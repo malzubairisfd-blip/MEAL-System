@@ -1,4 +1,4 @@
-import { runAudit } from "@/lib/auditEngine";
+import { runAudit } from "../../../lib/auditEngine";
 import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
