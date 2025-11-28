@@ -103,7 +103,8 @@ export default function UploadPage() {
         setProgress(prev => (prev < 90 ? prev + 10 : 90));
     }, 500);
 
-    const rows: RecordRow[] = rawData.map((row: any) => ({
+    const rows: RecordRow[] = rawData.map((row: any, index: number) => ({
+      _internalId: `row_${index}`, // Assign internal ID
       womanName: String(row[mapping.womanName] || ""),
       husbandName: String(row[mapping.husbandName] || ""),
       nationalId: String(row[mapping.nationalId] || ""),
@@ -154,16 +155,42 @@ export default function UploadPage() {
   };
 
   const exportToExcel = async () => {
-    if (clusters.length === 0) {
-      toast({ title: "No Data", description: "No clusters to export.", variant: "destructive" });
+    if (rawData.length === 0) {
+      toast({ title: "No Data", description: "No data to export. Please upload and process a file.", variant: "destructive" });
       return;
     }
     setLoading(true);
+
+    const allRecordIds = new Set(rawData.map((_, i) => `row_${i}`));
+    const clusteredRecordIds = new Set(clusters.flat().map(r => r._internalId));
+    const unclusteredIds = Array.from(allRecordIds).filter(id => !clusteredRecordIds.has(id));
+
+    const processedRows: RecordRow[] = rawData.map((row: any, index: number) => ({
+      _internalId: `row_${index}`,
+      womanName: String(row[mapping.womanName] || ""),
+      husbandName: String(row[mapping.husbandName] || ""),
+      nationalId: String(row[mapping.nationalId] || ""),
+      phone: String(row[mapping.phone] || ""),
+      village: String(row[mapping.village] || ""),
+      subdistrict: String(row[mapping.subdistrict] || ""),
+      children: String(row[mapping.children] || "").split(/[;,،]/).map((x) => x.trim()).filter(Boolean),
+    }));
+
+    const unclusteredRecords = unclusteredIds.map(id => {
+        const index = parseInt(id.split('_')[1]);
+        return processedRows[index];
+    });
+
     try {
       const response = await fetch('/api/export', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clusters }),
+        body: JSON.stringify({ 
+            clusters,
+            unclustered: unclusteredRecords,
+            originalData: rawData,
+            originalColumns: columns
+        }),
       });
 
       if (!response.ok) {
@@ -174,7 +201,7 @@ export default function UploadPage() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'clustered-output.xlsx';
+      a.download = 'full-report.xlsx';
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -281,7 +308,7 @@ export default function UploadPage() {
                 </div>
                 <Button onClick={exportToExcel} variant="outline" disabled={loading}>
                     <FileDown className="mr-2 h-4 w-4" />
-                    Export to Excel
+                    Export Full Report
                 </Button>
             </div>
           </CardHeader>
