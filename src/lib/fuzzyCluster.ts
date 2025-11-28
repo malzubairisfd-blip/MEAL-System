@@ -1,7 +1,7 @@
 // lib/fuzzyCluster.ts
 // FINAL VERSION — COMPLETE — NO QUESTIONS NEEDED
 
-import jaroWinkler from "talisman/metrics/jaro-winkler";
+import jarowinkler from "talisman/metrics/jaro-winkler";
 import levenshtein from "fast-levenshtein";
 
 export type RecordRow = {
@@ -48,7 +48,7 @@ function digits(s?: string) {
    FUZZY SCORE FUNCTIONS
 ------------------------------------------ */
 function jaro(a: string, b: string) {
-  return jaroWinkler(a || "", b || "");
+  return jarowinkler(a || "", b || "");
 }
 
 function lev(a: string, b: string) {
