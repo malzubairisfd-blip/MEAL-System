@@ -1,7 +1,7 @@
 // lib/fuzzyCluster.ts
 // FINAL VERSION — COMPLETE — NO QUESTIONS NEEDED
 
-import { jaroWinkler } from "talisman/metrics/distance/jaro-winkler";
+import jaroWinkler from "talisman/metrics/jaro-winkler";
 import levenshtein from "fast-levenshtein";
 
 export type RecordRow = {
