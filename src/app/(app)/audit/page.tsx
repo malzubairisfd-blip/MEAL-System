@@ -2,20 +2,27 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import type { RecordRow } from "@/lib/auditEngine";
-import type { AuditFinding } from "@/lib/auditEngine";
+import type { RecordRow, AuditFinding } from "@/lib/auditEngine";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
-import { AlertTriangle, ShieldCheck, Loader2, ChevronLeft } from "lucide-react";
+import { AlertTriangle, ShieldCheck, Loader2, ChevronLeft, FileDown, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
+
+// Extend jsPDF with the autoTable method
+interface jsPDFWithAutoTable extends jsPDF {
+  autoTable: (options: any) => jsPDF;
+}
+
 
 export default function AuditPage() {
   const [rows, setRows] = useState<RecordRow[]>([]);
   const [findings, setFindings] = useState<AuditFinding[]>([]);
-  const [loading, setLoading] = useState({ data: false, audit: false });
+  const [loading, setLoading] = useState({ data: false, audit: false, export: false });
   const { toast } = useToast();
 
   useEffect(() => {
@@ -81,6 +88,96 @@ export default function AuditPage() {
     }
   };
 
+  const exportToExcel = async () => {
+    if (findings.length === 0) {
+      toast({ title: "No Data", description: "No audit findings to export.", variant: "destructive" });
+      return;
+    }
+    setLoading(prev => ({ ...prev, export: true }));
+    try {
+      const response = await fetch('/api/audit/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ findings }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to generate Excel file.');
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'audit-report.xlsx';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      toast({ title: "Export Successful", description: "Your Excel file has been downloaded." });
+    } catch (error) {
+      console.error(error);
+      toast({ title: "Export Error", description: "Could not export data to Excel.", variant: "destructive" });
+    } finally {
+      setLoading(prev => ({ ...prev, export: false }));
+    }
+  };
+
+  const exportToPdf = () => {
+    if (findings.length === 0) {
+      toast({ title: "No Data", description: "No audit findings to export.", variant: "destructive" });
+      return;
+    }
+    
+    const doc = new jsPDF() as jsPDFWithAutoTable;
+    
+    // Header
+    doc.setFontSize(18);
+    doc.text("Data Integrity Audit Report", 14, 22);
+    doc.setFontSize(11);
+    doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 30);
+
+    const tableData = findings.flatMap(finding => 
+      finding.records.map(record => ({
+        severity: finding.severity,
+        type: finding.type,
+        description: finding.description,
+        womanName: record.womanName,
+        husbandName: record.husbandName,
+        nationalId: record.nationalId,
+        phone: record.phone,
+      }))
+    );
+
+    doc.autoTable({
+      startY: 40,
+      head: [['Severity', 'Type', 'Description', 'Woman', 'Husband', 'National ID']],
+      body: tableData.map(d => [d.severity, d.type, d.description, d.womanName, d.husbandName, d.nationalId]),
+      theme: 'grid',
+      headStyles: { fillColor: [41, 128, 185] }, // Blue header
+      didParseCell: function (data) {
+        const rowData = tableData[data.row.index];
+        if (rowData?.severity === 'high') {
+          data.cell.styles.fillColor = '#fde2e2'; // Light red
+        } else if (rowData?.severity === 'medium') {
+          data.cell.styles.fillColor = '#fef3c7'; // Light yellow
+        }
+      },
+    });
+
+    // Footer
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(9);
+        doc.text(`Page ${i} of ${pageCount}`, doc.internal.pageSize.width - 25, doc.internal.pageSize.height - 10);
+    }
+    
+    doc.save("audit-report.pdf");
+    toast({ title: "Export Successful", description: "Your PDF file has been downloaded." });
+  };
+
+
   return (
     <div className="space-y-6">
       <Card>
@@ -123,8 +220,22 @@ export default function AuditPage() {
       ) : findings.length > 0 ? (
         <Card>
             <CardHeader>
-                <CardTitle>Audit Findings</CardTitle>
-                <CardDescription>{findings.length} issues identified.</CardDescription>
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <div>
+                        <CardTitle>Audit Findings</CardTitle>
+                        <CardDescription>{findings.length} issues identified.</CardDescription>
+                    </div>
+                    <div className="flex gap-2">
+                        <Button onClick={exportToExcel} variant="outline" disabled={loading.export}>
+                            {loading.export ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
+                            Export to Excel
+                        </Button>
+                         <Button onClick={exportToPdf} variant="outline">
+                            <FileText className="mr-2 h-4 w-4" />
+                            Export PDF Report
+                        </Button>
+                    </div>
+                </div>
             </CardHeader>
             <CardContent>
                 <Accordion type="multiple" className="w-full">
