@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { fullPairwiseBreakdown } from "@/lib/fuzzyCluster"; 
+import { fullPairwiseBreakdown } from "../../../lib/fuzzyCluster"; 
 
 export async function POST(req: Request) {
   try {

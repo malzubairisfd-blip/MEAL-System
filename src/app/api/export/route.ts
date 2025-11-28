@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import ExcelJS from "exceljs";
-import { fullPairwiseBreakdown } from "@/lib/fuzzyCluster";
-import type { RecordRow } from "@/lib/fuzzyCluster";
+import { fullPairwiseBreakdown } from "../../../lib/fuzzyCluster";
+import type { RecordRow } from "../../../lib/fuzzyCluster";
 
 export async function POST(req: Request) {
   try {
