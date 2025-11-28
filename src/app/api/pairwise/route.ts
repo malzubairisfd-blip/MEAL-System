@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { fullPairwiseBreakdown } from "../../../lib/fuzzyCluster"; 
+import type { RecordRow } from "../../../lib/fuzzyCluster";
 
 export async function POST(req: Request) {
   try {
@@ -7,7 +8,7 @@ export async function POST(req: Request) {
     if (!cluster || !Array.isArray(cluster)) {
       return NextResponse.json({ error: "Invalid cluster data" }, { status: 400 });
     }
-    const pairs = fullPairwiseBreakdown(cluster);
+    const pairs = fullPairwiseBreakdown(cluster as RecordRow[]);
     return NextResponse.json({ pairs });
   } catch(error: any) {
     console.error("Pairwise scoring error:", error);

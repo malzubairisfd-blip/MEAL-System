@@ -49,7 +49,7 @@ export default function UploadPage() {
   const requiredFields = [
     "womanName", "husbandName", "children", "phone", "nationalId", "subdistrict", "village",
   ];
-  const allMappingFields = [...optionalFields, ...requiredFields];
+  const allMappingFields = ["beneficiaryId", "womanName", "husbandName", "children", "phone", "nationalId", "subdistrict", "village"];
 
   const allRequiredFieldsMapped = requiredFields.every((field) => mapping[field]);
 
@@ -206,7 +206,7 @@ export default function UploadPage() {
 
 
     try {
-      const response = await fetch('/api/export', {
+      const response = await fetch('/api/cluster/export', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 

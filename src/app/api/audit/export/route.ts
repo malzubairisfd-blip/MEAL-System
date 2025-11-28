@@ -1,8 +1,7 @@
 
-// src/app/api/audit/export/route.ts
 import { NextResponse } from "next/server";
 import ExcelJS from "exceljs";
-import type { AuditFinding, RecordRow } from "@/lib/auditEngine";
+import type { AuditFinding } from "../../../../lib/auditEngine";
 
 export async function POST(req: Request) {
   try {

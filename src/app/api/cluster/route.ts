@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { runClustering } from "@/lib/fuzzyCluster";
-import type { RecordRow } from "@/lib/fuzzyCluster";
+import { runClustering } from "../../../lib/fuzzyCluster";
+import type { RecordRow } from "../../../lib/fuzzyCluster";
 
 export async function POST(req: Request) {
   try {
