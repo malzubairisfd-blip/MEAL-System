@@ -1,3 +1,4 @@
+
 import { NextResponse } from "next/server";
 import ExcelJS from "exceljs";
 import { fullPairwiseBreakdown } from "../../../lib/fuzzyCluster";
@@ -5,10 +6,35 @@ import type { RecordRow } from "../../../lib/fuzzyCluster";
 
 export async function POST(req: Request) {
   try {
-    const { clusters = [], unclustered = [], originalData = [], originalColumns = [] } = await req.json();
+    const { clusters = [], unclustered = [], originalData = [], originalColumns = [], edgesUsed = [] } = await req.json();
 
     const wb = new ExcelJS.Workbook();
-    
+    wb.creator = "Beneficiary Insights";
+    wb.created = new Date();
+
+    // --- SUMMARY SHEET ---
+    const wsSummary = wb.addWorksheet("Summary");
+    wsSummary.addRow(["Beneficiary Insights Analysis Report"]);
+    wsSummary.getCell('A1').font = { size: 18, bold: true };
+    wsSummary.mergeCells('A1:D1');
+    wsSummary.addRow([]); // Spacer
+
+    wsSummary.addRow(["Metric", "Value"]);
+    wsSummary.getRow(3).font = { bold: true };
+    wsSummary.addRow(["Total Records Processed", originalData.length]);
+    wsSummary.addRow(["Clustered Records", clusters.flat().length]);
+    wsSummary.addRow(["Unclustered Records", unclustered.length]);
+    wsSummary.addRow(["Number of Clusters Found", clusters.length]);
+    wsSummary.addRow(["Average Cluster Size", clusters.length > 0 ? (clusters.flat().length / clusters.length).toFixed(2) : 0]);
+    wsSummary.columns = [{ key: 'metric', width: 30 }, { key: 'value', width: 15 }];
+    wsSummary.eachRow((row, rowNumber) => {
+        if (rowNumber > 2) {
+            row.getCell(1).font = { bold: true };
+            row.eachCell(c => c.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } });
+        }
+    });
+
+
     // --- CLUSTERED DATA SHEET ---
     const wsClustered = wb.addWorksheet("Clustered Data");
     
@@ -53,7 +79,8 @@ export async function POST(req: Request) {
       const clusterColor = colors[clusterIndex % colors.length];
       
       for (const record of cluster) {
-        const recordIndex = parseInt(record._internalId.split('_')[1]);
+        const recordIndex = parseInt((record._internalId || 'row_-1').split('_')[1]);
+        if (recordIndex === -1) continue;
         const originalRecord = originalData[recordIndex];
 
         let scores: any = {};
@@ -77,6 +104,9 @@ export async function POST(req: Request) {
           cell.border = { top: { style: "thin" }, left: { style: "thin" }, bottom: { style: "thin" }, right: { style: "thin" } };
         });
       }
+      if (cluster.length > 0) {
+        wsClustered.addRow([]).eachCell(cell => cell.fill = {type: 'pattern', pattern: 'solid', fgColor: {argb: 'FFDDDDDD'}});
+      }
       clusterIdCounter++;
     }
 
@@ -91,7 +121,8 @@ export async function POST(req: Request) {
     });
 
     for (const record of unclustered) {
-      const recordIndex = parseInt(record._internalId.split('_')[1]);
+      const recordIndex = parseInt((record._internalId || 'row_-1').split('_')[1]);
+       if (recordIndex === -1) continue;
       const originalRecord = originalData[recordIndex];
       const rowValues = [record._internalId, ...originalColumns.map(col => originalRecord[col])];
       const row = wsUnclustered.addRow(rowValues);
@@ -100,16 +131,43 @@ export async function POST(req: Request) {
         });
     }
 
-    // Auto-fit columns for both sheets
-    [wsClustered, wsUnclustered].forEach(ws => {
+    // --- GRAPH EDGES SHEET ---
+    const wsEdges = wb.addWorksheet("Graph Edges");
+    const edgeHeader = ["Record_A_ID", "Record_B_ID", "Score", "nameScore", "husbandScore", "idScore", "phoneScore", "locationScore", "childrenScore"];
+    wsEdges.addRow(edgeHeader);
+    wsEdges.getRow(1).eachCell((cell) => {
+      cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF4F4F4F" } };
+    });
+
+    const allRecords: RecordRow[] = [...clusters.flat(), ...unclustered];
+    const allPairs = fullPairwiseBreakdown(allRecords);
+
+    for (const p of allPairs) {
+        if(p.score < 0.60) continue; // Only show significant edges
+         const row = wsEdges.addRow([
+            p.a._internalId,
+            p.b._internalId,
+            p.score.toFixed(4),
+            p.breakdown.nameScore.toFixed(4),
+            p.breakdown.husbandScore.toFixed(4),
+            p.breakdown.idScore.toFixed(4),
+            p.breakdown.phoneScore.toFixed(4),
+            p.breakdown.locationScore.toFixed(4),
+            p.breakdown.childrenScore.toFixed(4),
+        ]);
+        row.eachCell(c => c.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } });
+    }
+
+    // Auto-fit columns for all sheets
+    [wsSummary, wsClustered, wsUnclustered, wsEdges].forEach(ws => {
         ws.columns.forEach(column => {
+            if (!column.key) return; // Skip if no key
             let max_width = 0;
-            column.eachCell({ includeEmpty: true }, cell => {
-                if (cell.value) {
-                    const column_width = cell.value.toString().length;
-                    if (column_width > max_width) {
-                        max_width = column_width;
-                    }
+            column.eachCell!({ includeEmpty: true }, cell => {
+                const column_width = cell.value ? cell.value.toString().length : 0;
+                if (column_width > max_width) {
+                    max_width = column_width;
                 }
             });
             column.width = Math.min(50, Math.max(12, max_width + 2));
@@ -122,7 +180,7 @@ export async function POST(req: Request) {
       status: 200,
       headers: {
         "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "Content-Disposition": "attachment; filename=full-report.xlsx"
+        "Content-Disposition": "attachment; filename=beneficiary-analysis-report.xlsx"
       }
     });
   } catch (error: any) {
@@ -133,3 +191,5 @@ export async function POST(req: Request) {
     });
   }
 }
+
+    
