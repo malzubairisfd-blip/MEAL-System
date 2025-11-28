@@ -123,7 +123,17 @@ export default function AuditPage() {
     }
   };
 
-  const exportToPdf = () => {
+  const arrayBufferToBase64 = (buffer: ArrayBuffer) => {
+    let binary = '';
+    const bytes = new Uint8Array(buffer);
+    const len = bytes.byteLength;
+    for (let i = 0; i < len; i++) {
+        binary += String.fromCharCode(bytes[i]);
+    }
+    return window.btoa(binary);
+  }
+
+  const exportToPdf = async () => {
     if (findings.length === 0) {
       toast({ title: "No Data", description: "No audit findings to export.", variant: "destructive" });
       return;
@@ -131,13 +141,26 @@ export default function AuditPage() {
     
     const doc = new jsPDF() as jsPDFWithAutoTable;
 
-    // Add Arabic font
-    doc.addFont('/fonts/Amiri-Regular.ttf', 'Amiri', 'normal');
-    doc.setFont('Amiri');
+    try {
+      // Fetch and embed the font
+      const fontResponse = await fetch('/fonts/Amiri-Regular.ttf');
+      if (!fontResponse.ok) throw new Error("Font file not found");
+      const fontBuffer = await fontResponse.arrayBuffer();
+      const fontBase64 = arrayBufferToBase64(fontBuffer);
+
+      doc.addFileToVFS('Amiri-Regular.ttf', fontBase64);
+      doc.addFont('Amiri-Regular.ttf', 'Amiri', 'normal');
+      doc.setFont('Amiri');
+    } catch (fontError) {
+      console.error("Font loading error:", fontError);
+      toast({ title: "Font Error", description: "Could not load the required font for PDF generation.", variant: "destructive" });
+      // Fallback to default font
+      doc.setFont("helvetica");
+    }
     
     // Header
     doc.setFontSize(18);
-    doc.text("تقرير تدقيق البيانات", 14, 22, { align: 'right', lang: 'ar' });
+    doc.text("تقرير تدقيق البيانات", doc.internal.pageSize.width - 14, 22, { align: 'right', lang: 'ar' });
     doc.setFontSize(11);
     doc.text(`تم إنشاؤه في: ${new Date().toLocaleDateString()}`, 14, 30);
 
@@ -158,12 +181,12 @@ export default function AuditPage() {
       head: [['الرقم القومي', 'الزوج', 'الزوجة', 'الوصف', 'النوع', 'الخطورة']],
       body: tableData.map(d => [d.nationalId, d.husbandName, d.womanName, d.description, d.type, d.severity]),
       theme: 'grid',
-      headStyles: { fillColor: [41, 128, 185], font: 'Amiri' },
-      bodyStyles: { font: 'Amiri' },
+      headStyles: { fillColor: [41, 128, 185], font: 'Amiri', halign: 'right' },
+      bodyStyles: { font: 'Amiri', halign: 'right' },
       didParseCell: function (data) {
-        // Right-align Arabic content
-        data.cell.styles.halign = 'right';
-
+        if (data.section !== 'body') return;
+        // Right-align Arabic content is now set in bodyStyles
+        
         const rowData = tableData[data.row.index];
         if (rowData?.severity === 'high') {
           data.cell.styles.fillColor = '#fde2e2'; // Light red
@@ -288,3 +311,5 @@ export default function AuditPage() {
     </div>
   );
 }
+
+    
