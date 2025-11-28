@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from "react";
@@ -7,8 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
-import { AlertTriangle, ShieldCheck, Loader2 } from "lucide-react";
+import { AlertTriangle, ShieldCheck, Loader2, ChevronLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import Link from "next/link";
 
 export default function AuditPage() {
   const [rows, setRows] = useState<RecordRow[]>([]);
@@ -83,11 +85,21 @@ export default function AuditPage() {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>Data Integrity Audit</CardTitle>
-          <CardDescription>
-            Run a set of rules against your dataset to identify potential issues like duplicates, invalid relationships, and data entry errors.
-            {rows.length > 0 && ` Currently loaded ${rows.length} records.`}
-          </CardDescription>
+            <div className="flex justify-between items-start">
+                <div>
+                  <CardTitle>Data Integrity Audit</CardTitle>
+                  <CardDescription>
+                    Run a set of rules against your dataset to identify potential issues like duplicates, invalid relationships, and data entry errors.
+                    {rows.length > 0 && ` Currently loaded ${rows.length} records.`}
+                  </CardDescription>
+                </div>
+                <Button variant="outline" asChild>
+                    <Link href="/review">
+                        <ChevronLeft className="mr-2 h-4 w-4" />
+                        Back to Review
+                    </Link>
+                </Button>
+            </div>
         </CardHeader>
         <CardContent>
           <div className="flex gap-4">

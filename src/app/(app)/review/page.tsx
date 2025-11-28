@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from "react";
@@ -8,8 +9,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Microscope, Search } from "lucide-react";
+import { Loader2, Microscope, Search, ChevronLeft, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import Link from "next/link";
 
 type Cluster = RecordRow[];
 type PairwiseData = { a: RecordRow; b: RecordRow; score: number; breakdown: any };
@@ -68,10 +70,28 @@ export default function ReviewPage() {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>Cluster Review</CardTitle>
-          <CardDescription>
-            Inspect and analyze potential duplicate clusters from the last processing run. Found {filteredClusters.length} of {allClusters.length} clusters.
-          </CardDescription>
+          <div className="flex justify-between items-start">
+            <div>
+              <CardTitle>Cluster Review</CardTitle>
+              <CardDescription>
+                Inspect and analyze potential duplicate clusters from the last processing run. Found {filteredClusters.length} of {allClusters.length} clusters.
+              </CardDescription>
+            </div>
+             <div className="flex gap-2">
+                <Button variant="outline" asChild>
+                    <Link href="/upload">
+                        <ChevronLeft className="mr-2 h-4 w-4" />
+                        Back to Upload
+                    </Link>
+                </Button>
+                <Button asChild>
+                    <Link href="/audit">
+                        Go to Audit
+                        <AlertTriangle className="ml-2 h-4 w-4" />
+                    </Link>
+                </Button>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="flex gap-4 mb-6">

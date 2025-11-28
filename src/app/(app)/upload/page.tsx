@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState } from "react";
@@ -11,9 +12,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
-import { FileUp, Loader2, PartyPopper, ChevronRight, FileDown, CheckCircle, AlertCircle, Sparkles } from "lucide-react";
+import { FileUp, Loader2, PartyPopper, ChevronRight, FileDown, CheckCircle, AlertCircle, Sparkles, Microscope, ChevronLeft } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { generateClusterDescription } from "@/ai/flows/llm-powered-audit-assistant";
+import Link from "next/link";
 
 type Mapping = {
   [key: string]: string;
@@ -306,10 +308,18 @@ export default function UploadPage() {
                     <CardTitle>Step 3: Results</CardTitle>
                     <CardDescription>{clusters.length} potential duplicate clusters found.</CardDescription>
                 </div>
-                <Button onClick={exportToExcel} variant="outline" disabled={loading}>
-                    <FileDown className="mr-2 h-4 w-4" />
-                    Export Full Report
-                </Button>
+                <div className="flex gap-2">
+                    <Button onClick={exportToExcel} variant="outline" disabled={loading}>
+                        <FileDown className="mr-2 h-4 w-4" />
+                        Export Full Report
+                    </Button>
+                     <Button asChild>
+                        <Link href="/review">
+                           Go to Review
+                           <Microscope className="ml-2 h-4 w-4" />
+                        </Link>
+                    </Button>
+                </div>
             </div>
           </CardHeader>
           <CardContent>
