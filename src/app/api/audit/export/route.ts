@@ -12,19 +12,22 @@ export async function POST(req: Request) {
     }
 
     const wb = new ExcelJS.Workbook();
-    const ws = wb.addWorksheet("Audit Findings");
+    const ws = wb.addWorksheet("نتائج التدقيق");
 
     // Define columns
     ws.columns = [
-      { header: "Severity", key: "severity", width: 12 },
-      { header: "Finding Type", key: "type", width: 30 },
-      { header: "Description", key: "description", width: 50 },
-      { header: "Affected Woman", key: "womanName", width: 25 },
-      { header: "Affected Husband", key: "husbandName", width: 25 },
-      { header: "National ID", key: "nationalId", width: 20 },
-      { header: "Phone", key: "phone", width: 20 },
-      { header: "Village", key: "village", width: 20 },
+      { header: "الخطورة", key: "severity", width: 12 },
+      { header: "نوع النتيجة", key: "type", width: 30 },
+      { header: "الوصف", key: "description", width: 50 },
+      { header: "الزوجة المتأثرة", key: "womanName", width: 25 },
+      { header: "الزوج المتأثر", key: "husbandName", width: 25 },
+      { header: "الرقم القومي", key: "nationalId", width: 20 },
+      { header: "الهاتف", key: "phone", width: 20 },
+      { header: "القرية", key: "village", width: 20 },
     ];
+    
+    // Set RTL for the worksheet
+    ws.views = [{ rightToLeft: true }];
 
     // Style header
     ws.getRow(1).eachCell((cell) => {
@@ -51,14 +54,18 @@ export async function POST(req: Request) {
             const severityColor = finding.severity === 'high' ? 'FFFFC7CE' : finding.severity === 'medium' ? 'FFFFEB9C' : 'FFC6EFCE';
             row.eachCell({ includeEmpty: true }, (cell) => {
                 cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: severityColor } };
+                cell.alignment = { horizontal: 'right' };
             });
         }
       } else {
         // Handle findings with no records
-         ws.addRow({
+         const row = ws.addRow({
             severity: finding.severity,
             type: finding.type,
             description: finding.description,
+        });
+        row.eachCell({ includeEmpty: true }, (cell) => {
+            cell.alignment = { horizontal: 'right' };
         });
       }
        // Add a separator row
@@ -84,7 +91,7 @@ export async function POST(req: Request) {
       status: 200,
       headers: {
         "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "Content-Disposition": "attachment; filename=audit-report.xlsx",
+        "Content-Disposition": "attachment; filename=audit-report-arabic.xlsx",
       },
     });
   } catch (error: any) {

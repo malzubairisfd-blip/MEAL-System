@@ -11,38 +11,50 @@ export async function POST(req: Request) {
     const wb = new ExcelJS.Workbook();
     wb.creator = "Beneficiary Insights";
     wb.created = new Date();
+    wb.views = [{ rightToLeft: true }];
+
 
     // --- SUMMARY SHEET ---
-    const wsSummary = wb.addWorksheet("Summary");
-    wsSummary.addRow(["Beneficiary Insights Analysis Report"]);
+    const wsSummary = wb.addWorksheet("ملخص");
+    wsSummary.views = [{ rightToLeft: true }];
+    wsSummary.addRow(["تقرير تحليل رؤى المستفيدين"]);
     wsSummary.getCell('A1').font = { size: 18, bold: true };
     wsSummary.mergeCells('A1:D1');
+    wsSummary.getCell('A1').alignment = { horizontal: 'center' };
     wsSummary.addRow([]); // Spacer
 
-    wsSummary.addRow(["Metric", "Value"]);
+    wsSummary.addRow(["المقياس", "القيمة"]);
     wsSummary.getRow(3).font = { bold: true };
-    wsSummary.addRow(["Total Records Processed", originalData.length]);
-    wsSummary.addRow(["Clustered Records", clusters.flat().length]);
-    wsSummary.addRow(["Unclustered Records", unclustered.length]);
-    wsSummary.addRow(["Number of Clusters Found", clusters.length]);
-    wsSummary.addRow(["Average Cluster Size", clusters.length > 0 ? (clusters.flat().length / clusters.length).toFixed(2) : 0]);
+    wsSummary.addRow(["إجمالي السجلات المعالجة", originalData.length]);
+    wsSummary.addRow(["السجلات المجمعة", clusters.flat().length]);
+    wsSummary.addRow(["السجلات غير المجمعة", unclustered.length]);
+    wsSummary.addRow(["عدد المجموعات التي تم العثور عليها", clusters.length]);
+    wsSummary.addRow(["متوسط حجم المجموعة", clusters.length > 0 ? (clusters.flat().length / clusters.length).toFixed(2) : 0]);
     wsSummary.columns = [{ key: 'metric', width: 30 }, { key: 'value', width: 15 }];
     wsSummary.eachRow((row, rowNumber) => {
         if (rowNumber > 2) {
             row.getCell(1).font = { bold: true };
-            row.eachCell(c => c.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } });
+            row.eachCell(c => {
+              c.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+              c.alignment = { horizontal: 'right' };
+            });
         }
     });
 
 
     // --- CLUSTERED DATA SHEET ---
-    const wsClustered = wb.addWorksheet("Clustered Data");
+    const wsClustered = wb.addWorksheet("البيانات المجمعة");
+    wsClustered.views = [{ rightToLeft: true }];
     
     const scoreColumns = [
       "PairScore", "nameScore", "husbandScore", "idScore", "phoneScore", "locationScore", "childrenScore"
     ];
+
+    const scoreColumnsArabic = [
+      "درجة الزوج", "درجة الاسم", "درجة الزوج", "درجة الهوية", "درجة الهاتف", "درجة الموقع", "درجة الأطفال"
+    ];
     
-    const clusteredHeader = ["ClusterID", "InternalID", "BeneficiaryID", ...originalColumns, ...scoreColumns];
+    const clusteredHeader = ["معرف المجموعة", "المعرف الداخلي", "معرف المستفيد", ...originalColumns, ...scoreColumnsArabic];
     wsClustered.addRow(clusteredHeader);
 
     wsClustered.getRow(1).eachCell((cell) => {
@@ -92,7 +104,7 @@ export async function POST(req: Request) {
         }
 
         const rowValues = [
-          `Cluster ${clusterIdCounter}`,
+          `مجموعة ${clusterIdCounter}`,
           record._internalId,
           record.beneficiaryId,
           ...originalColumns.map((col: string) => originalRecord[col]),
@@ -103,6 +115,7 @@ export async function POST(req: Request) {
         row.eachCell({ includeEmpty: true }, (cell) => {
           cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: clusterColor } };
           cell.border = { top: { style: "thin" }, left: { style: "thin" }, bottom: { style: "thin" }, right: { style: "thin" } };
+          cell.alignment = { horizontal: 'right' };
         });
       }
       if (cluster.length > 0) {
@@ -112,8 +125,9 @@ export async function POST(req: Request) {
     }
 
     // --- UNCLUSTERED DATA SHEET ---
-    const wsUnclustered = wb.addWorksheet("Unclustered Data");
-    wsUnclustered.addRow(["InternalID", "BeneficiaryID", ...originalColumns]);
+    const wsUnclustered = wb.addWorksheet("البيانات غير المجمعة");
+    wsUnclustered.views = [{ rightToLeft: true }];
+    wsUnclustered.addRow(["المعرف الداخلي", "معرف المستفيد", ...originalColumns]);
 
     wsUnclustered.getRow(1).eachCell((cell) => {
       cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
@@ -129,12 +143,14 @@ export async function POST(req: Request) {
       const row = wsUnclustered.addRow(rowValues);
        row.eachCell({ includeEmpty: true }, (cell) => {
           cell.border = { top: { style: "thin" }, left: { style: "thin" }, bottom: { style: "thin" }, right: { style: "thin" } };
+          cell.alignment = { horizontal: 'right' };
         });
     }
 
     // --- GRAPH EDGES SHEET ---
-    const wsEdges = wb.addWorksheet("Graph Edges");
-    const edgeHeader = ["Record_A_ID", "Record_B_ID", "Score", "nameScore", "husbandScore", "idScore", "phoneScore", "locationScore", "childrenScore"];
+    const wsEdges = wb.addWorksheet("حواف الرسم البياني");
+    wsEdges.views = [{ rightToLeft: true }];
+    const edgeHeader = ["معرف السجل أ", "معرف السجل ب", "الدرجة", ...scoreColumnsArabic];
     wsEdges.addRow(edgeHeader);
     wsEdges.getRow(1).eachCell((cell) => {
       cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
@@ -157,7 +173,10 @@ export async function POST(req: Request) {
             p.breakdown.locationScore.toFixed(4),
             p.breakdown.childrenScore.toFixed(4),
         ]);
-        row.eachCell(c => c.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } });
+        row.eachCell(c => {
+          c.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+          c.alignment = { horizontal: 'right' };
+        });
     }
 
     // Auto-fit columns for all sheets
@@ -189,7 +208,7 @@ export async function POST(req: Request) {
       status: 200,
       headers: {
         "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "Content-Disposition": "attachment; filename=beneficiary-analysis-report.xlsx"
+        "Content-Disposition": "attachment; filename=beneficiary-analysis-report-arabic.xlsx"
       }
     });
   } catch (error: any) {

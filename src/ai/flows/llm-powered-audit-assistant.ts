@@ -44,7 +44,7 @@ const generateClusterDescriptionPrompt = ai.definePrompt({
   output: {schema: ClusterDescriptionOutputSchema},
   prompt: `You are an AI assistant helping a reviewer understand potential duplicate clusters of beneficiary records.
 
-  Your task is to generate a concise description of the cluster, highlighting potential connections, shared household members, and any anomalies that might indicate duplication or fraud.
+  Your task is to generate a concise description of the cluster IN ARABIC, highlighting potential connections, shared household members, and any anomalies that might indicate duplication or fraud.
   Reason if it is appropriate to include potentially identifying personal information to contextualize the records in question.
 
   Here is the cluster data:

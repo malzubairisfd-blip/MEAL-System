@@ -130,12 +130,16 @@ export default function AuditPage() {
     }
     
     const doc = new jsPDF() as jsPDFWithAutoTable;
+
+    // Add Arabic font
+    doc.addFont('/fonts/Amiri-Regular.ttf', 'Amiri', 'normal');
+    doc.setFont('Amiri');
     
     // Header
     doc.setFontSize(18);
-    doc.text("Data Integrity Audit Report", 14, 22);
+    doc.text("تقرير تدقيق البيانات", 14, 22, { align: 'right', lang: 'ar' });
     doc.setFontSize(11);
-    doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 30);
+    doc.text(`تم إنشاؤه في: ${new Date().toLocaleDateString()}`, 14, 30);
 
     const tableData = findings.flatMap(finding => 
       finding.records.map(record => ({
@@ -151,11 +155,15 @@ export default function AuditPage() {
 
     doc.autoTable({
       startY: 40,
-      head: [['Severity', 'Type', 'Description', 'Woman', 'Husband', 'National ID']],
-      body: tableData.map(d => [d.severity, d.type, d.description, d.womanName, d.husbandName, d.nationalId]),
+      head: [['الرقم القومي', 'الزوج', 'الزوجة', 'الوصف', 'النوع', 'الخطورة']],
+      body: tableData.map(d => [d.nationalId, d.husbandName, d.womanName, d.description, d.type, d.severity]),
       theme: 'grid',
-      headStyles: { fillColor: [41, 128, 185] }, // Blue header
+      headStyles: { fillColor: [41, 128, 185], font: 'Amiri' },
+      bodyStyles: { font: 'Amiri' },
       didParseCell: function (data) {
+        // Right-align Arabic content
+        data.cell.styles.halign = 'right';
+
         const rowData = tableData[data.row.index];
         if (rowData?.severity === 'high') {
           data.cell.styles.fillColor = '#fde2e2'; // Light red
@@ -170,7 +178,7 @@ export default function AuditPage() {
     for (let i = 1; i <= pageCount; i++) {
         doc.setPage(i);
         doc.setFontSize(9);
-        doc.text(`Page ${i} of ${pageCount}`, doc.internal.pageSize.width - 25, doc.internal.pageSize.height - 10);
+        doc.text(`صفحة ${i} من ${pageCount}`, doc.internal.pageSize.width - 25, doc.internal.pageSize.height - 10);
     }
     
     doc.save("audit-report.pdf");
