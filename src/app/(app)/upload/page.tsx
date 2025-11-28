@@ -46,7 +46,7 @@ export default function UploadPage() {
   }, []);
 
   const requiredFields = [
-    "womanName", "husbandName", "nationalId", "phone", "village", "subdistrict", "children",
+    "womanName", "husbandName", "children", "phone", "nationalId", "subdistrict", "village",
   ];
 
   const allFieldsMapped = requiredFields.every((field) => mapping[field]);
@@ -382,3 +382,5 @@ export default function UploadPage() {
     </div>
   );
 }
+
+    
