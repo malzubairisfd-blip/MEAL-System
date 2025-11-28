@@ -27,7 +27,7 @@ export default function UploadPage() {
   const [rawData, setRawData] = useState<any[]>([]);
   const [columns, setColumns] = useState<string[]>([]);
   const [mapping, setMapping] = useState<Mapping>({});
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState({ process: false, cluster: false, export: false });
   const [progress, setProgress] = useState(0);
   const [clusters, setClusters] = useState<Cluster[]>([]);
   const [fileName, setFileName] = useState<string>("");
@@ -57,7 +57,7 @@ export default function UploadPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setLoading(true);
+    setLoading(prev => ({...prev, process: true}));
     setFileName(file.name);
     setProgress(20);
 
@@ -88,7 +88,7 @@ export default function UploadPage() {
       resetState();
     } finally {
       setTimeout(() => {
-        setLoading(false);
+        setLoading(prev => ({...prev, process: false}));
         setProgress(0);
       }, 1000);
     }
@@ -100,7 +100,7 @@ export default function UploadPage() {
     setMapping({});
     setClusters([]);
     setFileName("");
-    setLoading(false);
+    setLoading({ process: false, cluster: false, export: false });
     setProgress(0);
     const fileInput = document.getElementById('file-upload') as HTMLInputElement;
     if (fileInput) fileInput.value = '';
@@ -112,7 +112,7 @@ export default function UploadPage() {
       return;
     }
 
-    setLoading(true);
+    setLoading(prev => ({...prev, cluster: true}));
     setProgress(0);
 
     const interval = setInterval(() => {
@@ -165,7 +165,7 @@ export default function UploadPage() {
       toast({ title: "Network Error", description: "Failed to connect to the clustering service.", variant: "destructive" });
     } finally {
         setTimeout(() => {
-            setLoading(false);
+            setLoading(prev => ({...prev, cluster: false}));
             setProgress(0);
         }, 1000);
     }
@@ -176,7 +176,12 @@ export default function UploadPage() {
       toast({ title: "No Data", description: "No data to export. Please upload and process a file.", variant: "destructive" });
       return;
     }
-    setLoading(true);
+    setLoading(prev => ({...prev, export: true}));
+    setProgress(0);
+     const interval = setInterval(() => {
+        setProgress(prev => (prev < 90 ? prev + 10 : 90));
+    }, 500);
+
 
     const allRecordIds = new Set(rawData.map((_, i) => `row_${i}`));
     const clusteredRecordIds = new Set(clusters.flat().map(r => r._internalId));
@@ -216,6 +221,9 @@ export default function UploadPage() {
             originalColumns: columns
         }),
       });
+      
+      clearInterval(interval);
+      setProgress(100);
 
       if (!response.ok) {
         throw new Error('Failed to generate Excel file.');
@@ -232,10 +240,14 @@ export default function UploadPage() {
       window.URL.revokeObjectURL(url);
       toast({ title: "Export Successful", description: "Your file has been downloaded." });
     } catch (error) {
+      clearInterval(interval);
       console.error(error);
       toast({ title: "Export Error", description: "Could not export data to Excel.", variant: "destructive" });
     } finally {
-      setLoading(false);
+      setTimeout(() => {
+        setLoading(prev => ({...prev, export: false}));
+        setProgress(0);
+      }, 1000);
     }
   };
 
@@ -279,13 +291,13 @@ export default function UploadPage() {
                         {fileName || "Click to select a file or drag and drop"}
                     </span>
                 </span>
-                <Input id="file-upload" type="file" className="hidden" accept=".xlsx,.xls,.xlsm,.xlsb,.csv,.txt" onChange={handleFile} disabled={loading} />
+                <Input id="file-upload" type="file" className="hidden" accept=".xlsx,.xls,.xlsm,.xlsb,.csv,.txt" onChange={handleFile} disabled={loading.process} />
             </Label>
             {fileName && (
-              <Button variant="outline" onClick={resetState} disabled={loading}>Clear</Button>
+              <Button variant="outline" onClick={resetState} disabled={loading.process || loading.cluster || loading.export}>Clear</Button>
             )}
           </div>
-          {loading && progress > 0 && <Progress value={progress} className="w-full mt-4" />}
+          {loading.process && <Progress value={progress} className="w-full mt-4" />}
         </CardContent>
       </Card>
 
@@ -307,7 +319,7 @@ export default function UploadPage() {
                   <Select
                     value={mapping[field] || ""}
                     onValueChange={(value) => setMapping((m) => ({ ...m, [field]: value }))}
-                    disabled={loading}
+                    disabled={loading.process || loading.cluster || loading.export}
                   >
                     <SelectTrigger id={`map-${field}`}>
                       <SelectValue placeholder="Select a column..." />
@@ -321,13 +333,16 @@ export default function UploadPage() {
                 </div>
               ))}
             </div>
-            <div className="mt-6 flex flex-col sm:flex-row gap-4 items-center">
-              <Button onClick={runClustering} disabled={loading || !allRequiredFieldsMapped} className="w-full sm:w-auto">
-                {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ChevronRight className="mr-2 h-4 w-4" />}
-                Run Clustering
-              </Button>
-              {!allRequiredFieldsMapped && (
-                  <p className="text-sm text-muted-foreground flex items-center"><AlertCircle className="h-4 w-4 mr-2" /> All required fields must be mapped to run clustering.</p>
+            <div className="mt-6 flex flex-col sm:flex-row gap-4 items-start">
+              <div className="flex-1 w-full sm:w-auto">
+                <Button onClick={runClustering} disabled={loading.process || loading.cluster || loading.export || !allRequiredFieldsMapped} className="w-full sm:w-auto">
+                  {loading.cluster ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ChevronRight className="mr-2 h-4 w-4" />}
+                  Run Clustering
+                </Button>
+                 {loading.cluster && <Progress value={progress} className="w-full mt-2" />}
+              </div>
+              {!allRequiredFieldsMapped && !loading.cluster && (
+                  <p className="text-sm text-muted-foreground flex items-center pt-2"><AlertCircle className="h-4 w-4 mr-2" /> All required fields must be mapped to run clustering.</p>
               )}
             </div>
           </CardContent>
@@ -342,12 +357,15 @@ export default function UploadPage() {
                     <CardTitle>Step 3: Results</CardTitle>
                     <CardDescription>{clusters.length} potential duplicate clusters found.</CardDescription>
                 </div>
-                <div className="flex gap-2">
-                    <Button onClick={exportToExcel} variant="outline" disabled={loading}>
-                        <FileDown className="mr-2 h-4 w-4" />
-                        Export Full Report
-                    </Button>
-                     <Button asChild>
+                <div className="flex gap-2 flex-col sm:flex-row w-full sm:w-auto">
+                    <div className="flex-1">
+                        <Button onClick={exportToExcel} variant="outline" disabled={loading.process || loading.cluster || loading.export} className="w-full">
+                           {loading.export ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
+                            Export Full Report
+                        </Button>
+                        {loading.export && <Progress value={progress} className="w-full mt-2" />}
+                    </div>
+                     <Button asChild className="w-full sm:w-auto">
                         <Link href="/review">
                            Go to Review
                            <Microscope className="ml-2 h-4 w-4" />
@@ -358,7 +376,7 @@ export default function UploadPage() {
           </CardHeader>
           <CardContent>
             <Accordion type="single" collapsible className="w-full">
-              {clusters.map((cluster, index) => (
+              {clusters.slice(0, 5).map((cluster, index) => (
                 <AccordionItem value={`item-${index}`} key={index}>
                   <AccordionTrigger>Cluster {index + 1} ({cluster.length} records)</AccordionTrigger>
                   <AccordionContent>
@@ -389,9 +407,22 @@ export default function UploadPage() {
                 </AccordionItem>
               ))}
             </Accordion>
+            {clusters.length > 5 && (
+                <div className="mt-4 text-center">
+                    <p className="text-sm text-muted-foreground">...and {clusters.length - 5} more clusters.</p>
+                    <Button asChild variant="link">
+                        <Link href="/review">
+                           Go to Review to see all clusters
+                           <ChevronRight className="ml-1 h-4 w-4" />
+                        </Link>
+                    </Button>
+                </div>
+            )}
           </CardContent>
         </Card>
       )}
     </div>
   );
 }
+
+    
