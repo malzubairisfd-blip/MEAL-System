@@ -14,7 +14,7 @@ import {
   SidebarTrigger,
   SidebarInset,
 } from "@/components/ui/sidebar";
-import { FileBarChart2, Upload, Microscope, ClipboardList, Home } from "lucide-react";
+import { FileBarChart2, Upload, Microscope, ClipboardList, Home, Settings } from "lucide-react";
 
 export function LayoutProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -63,6 +63,14 @@ export function LayoutProvider({ children }: { children: React.ReactNode }) {
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
+             <SidebarMenuItem>
+              <SidebarMenuButton asChild isActive={isActive("/settings")}>
+                <Link href="/settings">
+                  <Settings />
+                  <span>Settings</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
           </SidebarMenu>
         </SidebarContent>
         <SidebarFooter>
@@ -75,7 +83,7 @@ export function LayoutProvider({ children }: { children: React.ReactNode }) {
         <header className="flex h-14 items-center gap-4 border-b bg-card px-6">
             <SidebarTrigger className="md:hidden" />
             <div className="flex-1">
-                <h1 className="text-lg font-semibold capitalize">{pathname.split('/').pop() || 'Dashboard'}</h1>
+                <h1 className="text-lg font-semibold capitalize">{pathname.split('/').pop()?.replace('-', ' ') || 'Dashboard'}</h1>
             </div>
         </header>
         <main className="flex-1 overflow-auto p-4 md:p-6">

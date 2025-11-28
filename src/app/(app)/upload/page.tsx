@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import * as XLSX from "xlsx";
 import type { RecordRow } from "@/lib/fuzzyCluster";
 
@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
-import { FileUp, Loader2, PartyPopper, ChevronRight, FileDown, CheckCircle, AlertCircle, Sparkles, Microscope, ChevronLeft } from "lucide-react";
+import { FileUp, Loader2, PartyPopper, ChevronRight, FileDown, CheckCircle, AlertCircle, Sparkles, Microscope, Settings } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { generateClusterDescription } from "@/ai/flows/llm-powered-audit-assistant";
 import Link from "next/link";
@@ -31,7 +31,19 @@ export default function UploadPage() {
   const [progress, setProgress] = useState(0);
   const [clusters, setClusters] = useState<Cluster[]>([]);
   const [fileName, setFileName] = useState<string>("");
+  const [settings, setSettings] = useState({ minPairScore: 0.60, minInternalScore: 0.50 });
   const { toast } = useToast();
+
+  useEffect(() => {
+    try {
+        const savedSettings = localStorage.getItem('beneficiary-insights-settings');
+        if (savedSettings) {
+            setSettings(JSON.parse(savedSettings));
+        }
+    } catch (e) {
+        console.warn("Could not load settings from localStorage");
+    }
+  }, []);
 
   const requiredFields = [
     "womanName", "husbandName", "nationalId", "phone", "village", "subdistrict", "children",
@@ -120,7 +132,7 @@ export default function UploadPage() {
       const res = await fetch("/api/cluster", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rows }),
+        body: JSON.stringify({ rows, opts: settings }),
       });
 
       const data = await res.json();
@@ -235,8 +247,18 @@ export default function UploadPage() {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>Step 1: Upload Data File</CardTitle>
-          <CardDescription>Upload a .xlsx, .csv, or .txt file containing beneficiary data.</CardDescription>
+            <div className="flex justify-between items-start">
+                <div>
+                    <CardTitle>Step 1: Upload Data File</CardTitle>
+                    <CardDescription>Upload a .xlsx, .csv, or .txt file containing beneficiary data.</CardDescription>
+                </div>
+                 <Button variant="outline" asChild>
+                    <Link href="/settings">
+                        <Settings className="mr-2 h-4 w-4" />
+                        Clustering Settings
+                    </Link>
+                </Button>
+            </div>
         </CardHeader>
         <CardContent>
           <div className="flex items-center space-x-4">
