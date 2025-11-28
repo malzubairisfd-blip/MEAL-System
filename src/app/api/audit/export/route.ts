@@ -1,3 +1,4 @@
+
 // src/app/api/audit/export/route.ts
 import { NextResponse } from "next/server";
 import ExcelJS from "exceljs";
@@ -75,7 +76,8 @@ export async function POST(req: Request) {
     // Auto-fit columns
     ws.columns.forEach(column => {
         let max_width = 0;
-        column.eachCell!({ includeEmpty: true }, cell => {
+        if (!column.eachCell) return;
+        column.eachCell({ includeEmpty: true }, cell => {
             const column_width = cell.value ? cell.value.toString().length : 0;
             if (column_width > max_width) {
                 max_width = column_width;
