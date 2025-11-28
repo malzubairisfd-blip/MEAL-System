@@ -6,7 +6,7 @@ import type { RecordRow } from "@/lib/fuzzyCluster";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, Search, ChevronLeft, AlertTriangle, ChevronRight } from "lucide-react";
+import { Loader2, Search, ChevronLeft, AlertTriangle, ChevronRight, FileDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
 import { ClusterCard } from "@/components/ClusterCard";
@@ -19,6 +19,7 @@ export default function ReviewPage() {
   const [filteredClusters, setFilteredClusters] = useState<Cluster[]>([]);
   const [selectedCluster, setSelectedCluster] = useState<Cluster | null>(null);
   const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [search, setSearch] = useState("");
   const { toast } = useToast();
 
@@ -73,6 +74,70 @@ export default function ReviewPage() {
     }
   }
 
+  const exportToExcel = async () => {
+     if (filteredClusters.length === 0) {
+      toast({ title: "No Data", description: "No clusters to export.", variant: "destructive" });
+      return;
+    }
+    setExporting(true);
+
+    // We need to fetch the original raw data to build a complete report
+    // This is a limitation of the current cache setup. A better solution might store original data alongside clusters.
+    let originalData = [];
+    try {
+      const res = await fetch("/api/cluster-cache?full=true"); // A hypothetical endpoint modification
+      const data = await res.json();
+      // This part is tricky as we don't have the full original data easily accessible from cache.
+      // For now, we'll build a pseudo-originalData from the clusters themselves.
+      originalData = allClusters.flat().map(c => ({
+        [c.womanName!]: c.womanName,
+        [c.husbandName!]: c.husbandName,
+        [c.nationalId!]: c.nationalId,
+        [c.phone!]: c.phone,
+        [c.village!]: c.village,
+        [c.subdistrict!]: c.subdistrict,
+        [c.children?.join(',')!]: c.children,
+        [c.beneficiaryId!]: c.beneficiaryId,
+      }));
+    } catch (e) {
+      // Fallback if we can't get original data
+    }
+
+
+    try {
+      const response = await fetch('/api/cluster/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+            clusters: filteredClusters,
+            unclustered: [], // Not applicable in this context
+            originalData: filteredClusters.flat(), // Send flattened clusters as pseudo-original data
+            originalColumns: ["womanName", "husbandName", "nationalId", "phone", "village", "subdistrict", "children", "beneficiaryId"]
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to generate Excel file.');
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'cluster-review-report.xlsx';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      toast({ title: "Export Successful", description: "Your Excel file has been downloaded." });
+    } catch (error) {
+      console.error(error);
+      toast({ title: "Export Error", description: "Could not export data to Excel.", variant: "destructive" });
+    } finally {
+      setExporting(false);
+    }
+  };
+
   // Pagination logic
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
@@ -102,6 +167,10 @@ export default function ReviewPage() {
                         <ChevronLeft className="mr-2 h-4 w-4" />
                         Back to Upload
                     </Link>
+                </Button>
+                 <Button onClick={exportToExcel} variant="outline" disabled={exporting}>
+                    {exporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
+                    Export to Excel
                 </Button>
                 <Button asChild>
                     <Link href="/audit">
