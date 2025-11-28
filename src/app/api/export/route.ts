@@ -1,12 +1,12 @@
 
 import { NextResponse } from "next/server";
 import ExcelJS from "exceljs";
-import { fullPairwiseBreakdown } from "../../../lib/fuzzyCluster";
-import type { RecordRow } from "../../../lib/fuzzyCluster";
+import { fullPairwiseBreakdown } from "@/lib/fuzzyCluster";
+import type { RecordRow } from "@/lib/fuzzyCluster";
 
 export async function POST(req: Request) {
   try {
-    const { clusters = [], unclustered = [], originalData = [], originalColumns = [], edgesUsed = [] } = await req.json();
+    const { clusters = [], unclustered = [], originalData = [], originalColumns = [] } = await req.json();
 
     const wb = new ExcelJS.Workbook();
     wb.creator = "Beneficiary Insights";
@@ -42,7 +42,7 @@ export async function POST(req: Request) {
       "PairScore", "nameScore", "husbandScore", "idScore", "phoneScore", "locationScore", "childrenScore"
     ];
     
-    const clusteredHeader = ["ClusterID", "InternalID", ...originalColumns, ...scoreColumns];
+    const clusteredHeader = ["ClusterID", "InternalID", "BeneficiaryID", ...originalColumns, ...scoreColumns];
     wsClustered.addRow(clusteredHeader);
 
     wsClustered.getRow(1).eachCell((cell) => {
@@ -94,6 +94,7 @@ export async function POST(req: Request) {
         const rowValues = [
           `Cluster ${clusterIdCounter}`,
           record._internalId,
+          record.beneficiaryId,
           ...originalColumns.map((col: string) => originalRecord[col]),
           ...scoreColumns.map(sc => scores[sc] || "")
         ];
@@ -112,7 +113,7 @@ export async function POST(req: Request) {
 
     // --- UNCLUSTERED DATA SHEET ---
     const wsUnclustered = wb.addWorksheet("Unclustered Data");
-    wsUnclustered.addRow(["InternalID", ...originalColumns]);
+    wsUnclustered.addRow(["InternalID", "BeneficiaryID", ...originalColumns]);
 
     wsUnclustered.getRow(1).eachCell((cell) => {
       cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
@@ -124,7 +125,7 @@ export async function POST(req: Request) {
       const recordIndex = parseInt((record._internalId || 'row_-1').split('_')[1]);
        if (recordIndex === -1 || recordIndex >= originalData.length) continue;
       const originalRecord = originalData[recordIndex];
-      const rowValues = [record._internalId, ...originalColumns.map((col: string) => originalRecord[col])];
+      const rowValues = [record._internalId, record.beneficiaryId, ...originalColumns.map((col: string) => originalRecord[col])];
       const row = wsUnclustered.addRow(rowValues);
        row.eachCell({ includeEmpty: true }, (cell) => {
           cell.border = { top: { style: "thin" }, left: { style: "thin" }, bottom: { style: "thin" }, right: { style: "thin" } };
