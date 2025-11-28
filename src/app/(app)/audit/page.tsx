@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import type { RecordRow } from "@/lib/fuzzyCluster";
+import type { RecordRow } from "@/lib/auditEngine";
 import type { AuditFinding } from "@/lib/auditEngine";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -28,7 +28,7 @@ export default function AuditPage() {
         const res = await fetch("/api/cluster-cache");
         const data = await res.json();
         if (res.ok && data.clusters) {
-            const flattenedRows = data.clusters.flat();
+            const flattenedRows: RecordRow[] = data.clusters.flat();
             setRows(flattenedRows);
             if (flattenedRows.length > 0) {
               toast({ title: "Data Loaded", description: `${flattenedRows.length} records ready for audit.` });
@@ -141,7 +141,7 @@ export default function AuditPage() {
                             <div className="p-3 bg-muted/50 rounded-md">
                                 <h4 className="font-semibold mb-2">Affected Records:</h4>
                                 <ul className="space-y-1 text-sm">
-                                {f.records.map((r: any, idx: number) => (
+                                {f.records.map((r, idx: number) => (
                                     <li key={idx} className="flex justify-between">
                                     <span>{r.womanName} (Husband: {r.husbandName})</span>
                                     <span className="font-mono text-muted-foreground">ID: {r.nationalId}</span>

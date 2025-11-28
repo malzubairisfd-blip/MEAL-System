@@ -1,13 +1,31 @@
+// src/lib/auditEngine.ts
 
-import { similarityScoreDetailed, RecordRow } from "./fuzzyCluster";
+import { similarityScoreDetailed, RecordRow as FuzzyRecordRow } from "./fuzzyCluster";
+
+/* -----------------------------------------
+   TYPES
+------------------------------------------ */
+export interface RecordRow {
+  _internalId?: string;
+  womanName: string;
+  husbandName: string;
+  nationalId?: string;
+  phone?: string;
+  village?: string;
+  subdistrict?: string;
+  children?: string[];
+}
 
 export interface AuditFinding {
   type: string;
   severity: "high" | "medium" | "low";
   description: string;
-  records: any[];
+  records: RecordRow[];
 }
 
+/* -----------------------------------------
+   CHECK FOR FORBIDDEN RELATIONSHIPS
+------------------------------------------ */
 function isForbiddenRelation(name1: string, name2: string) {
   if (!name1 || !name2) return false;
   const n1 = name1.split(" ");
@@ -22,14 +40,17 @@ function isForbiddenRelation(name1: string, name2: string) {
   return false;
 }
 
+/* -----------------------------------------
+   MAIN AUDIT FUNCTION
+------------------------------------------ */
 export function runAudit(records: RecordRow[]): AuditFinding[] {
   const findings: AuditFinding[] = [];
 
   // INDEXES
-  const byWoman = new Map<string, any[]>();
-  const byHusband = new Map<string, any[]>();
-  const byNationalId = new Map<string, any[]>();
-  const byPhone = new Map<string, any[]>();
+  const byWoman = new Map<string, RecordRow[]>();
+  const byHusband = new Map<string, RecordRow[]>();
+  const byNationalId = new Map<string, RecordRow[]>();
+  const byPhone = new Map<string, RecordRow[]>();
 
   // INDEXING
   for (const r of records) {
@@ -39,20 +60,20 @@ export function runAudit(records: RecordRow[]): AuditFinding[] {
     const ph = r.phone?.trim();
 
     if (w) {
-      if (!byWoman.has(w)) byWoman.set(w, []);
-      byWoman.get(w)!.push(r);
+        if (!byWoman.has(w)) byWoman.set(w, []);
+        byWoman.get(w)!.push(r);
     }
     if (h) {
-      if (!byHusband.has(h)) byHusband.set(h, []);
-      byHusband.get(h)!.push(r);
+        if (!byHusband.has(h)) byHusband.set(h, []);
+        byHusband.get(h)!.push(r);
     }
     if (id) {
-      if (!byNationalId.has(id)) byNationalId.set(id, []);
-      byNationalId.get(id)!.push(r);
+        if (!byNationalId.has(id)) byNationalId.set(id, []);
+        byNationalId.get(id)!.push(r);
     }
     if (ph) {
-      if (!byPhone.has(ph)) byPhone.set(ph, []);
-      byPhone.get(ph)!.push(r);
+        if (!byPhone.has(ph)) byPhone.set(ph, []);
+        byPhone.get(ph)!.push(r);
     }
   }
 
@@ -63,7 +84,7 @@ export function runAudit(records: RecordRow[]): AuditFinding[] {
         type: "Duplicate Woman",
         severity: "high",
         description: `${name} appears multiple times`,
-        records: list
+        records: list,
       });
     }
   }
@@ -75,12 +96,12 @@ export function runAudit(records: RecordRow[]): AuditFinding[] {
         type: "Husband has more than 4 wives",
         severity: "high",
         description: `${name} has ${list.length} wives`,
-        records: list
+        records: list,
       });
     }
   }
 
-  // 3. ILLEGAL MARRIAGES
+  // 3. ILLEGAL MARRIAGES (siblings, forbidden relations)
   for (const [hname, women] of byHusband) {
     if (women.length > 1) {
       for (let i = 0; i < women.length; i++) {
@@ -90,7 +111,7 @@ export function runAudit(records: RecordRow[]): AuditFinding[] {
               type: "Forbidden Marriage",
               severity: "high",
               description: `${hname} is married to forbidden relatives`,
-              records: [women[i], women[j]]
+              records: [women[i], women[j]],
             });
           }
         }
@@ -105,7 +126,7 @@ export function runAudit(records: RecordRow[]): AuditFinding[] {
         type: "Duplicate National ID",
         severity: "high",
         description: `National ID ${id} appears multiple times`,
-        records: list
+        records: list,
       });
     }
   }
@@ -117,12 +138,12 @@ export function runAudit(records: RecordRow[]): AuditFinding[] {
         type: "Phone Number Reused",
         severity: "medium",
         description: `Phone number ${ph} appears multiple times`,
-        records: list
+        records: list,
       });
     }
   }
 
-  // 6. SIMILAR NAME CONFLICTS
+  // 6. SIMILAR NAME CONFLICTS (potential duplicates)
   const seenPairs = new Set<string>();
   for (let i = 0; i < records.length; i++) {
     for (let j = i + 1; j < records.length; j++) {
@@ -130,17 +151,17 @@ export function runAudit(records: RecordRow[]): AuditFinding[] {
       const b = records[j];
       
       const key = [a.womanName, b.womanName].sort().join('|');
-      if (seenPairs.has(key)) continue;
+      if(seenPairs.has(key)) continue;
       seenPairs.add(key);
 
-      const sim = similarityScoreDetailed(a, b);
+      const sim = similarityScoreDetailed(a as FuzzyRecordRow, b as FuzzyRecordRow);
 
       if (sim.score > 0.85) {
         findings.push({
           type: "Potential Duplicate",
           severity: "medium",
           description: `High similarity between ${a.womanName} and ${b.womanName}`,
-          records: [a, b]
+          records: [a, b],
         });
       }
     }
