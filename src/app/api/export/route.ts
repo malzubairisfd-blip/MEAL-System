@@ -1,8 +1,8 @@
 
 import { NextResponse } from "next/server";
 import ExcelJS from "exceljs";
-import { fullPairwiseBreakdown } from "../../../lib/fuzzyCluster";
-import type { RecordRow } from "../../../lib/fuzzyCluster";
+import { fullPairwiseBreakdown } from "../../../../src/lib/fuzzyCluster";
+import type { RecordRow } from "../../../../src/lib/fuzzyCluster";
 
 export async function POST(req: Request) {
   try {
@@ -80,7 +80,7 @@ export async function POST(req: Request) {
       
       for (const record of cluster) {
         const recordIndex = parseInt((record._internalId || 'row_-1').split('_')[1]);
-        if (recordIndex === -1) continue;
+        if (recordIndex === -1 || recordIndex >= originalData.length) continue;
         const originalRecord = originalData[recordIndex];
 
         let scores: any = {};
@@ -94,7 +94,7 @@ export async function POST(req: Request) {
         const rowValues = [
           `Cluster ${clusterIdCounter}`,
           record._internalId,
-          ...originalColumns.map(col => originalRecord[col]),
+          ...originalColumns.map((col: string) => originalRecord[col]),
           ...scoreColumns.map(sc => scores[sc] || "")
         ];
 
@@ -122,9 +122,9 @@ export async function POST(req: Request) {
 
     for (const record of unclustered) {
       const recordIndex = parseInt((record._internalId || 'row_-1').split('_')[1]);
-       if (recordIndex === -1) continue;
+       if (recordIndex === -1 || recordIndex >= originalData.length) continue;
       const originalRecord = originalData[recordIndex];
-      const rowValues = [record._internalId, ...originalColumns.map(col => originalRecord[col])];
+      const rowValues = [record._internalId, ...originalColumns.map((col: string) => originalRecord[col])];
       const row = wsUnclustered.addRow(rowValues);
        row.eachCell({ includeEmpty: true }, (cell) => {
           cell.border = { top: { style: "thin" }, left: { style: "thin" }, bottom: { style: "thin" }, right: { style: "thin" } };
