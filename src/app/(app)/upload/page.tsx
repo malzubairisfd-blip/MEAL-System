@@ -45,11 +45,13 @@ export default function UploadPage() {
     }
   }, []);
 
+  const optionalFields = ["beneficiaryId"];
   const requiredFields = [
     "womanName", "husbandName", "children", "phone", "nationalId", "subdistrict", "village",
   ];
+  const allMappingFields = [...optionalFields, ...requiredFields];
 
-  const allFieldsMapped = requiredFields.every((field) => mapping[field]);
+  const allRequiredFieldsMapped = requiredFields.every((field) => mapping[field]);
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -105,7 +107,7 @@ export default function UploadPage() {
   }
 
   const runClustering = async () => {
-    if (!rawData.length || !allFieldsMapped) {
+    if (!rawData.length || !allRequiredFieldsMapped) {
       toast({ title: "Missing Information", description: "Please upload a file and map all required columns.", variant: "destructive" });
       return;
     }
@@ -119,6 +121,7 @@ export default function UploadPage() {
 
     const rows: RecordRow[] = rawData.map((row: any, index: number) => ({
       _internalId: `row_${index}`, // Assign internal ID
+      beneficiaryId: String(row[mapping.beneficiaryId] || ""),
       womanName: String(row[mapping.womanName] || ""),
       husbandName: String(row[mapping.husbandName] || ""),
       nationalId: String(row[mapping.nationalId] || ""),
@@ -181,6 +184,7 @@ export default function UploadPage() {
 
     const processedRows: RecordRow[] = rawData.map((row: any, index: number) => ({
       _internalId: `row_${index}`,
+      beneficiaryId: String(row[mapping.beneficiaryId] || ""),
       womanName: String(row[mapping.womanName] || ""),
       husbandName: String(row[mapping.husbandName] || ""),
       nationalId: String(row[mapping.nationalId] || ""),
@@ -194,6 +198,12 @@ export default function UploadPage() {
         const index = parseInt(id.split('_')[1]);
         return processedRows[index];
     });
+
+    const originalColumnsWithBenId = [
+        mapping.beneficiaryId,
+        ...columns.filter(c => c !== mapping.beneficiaryId)
+    ].filter(Boolean);
+
 
     try {
       const response = await fetch('/api/export', {
@@ -283,14 +293,16 @@ export default function UploadPage() {
         <Card>
           <CardHeader>
             <CardTitle>Step 2: Map Columns</CardTitle>
-            <CardDescription>Match the required fields to the columns from your uploaded file.</CardDescription>
+            <CardDescription>Match the required fields to the columns from your uploaded file. Beneficiary ID is optional but recommended.</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {requiredFields.map((field) => (
+              {allMappingFields.map((field) => (
                 <div key={field} className="space-y-2">
-                  <Label htmlFor={`map-${field}`} className="flex items-center">
-                    {field} {mapping[field] && <CheckCircle className="ml-2 h-4 w-4 text-green-500" />}
+                  <Label htmlFor={`map-${field}`} className="flex items-center capitalize">
+                    {field.replace(/([A-Z])/g, ' $1')}
+                    {allRequiredFieldsMapped && requiredFields.includes(field) && <CheckCircle className="ml-2 h-4 w-4 text-green-500" />}
+                    {!requiredFields.includes(field) && <span className="ml-2 text-xs text-muted-foreground">(Optional)</span>}
                   </Label>
                   <Select
                     value={mapping[field] || ""}
@@ -310,12 +322,12 @@ export default function UploadPage() {
               ))}
             </div>
             <div className="mt-6 flex flex-col sm:flex-row gap-4 items-center">
-              <Button onClick={runClustering} disabled={loading || !allFieldsMapped} className="w-full sm:w-auto">
+              <Button onClick={runClustering} disabled={loading || !allRequiredFieldsMapped} className="w-full sm:w-auto">
                 {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ChevronRight className="mr-2 h-4 w-4" />}
                 Run Clustering
               </Button>
-              {!allFieldsMapped && (
-                  <p className="text-sm text-muted-foreground flex items-center"><AlertCircle className="h-4 w-4 mr-2" /> All fields must be mapped to run clustering.</p>
+              {!allRequiredFieldsMapped && (
+                  <p className="text-sm text-muted-foreground flex items-center"><AlertCircle className="h-4 w-4 mr-2" /> All required fields must be mapped to run clustering.</p>
               )}
             </div>
           </CardContent>
@@ -353,6 +365,7 @@ export default function UploadPage() {
                     <div className="space-y-4 p-2">
                       {cluster.map((record, i) => (
                         <div key={i} className="text-sm p-2 rounded-md bg-muted/50">
+                          <p><strong>Beneficiary ID:</strong> {record.beneficiaryId || 'N/A'}</p>
                           <p><strong>Woman:</strong> {record.womanName}</p>
                           <p><strong>Husband:</strong> {record.husbandName}</p>
                           <p><strong>Phone:</strong> {record.phone}</p>
@@ -382,5 +395,3 @@ export default function UploadPage() {
     </div>
   );
 }
-
-    

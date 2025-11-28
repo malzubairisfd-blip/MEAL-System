@@ -1,8 +1,8 @@
 
 import { NextResponse } from "next/server";
 import ExcelJS from "exceljs";
-import { fullPairwiseBreakdown } from "../../../../src/lib/fuzzyCluster";
-import type { RecordRow } from "../../../../src/lib/fuzzyCluster";
+import { fullPairwiseBreakdown } from "../../../lib/fuzzyCluster";
+import type { RecordRow } from "../../../lib/fuzzyCluster";
 
 export async function POST(req: Request) {
   try {
@@ -162,7 +162,12 @@ export async function POST(req: Request) {
     // Auto-fit columns for all sheets
     [wsSummary, wsClustered, wsUnclustered, wsEdges].forEach(ws => {
         ws.columns.forEach(column => {
+            if (!column.key && column.header) {
+                // Ensure key is set for auto-sizing to work reliably
+                column.key = Array.isArray(column.header) ? column.header.join('_') : column.header;
+            }
             if (!column.key) return; // Skip if no key
+
             let max_width = 0;
             column.eachCell!({ includeEmpty: true }, cell => {
                 const column_width = cell.value ? cell.value.toString().length : 0;
@@ -170,6 +175,9 @@ export async function POST(req: Request) {
                     max_width = column_width;
                 }
             });
+            // Also consider the header width
+            const headerWidth = Array.isArray(column.header) ? column.header.join('').length : (column.header || '').length;
+            max_width = Math.max(max_width, headerWidth);
             column.width = Math.min(50, Math.max(12, max_width + 2));
         });
     });
@@ -191,5 +199,3 @@ export async function POST(req: Request) {
     });
   }
 }
-
-    

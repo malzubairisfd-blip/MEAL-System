@@ -92,6 +92,7 @@ export function levenshtein(a: string, b: string): number {
 
 export type RecordRow = {
   _internalId?: string;
+  beneficiaryId?: string;
   nationalId?: string;
   phone?: string;
   womanName?: string;
