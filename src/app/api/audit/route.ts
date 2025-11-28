@@ -1,16 +1,18 @@
-import { runAudit } from "../../../lib/auditEngine";
+// app/api/audit/route.ts
 import { NextResponse } from "next/server";
+import { runAudit } from "../../../lib/auditEngine";
 
 export async function POST(req: Request) {
   try {
-    const { rows } = await req.json();
-    if (!rows || !Array.isArray(rows)) {
-      return NextResponse.json({ error: "Invalid rows data" }, { status: 400 });
-    }
+    const body = await req.json();
+    const rows = body.rows || [];
     const findings = runAudit(rows);
-    return NextResponse.json({ findings });
-  } catch (error: any) {
-    console.error("Audit error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+
+    return NextResponse.json({ ok: true, findings });
+  } catch (err: any) {
+    return NextResponse.json(
+      { ok: false, error: err.message || "Unknown error" },
+      { status: 500 }
+    );
   }
 }
