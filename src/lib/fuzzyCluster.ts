@@ -1,8 +1,94 @@
 // lib/fuzzyCluster.ts
 // FINAL VERSION — COMPLETE — NO QUESTIONS NEEDED
 
-import jarowinkler from "talisman/metrics/jaro-winkler";
-import levenshtein from "fast-levenshtein";
+// --------------------
+// PURE TYPESCRIPT JARO-WINKLER
+// --------------------
+export function jaroWinkler(s1: string, s2: string): number {
+  if (!s1 || !s2) return 0;
+
+  const m = Math.floor(Math.max(s1.length, s2.length) / 2) - 1;
+
+  let matches1 = new Array(s1.length).fill(false);
+  let matches2 = new Array(s2.length).fill(false);
+
+  let matches = 0;
+  let transpositions = 0;
+
+  for (let i = 0; i < s1.length; i++) {
+    const start = Math.max(0, i - m);
+    const end = Math.min(i + m + 1, s2.length);
+
+    for (let j = start; j < end; j++) {
+      if (matches2[j]) continue;
+      if (s1[i] !== s2[j]) continue;
+
+      matches1[i] = true;
+      matches2[j] = true;
+      matches++;
+      break;
+    }
+  }
+
+  if (matches === 0) return 0;
+
+  let k = 0;
+  for (let i = 0; i < s1.length; i++) {
+    if (!matches1[i]) continue;
+    while (!matches2[k]) k++;
+    if (s1[i] !== s2[k]) transpositions++;
+    k++;
+  }
+
+  const jaro =
+    (matches / s1.length +
+      matches / s2.length +
+      (matches - transpositions / 2) / matches) /
+    3;
+
+  // Jaro–Winkler prefix bonus
+  let prefix = 0;
+  const maxPrefix = 4;
+
+  for (let i = 0; i < Math.min(maxPrefix, s1.length, s2.length); i++) {
+    if (s1[i] === s2[i]) prefix++;
+    else break;
+  }
+
+  return jaro + prefix * 0.1 * (1 - jaro);
+}
+
+// --------------------
+// PURE TYPESCRIPT LEVENSHTEIN
+// --------------------
+export function levenshtein(a: string, b: string): number {
+  if (a === b) return 0;
+  if (!a.length) return b.length;
+  if (!b.length) return a.length;
+
+  const v0 = new Array(b.length + 1);
+  const v1 = new Array(b.length + 1);
+
+  for (let i = 0; i <= b.length; i++) v0[i] = i;
+
+  for (let i = 0; i < a.length; i++) {
+    v1[0] = i + 1;
+
+    for (let j = 0; j < b.length; j++) {
+      const cost = a[i] === b[j] ? 0 : 1;
+      v1[j + 1] = Math.min(
+        v1[j] + 1,
+        v0[j + 1] + 1,
+        v0[j] + cost
+      );
+    }
+
+    for (let j = 0; j <= b.length; j++) v0[j] = v1[j];
+  }
+
+  return v1[b.length];
+}
+
 
 export type RecordRow = {
   _internalId?: string;
@@ -48,11 +134,11 @@ function digits(s?: string) {
    FUZZY SCORE FUNCTIONS
 ------------------------------------------ */
 function jaro(a: string, b: string) {
-  return jarowinkler(a || "", b || "");
+  return jaroWinkler(a || "", b || "");
 }
 
 function lev(a: string, b: string) {
-  const d = levenshtein.get(a || "", b || "");
+  const d = levenshtein(a || "", b || "");
   const maxLen = Math.max(1, a.length, b.length);
   return 1 - d / maxLen;
 }
