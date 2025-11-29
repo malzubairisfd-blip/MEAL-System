@@ -337,62 +337,22 @@ export default function UploadPage() {
     toast({ title: "Step 5 Complete", description: "Data sorted by Cluster ID." });
     setExportStep(3);
   };
-
-  const handleCreateSheets = async () => {
-    if (!workbook) return;
-    try {
-        setLoading(prev => ({...prev, export: true}));
-        const response = await fetch('/api/cluster/export-sheets', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                clusters,
-                unclustered: processedRecords.filter(p => !p.clusterId),
-                originalData: rawData,
-                originalColumns: columns
-            }),
-        });
-
-        if (!response.ok) throw new Error("Failed to generate analysis sheets");
-
-        const sheetsWorkbookArrayBuffer = await response.arrayBuffer();
-        const sheetsWorkbook = XLSX.read(sheetsWorkbookArrayBuffer, { type: 'array' });
-
-        sheetsWorkbook.SheetNames.forEach(sheetName => {
-            const sheet = sheetsWorkbook.Sheets[sheetName];
-            XLSX.utils.book_append_sheet(workbook, sheet, sheetName);
-        });
-
-        setWorkbook(workbook);
-        setExportStep(4);
-        toast({ title: "Step 6 Complete", description: "Analytical sheets added." });
-    } catch(error) {
-        console.error(error);
-        toast({ title: "Error", description: "Could not create analytical sheets.", variant: "destructive" });
-    } finally {
-        setLoading(prev => ({...prev, export: false}));
-    }
-  }
   
   const handleFormat = () => {
     if (!workbook) return;
     
-    const colors = [ "FFFFE4B5", "FFADD8E6", "FF90EE90", "FFFFB6C1", "FFE0FFFF", "FFF0E68C", "FFDDA0DD", "FFB0E0E6", "FFC8A2C8", "FFF5DEB3" ];
-    const headerFill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF4B0082" } } as ExcelJS.Fill;
-    const headerFont = { bold: true, color: { argb: "FFFFFFFF" } };
-    
     // This is a mock since we can't use exceljs on the client to this extent.
     // The real formatting must be done on an API route.
     // For UI purposes, we just advance the step.
-    toast({ title: "Step 7 Complete", description: "Formatting rules prepared." });
-    setExportStep(5);
+    toast({ title: "Step 6 Complete", description: "Formatting rules prepared." });
+    setExportStep(4);
   };
   
   const handleDownload = () => {
     if (!workbook) return;
     XLSX.writeFile(workbook, `processed_${fileName || 'report.xlsx'}`);
     toast({ title: "Download Started", description: "Your file is being downloaded." });
-    setExportStep(6);
+    setExportStep(5);
   };
 
 
@@ -598,28 +558,18 @@ export default function UploadPage() {
                      <Button onClick={handleSort} disabled={exportStep !== 2} className="mt-2">Sort by Cluster ID</Button>
                 </div>
 
-                {/* Step 6: Create Sheets */}
-                 <div className={`p-4 rounded-lg border ${exportStep >= 4 ? 'border-primary' : 'bg-muted/50'}`}>
-                    <h4 className="font-semibold flex items-center"><FileSpreadsheet className="mr-2 h-5 w-5" /> 6. Create Analysis Sheets</h4>
-                    <p className="text-sm text-muted-foreground mt-1">Add new sheets for Summary & Statistics and Graph Edges.</p>
-                     <Button onClick={handleCreateSheets} disabled={exportStep !== 3 || loading.export} className="mt-2">
-                        {loading.export ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                        Create New Sheets
-                     </Button>
-                </div>
-
-                {/* Step 7: Format */}
-                <div className={`p-4 rounded-lg border ${exportStep >= 5 ? 'border-primary' : 'bg-muted/50'}`}>
-                    <h4 className="font-semibold flex items-center"><Palette className="mr-2 h-5 w-5" /> 7. Apply Formatting</h4>
+                {/* Step 6: Format */}
+                <div className={`p-4 rounded-lg border ${exportStep >= 4 ? 'border-primary' : 'bg-muted/50'}`}>
+                    <h4 className="font-semibold flex items-center"><Palette className="mr-2 h-5 w-5" /> 6. Apply Formatting</h4>
                     <p className="text-sm text-muted-foreground mt-1">Apply styling like colors, borders, and RTL layout to the entire workbook.</p>
-                     <Button onClick={handleFormat} disabled={exportStep !== 4} className="mt-2">Apply Styling</Button>
+                     <Button onClick={handleFormat} disabled={exportStep !== 3} className="mt-2">Apply Styling</Button>
                 </div>
 
-                {/* Step 8: Download */}
-                <div className={`p-4 rounded-lg border ${exportStep >= 6 ? 'border-green-500' : 'bg-muted/50'}`}>
-                    <h4 className="font-semibold flex items-center"><Download className="mr-2 h-5 w-5" /> 8. Download Final Report</h4>
+                {/* Step 7: Download */}
+                <div className={`p-4 rounded-lg border ${exportStep >= 5 ? 'border-green-500' : 'bg-muted/50'}`}>
+                    <h4 className="font-semibold flex items-center"><Download className="mr-2 h-5 w-5" /> 7. Download Final Report</h4>
                     <p className="text-sm text-muted-foreground mt-1">Download the fully processed and formatted Excel file.</p>
-                    <Button onClick={handleDownload} disabled={exportStep < 5} className="mt-2" variant="default">Download Report</Button>
+                    <Button onClick={handleDownload} disabled={exportStep < 4} className="mt-2" variant="default">Download Report</Button>
                 </div>
             </CardContent>
         </Card>
