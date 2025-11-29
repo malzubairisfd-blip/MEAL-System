@@ -153,8 +153,8 @@ export default function AuditPage() {
       doc.setFont('Amiri');
     } catch (fontError) {
       console.error("Font loading error:", fontError);
-      toast({ title: "Font Error", description: "Could not load the required font for PDF generation.", variant: "destructive" });
-      // Fallback to default font
+      toast({ title: "Font Error", description: "Could not load the required font for PDF generation. The report will be generated with a default font.", variant: "destructive" });
+      // Fallback to default font if Amiri fails to load
       doc.setFont("helvetica");
     }
     
