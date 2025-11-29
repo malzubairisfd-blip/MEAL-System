@@ -114,7 +114,6 @@ function normalizeArabic(s: string): string {
   s = s.replace(/ى/g, "ي");
   s = s.replace(/ؤ/g, "و");
   s = s.replace(/ئ/g, "ي");
-  s = s.replace(/[ءةه]/g, ""); // Remove Hamza, Taa Marbuta, and Haa
   s = s.replace(/[^ء-ي0-9 ]/g, " ");
   s = s.replace(/\s+/g, " ").trim();
   return s.toLowerCase();
@@ -168,17 +167,22 @@ function phoneScore(a?: string, b?: string) {
    PAIRWISE SCORE (THE HEART)
 ------------------------------------------ */
 export function pairwiseScore(a: RecordRow, b: RecordRow) {
-  const wA = normalizeArabic(a.womanName || "");
-  const wB = normalizeArabic(b.womanName || "");
+  const wTokensA = tokens(a.womanName);
+  const wTokensB = tokens(b.womanName);
 
-  const nameJW = jaro(wA, wB);
-  const nameLev = lev(wA, wB);
-  const perm = tokenJaccard(tokens(wA), tokens(wB));
+  const firstNameA = wTokensA[0] || "";
+  const firstNameB = wTokensB[0] || "";
+  const familyNameA = wTokensA.slice(1).join(" ");
+  const familyNameB = wTokensB.slice(1).join(" ");
+
+  const firstNameScore = jaro(firstNameA, firstNameB);
+  const familyNameScore = jaro(familyNameA, familyNameB);
 
   const hA = normalizeArabic(a.husbandName || "");
   const hB = normalizeArabic(b.husbandName || "");
   const hJW = jaro(hA, hB);
   const hPerm = tokenJaccard(tokens(hA), tokens(hB));
+  const husbandScore = Math.max(hJW, hPerm);
 
   const idMatch =
     a.nationalId && b.nationalId && String(a.nationalId) === String(b.nationalId)
@@ -204,23 +208,20 @@ export function pairwiseScore(a: RecordRow, b: RecordRow) {
 
   // WEIGHTS (TUNABLE)
   const score =
-    0.30 * nameJW +
-    0.05 * nameLev +
-    0.12 * perm +
-    0.25 * Math.max(hJW, hPerm) +
-    0.14 * idMatch +
+    0.15 * firstNameScore +
+    0.35 * familyNameScore +
+    0.15 * husbandScore +
+    0.15 * idMatch +
     0.08 * phone +
-    0.03 * loc +
-    0.08 * children;
+    0.02 * loc +
+    0.10 * children;
 
   return {
     score: Math.max(0, Math.min(1, score)),
     breakdown: {
-      nameJW,
-      nameLev,
-      perm,
-      husbandJW: hJW,
-      husbandPerm: hPerm,
+      firstNameScore,
+      familyNameScore,
+      husbandScore,
       idMatch,
       phoneScore: phone,
       location: loc,
@@ -465,12 +466,12 @@ export async function runClustering(
 export function similarityScoreDetailed(a: RecordRow, b: RecordRow) {
   const { score, breakdown: rawBreakdown } = pairwiseScore(a, b);
   const breakdown = {
-    nameScore: 0.30 * rawBreakdown.nameJW + 0.05 * rawBreakdown.nameLev + 0.12 * rawBreakdown.perm,
-    husbandScore: 0.25 * Math.max(rawBreakdown.husbandJW, rawBreakdown.husbandPerm),
-    idScore: 0.14 * rawBreakdown.idMatch,
+    nameScore: 0.15 * rawBreakdown.firstNameScore + 0.35 * rawBreakdown.familyNameScore,
+    husbandScore: 0.15 * rawBreakdown.husbandScore,
+    idScore: 0.15 * rawBreakdown.idMatch,
     phoneScore: 0.08 * rawBreakdown.phoneScore,
-    locationScore: 0.03 * rawBreakdown.location,
-    childrenScore: 0.08 * rawBreakdown.children,
+    locationScore: 0.02 * rawBreakdown.location,
+    childrenScore: 0.10 * rawBreakdown.children,
   };
   return { score, breakdown };
 }
