@@ -14,6 +14,19 @@ type ProcessedRecord = RecordRow & {
     childrenScore?: number;
 }
 
+function getFlagForScore(scoreValue: any): string {
+    if (scoreValue === undefined || scoreValue === null || scoreValue === "") return "";
+    const score = Number(scoreValue);
+    if (isNaN(score)) return "";
+
+    if (score >= 0.9) return "m?";
+    if (score >= 0.8) return "m";
+    if (score >= 0.7) return "??";
+    if (score > 0) return "?";
+    return "";
+}
+
+
 export async function POST(req: Request) {
   try {
     const { originalData = [], processedRecords = [], idColumnName = '' } = await req.json();
@@ -92,6 +105,7 @@ export async function POST(req: Request) {
     }).map(({"Cluster ID": _, ...rest}) => ({ 
         "Cluster ID": rest["Cluster ID"],
         "Cluster_ID": rest["Cluster_ID"],
+        "Flag": getFlagForScore(rest["PairScore"]),
         ...Object.fromEntries(Object.entries(rest).filter(([key]) => key !== "Cluster ID" && key !== "Cluster_ID"))
     }));
 
