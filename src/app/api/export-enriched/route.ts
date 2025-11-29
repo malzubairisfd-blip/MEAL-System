@@ -15,7 +15,7 @@ type ProcessedRecord = RecordRow & {
 }
 
 function getFlagForScore(scoreValue: any): string | null {
-    if (scoreValue === undefined || scoreValue === null || scoreValue === "") return null;
+    if (scoreValue === undefined || scoreValue === null) return null;
     const score = Number(scoreValue);
     if (isNaN(score) || score <= 0) return null;
 
@@ -114,9 +114,11 @@ export async function POST(req: Request) {
     finalData.sort((a: any, b: any) => {
         const idA = a["Cluster_ID"] === null ? Infinity : a["Cluster_ID"];
         const idB = b["Cluster_ID"] === null ? Infinity : b["Cluster_ID"];
+        
         if (idA < idB) return -1;
         if (idA > idB) return 1;
 
+        // If Cluster_IDs are the same, sort by PairScore descending
         const scoreA = a["PairScore"] === null ? -1 : a["PairScore"];
         const scoreB = b["PairScore"] === null ? -1 : b["PairScore"];
         return scoreB - scoreA;
@@ -154,7 +156,7 @@ export async function POST(req: Request) {
     ws.eachRow({ includeEmpty: false }, (row, rowNumber) => {
         if (rowNumber === 1) return;
 
-        const currentClusterId = row.getCell('Cluster ID').value;
+        const currentClusterId = row.getCell('Cluster_ID').value;
 
         // Base border for all cells
         row.eachCell({ includeEmpty: true }, cell => {
@@ -168,18 +170,14 @@ export async function POST(req: Request) {
 
         // Apply thick TOP border for the start of a new cluster
         if (currentClusterId && currentClusterId !== lastClusterId) {
-             row.eachCell({ includeEmpty: true }, cell => {
-                cell.border = { ...cell.border, top: { style: 'thick', color: { argb: 'FF000000' } } };
-             });
+             row.border = { ...row.border, top: { style: 'thick', color: { argb: 'FF000000' } } };
         }
         
         // Apply thick BOTTOM border for the end of a cluster
         const nextRow = ws.getRow(rowNumber + 1);
-        const nextClusterId = nextRow.getCell('Cluster ID').value;
+        const nextClusterId = nextRow.getCell('Cluster_ID').value;
         if (currentClusterId && currentClusterId !== nextClusterId) {
-             row.eachCell({ includeEmpty: true }, cell => {
-                cell.border = { ...cell.border, bottom: { style: 'thick', color: { argb: 'FF000000' } } };
-             });
+             row.border = { ...row.border, bottom: { style: 'thick', color: { argb: 'FF000000' } } };
         }
 
         lastClusterId = currentClusterId;
