@@ -17,13 +17,12 @@ type ProcessedRecord = RecordRow & {
 function getFlagForScore(scoreValue: any): string {
     if (scoreValue === undefined || scoreValue === null || scoreValue === "") return "";
     const score = Number(scoreValue);
-    if (isNaN(score)) return "";
+    if (isNaN(score) || score <= 0) return "";
 
     if (score >= 0.9) return "m?";
     if (score >= 0.8) return "m";
     if (score >= 0.7) return "??";
-    if (score > 0) return "?";
-    return "";
+    return "?";
 }
 
 
@@ -45,13 +44,13 @@ export async function POST(req: Request) {
     // --- Data Merging ---
     const processedMap = new Map<string, ProcessedRecord>();
     for (const p of processedRecords) {
-        if (p._internalId) { // Use internal ID for robust mapping
+        if (p._internalId) {
             processedMap.set(String(p._internalId), p);
         }
     }
     
     let enrichedData = originalData.map((row: any, index: number) => {
-        const internalId = `row_${index}`; // Reconstruct internal ID
+        const internalId = `row_${index}`;
         const match = processedMap.get(internalId);
 
         if (match) {
@@ -97,10 +96,15 @@ export async function POST(req: Request) {
     // --- Add Helper Columns ---
     const finalData = enrichedData.map(row => {
         const clusterId = row["Cluster ID"];
+        let clusterSize = "";
+        if (clusterId) {
+          clusterSize = (clusterSizeMap.get(clusterId) || "").toString();
+        }
+
         return {
             ...row,
             "Cluster_ID": clusterId ? clusterMaxIdMap.get(clusterId) || "" : "",
-            "Cluster Size": clusterId ? clusterSizeMap.get(clusterId) || "" : "",
+            "Cluster Size": clusterSize,
             "Flag": getFlagForScore(row["PairScore"]),
         };
     });
@@ -112,7 +116,6 @@ export async function POST(req: Request) {
         if (idA < idB) return -1;
         if (idA > idB) return 1;
 
-        // If Cluster IDs are the same, sort by PairScore descending
         const scoreA = a["PairScore"] !== '' ? a["PairScore"] : -1;
         const scoreB = b["PairScore"] !== '' ? b["PairScore"] : -1;
         return scoreB - scoreA;
@@ -146,34 +149,36 @@ export async function POST(req: Request) {
         cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
     });
     
-    let lastClusterId: number | null = null;
-    let clusterStartIndex = -1;
-
+    let lastClusterId: number | string | null = null;
     ws.eachRow({ includeEmpty: false }, (row, rowNumber) => {
         if (rowNumber === 1) return;
 
-        const currentClusterId = row.getCell('Cluster ID').value as number;
+        const currentClusterId = row.getCell('Cluster ID').value;
 
-        // Start of a new cluster or end of sheet
-        if (currentClusterId !== lastClusterId && lastClusterId !== null) {
-            // Apply thick bottom border to the last row of the previous cluster
-            const lastRowOfCluster = ws.getRow(rowNumber - 1);
-            lastRowOfCluster.eachCell({ includeEmpty: true }, cell => {
-                const currentBorder = cell.border || {};
-                cell.border = { ...currentBorder, bottom: { style: 'thick', color: { argb: 'FF000000' } } };
-            });
-        }
-        
-        // Start of a new cluster
-        if (currentClusterId !== lastClusterId) {
-             clusterStartIndex = rowNumber;
-             // Apply thick top border to the first row of the new cluster
+        // Apply top border for the start of a new cluster
+        if (currentClusterId && currentClusterId !== lastClusterId) {
              row.eachCell({ includeEmpty: true }, cell => {
-                 const currentBorder = cell.border || {};
-                 cell.border = { ...currentBorder, top: { style: 'thick', color: { argb: 'FF000000' } } };
+                cell.border = { ...cell.border, top: { style: 'thick', color: { argb: 'FF000000' } } };
              });
         }
         
+        // Apply bottom border for the end of a cluster
+        const nextRow = ws.getRow(rowNumber + 1);
+        const nextClusterId = nextRow.getCell('Cluster ID').value;
+        if (currentClusterId && currentClusterId !== nextClusterId) {
+             row.eachCell({ includeEmpty: true }, cell => {
+                cell.border = { ...cell.border, bottom: { style: 'thick', color: { argb: 'FF000000' } } };
+             });
+        }
+
+        // Apply standard thin inner border
+        if (currentClusterId && currentClusterId === nextClusterId) {
+            row.eachCell({ includeEmpty: true }, cell => {
+                cell.border = { ...cell.border, bottom: { style: 'thin', color: { argb: 'FFFFFFFF' } } };
+            });
+        }
+
+
         lastClusterId = currentClusterId;
 
         // Apply formatting based on score
@@ -190,40 +195,28 @@ export async function POST(req: Request) {
             fillColor = 'FFFFC7CE'; // Light Red
         } else if (score >= 0.7) {
             fillColor = 'FFFFC000'; // Orange
-        } else if(score > 0 || currentClusterId) { // Color all rows in a cluster
+        } else if(score > 0 || (currentClusterId && clusterSizeMap.get(currentClusterId as number)! > 1) ) {
             fillColor = 'FFFFFF00'; // Yellow
         }
 
-        row.eachCell({ includeEmpty: true }, (cell) => {
-            const currentBorder = cell.border || {
-                top: { style: 'thin', color: { argb: 'FFDDDDDD' } },
-                left: { style: 'thin', color: { argb: 'FFDDDDDD' } },
-                bottom: { style: 'thin', color: { argb: 'FFDDDDDD' } },
-                right: { style: 'thin', color: { argb: 'FFDDDDDD' } },
-            };
-            
-            // Apply side borders to all
-            currentBorder.left = { style: 'thick', color: { argb: 'FF000000' } };
-            currentBorder.right = { style: 'thick', color: { argb: 'FF000000' } };
-            
-            cell.border = currentBorder;
-
+        row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
             if (fillColor) {
                 cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fillColor } };
             }
             cell.font = { bold: true, color: { argb: fontColor } };
             cell.alignment = { horizontal: 'right', vertical: 'middle' };
+
+            // Apply thick side borders to all cells in a cluster row
+            if (currentClusterId) {
+                 cell.border = {
+                    ...cell.border,
+                    left: { style: 'thick', color: { argb: 'FF000000' } },
+                    right: { style: 'thick', color: { argb: 'FF000000' } },
+                };
+            }
         });
     });
 
-    // Handle the very last row of the sheet
-    if (lastClusterId !== null) {
-        const lastRow = ws.getRow(ws.rowCount);
-         lastRow.eachCell({ includeEmpty: true }, cell => {
-            const currentBorder = cell.border || {};
-            cell.border = { ...currentBorder, bottom: { style: 'thick', color: { argb: 'FF000000' } } };
-        });
-    }
 
     const buffer = await wb.xlsx.writeBuffer();
 

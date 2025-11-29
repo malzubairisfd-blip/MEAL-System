@@ -172,12 +172,17 @@ export default function UploadPage() {
 
             // For each record, find the highest score it has with another record in the cluster
             for (const record of cluster) {
-                let topScoreData = { pairScore: 0 };
+                let topScoreData: any = { pairScore: 0 };
                 for (const pair of pairs) {
                     if ((pair.a._internalId === record._internalId || pair.b._internalId === record._internalId) && pair.score > topScoreData.pairScore) {
                         topScoreData = {
                             pairScore: pair.score,
-                            ...pair.breakdown
+                            nameScore: pair.breakdown.nameScore,
+                            husbandScore: pair.breakdown.husbandScore,
+                            idScore: pair.breakdown.idScore,
+                            phoneScore: pair.breakdown.phoneScore,
+                            locationScore: pair.breakdown.locationScore,
+                            childrenScore: pair.breakdown.childrenScore,
                         };
                     }
                 }
