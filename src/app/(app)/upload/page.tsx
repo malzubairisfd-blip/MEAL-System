@@ -355,13 +355,13 @@ export default function UploadPage() {
 
         if (!response.ok) throw new Error("Failed to generate analysis sheets");
 
-        const sheetBuffers = await response.json();
+        const sheetsWorkbookArrayBuffer = await response.arrayBuffer();
+        const sheetsWorkbook = XLSX.read(sheetsWorkbookArrayBuffer, { type: 'array' });
 
-        const summaryWb = XLSX.read(Buffer.from(sheetBuffers.summary, 'base64'), {type: 'buffer'});
-        const graphWb = XLSX.read(Buffer.from(sheetBuffers.graph, 'base64'), {type: 'buffer'});
-        
-        XLSX.utils.book_append_sheet(workbook, summaryWb.Sheets[summaryWb.SheetNames[0]], "Summary & Statistics");
-        XLSX.utils.book_append_sheet(workbook, graphWb.Sheets[graphWb.SheetNames[0]], "Graph Edges");
+        sheetsWorkbook.SheetNames.forEach(sheetName => {
+            const sheet = sheetsWorkbook.Sheets[sheetName];
+            XLSX.utils.book_append_sheet(workbook, sheet, sheetName);
+        });
 
         setWorkbook(workbook);
         setExportStep(4);
@@ -602,7 +602,10 @@ export default function UploadPage() {
                  <div className={`p-4 rounded-lg border ${exportStep >= 4 ? 'border-primary' : 'bg-muted/50'}`}>
                     <h4 className="font-semibold flex items-center"><FileSpreadsheet className="mr-2 h-5 w-5" /> 6. Create Analysis Sheets</h4>
                     <p className="text-sm text-muted-foreground mt-1">Add new sheets for Summary & Statistics and Graph Edges.</p>
-                     <Button onClick={handleCreateSheets} disabled={exportStep !== 3} className="mt-2">Create New Sheets</Button>
+                     <Button onClick={handleCreateSheets} disabled={exportStep !== 3 || loading.export} className="mt-2">
+                        {loading.export ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                        Create New Sheets
+                     </Button>
                 </div>
 
                 {/* Step 7: Format */}
@@ -624,6 +627,3 @@ export default function UploadPage() {
     </div>
   );
 }
-
-    
-    

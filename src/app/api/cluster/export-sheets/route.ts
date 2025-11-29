@@ -7,10 +7,11 @@ import type { RecordRow } from "../../../../lib/fuzzyCluster";
 export async function POST(req: Request) {
   try {
     const { clusters = [], unclustered = [], originalData = [], originalColumns = [] } = await req.json();
+    
+    const wb = new ExcelJS.Workbook();
 
     // --- Summary & Stats Sheet ---
-    const summaryWb = new ExcelJS.Workbook();
-    const wsSummary = summaryWb.addWorksheet("Summary");
+    const wsSummary = wb.addWorksheet("Summary & Statistics");
     wsSummary.views = [{ rightToLeft: true }];
     wsSummary.addRow(["المقياس", "القيمة"]);
     wsSummary.getRow(1).font = { bold: true };
@@ -37,8 +38,7 @@ export async function POST(req: Request) {
 
 
     // --- Graph Edges Sheet ---
-    const graphWb = new ExcelJS.Workbook();
-    const wsEdges = graphWb.addWorksheet("Graph Edges");
+    const wsEdges = wb.addWorksheet("Graph Edges");
     wsEdges.views = [{ rightToLeft: true }];
     const scoreColumnsArabic = ["الدرجة", "درجة الاسم", "درجة الزوج", "درجة الهوية", "درجة الهاتف", "درجة الموقع", "درجة الأطفال"];
     const edgeHeader = ["معرف السجل أ", "معرف السجل ب", ...scoreColumnsArabic];
@@ -64,12 +64,14 @@ export async function POST(req: Request) {
     }
     wsEdges.columns = edgeHeader.map(h => ({ header: h, key: h, width: 20 }));
 
-    const summaryBuffer = await summaryWb.xlsx.writeBuffer();
-    const graphBuffer = await graphWb.xlsx.writeBuffer();
+    const buffer = await wb.xlsx.writeBuffer();
 
-    return NextResponse.json({
-      summary: Buffer.from(summaryBuffer).toString('base64'),
-      graph: Buffer.from(graphBuffer).toString('base64'),
+    return new NextResponse(buffer, {
+      status: 200,
+      headers: {
+        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "Content-Disposition": `attachment; filename="analytical-sheets.xlsx"`,
+      },
     });
 
   } catch (error: any) {
@@ -80,5 +82,3 @@ export async function POST(req: Request) {
     });
   }
 }
-
-    
