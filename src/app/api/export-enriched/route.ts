@@ -107,16 +107,16 @@ export async function POST(req: Request) {
         const clusterId = row["Cluster ID"];
         const newClusterIdValue = clusterId ? clusterMaxIdMap.get(clusterId) || "" : "";
         return {
-            "Cluster ID": row["Cluster ID"],
+            "Original Cluster ID": row["Cluster ID"],
             "Cluster_ID": newClusterIdValue,
             ...row,
         };
     }).map(({"Cluster ID": _, ...rest}) => ({ 
-        "Cluster ID": rest["Cluster ID"],
+        "Cluster ID": rest["Original Cluster ID"],
         "Cluster_ID": rest["Cluster_ID"],
         "Cluster Size": rest["Cluster ID"] ? clusterSizeMap.get(rest["Cluster ID"]) || 0 : "",
         "Flag": getFlagForScore(rest["PairScore"]),
-        ...Object.fromEntries(Object.entries(rest).filter(([key]) => key !== "Cluster ID" && key !== "Cluster_ID"))
+        ...Object.fromEntries(Object.entries(rest).filter(([key]) => key !== "Original Cluster ID" && key !== "Cluster_ID"))
     }));
 
 
@@ -164,7 +164,7 @@ export async function POST(req: Request) {
             fillColor = 'FFFF0000'; // Red
             font.color = { argb: 'FFFFFFFF' }; // White text
         } else if (score >= 0.8) {
-            fillColor = 'FFFFC7CE'; // Light Red (Red, Dark 25% is not a direct ARGB)
+            fillColor = 'FFFFC7CE'; // Light Red (FFC7CE)
         } else if (score >= 0.7) {
             fillColor = 'FFFFC000'; // Orange
         } else if(score > 0) {
@@ -176,8 +176,14 @@ export async function POST(req: Request) {
             cell.alignment = { horizontal: 'right', vertical: 'middle' };
             if (fillColor) {
                 cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fillColor } };
-                cell.font = font;
             }
+            // Apply font styles based on the score condition
+             if (score >= 0.8 || (score >= 0.7 && score < 0.8) || (score < 0.7 && score > 0)) {
+                cell.font = font;
+             }
+             if (score >= 0.9) {
+                cell.font = font; // This applies the white text color for >= 90
+             }
         });
     });
 
@@ -212,3 +218,5 @@ export async function POST(req: Request) {
     });
   }
 }
+
+    
