@@ -32,25 +32,24 @@ export async function POST(req: Request) {
     // --- Data Merging (XLOOKUP Logic) ---
     const processedMap = new Map<string, ProcessedRecord>();
     for (const p of processedRecords) {
-        // Use the beneficiaryId which was mapped from the user's selected column
         if (p.beneficiaryId) {
             processedMap.set(String(p.beneficiaryId), p);
         }
     }
     
-    const enrichedData = originalData.map((row: any) => {
+    let enrichedData = originalData.map((row: any) => {
         const lookupValue = String(row[idColumnName]);
         const match = processedMap.get(lookupValue);
 
         if (match) {
             return {
                 "Cluster ID": match.clusterId || "",
+                ...row, // Original data
                 "PairScore": match.pairScore?.toFixed(4) || "",
                 "nameScore": match.nameScore?.toFixed(4) || "",
                 "husbandScore": match.husbandScore?.toFixed(4) || "",
                 "idScore": match.idScore?.toFixed(4) || "",
                 "phoneScore": match.phoneScore?.toFixed(4) || "",
-                ...row, // Original data
                 "womanName_processed": match.womanName,
                 "husbandName_processed": match.husbandName,
                 "children_processed": (match.children || []).join(', '),
@@ -60,16 +59,45 @@ export async function POST(req: Request) {
                 "subdistrict_processed": match.subdistrict,
             };
         }
-        // Return original row with empty placeholders if no match
         return {
-            "Cluster ID": "", "PairScore": "", "nameScore": "", "husbandScore": "", "idScore": "", "phoneScore": "",
+            "Cluster ID": "",
             ...row,
+             "PairScore": "", "nameScore": "", "husbandScore": "", "idScore": "", "phoneScore": "",
              "womanName_processed": "", "husbandName_processed": "", "children_processed": "", "nationalId_processed": "", "phone_processed": "", "village_processed": "", "subdistrict_processed": "",
         };
     });
 
+    // --- MAXIFS Logic for Cluster_ID ---
+    const clusterMaxIdMap = new Map<number, number>();
+    for (const row of enrichedData) {
+        const clusterId = row["Cluster ID"];
+        const beneficiaryId = Number(row[idColumnName]);
+
+        if (clusterId && !isNaN(beneficiaryId)) {
+            const currentMax = clusterMaxIdMap.get(clusterId) || 0;
+            if (beneficiaryId > currentMax) {
+                clusterMaxIdMap.set(clusterId, beneficiaryId);
+            }
+        }
+    }
+
+    const finalData = enrichedData.map(row => {
+        const clusterId = row["Cluster ID"];
+        const newClusterIdValue = clusterId ? clusterMaxIdMap.get(clusterId) || "" : "";
+        return {
+            "Cluster ID": row["Cluster ID"],
+            "Cluster_ID": newClusterIdValue,
+            ...row, // The original row already contains "Cluster ID", so we need to order keys carefully
+        };
+    }).map(({"Cluster ID": _, ...rest}) => ({ // Remove original "Cluster ID" to re-insert at the start
+        "Cluster ID": rest["Cluster ID"],
+        "Cluster_ID": rest["Cluster_ID"],
+        ...Object.fromEntries(Object.entries(rest).filter(([key]) => key !== "Cluster ID" && key !== "Cluster_ID"))
+    }));
+
+
     // --- Sorting ---
-    enrichedData.sort((a: any, b: any) => {
+    finalData.sort((a: any, b: any) => {
         const idA = a["Cluster ID"] || Infinity;
         const idB = b["Cluster ID"] || Infinity;
         if (idA === Infinity && idB === Infinity) return 0;
@@ -77,44 +105,43 @@ export async function POST(req: Request) {
     });
 
     // --- Headers ---
-    if (enrichedData.length > 0) {
-        const headers = Object.keys(enrichedData[0]);
+    if (finalData.length > 0) {
+        const headers = Object.keys(finalData[0]);
         ws.columns = headers.map(h => ({ header: h, key: h, width: 20 }));
     }
 
     // --- Add Sorted and Enriched Data ---
-    ws.addRows(enrichedData);
+    ws.addRows(finalData);
 
 
     // --- Formatting ---
-    // Style header
     ws.getRow(1).eachCell((cell) => {
         cell.font = { bold: true, color: { argb: "FFFFFFFF" }, name: 'Arial' };
-        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF002060" } }; // Dark Blue
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF002060" } };
         cell.alignment = { horizontal: "center", vertical: "middle" };
         cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
     });
 
-    // Style data rows and apply conditional formatting for clusters
     const clusterColors = ['FFFFD966', 'FFA9D18E', 'FF9BC2E6', 'FFF4B084', 'FFC5C5C5', 'FFFFAEC9'];
-    let lastClusterId = null;
+    let lastClusterId: any = null;
     let colorIndex = 0;
 
     ws.eachRow({ includeEmpty: false }, (row, rowNumber) => {
-        if (rowNumber === 1) return; // Skip header
+        if (rowNumber === 1) return;
 
         const clusterIdCell = row.getCell('Cluster ID');
         const currentClusterId = clusterIdCell.value;
 
         let fillColor = undefined;
+        if (currentClusterId && currentClusterId !== lastClusterId) {
+            colorIndex = (colorIndex + 1) % clusterColors.length;
+            lastClusterId = currentClusterId;
+        }
+        
         if (currentClusterId) {
-            if (currentClusterId !== lastClusterId) {
-                colorIndex = (colorIndex + 1) % clusterColors.length;
-                lastClusterId = currentClusterId;
-            }
             fillColor = clusterColors[colorIndex];
         } else {
-             lastClusterId = null; // Reset for unclustered rows
+             lastClusterId = null;
         }
 
         row.eachCell({ includeEmpty: true }, (cell) => {
@@ -126,9 +153,8 @@ export async function POST(req: Request) {
         });
     });
 
-    // Auto-fit columns
     ws.columns.forEach(column => {
-        let max_width = 15; // minimum width
+        let max_width = 15;
         if (column.eachCell) {
             column.eachCell({ includeEmpty: true }, cell => {
                 const column_width = cell.value ? String(cell.value).length : 0;
