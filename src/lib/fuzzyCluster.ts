@@ -114,7 +114,7 @@ function normalizeArabic(s: string): string {
   s = s.replace(/ى/g, "ي");
   s = s.replace(/ؤ/g, "و");
   s = s.replace(/ئ/g, "ي");
-  s = s.replace(/ة/g, "ه");
+  s = s.replace(/[ءةه]/g, ""); // Remove Hamza, Taa Marbuta, and Haa
   s = s.replace(/[^ء-ي0-9 ]/g, " ");
   s = s.replace(/\s+/g, " ").trim();
   return s.toLowerCase();
