@@ -45,7 +45,7 @@ export async function POST(req: Request) {
             return {
                 "Cluster ID": match.clusterId || "",
                 ...row, // Original data
-                "PairScore": match.pairScore?.toFixed(4) || "",
+                "PairScore": match.pairScore ? Number(match.pairScore) : "", // Ensure it's a number
                 "nameScore": match.nameScore?.toFixed(4) || "",
                 "husbandScore": match.husbandScore?.toFixed(4) || "",
                 "idScore": match.idScore?.toFixed(4) || "",
@@ -87,9 +87,9 @@ export async function POST(req: Request) {
         return {
             "Cluster ID": row["Cluster ID"],
             "Cluster_ID": newClusterIdValue,
-            ...row, // The original row already contains "Cluster ID", so we need to order keys carefully
+            ...row,
         };
-    }).map(({"Cluster ID": _, ...rest}) => ({ // Remove original "Cluster ID" to re-insert at the start
+    }).map(({"Cluster ID": _, ...rest}) => ({ 
         "Cluster ID": rest["Cluster ID"],
         "Cluster_ID": rest["Cluster_ID"],
         ...Object.fromEntries(Object.entries(rest).filter(([key]) => key !== "Cluster ID" && key !== "Cluster_ID"))
@@ -100,8 +100,13 @@ export async function POST(req: Request) {
     finalData.sort((a: any, b: any) => {
         const idA = a["Cluster ID"] || Infinity;
         const idB = b["Cluster ID"] || Infinity;
-        if (idA === Infinity && idB === Infinity) return 0;
-        return idA - idB;
+        if (idA < idB) return -1;
+        if (idA > idB) return 1;
+
+        // If Cluster IDs are the same, sort by PairScore descending
+        const scoreA = a["PairScore"] || -1;
+        const scoreB = b["PairScore"] || -1;
+        return scoreB - scoreA;
     });
 
     // --- Headers ---
@@ -121,27 +126,25 @@ export async function POST(req: Request) {
         cell.alignment = { horizontal: "center", vertical: "middle" };
         cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
     });
-
-    const clusterColors = ['FFFFD966', 'FFA9D18E', 'FF9BC2E6', 'FFF4B084', 'FFC5C5C5', 'FFFFAEC9'];
-    let lastClusterId: any = null;
-    let colorIndex = 0;
-
+    
     ws.eachRow({ includeEmpty: false }, (row, rowNumber) => {
         if (rowNumber === 1) return;
 
-        const clusterIdCell = row.getCell('Cluster ID');
-        const currentClusterId = clusterIdCell.value;
+        const pairScoreCell = row.getCell('PairScore');
+        const score = pairScoreCell.value ? Number(pairScoreCell.value) : -1;
 
-        let fillColor = undefined;
-        if (currentClusterId && currentClusterId !== lastClusterId) {
-            colorIndex = (colorIndex + 1) % clusterColors.length;
-            lastClusterId = currentClusterId;
-        }
-        
-        if (currentClusterId) {
-            fillColor = clusterColors[colorIndex];
-        } else {
-             lastClusterId = null;
+        let fillColor: string | undefined;
+        let font: Partial<ExcelJS.Font> = { bold: true, color: { argb: 'FF000000' } }; // Default: bold black
+
+        if (score >= 0.9) {
+            fillColor = 'FFFF0000'; // Red
+            font.color = { argb: 'FFFFFFFF' }; // White text
+        } else if (score >= 0.8) {
+            fillColor = 'FFFFC7CE'; // Light Red (Red, Dark 25% is not a direct ARGB)
+        } else if (score >= 0.7) {
+            fillColor = 'FFFFC000'; // Orange
+        } else if(score > 0) {
+            fillColor = 'FFFFFF00'; // Yellow
         }
 
         row.eachCell({ includeEmpty: true }, (cell) => {
@@ -149,6 +152,7 @@ export async function POST(req: Request) {
             cell.alignment = { horizontal: 'right', vertical: 'middle' };
             if (fillColor) {
                 cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fillColor } };
+                cell.font = font;
             }
         });
     });
