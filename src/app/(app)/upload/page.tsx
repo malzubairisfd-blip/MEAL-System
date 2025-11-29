@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
-import { FileUp, Loader2, PartyPopper, ChevronRight, FileDown, CheckCircle, AlertCircle, Settings, Rows, Users, Cubes, Bot, Sigma, FileSpreadsheet, Plus, Key, ArrowDownUp, SortAsc, Palette, Download, Group, FileInput } from "lucide-react";
+import { FileUp, Loader2, PartyPopper, ChevronRight, FileDown, CheckCircle, AlertCircle, Settings, Rows, Users, Bot, Sigma, FileSpreadsheet, Plus, Key, ArrowDownUp, SortAsc, Palette, Download, Group, FileInput, Blocks } from "lucide-react";
 import Link from "next/link";
 import { fullPairwiseBreakdown } from "@/lib/fuzzyCluster";
 
@@ -511,7 +511,7 @@ export default function UploadPage() {
                         </CardContent>
                     </Card>
                      <Card>
-                        <CardHeader className="pb-2"><Cubes className="mx-auto h-6 w-6 text-blue-600" /></CardHeader>
+                        <CardHeader className="pb-2"><Blocks className="mx-auto h-6 w-6 text-blue-600" /></CardHeader>
                         <CardContent>
                             <p className="text-2xl font-bold">{summaryStats.numClusters}</p>
                             <p className="text-xs text-muted-foreground">عدد المجموعات</p>
@@ -625,4 +625,5 @@ export default function UploadPage() {
   );
 }
 
+    
     
