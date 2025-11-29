@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
-import { FileUp, Loader2, PartyPopper, ChevronRight, FileDown, CheckCircle, AlertCircle, Settings, Rows, Users, Bot, Sigma, FileSpreadsheet, Plus, Key, ArrowDownUp, SortAsc, Palette, Download, Group, FileInput, Blocks } from "lucide-react";
+import { FileUp, Loader2, PartyPopper, ChevronRight, FileDown, CheckCircle, AlertCircle, Settings, Users, Bot, Sigma, FileSpreadsheet, Plus, Key, ArrowDownUp, SortAsc, Palette, Download, Group, FileInput, Blocks } from "lucide-react";
 import Link from "next/link";
 import { fullPairwiseBreakdown } from "@/lib/fuzzyCluster";
 
@@ -45,15 +45,8 @@ export default function UploadPage() {
   const [settings, setSettings] = useState({ minPairScore: 0.60, minInternalScore: 0.50 });
   const { toast } = useToast();
 
-  // New state for export workflow
   const [showExportWorkflow, setShowExportWorkflow] = useState(false);
   const [processedRecords, setProcessedRecords] = useState<ProcessedRecord[]>([]);
-  const [workbook, setWorkbook] = useState<XLSX.WorkBook | null>(null);
-  const [worksheet, setWorksheet] = useState<XLSX.WorkSheet | null>(null);
-  const [lookupValue, setLookupValue] = useState<string>('');
-  const [matchValue, setMatchValue] = useState<string>('');
-  const [exportStep, setExportStep] = useState(0);
-
 
   useEffect(() => {
     try {
@@ -102,9 +95,6 @@ export default function UploadPage() {
       setRawData(json);
       setColumns(Object.keys(json[0] as object));
       setClusters([]);
-      setWorkbook(wb);
-      setWorksheet(ws);
-      setExportStep(0);
       setShowExportWorkflow(false);
       setProgress(100);
       toast({ title: "Success", description: "File processed. Please map the columns.", });
@@ -127,10 +117,7 @@ export default function UploadPage() {
     setClusters([]);
     setFileName("");
     setFile(null);
-    setWorkbook(null);
-    setWorksheet(null);
     setShowExportWorkflow(false);
-    setExportStep(0);
     setLoading({ process: false, cluster: false, export: false });
     setProgress(0);
     const fileInput = document.getElementById('file-upload') as HTMLInputElement;
@@ -152,7 +139,7 @@ export default function UploadPage() {
 
     const rows: RecordRow[] = rawData.map((row: any, index: number) => ({
       _internalId: `row_${index}`, // Assign internal ID
-      beneficiaryId: String(row[mapping.beneficiaryId] || ""),
+      beneficiaryId: String(row[mapping.beneficiaryId] || `row_${index}`), // Use internalId as fallback for matching
       womanName: String(row[mapping.womanName] || ""),
       husbandName: String(row[mapping.husbandName] || ""),
       nationalId: String(row[mapping.nationalId] || ""),
@@ -176,6 +163,37 @@ export default function UploadPage() {
 
       if (data.ok) {
         setClusters(data.result.clusters);
+        
+        // Generate processed records from clusters for export
+        const clusterMap = new Map<string, any>();
+        data.result.clusters.forEach((cluster: Cluster, index: number) => {
+            const pairs = fullPairwiseBreakdown(cluster);
+            if (pairs.length > 0) {
+                const topPair = pairs[0];
+                const scoreData = {
+                    clusterId: index + 1,
+                    pairScore: topPair.score,
+                    ...topPair.breakdown
+                };
+                cluster.forEach(record => {
+                    clusterMap.set(record._internalId!, { ...record, ...scoreData });
+                });
+            } else if (cluster.length > 0) {
+                cluster.forEach(record => {
+                    clusterMap.set(record._internalId!, { ...record, clusterId: index + 1 });
+                });
+            }
+        });
+
+        const allProcessed: ProcessedRecord[] = rows.map((row) => {
+            if (clusterMap.has(row._internalId!)) {
+                return clusterMap.get(row._internalId!);
+            }
+            return row;
+        });
+        setProcessedRecords(allProcessed);
+
+
         toast({
           title: "Clustering Complete",
           description: `${data.result.clusters.length} clusters found.`,
@@ -193,7 +211,7 @@ export default function UploadPage() {
     } catch (error) {
       clearInterval(interval);
       console.error(error);
-      toast({ title: "NetworkError", description: "Failed to connect to the clustering service.", variant: "destructive" });
+      toast({ title: "Network Error", description: "Failed to connect to the clustering service.", variant: "destructive" });
     } finally {
        setLoading(prev => ({...prev, cluster: false}));
        setProgress(0);
@@ -212,149 +230,48 @@ export default function UploadPage() {
 
   // --- EXPORT WORKFLOW FUNCTIONS ---
 
-  const handleCreateColumns = () => {
-    if (!worksheet) return;
-    const newHeaders = ["Cluster ID", "PairScore", "nameScore", "husbandScore", "idScore", "phoneScore", "womanName_processed", "husbandName_processed", "children_processed", "nationalId_processed", "phone_processed", "village_processed", "subdistrict_processed"];
-    
-    // This is a placeholder step to show UI change, actual XLSX modification happens later
-    setColumns(prev => [...newHeaders.slice(0,6), ...prev, ...newHeaders.slice(6)]);
-    
-    // Generate processed records from clusters
-    const clusterMap = new Map<string, any>();
-    clusters.forEach((cluster, index) => {
-        const pairs = fullPairwiseBreakdown(cluster);
-        if (pairs.length > 0) {
-            const topPair = pairs[0];
-            const scoreData = {
-                clusterId: index + 1,
-                pairScore: topPair.score,
-                ...topPair.breakdown
-            };
-            cluster.forEach(record => {
-                clusterMap.set(record._internalId!, { ...record, ...scoreData });
-            });
-        } else if (cluster.length > 0) {
-             cluster.forEach(record => {
-                clusterMap.set(record._internalId!, { ...record, clusterId: index + 1 });
-            });
-        }
-    });
-
-    const allProcessed: ProcessedRecord[] = rawData.map((row, index) => {
-        const internalId = `row_${index}`;
-        if (clusterMap.has(internalId)) {
-            return clusterMap.get(internalId);
-        }
-        return { // Create a processed record even for unclustered items
-          _internalId: internalId,
-          beneficiaryId: String(row[mapping.beneficiaryId] || ""),
-          womanName: String(row[mapping.womanName] || ""),
-          husbandName: String(row[mapping.husbandName] || ""),
-          nationalId: String(row[mapping.nationalId] || ""),
-          phone: String(row[mapping.phone] || ""),
-          village: String(row[mapping.village] || ""),
-          subdistrict: String(row[mapping.subdistrict] || ""),
-          children: String(row[mapping.children] || "").split(/[;,،]/).map((x) => x.trim()).filter(Boolean),
-        };
-    });
-    setProcessedRecords(allProcessed);
-
-    toast({ title: "Step 2 Complete", description: "New columns prepared. Please proceed to matching." });
-    setExportStep(1);
-  };
-  
-  const handleVlookup = () => {
-    if (!worksheet || !lookupValue || !matchValue || processedRecords.length === 0) {
-        toast({ title: "Missing Selection", description: "Please select columns for both match and lookup values.", variant: "destructive" });
+  const handleDownload = async () => {
+    if (processedRecords.length === 0 || rawData.length === 0 || !mapping.beneficiaryId) {
+        toast({ title: "Missing Data", description: "Please ensure data is clustered and Beneficiary ID is mapped before exporting.", variant: "destructive"});
         return;
     }
+
+    setLoading(prev => ({...prev, export: true}));
     
-    const newWs = XLSX.utils.json_to_sheet(rawData); // Start with fresh data
-    const newHeaders = ["Cluster ID", "PairScore", "nameScore", "husbandScore", "idScore", "phoneScore"];
-    const processedHeaders = ["womanName", "husbandName", "children", "nationalId", "phone", "village", "subdistrict"].map(h => `${h}_processed`);
+    try {
+        const response = await fetch('/api/export-enriched', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                originalData: rawData,
+                processedRecords,
+                idColumnName: mapping.beneficiaryId
+            }),
+        });
 
-    // Add new headers to the worksheet
-    XLSX.utils.sheet_add_aoa(newWs, [newHeaders], { origin: "A1" });
-    const originalHeader = XLSX.utils.sheet_to_json(newWs, { header: 1 })[0] as string[];
-    XLSX.utils.sheet_add_aoa(newWs, [processedHeaders], { origin: { c: originalHeader.length, r: 0 } });
-
-    const processedMap = new Map(processedRecords.map(p => [String(p[matchValue as keyof ProcessedRecord]), p]));
-    
-    const data = XLSX.utils.sheet_to_json(newWs) as any[];
-
-    const updatedData = data.map(row => {
-        const key = String(row[lookupValue]);
-        const match = processedMap.get(key);
-        if (match) {
-            return {
-                "Cluster ID": match.clusterId || "",
-                "PairScore": match.pairScore?.toFixed(4) || "",
-                "nameScore": match.nameScore?.toFixed(4) || "",
-                "husbandScore": match.husbandScore?.toFixed(4) || "",
-                "idScore": match.idScore?.toFixed(4) || "",
-                "phoneScore": match.phoneScore?.toFixed(4) || "",
-                ...row,
-                "womanName_processed": match.womanName,
-                "husbandName_processed": match.husbandName,
-                "children_processed": (match.children || []).join(', '),
-                "nationalId_processed": match.nationalId,
-                "phone_processed": match.phone,
-                "village_processed": match.village,
-                "subdistrict_processed": match.subdistrict,
-            };
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Failed to generate enriched Excel file.');
         }
-        return {
-            "Cluster ID": "", "PairScore": "", "nameScore": "", "husbandScore": "", "idScore": "", "phoneScore": "",
-            ...row,
-            "womanName_processed": "", "husbandName_processed": "", "children_processed": "", "nationalId_processed": "", "phone_processed": "", "village_processed": "", "subdistrict_processed": "",
-        };
-    });
 
-    const finalWs = XLSX.utils.json_to_sheet(updatedData);
-    setWorksheet(finalWs);
-    const newWb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(newWb, finalWs, "Enriched Data");
-    setWorkbook(newWb);
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `enriched_${fileName || 'report.xlsx'}`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+        toast({ title: "Download Started", description: "Your enriched file is being downloaded." });
 
-    toast({ title: "Step 4 Complete", description: "Data has been merged." });
-    setExportStep(2);
-  };
-  
-  const handleSort = () => {
-    if (!worksheet) return;
-    const data = XLSX.utils.sheet_to_json(worksheet) as any[];
-    data.sort((a, b) => {
-        const idA = a["Cluster ID"] || Infinity;
-        const idB = b["Cluster ID"] || Infinity;
-        return idA - idB;
-    });
-    const newWs = XLSX.utils.json_to_sheet(data);
-    setWorksheet(newWs);
-    if(workbook) {
-        workbook.Sheets[workbook.SheetNames[0]] = newWs;
-        setWorkbook(workbook);
+    } catch (error: any) {
+        console.error(error);
+        toast({ title: "Export Error", description: error.message, variant: "destructive" });
+    } finally {
+        setLoading(prev => ({...prev, export: false}));
     }
-    toast({ title: "Step 5 Complete", description: "Data sorted by Cluster ID." });
-    setExportStep(3);
   };
-  
-  const handleFormat = () => {
-    if (!workbook) return;
-    
-    // This is a mock since we can't use exceljs on the client to this extent.
-    // The real formatting must be done on an API route.
-    // For UI purposes, we just advance the step.
-    toast({ title: "Step 6 Complete", description: "Formatting rules prepared." });
-    setExportStep(4);
-  };
-  
-  const handleDownload = () => {
-    if (!workbook) return;
-    XLSX.writeFile(workbook, `processed_${fileName || 'report.xlsx'}`);
-    toast({ title: "Download Started", description: "Your file is being downloaded." });
-    setExportStep(5);
-  };
-
 
   return (
     <div className="space-y-6">
@@ -396,7 +313,7 @@ export default function UploadPage() {
         <Card>
           <CardHeader>
             <CardTitle>Step 2: Map Columns</CardTitle>
-            <CardDescription>Match the required fields to the columns from your uploaded file. Beneficiary ID is optional but recommended.</CardDescription>
+            <CardDescription>Match the required fields to the columns from your uploaded file. Beneficiary ID is required for the export workflow.</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -405,7 +322,7 @@ export default function UploadPage() {
                   <Label htmlFor={`map-${field}`} className="flex items-center capitalize">
                     {field.replace(/([A-Z])/g, ' $1')}
                     {allRequiredFieldsMapped && requiredFields.includes(field) && <CheckCircle className="ml-2 h-4 w-4 text-green-500" />}
-                    {!requiredFields.includes(field) && <span className="ml-2 text-xs text-muted-foreground">(Optional)</span>}
+                    {field === 'beneficiaryId' && <span className="ml-2 text-xs font-semibold text-destructive">(Required for Export)</span>}
                   </Label>
                   <Select
                     value={mapping[field] || ""}
@@ -505,71 +422,25 @@ export default function UploadPage() {
       {showExportWorkflow && (
         <Card>
             <CardHeader>
-                <CardTitle>Step 4: Interactive Export Workflow</CardTitle>
-                <CardDescription>Follow these steps to enrich your original file with clustering data and download the final report.</CardDescription>
+                <CardTitle>Step 4: Generate Enriched Report</CardTitle>
+                <CardDescription>Generate and download a fully enriched Excel file with all analysis data, sorting, and professional formatting applied.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-                {/* Step 1: File Info */}
-                <div className={`p-4 rounded-lg border ${exportStep >= 0 ? 'border-primary' : ''}`}>
-                    <h4 className="font-semibold flex items-center"><FileInput className="mr-2 h-5 w-5 text-primary" />1. Uploaded File</h4>
-                    <p className="text-sm text-muted-foreground mt-1">File prepared for processing: <span className="font-mono bg-muted p-1 rounded">{fileName}</span></p>
-                </div>
-
-                {/* Step 2: Create Columns */}
-                <div className={`p-4 rounded-lg border ${exportStep >= 1 ? 'border-primary' : ''}`}>
-                    <h4 className="font-semibold flex items-center"><Plus className="mr-2 h-5 w-5" /> 2. Add New Columns</h4>
-                    <p className="text-sm text-muted-foreground mt-1">Add new columns for cluster analysis data to your file.</p>
-                     <Button onClick={handleCreateColumns} disabled={exportStep > 0} className="mt-2">Create Column Headers</Button>
-                </div>
-
-                {/* Step 3: Select Keys */}
-                 <div className={`p-4 rounded-lg border ${exportStep >= 2 ? 'border-primary' : 'bg-muted/50'}`}>
-                    <h4 className="font-semibold flex items-center"><Key className="mr-2 h-5 w-5" /> 3. Select Matching Keys</h4>
-                    <p className="text-sm text-muted-foreground mt-1">Choose the columns to match the analysis data back to your original file.</p>
-                    <div className="grid grid-cols-2 gap-4 mt-2">
-                        <div>
-                            <Label>Lookup Value (From your file)</Label>
-                            <Select onValueChange={setLookupValue} disabled={exportStep !== 1}>
-                                <SelectTrigger><SelectValue placeholder="Select original column..." /></SelectTrigger>
-                                <SelectContent>{columns.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
-                            </Select>
-                        </div>
-                         <div>
-                            <Label>Match Value (From processed data)</Label>
-                            <Select onValueChange={setMatchValue} disabled={exportStep !== 1}>
-                                <SelectTrigger><SelectValue placeholder="Select processed column..." /></SelectTrigger>
-                                <SelectContent>{Object.keys(processedRecords[0] || {}).map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
-                            </Select>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Step 4: VLOOKUP */}
-                 <div className={`p-4 rounded-lg border ${exportStep >= 2 ? 'border-primary' : 'bg-muted/50'}`}>
-                    <h4 className="font-semibold flex items-center"><ArrowDownUp className="mr-2 h-5 w-5" /> 4. Add Data to New Columns</h4>
-                    <p className="text-sm text-muted-foreground mt-1">Merge the clustering results into the new columns based on the keys you selected.</p>
-                     <Button onClick={handleVlookup} disabled={exportStep !== 1 || !lookupValue || !matchValue} className="mt-2">Perform VLOOKUP</Button>
-                </div>
-                
-                {/* Step 5: Sort */}
-                <div className={`p-4 rounded-lg border ${exportStep >= 3 ? 'border-primary' : 'bg-muted/50'}`}>
-                    <h4 className="font-semibold flex items-center"><SortAsc className="mr-2 h-5 w-5" /> 5. Sort Data</h4>
-                    <p className="text-sm text-muted-foreground mt-1">Sort the entire sheet by Cluster ID to group duplicates together.</p>
-                     <Button onClick={handleSort} disabled={exportStep !== 2} className="mt-2">Sort by Cluster ID</Button>
-                </div>
-
-                {/* Step 6: Format */}
-                <div className={`p-4 rounded-lg border ${exportStep >= 4 ? 'border-primary' : 'bg-muted/50'}`}>
-                    <h4 className="font-semibold flex items-center"><Palette className="mr-2 h-5 w-5" /> 6. Apply Formatting</h4>
-                    <p className="text-sm text-muted-foreground mt-1">Apply styling like colors, borders, and RTL layout to the entire workbook.</p>
-                     <Button onClick={handleFormat} disabled={exportStep !== 3} className="mt-2">Apply Styling</Button>
-                </div>
-
-                {/* Step 7: Download */}
-                <div className={`p-4 rounded-lg border ${exportStep >= 5 ? 'border-green-500' : 'bg-muted/50'}`}>
-                    <h4 className="font-semibold flex items-center"><Download className="mr-2 h-5 w-5" /> 7. Download Final Report</h4>
-                    <p className="text-sm text-muted-foreground mt-1">Download the fully processed and formatted Excel file.</p>
-                    <Button onClick={handleDownload} disabled={exportStep < 4} className="mt-2" variant="default">Download Report</Button>
+                <div className="p-4 rounded-lg border border-primary">
+                    <h4 className="font-semibold flex items-center"><Download className="mr-2 h-5 w-5 text-primary" /> Download Enriched Report</h4>
+                    <p className="text-sm text-muted-foreground mt-2">
+                        Click the button below to generate a new Excel file. This file will contain your original data enriched with the following:
+                    </p>
+                    <ul className="text-sm text-muted-foreground mt-2 list-disc list-inside space-y-1">
+                        <li>New columns for Cluster ID and all similarity scores.</li>
+                        <li>Data sorted by Cluster ID to group potential duplicates.</li>
+                        <li>Professional styling with colors, borders, and RTL layout for easy analysis.</li>
+                    </ul>
+                     <Button onClick={handleDownload} disabled={loading.export || !mapping.beneficiaryId} className="mt-4">
+                        {loading.export ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
+                        Generate and Download Report
+                    </Button>
+                    {!mapping.beneficiaryId && <p className="text-xs text-destructive mt-2">Beneficiary ID must be mapped in Step 2 to enable export.</p>}
                 </div>
             </CardContent>
         </Card>
