@@ -14,10 +14,10 @@ type ProcessedRecord = RecordRow & {
     childrenScore?: number;
 }
 
-function getFlagForScore(scoreValue: any): string {
-    if (scoreValue === undefined || scoreValue === null || scoreValue === "") return "";
+function getFlagForScore(scoreValue: any): string | null {
+    if (scoreValue === undefined || scoreValue === null || scoreValue === "") return null;
     const score = Number(scoreValue);
-    if (isNaN(score) || score <= 0) return "";
+    if (isNaN(score) || score <= 0) return null;
 
     if (score >= 0.9) return "m?";
     if (score >= 0.8) return "m";
@@ -56,19 +56,19 @@ export async function POST(req: Request) {
         if (match) {
             return {
                 ...row, // Original data first
-                "Cluster ID": match.clusterId || "",
-                "PairScore": match.pairScore !== undefined ? Number(match.pairScore) : "",
-                "nameScore": match.nameScore !== undefined ? Number(match.nameScore) : "",
-                "husbandScore": match.husbandScore !== undefined ? Number(match.husbandScore) : "",
-                "idScore": match.idScore !== undefined ? Number(match.idScore) : "",
-                "phoneScore": match.phoneScore !== undefined ? Number(match.phoneScore) : "",
-                "locationScore": match.locationScore !== undefined ? Number(match.locationScore) : "",
-                "childrenScore": match.childrenScore !== undefined ? Number(match.childrenScore) : "",
+                "Cluster ID": match.clusterId || null,
+                "PairScore": match.pairScore !== undefined ? Number(match.pairScore) : null,
+                "nameScore": match.nameScore !== undefined ? Number(match.nameScore) : null,
+                "husbandScore": match.husbandScore !== undefined ? Number(match.husbandScore) : null,
+                "idScore": match.idScore !== undefined ? Number(match.idScore) : null,
+                "phoneScore": match.phoneScore !== undefined ? Number(match.phoneScore) : null,
+                "locationScore": match.locationScore !== undefined ? Number(match.locationScore) : null,
+                "childrenScore": match.childrenScore !== undefined ? Number(match.childrenScore) : null,
             };
         }
         return {
             ...row,
-            "Cluster ID": "", "PairScore": "", "nameScore": "", "husbandScore": "", "idScore": "", "phoneScore": "", "locationScore": "", "childrenScore": "",
+            "Cluster ID": null, "PairScore": null, "nameScore": null, "husbandScore": null, "idScore": null, "phoneScore": null, "locationScore": null, "childrenScore": null,
         };
     });
 
@@ -96,14 +96,14 @@ export async function POST(req: Request) {
     // --- Add Helper Columns ---
     const finalData = enrichedData.map(row => {
         const clusterId = row["Cluster ID"];
-        let clusterSize = "";
+        let clusterSize: number | null = null;
         if (clusterId) {
-          clusterSize = (clusterSizeMap.get(clusterId) || "").toString();
+          clusterSize = clusterSizeMap.get(clusterId) || null;
         }
 
         return {
             ...row,
-            "Cluster_ID": clusterId ? clusterMaxIdMap.get(clusterId) || "" : "",
+            "Cluster_ID": clusterId ? clusterMaxIdMap.get(clusterId) || null : null,
             "Cluster Size": clusterSize,
             "Flag": getFlagForScore(row["PairScore"]),
         };
@@ -111,13 +111,13 @@ export async function POST(req: Request) {
 
     // --- Sorting ---
     finalData.sort((a: any, b: any) => {
-        const idA = a["Cluster ID"] || Infinity;
-        const idB = b["Cluster ID"] || Infinity;
+        const idA = a["Cluster ID"] === null ? Infinity : a["Cluster ID"];
+        const idB = b["Cluster ID"] === null ? Infinity : b["Cluster ID"];
         if (idA < idB) return -1;
         if (idA > idB) return 1;
 
-        const scoreA = a["PairScore"] !== '' ? a["PairScore"] : -1;
-        const scoreB = b["PairScore"] !== '' ? b["PairScore"] : -1;
+        const scoreA = a["PairScore"] === null ? -1 : a["PairScore"];
+        const scoreB = b["PairScore"] === null ? -1 : b["PairScore"];
         return scoreB - scoreA;
     });
 
@@ -155,6 +155,16 @@ export async function POST(req: Request) {
 
         const currentClusterId = row.getCell('Cluster ID').value;
 
+        // Base border for all cells
+        row.eachCell({ includeEmpty: true }, cell => {
+            cell.border = {
+                top: { style: 'thin' }, 
+                left: { style: 'thin' }, 
+                bottom: { style: 'thin' }, 
+                right: { style: 'thin' }
+            };
+        });
+
         // Apply top border for the start of a new cluster
         if (currentClusterId && currentClusterId !== lastClusterId) {
              row.eachCell({ includeEmpty: true }, cell => {
@@ -171,7 +181,7 @@ export async function POST(req: Request) {
              });
         }
 
-        // Apply standard thin inner border
+        // Apply standard thin inner border, but make it white for contrast inside a colored block
         if (currentClusterId && currentClusterId === nextClusterId) {
             row.eachCell({ includeEmpty: true }, cell => {
                 cell.border = { ...cell.border, bottom: { style: 'thin', color: { argb: 'FFFFFFFF' } } };
@@ -237,4 +247,3 @@ export async function POST(req: Request) {
   }
 }
 
-    
