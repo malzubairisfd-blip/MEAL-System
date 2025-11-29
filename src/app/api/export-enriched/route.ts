@@ -22,7 +22,8 @@ function getFlagForScore(scoreValue: any): string | null {
     if (score >= 0.9) return "m?";
     if (score >= 0.8) return "m";
     if (score >= 0.7) return "??";
-    return "?";
+    if (score > 0) return "?";
+    return null;
 }
 
 
@@ -56,7 +57,7 @@ export async function POST(req: Request) {
         if (match) {
             return {
                 ...row, // Original data first
-                "Cluster ID": match.clusterId || null,
+                "Cluster ID": match.clusterId !== undefined ? match.clusterId : null,
                 "PairScore": match.pairScore !== undefined ? Number(match.pairScore) : null,
                 "nameScore": match.nameScore !== undefined ? Number(match.nameScore) : null,
                 "husbandScore": match.husbandScore !== undefined ? Number(match.husbandScore) : null,
@@ -111,8 +112,8 @@ export async function POST(req: Request) {
 
     // --- Sorting ---
     finalData.sort((a: any, b: any) => {
-        const idA = a["Cluster ID"] === null ? Infinity : a["Cluster ID"];
-        const idB = b["Cluster ID"] === null ? Infinity : b["Cluster ID"];
+        const idA = a["Cluster_ID"] === null ? Infinity : a["Cluster_ID"];
+        const idB = b["Cluster_ID"] === null ? Infinity : b["Cluster_ID"];
         if (idA < idB) return -1;
         if (idA > idB) return 1;
 
@@ -125,8 +126,8 @@ export async function POST(req: Request) {
     const originalHeaders = Object.keys(originalData[0] || {});
     const newHeaders = [
         "Cluster ID", "Cluster_ID", "Cluster Size", "Flag",
-        ...originalHeaders,
-        "PairScore", "nameScore", "husbandScore", "idScore", "phoneScore", "locationScore", "childrenScore"
+        "PairScore", "nameScore", "husbandScore", "idScore", "phoneScore", "locationScore", "childrenScore",
+        ...originalHeaders
     ];
     
     const reorderedData = finalData.map(row => {
@@ -158,21 +159,21 @@ export async function POST(req: Request) {
         // Base border for all cells
         row.eachCell({ includeEmpty: true }, cell => {
             cell.border = {
-                top: { style: 'thin' }, 
+                top: { style: 'thin', color: { argb: "FFFFFFFF" } }, 
                 left: { style: 'thin' }, 
-                bottom: { style: 'thin' }, 
+                bottom: { style: 'thin', color: { argb: "FFFFFFFF" } }, 
                 right: { style: 'thin' }
             };
         });
 
-        // Apply top border for the start of a new cluster
+        // Apply thick TOP border for the start of a new cluster
         if (currentClusterId && currentClusterId !== lastClusterId) {
              row.eachCell({ includeEmpty: true }, cell => {
                 cell.border = { ...cell.border, top: { style: 'thick', color: { argb: 'FF000000' } } };
              });
         }
         
-        // Apply bottom border for the end of a cluster
+        // Apply thick BOTTOM border for the end of a cluster
         const nextRow = ws.getRow(rowNumber + 1);
         const nextClusterId = nextRow.getCell('Cluster ID').value;
         if (currentClusterId && currentClusterId !== nextClusterId) {
@@ -180,14 +181,6 @@ export async function POST(req: Request) {
                 cell.border = { ...cell.border, bottom: { style: 'thick', color: { argb: 'FF000000' } } };
              });
         }
-
-        // Apply standard thin inner border, but make it white for contrast inside a colored block
-        if (currentClusterId && currentClusterId === nextClusterId) {
-            row.eachCell({ includeEmpty: true }, cell => {
-                cell.border = { ...cell.border, bottom: { style: 'thin', color: { argb: 'FFFFFFFF' } } };
-            });
-        }
-
 
         lastClusterId = currentClusterId;
 
@@ -215,15 +208,6 @@ export async function POST(req: Request) {
             }
             cell.font = { bold: true, color: { argb: fontColor } };
             cell.alignment = { horizontal: 'right', vertical: 'middle' };
-
-            // Apply thick side borders to all cells in a cluster row
-            if (currentClusterId) {
-                 cell.border = {
-                    ...cell.border,
-                    left: { style: 'thick', color: { argb: 'FF000000' } },
-                    right: { style: 'thick', color: { argb: 'FF000000' } },
-                };
-            }
         });
     });
 
@@ -246,4 +230,3 @@ export async function POST(req: Request) {
     });
   }
 }
-
