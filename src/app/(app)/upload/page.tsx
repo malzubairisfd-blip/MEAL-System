@@ -169,28 +169,40 @@ export default function UploadPage() {
         data.result.clusters.forEach((cluster: Cluster, index: number) => {
             const pairs = fullPairwiseBreakdown(cluster);
             if (pairs.length > 0) {
+                // For simplicity, we assign the top pair's score to all records in the cluster.
+                // A more advanced approach might average scores or handle it differently.
                 const topPair = pairs[0];
                 const scoreData = {
                     clusterId: index + 1,
                     pairScore: topPair.score,
-                    ...topPair.breakdown
+                    nameScore: topPair.breakdown.nameScore,
+                    husbandScore: topPair.breakdown.husbandScore,
+                    idScore: topPair.breakdown.idScore,
+                    phoneScore: topPair.breakdown.phoneScore,
+                    locationScore: topPair.breakdown.locationScore,
+                    childrenScore: topPair.breakdown.childrenScore,
                 };
                 cluster.forEach(record => {
+                    // Use internal ID as the key
                     clusterMap.set(record._internalId!, { ...record, ...scoreData });
                 });
             } else if (cluster.length > 0) {
+                 // Handle single-record clusters if they were to appear, or clusters with no valid pairs
                 cluster.forEach(record => {
                     clusterMap.set(record._internalId!, { ...record, clusterId: index + 1 });
                 });
             }
         });
 
+        // Create the final list of all records, enriching those that are in a cluster
         const allProcessed: ProcessedRecord[] = rows.map((row) => {
             if (clusterMap.has(row._internalId!)) {
                 return clusterMap.get(row._internalId!);
             }
+            // Return the original record if it's not in any cluster
             return row;
         });
+
         setProcessedRecords(allProcessed);
 
 
@@ -448,3 +460,5 @@ export default function UploadPage() {
     </div>
   );
 }
+
+    
