@@ -94,6 +94,15 @@ export async function POST(req: Request) {
         }
     }
 
+    // --- COUNTIF logic for Cluster Size ---
+    const clusterSizeMap = new Map<number, number>();
+    for (const row of enrichedData) {
+        const clusterId = row["Cluster ID"];
+        if (clusterId) {
+            clusterSizeMap.set(clusterId, (clusterSizeMap.get(clusterId) || 0) + 1);
+        }
+    }
+
     const finalData = enrichedData.map(row => {
         const clusterId = row["Cluster ID"];
         const newClusterIdValue = clusterId ? clusterMaxIdMap.get(clusterId) || "" : "";
@@ -105,6 +114,7 @@ export async function POST(req: Request) {
     }).map(({"Cluster ID": _, ...rest}) => ({ 
         "Cluster ID": rest["Cluster ID"],
         "Cluster_ID": rest["Cluster_ID"],
+        "Cluster Size": rest["Cluster ID"] ? clusterSizeMap.get(rest["Cluster ID"]) || 0 : "",
         "Flag": getFlagForScore(rest["PairScore"]),
         ...Object.fromEntries(Object.entries(rest).filter(([key]) => key !== "Cluster ID" && key !== "Cluster_ID"))
     }));
