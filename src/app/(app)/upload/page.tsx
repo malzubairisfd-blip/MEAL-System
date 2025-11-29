@@ -168,30 +168,30 @@ export default function UploadPage() {
         const clusterMap = new Map<string, any>();
         data.result.clusters.forEach((cluster: Cluster, index: number) => {
             const pairs = fullPairwiseBreakdown(cluster);
-            if (pairs.length > 0) {
-                // For simplicity, we assign the top pair's score to all records in the cluster.
-                // A more advanced approach might average scores or handle it differently.
-                const topPair = pairs[0];
-                const scoreData = {
-                    clusterId: index + 1,
-                    pairScore: topPair.score,
-                    nameScore: topPair.breakdown.nameScore,
-                    husbandScore: topPair.breakdown.husbandScore,
-                    idScore: topPair.breakdown.idScore,
-                    phoneScore: topPair.breakdown.phoneScore,
-                    locationScore: topPair.breakdown.locationScore,
-                    childrenScore: topPair.breakdown.childrenScore,
-                };
-                cluster.forEach(record => {
-                    // Use internal ID as the key
-                    clusterMap.set(record._internalId!, { ...record, ...scoreData });
-                });
-            } else if (cluster.length > 0) {
-                 // Handle single-record clusters if they were to appear, or clusters with no valid pairs
-                cluster.forEach(record => {
-                    clusterMap.set(record._internalId!, { ...record, clusterId: index + 1 });
-                });
+            const recordScores = new Map<string, any>();
+
+            // For each record, find the highest score it has with another record in the cluster
+            for (const record of cluster) {
+                let topScoreData = { pairScore: 0 };
+                for (const pair of pairs) {
+                    if ((pair.a._internalId === record._internalId || pair.b._internalId === record._internalId) && pair.score > topScoreData.pairScore) {
+                        topScoreData = {
+                            pairScore: pair.score,
+                            ...pair.breakdown
+                        };
+                    }
+                }
+                recordScores.set(record._internalId!, topScoreData);
             }
+            
+            cluster.forEach(record => {
+                const scores = recordScores.get(record._internalId!);
+                clusterMap.set(record._internalId!, {
+                    ...record,
+                    clusterId: index + 1,
+                    ...scores
+                });
+            });
         });
 
         // Create the final list of all records, enriching those that are in a cluster
@@ -410,8 +410,7 @@ export default function UploadPage() {
                         <CardHeader className="pb-2"><Sigma className="mx-auto h-6 w-6 text-purple-600" /></CardHeader>
                         <CardContent>
                             <p className="text-2xl font-bold">{summaryStats.avgClusterSize}</p>
-                            <p className="text-xs text-muted-foreground">متوسط حجم المجموعة</p>
-                        </CardContent>
+                            <p className="text-xs text-muted-foreground">متوسط حجم المجموعة</p>                        </CardContent>
                     </Card>
                 </div>
             )}
@@ -461,5 +460,4 @@ export default function UploadPage() {
   );
 }
 
-    
     
