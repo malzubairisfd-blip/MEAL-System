@@ -16,10 +16,12 @@ type Cluster = RecordRow[];
 
 export default function ReviewPage() {
   const [allClusters, setAllClusters] = useState<Cluster[]>([]);
+  const [allRows, setAllRows] = useState<RecordRow[]>([]);
   const [filteredClusters, setFilteredClusters] = useState<Cluster[]>([]);
   const [selectedCluster, setSelectedCluster] = useState<Cluster | null>(null);
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [exportMessage, setExportMessage] = useState('');
   const [search, setSearch] = useState("");
   const { toast } = useToast();
 
@@ -59,8 +61,10 @@ export default function ReviewPage() {
       const data = await res.json();
       if (res.ok) {
         const clusters = data.clusters || [];
+        const rows = data.rows || [];
         setAllClusters(clusters);
         setFilteredClusters(clusters);
+        setAllRows(rows);
         if (clusters.length === 0) {
           toast({ title: "No Data", description: "No clusters found in cache. Please upload data first." });
         }
@@ -80,39 +84,40 @@ export default function ReviewPage() {
       return;
     }
     setExporting(true);
-
-    // We need to fetch the original raw data to build a complete report
-    // This is a limitation of the current cache setup. A better solution might store original data alongside clusters.
-    let originalData = [];
-    try {
-      const res = await fetch("/api/cluster-cache?full=true"); // A hypothetical endpoint modification
-      const data = await res.json();
-      // This part is tricky as we don't have the full original data easily accessible from cache.
-      // For now, we'll build a pseudo-originalData from the clusters themselves.
-      originalData = allClusters.flat().map(c => ({
-        [c.womanName!]: c.womanName,
-        [c.husbandName!]: c.husbandName,
-        [c.nationalId!]: c.nationalId,
-        [c.phone!]: c.phone,
-        [c.village!]: c.village,
-        [c.subdistrict!]: c.subdistrict,
-        [c.children?.join(',')!]: c.children,
-        [c.beneficiaryId!]: c.beneficiaryId,
-      }));
-    } catch (e) {
-      // Fallback if we can't get original data
-    }
-
+    setExportMessage('Generating AI summaries...');
 
     try {
-      const response = await fetch('/api/cluster/export', {
+      // Step 1: Generate AI summaries for all filtered clusters in parallel
+      const summaryPromises = filteredClusters.map(cluster => 
+        fetch('/api/ai/describe-cluster', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cluster }),
+        }).then(res => res.json())
+      );
+
+      const summaryResults = await Promise.all(summaryPromises);
+      
+      const aiSummaries: { [key: number]: string } = {};
+      summaryResults.forEach((result, index) => {
+        if (result.description) {
+            // Find the original index of the cluster to use as a key
+            const cluster = filteredClusters[index];
+            const originalIndex = allClusters.findIndex(c => c[0]._internalId === cluster[0]._internalId);
+            aiSummaries[originalIndex + 1] = result.description;
+        }
+      });
+      
+      setExportMessage('Generating Excel report...');
+      
+      // Step 2: Call the new export API endpoint
+      const response = await fetch('/api/review/export', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-            clusters: filteredClusters,
-            unclustered: [], // Not applicable in this context
-            originalData: filteredClusters.flat(), // Send flattened clusters as pseudo-original data
-            originalColumns: ["womanName", "husbandName", "nationalId", "phone", "village", "subdistrict", "children", "beneficiaryId"]
+            clusters: allClusters, // Send all clusters to get correct IDs
+            allRecords: allRows,
+            aiSummaries: aiSummaries,
         }),
       });
       
@@ -135,6 +140,7 @@ export default function ReviewPage() {
       toast({ title: "Export Error", description: "Could not export data to Excel.", variant: "destructive" });
     } finally {
       setExporting(false);
+      setExportMessage('');
     }
   };
 
@@ -161,7 +167,7 @@ export default function ReviewPage() {
                 Inspect and analyze potential duplicate clusters from the last processing run. Found {filteredClusters.length} of {allClusters.length} clusters.
               </CardDescription>
             </div>
-             <div className="flex gap-2">
+             <div className="flex flex-col sm:flex-row gap-2">
                 <Button variant="outline" asChild>
                     <Link href="/upload">
                         <ChevronLeft className="mr-2 h-4 w-4" />
@@ -170,7 +176,7 @@ export default function ReviewPage() {
                 </Button>
                  <Button onClick={exportToExcel} variant="outline" disabled={exporting}>
                     {exporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
-                    Export to Excel
+                    {exporting ? exportMessage : 'Export to Excel'}
                 </Button>
                 <Button asChild>
                     <Link href="/audit">

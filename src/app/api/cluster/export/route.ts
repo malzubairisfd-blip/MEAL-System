@@ -1,15 +1,12 @@
 
 import { NextResponse } from "next/server";
 import ExcelJS from "exceljs";
-import { fullPairwiseBreakdown } from "../../../../lib/fuzzyCluster";
-import type { RecordRow } from "../../../../lib/fuzzyCluster";
 
-// This is a placeholder for the new export-sheets endpoint.
-// The main logic is now on the frontend for the interactive workflow.
-// This endpoint can be expanded later if server-side generation is needed again.
+// This endpoint is now simplified and can be deprecated or used for a simple summary.
+// The main logic is moved to /api/review/export
 export async function POST(req: Request) {
   try {
-    const { clusters = [], unclustered = [], originalData = [], originalColumns = [] } = await req.json();
+    const { clusters = [], allRecords: originalData = [] } = await req.json();
 
     const wb = new ExcelJS.Workbook();
     wb.creator = "Beneficiary Insights";
@@ -60,5 +57,3 @@ export async function POST(req: Request) {
     });
   }
 }
-
-    

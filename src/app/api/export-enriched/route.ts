@@ -29,9 +29,9 @@ function getFlagForScore(scoreValue: any): string | null {
 
 export async function POST(req: Request) {
   try {
-    const { originalData = [], processedRecords = [], idColumnName = '' } = await req.json();
+    const { processedRecords = [], originalHeaders = [], idColumnName = '' } = await req.json();
 
-    if (originalData.length === 0 || processedRecords.length === 0 || !idColumnName) {
+    if (processedRecords.length === 0 || !idColumnName) {
       return NextResponse.json({ ok: false, error: "Missing required data for export" }, { status: 400 });
     }
 
@@ -41,49 +41,19 @@ export async function POST(req: Request) {
 
     const ws = wb.addWorksheet("Enriched Data");
     ws.views = [{ rightToLeft: true }];
-
-    // --- Data Merging ---
-    const processedMap = new Map<string, ProcessedRecord>();
-    for (const p of processedRecords) {
-        if (p._internalId) {
-            processedMap.set(String(p._internalId), p);
-        }
-    }
     
-    let enrichedData = originalData.map((row: any, index: number) => {
-        const internalId = `row_${index}`;
-        const match = processedMap.get(internalId);
-
-        if (match) {
-            return {
-                ...row, // Original data first
-                "Cluster ID": match.clusterId !== undefined ? match.clusterId : null,
-                "PairScore": match.pairScore !== undefined ? Number(match.pairScore) : null,
-                "nameScore": match.nameScore !== undefined ? Number(match.nameScore) : null,
-                "husbandScore": match.husbandScore !== undefined ? Number(match.husbandScore) : null,
-                "idScore": match.idScore !== undefined ? Number(match.idScore) : null,
-                "phoneScore": match.phoneScore !== undefined ? Number(match.phoneScore) : null,
-                "locationScore": match.locationScore !== undefined ? Number(match.locationScore) : null,
-                "childrenScore": match.childrenScore !== undefined ? Number(match.childrenScore) : null,
-            };
-        }
-        return {
-            ...row,
-            "Cluster ID": null, "PairScore": null, "nameScore": null, "husbandScore": null, "idScore": null, "phoneScore": null, "locationScore": null, "childrenScore": null,
-        };
-    });
-
     // --- MAXIFS and COUNTIF Logic ---
     const clusterMaxIdMap = new Map<number, number>();
     const clusterSizeMap = new Map<number, number>();
 
-    for (const row of enrichedData) {
-        const clusterId = row["Cluster ID"];
+    for (const row of processedRecords) {
+        const clusterId = row["clusterId"];
         if (clusterId) {
             // COUNTIF
             clusterSizeMap.set(clusterId, (clusterSizeMap.get(clusterId) || 0) + 1);
             
             // MAXIFS
+            // Reconstruct the original row to get the beneficiaryId based on the original header name
             const beneficiaryId = Number(row[idColumnName]);
             if (!isNaN(beneficiaryId)) {
                 const currentMax = clusterMaxIdMap.get(clusterId) || 0;
@@ -95,8 +65,8 @@ export async function POST(req: Request) {
     }
 
     // --- Add Helper Columns ---
-    let finalData = enrichedData.map(row => {
-        const clusterId = row["Cluster ID"];
+    let finalData = processedRecords.map((row: ProcessedRecord) => {
+        const clusterId = row["clusterId"];
         let clusterSize: number | null = null;
         let finalClusterId: number | null = null;
         if (clusterId) {
@@ -104,11 +74,18 @@ export async function POST(req: Request) {
           finalClusterId = clusterMaxIdMap.get(clusterId) || null;
         }
 
+        const reconstructedRow: any = {};
+        for(const header of originalHeaders) {
+            // Find the mapped field name
+            const mappedField = Object.keys(row).find(k => row[k] === row[header]);
+            reconstructedRow[header] = row[header];
+        }
+
         return {
-            ...row,
+            ...row, // Contains all original data and scores
             "Cluster_ID": finalClusterId,
             "Cluster Size": clusterSize,
-            "Flag": getFlagForScore(row["PairScore"]),
+            "Flag": getFlagForScore(row["pairScore"]),
         };
     });
 
@@ -121,30 +98,34 @@ export async function POST(req: Request) {
             return clusterA - clusterB;
         }
 
-        const scoreA = a["PairScore"] === null ? -1 : a["PairScore"];
-        const scoreB = b["PairScore"] === null ? -1 : b["PairScore"];
+        const scoreA = a["pairScore"] === null ? -1 : a["pairScore"];
+        const scoreB = b["pairScore"] === null ? -1 : b["pairScore"];
         return scoreB - scoreA;
     });
 
 
     // --- Reorder and Define Headers ---
-    const originalHeaders = Object.keys(originalData[0] || {});
     const newHeaders = [
         "Cluster ID", "Cluster_ID", "Cluster Size", "Flag",
         "PairScore", "nameScore", "husbandScore", "idScore", "phoneScore", "locationScore", "childrenScore",
         ...originalHeaders
     ];
     
-    const reorderedData = finalData.map(row => {
-        const newRow: {[key: string]: any} = {};
-        for (const header of newHeaders) {
-            newRow[header] = row[header];
-        }
-        return newRow;
-    });
+    // Create a set of the new headers for faster lookup
+    const newHeaderSet = new Set(newHeaders);
+    
+    // Filter out original headers that are already in the new headers section (to avoid duplication)
+    const filteredOriginalHeaders = originalHeaders.filter((h: string) => !newHeaderSet.has(h));
+    
+    const finalHeaders = [
+      "Cluster_ID", "Cluster Size", "Flag",
+      "PairScore", "nameScore", "husbandScore", "idScore", "phoneScore", "locationScore", "childrenScore",
+      ...filteredOriginalHeaders
+    ];
 
-    ws.columns = newHeaders.map(h => ({ header: h, key: h, width: 15 }));
-    ws.addRows(reorderedData);
+
+    ws.columns = finalHeaders.map(h => ({ header: h, key: h, width: 15 }));
+    ws.addRows(finalData);
 
 
     // --- Formatting ---
@@ -158,9 +139,8 @@ export async function POST(req: Request) {
     ws.eachRow({ includeEmpty: false }, (row, rowNumber) => {
         if (rowNumber === 1) return;
 
-        // Apply formatting based on score
         const pairScoreCell = row.getCell('PairScore');
-        const score = pairScoreCell.value ? Number(pairScoreCell.value) : -1;
+        const score = (pairScoreCell.value !== null && pairScoreCell.value !== undefined) ? Number(pairScoreCell.value) : -1;
         
         let fillColor: string | undefined;
         let fontColor = 'FF000000'; // Default black
@@ -191,7 +171,6 @@ export async function POST(req: Request) {
         const currentRow = ws.getRow(i);
         const currentClusterId = currentRow.getCell('Cluster_ID').value;
 
-        // Determine if it's the start of a new cluster
         const isNewClusterStart = currentClusterId !== null && currentClusterId !== lastClusterId;
         if (isNewClusterStart) {
              currentRow.eachCell({ includeEmpty: true }, cell => {
@@ -199,7 +178,6 @@ export async function POST(req: Request) {
             });
         }
         
-        // Determine if it's the end of a cluster
         const nextRow = ws.getRow(i + 1);
         const nextClusterId = nextRow ? nextRow.getCell('Cluster_ID').value : null;
         const isClusterEnd = currentClusterId !== null && currentClusterId !== nextClusterId;

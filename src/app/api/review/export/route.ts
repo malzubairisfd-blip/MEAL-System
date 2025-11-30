@@ -1,0 +1,187 @@
+
+import { NextResponse } from "next/server";
+import ExcelJS from "exceljs";
+import { fullPairwiseBreakdown, type RecordRow } from "../../../../lib/fuzzyCluster";
+
+export async function POST(req: Request) {
+  try {
+    const { clusters = [], allRecords = [], aiSummaries = {} } = await req.json();
+
+    const wb = new ExcelJS.Workbook();
+    wb.creator = "Beneficiary Insights";
+    wb.created = new Date();
+    wb.lastModifiedBy = "Beneficiary Insights";
+
+    // --- Sheet 1: Summary ---
+    createSummarySheet(wb, allRecords, clusters);
+
+    // --- Sheet 2: All Records ---
+    createAllRecordsSheet(wb, allRecords, clusters);
+
+    // --- Sheet 3: Clusters ---
+    createClustersSheet(wb, clusters, aiSummaries);
+
+    const buffer = await wb.xlsx.writeBuffer();
+
+    return new NextResponse(buffer, {
+      status: 200,
+      headers: {
+        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "Content-Disposition": "attachment; filename=review-export.xlsx",
+      },
+    });
+
+  } catch (error: any) {
+    console.error('Failed to generate review export file', error);
+    return NextResponse.json({ error: "Failed to generate Excel file: " + error.message }, { status: 500 });
+  }
+}
+
+function createSummarySheet(wb: ExcelJS.Workbook, allRecords: RecordRow[], clusters: RecordRow[][]) {
+    const ws = wb.addWorksheet("ملخص");
+    ws.views = [{ rightToLeft: true }];
+    
+    // --- Title ---
+    ws.addRow(["تقرير مراجعة المجموعات"]).font = { size: 20, bold: true, name: 'Calibri' };
+    ws.mergeCells('A1:E1');
+    ws.getCell('A1').alignment = { horizontal: 'center' };
+    ws.getRow(1).height = 40;
+    ws.addRow([]); // Spacer
+
+    // --- Stats ---
+    const totalRecords = allRecords.length;
+    const clusteredRecordsCount = clusters.flat().length;
+    const unclusteredRecordsCount = totalRecords - clusteredRecordsCount;
+    const numClusters = clusters.length;
+    const avgClusterSize = numClusters > 0 ? (clusteredRecordsCount / numClusters) : 0;
+
+    const stats = [
+        { title: "إجمالي السجلات", value: totalRecords, icon: "👥" },
+        { title: "السجلات المجمعة", value: clusteredRecordsCount, icon: "🔗" },
+        { title: "السجلات غير المجمعة", value: unclusteredRecordsCount, icon: "👤" },
+        { title: "عدد المجموعات", value: numClusters, icon: "📂" },
+        { title: "متوسط حجم المجموعة", value: avgClusterSize.toFixed(2), icon: "📊" },
+    ];
+    
+    const cardRow = ws.addRow([]);
+    cardRow.height = 80;
+
+    stats.forEach((stat, index) => {
+        const col = index * 2 + 1;
+        
+        // Merge cells for the card
+        ws.mergeCells(cardRow.number, col, cardRow.number + 2, col + 1);
+        const cardCell = ws.getCell(cardRow.number, col);
+
+        // Card Styling
+        cardCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE6F2FF' } }; // Light blue
+        cardCell.border = {
+            top: { style: 'thin', color: { argb: 'FFB0C4DE' } },
+            left: { style: 'thin', color: { argb: 'FFB0C4DE' } },
+            bottom: { style: 'thin', color: { argb: 'FFB0C4DE' } },
+            right: { style: 'thin', color: { argb: 'FFB0C4DE' } },
+        };
+        cardCell.alignment = { vertical: 'middle', horizontal: 'center' };
+
+        cardCell.value = {
+            richText: [
+                { text: `${stat.icon}\n`, font: { size: 24 } },
+                { text: `${stat.title}\n`, font: { size: 12, bold: true, name: 'Calibri', color: { argb: 'FF002060' } } },
+                { text: `${stat.value}`, font: { size: 18, bold: true, name: 'Calibri', color: { argb: 'FF00529B' } } },
+            ]
+        };
+    });
+
+    ws.columns = Array(stats.length * 2).fill({ width: 12 });
+}
+
+
+function createAllRecordsSheet(wb: ExcelJS.Workbook, allRecords: RecordRow[], clusters: RecordRow[][]) {
+  const ws = wb.addWorksheet("جميع السجلات");
+  ws.views = [{ rightToLeft: true }];
+  
+  const recordToClusterIdMap = new Map<string, number>();
+  clusters.forEach((cluster, index) => {
+    cluster.forEach(record => {
+      recordToClusterIdMap.set(record._internalId!, index + 1);
+    });
+  });
+
+  const headers = Object.keys(allRecords[0] || {}).filter(h => h !== '_internalId');
+  ws.columns = [
+    { header: "معرف المجموعة", key: "clusterId", width: 15 },
+    ...headers.map(h => ({ header: h, key: h, width: 25 })),
+  ];
+  
+  ws.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' }};
+  ws.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0070C0' } }; // Blue
+  ws.getRow(1).alignment = { horizontal: 'center' };
+
+
+  allRecords.forEach(record => {
+    const clusterId = recordToClusterIdMap.get(record._internalId!) || '';
+    ws.addRow({ ...record, clusterId });
+  });
+}
+
+
+function createClustersSheet(wb: ExcelJS.Workbook, clusters: RecordRow[][], aiSummaries: { [key: number]: string }) {
+    const ws = wb.addWorksheet("تفاصيل المجموعات");
+    ws.views = [{ rightToLeft: true }];
+
+    const headers = [
+        "معرف المجموعة", "ملخص الذكاء الاصطناعي", "الدرجة", "اسم المرأة", "اسم الزوج", "الرقم القومي", "الهاتف", "الأطفال"
+    ];
+    ws.columns = headers.map(h => ({ header: h, key: h.replace(/\s/g, ''), width: h === 'ملخص الذكاء الاصطناعي' ? 60 : 25 }));
+    ws.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    ws.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4F81BD' } }; // Darker Blue
+    ws.getRow(1).alignment = { horizontal: 'center' };
+
+    let isFirstRowOfCluster = true;
+    clusters.forEach((cluster, index) => {
+        const clusterId = index + 1;
+        const pairs = fullPairwiseBreakdown(cluster);
+        isFirstRowOfCluster = true;
+        const aiSummary = aiSummaries[clusterId] || '';
+
+        // Add a row for each pair
+        pairs.forEach(pair => {
+            const addRecordToSheet = (record: RecordRow) => {
+                 ws.addRow({
+                    'معرفالمجموعة': isFirstRowOfCluster ? clusterId : '',
+                    'ملخصالذكاءالاصطناعي': isFirstRowOfCluster ? aiSummary : '',
+                    'الدرجة': pair.score.toFixed(4),
+                    'اسمالمرأة': record.womanName,
+                    'اسمالزوج': record.husbandName,
+                    'الرقمالقومي': record.nationalId,
+                    'الهاتف': record.phone,
+                    'الأطفال': (record.children || []).join(', '),
+                });
+                const addedRow = ws.lastRow!;
+                if(isFirstRowOfCluster) {
+                   addedRow.getCell(1).alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+                   addedRow.getCell(2).alignment = { vertical: 'middle', wrapText: true, horizontal: 'right' };
+                }
+                isFirstRowOfCluster = false;
+            }
+            
+            addRecordToSheet(pair.a);
+            addRecordToSheet(pair.b);
+
+            const scoreCell = ws.lastRow!.getCell(3);
+            scoreCell.font = { bold: true };
+            if (pair.score > 0.9) scoreCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFC7CE' } };
+            else if (pair.score > 0.8) scoreCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFEB9C' } };
+
+
+            // Add a thin separator after the pair
+            ws.addRow([]).eachCell(c => c.border = { bottom: {style: 'thin', color: {argb: 'FFD9D9D9'}}});
+            isFirstRowOfCluster = true; // Reset for the next pair in the same conceptual cluster if needed
+        });
+        
+        // Add a thick separator between clusters
+        const separatorRow = ws.addRow([]);
+        separatorRow.height = 5;
+        separatorRow.eachCell(c => c.border = { bottom: {style: 'thick', color: {argb: 'FF4F81BD'}}});
+    });
+}

@@ -219,7 +219,7 @@ export default function UploadPage() {
         await fetch("/api/cluster-cache", {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ clusters: data.result.clusters }),
+            body: JSON.stringify({ clusters: data.result.clusters, rows: rows }),
         });
       } else {
         toast({ title: "Clustering Error", description: data.error, variant: "destructive" });
@@ -248,7 +248,7 @@ export default function UploadPage() {
   // --- EXPORT WORKFLOW FUNCTIONS ---
 
   const handleDownload = async () => {
-    if (processedRecords.length === 0 || rawData.length === 0 || !mapping.beneficiaryId) {
+    if (processedRecords.length === 0 || !mapping.beneficiaryId) {
         toast({ title: "Missing Data", description: "Please ensure data is clustered and Beneficiary ID is mapped before exporting.", variant: "destructive"});
         return;
     }
@@ -260,8 +260,8 @@ export default function UploadPage() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
-                originalData: rawData,
                 processedRecords,
+                originalHeaders: columns,
                 idColumnName: mapping.beneficiaryId
             }),
         });
@@ -464,5 +464,3 @@ export default function UploadPage() {
     </div>
   );
 }
-
-    
