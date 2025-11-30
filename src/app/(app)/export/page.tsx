@@ -125,14 +125,17 @@ export default function ExportPage() {
             
             const dataToSort = [...enrichedData];
             dataToSort.sort((a, b) => {
-                const clusterA = a.Cluster_ID ?? Number.MAX_SAFE_INTEGER;
-                const clusterB = b.Cluster_ID ?? Number.MAX_SAFE_INTEGER;
-                if (clusterA !== clusterB) {
-                    return clusterA - clusterB;
-                }
+                // Primary sort: pairScore descending
                 const scoreA = a.pairScore ?? -1;
                 const scoreB = b.pairScore ?? -1;
-                return scoreB - scoreA;
+                if (scoreA !== scoreB) {
+                    return scoreB - scoreA;
+                }
+
+                // Secondary sort: Cluster_ID ascending
+                const clusterA = a.Cluster_ID ?? Number.MAX_SAFE_INTEGER;
+                const clusterB = b.Cluster_ID ?? Number.MAX_SAFE_INTEGER;
+                return clusterA - clusterB;
             });
             
             sessionStorage.setItem('sortedData', JSON.stringify(dataToSort));
@@ -225,7 +228,7 @@ export default function ExportPage() {
                      <div className="flex items-center gap-4 p-4 border rounded-lg">
                         <div className="flex-1 space-y-1">
                             <h4 className="font-semibold">Step 2: Sort Data</h4>
-                            <p className="text-sm text-muted-foreground">Sort the enriched data by Cluster ID (ascending) and then by Pair Score (descending).</p>
+                            <p className="text-sm text-muted-foreground">Sort the enriched data by Pair Score (descending) and then by Cluster ID (ascending).</p>
                         </div>
                         <Button onClick={handleSortData} disabled={loading || status.sorted || !status.enriched}>
                              {loading && !status.sorted ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
@@ -265,4 +268,5 @@ export default function ExportPage() {
     );
 }
 
+    
     

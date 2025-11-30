@@ -62,13 +62,13 @@ function createEnrichedDataSheet(wb: ExcelJS.Workbook, data: EnrichedRecord[], o
     const headers = [
         "Cluster_ID", "ClusterSize", "Flag", "pairScore", "nameScore",
         "husbandScore", "idScore", "phoneScore", "locationScore", "childrenScore",
-        ...originalHeaders.filter(h => ![
-            "womanName", "husbandName", "nationalId", "phone", "village", "subdistrict", "children", "beneficiaryId"
-        ].includes(h)),
-        "womanName", "husbandName", "nationalId", "phone", "village", "subdistrict", "children"
+        ...originalHeaders
     ];
+    
+    // Use a Set to avoid duplicate headers
+    const uniqueHeaders = [...new Set(headers)];
 
-    ws.columns = headers.map(h => ({
+    ws.columns = uniqueHeaders.map(h => ({
         header: h,
         key: h,
         width: ["womanName", "husbandName"].includes(h) ? 25 : 15
@@ -280,3 +280,5 @@ function createAuditSheet(wb: ExcelJS.Workbook, findings: AuditFinding[]) {
         ws.addRow([]).eachCell(cell => cell.fill = {type: 'pattern', pattern: 'solid', fgColor: {argb: 'FFDDDDDD'}});
     }
 }
+
+    
