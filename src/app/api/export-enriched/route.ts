@@ -91,15 +91,19 @@ export async function POST(req: Request) {
 
     // --- Sorting ---
     finalData.sort((a: any, b: any) => {
+        // Handle nulls for Cluster_ID by treating them as larger than any number
         const clusterA = a["Cluster_ID"] === null ? Infinity : a["Cluster_ID"];
         const clusterB = b["Cluster_ID"] === null ? Infinity : b["Cluster_ID"];
 
         if (clusterA !== clusterB) {
-            return clusterA - clusterB;
+            return clusterA - clusterB; // Ascending sort for Cluster_ID
         }
 
-        const scoreA = a["pairScore"] === null ? -1 : a["pairScore"];
-        const scoreB = b["pairScore"] === null ? -1 : b["pairScore"];
+        // Handle nulls for pairScore
+        const scoreA = a["pairScore"] === null || a["pairScore"] === undefined ? -1 : a["pairScore"];
+        const scoreB = b["pairScore"] === null || b["pairScore"] === undefined ? -1 : b["pairScore"];
+        
+        // Descending sort for pairScore within the same cluster
         return scoreB - scoreA;
     });
 
