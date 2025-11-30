@@ -7,7 +7,6 @@ import type { RecordRow } from "@/lib/fuzzyCluster";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
@@ -15,6 +14,8 @@ import { useToast } from "@/hooks/use-toast";
 import { FileUp, Loader2, PartyPopper, ChevronRight, FileDown, CheckCircle, AlertCircle, Settings, Users, Bot, Sigma, FileSpreadsheet, Plus, Key, ArrowDownUp, SortAsc, Palette, Download, Group, FileInput, Blocks } from "lucide-react";
 import Link from "next/link";
 import { fullPairwiseBreakdown } from "@/lib/fuzzyCluster";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 type Mapping = {
   [key: string]: string;
@@ -333,28 +334,33 @@ export default function UploadPage() {
             <CardDescription>Match the required fields to the columns from your uploaded file. Beneficiary ID is required for the export workflow.</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {allMappingFields.map((field) => (
                 <div key={field} className="space-y-2">
-                  <Label htmlFor={`map-${field}`} className="flex items-center capitalize">
+                  <Label className="flex items-center capitalize">
                     {field.replace(/([A-Z])/g, ' $1')}
-                    {allRequiredFieldsMapped && requiredFields.includes(field) && <CheckCircle className="ml-2 h-4 w-4 text-green-500" />}
-                    {field === 'beneficiaryId' && <span className="ml-2 text-xs font-semibold text-destructive">(Required for Export)</span>}
+                    {mapping[field] && <CheckCircle className="ml-2 h-4 w-4 text-green-500" />}
+                    {!requiredFields.includes(field) && <span className="ml-2 text-xs font-normal text-muted-foreground">(Optional)</span>}
                   </Label>
-                  <Select
-                    value={mapping[field] || ""}
-                    onValueChange={(value) => setMapping((m) => ({ ...m, [field]: value }))}
-                    disabled={loading.process || loading.cluster || loading.export}
-                  >
-                    <SelectTrigger id={`map-${field}`}>
-                      <SelectValue placeholder="Select a column..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {columns.map((c) => (
-                        <SelectItem key={c} value={c}>{c}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Card>
+                    <CardContent className="p-2">
+                      <ScrollArea className="h-32 w-full">
+                        <RadioGroup
+                          value={mapping[field] || ""}
+                          onValueChange={(value) => setMapping((m) => ({ ...m, [field]: value }))}
+                          className="grid grid-cols-2 gap-x-4 gap-y-2 p-2"
+                          disabled={loading.process || loading.cluster || loading.export}
+                        >
+                          {columns.map((c) => (
+                            <div key={`${field}-${c}`} className="flex items-center space-x-2">
+                              <RadioGroupItem value={c} id={`${field}-${c}`} />
+                              <Label htmlFor={`${field}-${c}`} className="text-sm font-normal truncate" title={c}>{c}</Label>
+                            </div>
+                          ))}
+                        </RadioGroup>
+                      </ScrollArea>
+                    </CardContent>
+                  </Card>
                 </div>
               ))}
             </div>
