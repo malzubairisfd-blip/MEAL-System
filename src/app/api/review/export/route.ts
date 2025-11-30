@@ -84,10 +84,15 @@ function createSummarySheet(wb: ExcelJS.Workbook, allRecords: RecordRow[], clust
             if (!stat) return;
             
             const startCol = colIndex === 0 ? 'B' : 'E';
-            const endCol = colIndex === 0 ? 'B' : 'E';
+            
+            // For ExcelJS, we reference cells by their top-left coordinate for merging.
+            // B4:C7, E4:F7 etc. We need to calculate the end column.
+            const startColNum = colIndex === 0 ? 2 : 5; // B is 2, E is 5
+            const endColNum = startColNum + 1; // Merge 2 columns
+            const endRow = currentRow + 3;
 
-            ws.mergeCells(`${startCol}${currentRow}:${endCol}${currentRow + 3}`);
-            const cardCell = ws.getCell(`${startCol}${currentRow}`);
+            ws.mergeCells(currentRow, startColNum, endRow, endColNum);
+            const cardCell = ws.getCell(startCol + currentRow);
             
             cardCell.value = {
                 richText: [
@@ -132,8 +137,12 @@ function createAllRecordsSheet(wb: ExcelJS.Workbook, allRecords: RecordRow[], cl
   headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' }};
   headerRow.alignment = { horizontal: 'center' };
   
-  headerRow.eachCell({ includeEmpty: false }, (cell) => {
-    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0070C0' } }; // Blue
+  // Apply fill only to cells that have a header
+  ws.columns.forEach((_col, index) => {
+    const cell = headerRow.getCell(index + 1);
+    if (cell.value) {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0070C0' } }; // Blue
+    }
   });
 
 
@@ -157,20 +166,23 @@ function createClustersSheet(wb: ExcelJS.Workbook, clusters: RecordRow[][], aiSu
     headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4F81BD' } }; // Darker Blue
     headerRow.alignment = { horizontal: 'center' };
 
-    let isFirstRowOfCluster = true;
+    let currentRowIndex = 2; // Start after header
     clusters.forEach((cluster, index) => {
         const clusterId = index + 1;
         const pairs = fullPairwiseBreakdown(cluster);
-        isFirstRowOfCluster = true;
+        if (pairs.length === 0 && cluster.length < 2) return; // Should not happen for clusters > 1
+        
+        const clusterRowCount = pairs.length * 2; // Each pair has 2 records
+        const startRow = currentRowIndex;
+        const endRow = startRow + clusterRowCount - 1;
+        
         const aiSummary = aiSummaries[clusterId] || '';
 
-        let isFirstPair = true;
-        // Add a row for each pair
+        // Add all rows for the cluster first
         pairs.forEach(pair => {
-            const addRecordToSheet = (record: RecordRow, isA: boolean) => {
+            const addRecordToSheet = (record: RecordRow) => {
                  ws.addRow({
-                    'معرفالمجموعة': isFirstPair && isA ? clusterId : '',
-                    'ملخصالذكاءالاصطناعي': isFirstPair && isA ? aiSummary : '',
+                    // 'معرفالمجموعة' and 'ملخصالذكاءالاصطناعي' will be set after merging
                     'الدرجة': pair.score.toFixed(4),
                     'اسمالمرأة': record.womanName,
                     'اسمالزوج': record.husbandName,
@@ -179,31 +191,49 @@ function createClustersSheet(wb: ExcelJS.Workbook, clusters: RecordRow[][], aiSu
                     'الأطفال': (record.children || []).join(', '),
                 });
                 const addedRow = ws.lastRow!;
-                if(isFirstPair && isA) {
-                   addedRow.getCell(1).alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
-                   addedRow.getCell(2).alignment = { vertical: 'middle', wrapText: true, horizontal: 'right' };
-                }
-            }
+                const scoreCell = addedRow.getCell('الدرجة');
+                scoreCell.font = { bold: true };
+                if (pair.score > 0.9) scoreCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFC7CE' } };
+                else if (pair.score > 0.8) scoreCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFEB9C' } };
+            };
             
-            addRecordToSheet(pair.a, true);
-            addRecordToSheet(pair.b, false);
-            isFirstPair = false;
-
-            const scoreCellA = ws.getRow(ws.rowCount -1).getCell(3);
-            const scoreCellB = ws.lastRow!.getCell(3);
-            [scoreCellA, scoreCellB].forEach(cell => {
-                cell.font = { bold: true };
-                if (pair.score > 0.9) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFC7CE' } };
-                else if (pair.score > 0.8) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFEB9C' } };
-            });
-
-            // Add a thin separator after the pair
-            ws.addRow([]).eachCell(c => c.border = { bottom: {style: 'thin', color: {argb: 'FFD9D9D9'}}});
+            addRecordToSheet(pair.a);
+            addRecordToSheet(pair.b);
         });
+
+        // Merge cells for Cluster ID and AI Summary
+        if (clusterRowCount > 0) {
+            // Merge Cluster ID
+            ws.mergeCells(`A${startRow}:A${endRow}`);
+            const clusterIdCell = ws.getCell(`A${startRow}`);
+            clusterIdCell.value = clusterId;
+            clusterIdCell.alignment = { vertical: 'middle', horizontal: 'center' };
+
+            // Merge AI Summary
+            ws.mergeCells(`B${startRow}:B${endRow}`);
+            const summaryCell = ws.getCell(`B${startRow}`);
+            summaryCell.value = aiSummary;
+            summaryCell.alignment = { vertical: 'middle', horizontal: 'right', wrapText: true };
+        }
+
+        // Apply thick border around the entire cluster block
+        for (let i = startRow; i <= endRow; i++) {
+            const row = ws.getRow(i);
+            row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+                const border: Partial<ExcelJS.Borders> = {};
+                if (i === startRow) border.top = { style: 'thick', color: { argb: 'FF4F81BD' } };
+                if (i === endRow) border.bottom = { style: 'thick', color: { argb: 'FF4F81BD' } };
+                if (colNumber === 1) border.left = { style: 'thick', color: { argb: 'FF4F81BD' } };
+                if (colNumber === ws.columns.length) border.right = { style: 'thick', color: { argb: 'FF4F81BD' } };
+                
+                // Add thin inner borders
+                if (i < endRow && !border.bottom) border.bottom = { style: 'thin', color: { argb: 'FFD9D9D9' }};
+                if (colNumber > 1 && !border.left) border.left = {style: 'thin', color: { argb: 'FFD9D9D9' }};
+
+                cell.border = { ...cell.border, ...border };
+            });
+        }
         
-        // Add a thick separator between clusters
-        const separatorRow = ws.addRow([]);
-        separatorRow.height = 5;
-        separatorRow.eachCell(c => c.border = { bottom: {style: 'thick', color: {argb: 'FF4F81BD'}}});
+        currentRowIndex = endRow + 1;
     });
 }
