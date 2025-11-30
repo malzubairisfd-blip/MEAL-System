@@ -152,49 +152,51 @@ export default function UploadPage() {
     setLoading(prev => ({...prev, cluster: true}));
     setProgress(0);
 
-    const interval = setInterval(() => {
+    const progressInterval = setInterval(() => {
         setProgress(prev => (prev < 90 ? prev + 5 : 90));
     }, 500);
 
-    const rows: RecordRow[] = rawData.map((row: any, index: number) => ({
-      ...row,
-      _internalId: `row_${index}`,
-      beneficiaryId: String(row[mapping.beneficiaryId] || `row_${index}`),
-      womanName: String(row[mapping.womanName] || ""),
-      husbandName: String(row[mapping.husbandName] || ""),
-      nationalId: String(row[mapping.nationalId] || ""),
-      phone: String(row[mapping.phone] || ""),
-      village: String(row[mapping.village] || ""),
-      subdistrict: String(row[mapping.subdistrict] || ""),
-      children: String(row[mapping.children] || "").split(/[;,،]/).map((x) => x.trim()).filter(Boolean),
-    }));
-
-    const fieldsForApi = rows.map(row => ({
-      _internalId: row._internalId,
-      beneficiaryId: row.beneficiaryId,
-      womanName: row.womanName,
-      husbandName: row.husbandName,
-      nationalId: row.nationalId,
-      phone: row.phone,
-      village: row.village,
-      subdistrict: row.subdistrict,
-      children: row.children
-    }));
-
     try {
-      const clusterRes = await fetch("/api/cluster", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rows: fieldsForApi, opts: settings }),
-      });
+        const rows: RecordRow[] = rawData.map((row: any, index: number) => ({
+          ...row,
+          _internalId: `row_${index}`,
+          beneficiaryId: String(row[mapping.beneficiaryId] || `row_${index}`),
+          womanName: String(row[mapping.womanName] || ""),
+          husbandName: String(row[mapping.husbandName] || ""),
+          nationalId: String(row[mapping.nationalId] || ""),
+          phone: String(row[mapping.phone] || ""),
+          village: String(row[mapping.village] || ""),
+          subdistrict: String(row[mapping.subdistrict] || ""),
+          children: String(row[mapping.children] || "").split(/[;,،]/).map((x) => x.trim()).filter(Boolean),
+        }));
 
-      const clusterData = await clusterRes.json();
-      
-      if (clusterRes.ok && clusterData.ok) {
-        clearInterval(interval);
-        setProgress(100);
-        setClusters(clusterData.result.clusters);
+        const fieldsForApi = rows.map(row => ({
+          _internalId: row._internalId,
+          beneficiaryId: row.beneficiaryId,
+          womanName: row.womanName,
+          husbandName: row.husbandName,
+          nationalId: row.nationalId,
+          phone: row.phone,
+          village: row.village,
+          subdistrict: row.subdistrict,
+          children: row.children
+        }));
+
+        const clusterRes = await fetch("/api/cluster", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ rows: fieldsForApi, opts: settings }),
+        });
+
+        const clusterData = await clusterRes.json();
         
+        if (!clusterRes.ok || !clusterData.ok) {
+            throw new Error(clusterData.error || "Clustering failed on the server.");
+        }
+        
+        clearInterval(progressInterval);
+        setProgress(95);
+
         // Now, save to the server-side file cache
         const cacheRes = await fetch("/api/cluster-cache", {
             method: "POST",
@@ -207,27 +209,31 @@ export default function UploadPage() {
             }),
         });
 
-        if (!cacheRes.ok) throw new Error("Failed to save data to server cache.");
+        if (!cacheRes.ok) {
+            throw new Error("Failed to save data to server cache.");
+        }
 
         const { cacheId } = await cacheRes.json();
-        sessionStorage.setItem('cacheId', cacheId); // Save only the ID to session storage
+        sessionStorage.setItem('cacheId', cacheId);
 
+        setClusters(clusterData.result.clusters);
+        setProgress(100);
+        
         toast({
           title: "Clustering Complete",
           description: `${clusterData.result.clusters.length} clusters found.`,
           action: <PartyPopper className="text-green-500" />,
         });
-      } else {
-        throw new Error(clusterData.error || "Clustering failed");
-      }
+
     } catch (error: any) {
-      clearInterval(interval);
+      clearInterval(progressInterval);
+      setProgress(0);
       console.error(error);
       toast({ title: "Error", description: error.message, variant: "destructive" });
       setClusters([]);
     } finally {
        setLoading(prev => ({...prev, cluster: false}));
-       setTimeout(() => setProgress(0), 1000);
+       setTimeout(() => setProgress(0), 2000); // Keep progress bar for a bit for user feedback
     }
   };
 
@@ -390,3 +396,5 @@ export default function UploadPage() {
     </div>
   );
 }
+
+    
