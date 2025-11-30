@@ -85,8 +85,6 @@ function createSummarySheet(wb: ExcelJS.Workbook, allRecords: RecordRow[], clust
             
             const startCol = colIndex === 0 ? 'B' : 'E';
             
-            // For ExcelJS, we reference cells by their top-left coordinate for merging.
-            // B4:C7, E4:F7 etc. We need to calculate the end column.
             const startColNum = colIndex === 0 ? 2 : 5; // B is 2, E is 5
             const endColNum = startColNum + 1; // Merge 2 columns
             const endRow = currentRow + 3;
@@ -111,7 +109,7 @@ function createSummarySheet(wb: ExcelJS.Workbook, allRecords: RecordRow[], clust
                 right: { style: 'thin', color: { argb: 'FFB0C4DE' } },
             };
         });
-        currentRow += 5; // Move to the next row for cards, with a gap
+        currentRow += 5;
     });
 }
 
@@ -135,15 +133,8 @@ function createAllRecordsSheet(wb: ExcelJS.Workbook, allRecords: RecordRow[], cl
   
   const headerRow = ws.getRow(1);
   headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' }};
+  headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0070C0' } }; // Blue
   headerRow.alignment = { horizontal: 'center' };
-  
-  // Apply fill only to cells that have a header
-  ws.columns.forEach((_col, index) => {
-    const cell = headerRow.getCell(index + 1);
-    if (cell.value) {
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0070C0' } }; // Blue
-    }
-  });
 
 
   allRecords.forEach(record => {
@@ -170,66 +161,63 @@ function createClustersSheet(wb: ExcelJS.Workbook, clusters: RecordRow[][], aiSu
     clusters.forEach((cluster, index) => {
         const clusterId = index + 1;
         const pairs = fullPairwiseBreakdown(cluster);
-        if (pairs.length === 0 && cluster.length < 2) return; // Should not happen for clusters > 1
+        if (pairs.length === 0 && cluster.length < 2) return;
         
-        const clusterRowCount = pairs.length * 2; // Each pair has 2 records
+        const clusterRowCount = Math.max(1, pairs.length > 0 ? pairs.length * 2 : cluster.length);
         const startRow = currentRowIndex;
         const endRow = startRow + clusterRowCount - 1;
         
         const aiSummary = aiSummaries[clusterId] || '';
 
-        // Add all rows for the cluster first
-        pairs.forEach(pair => {
-            const addRecordToSheet = (record: RecordRow) => {
-                 ws.addRow({
-                    // 'معرفالمجموعة' and 'ملخصالذكاءالاصطناعي' will be set after merging
+        if (pairs.length > 0) {
+             pairs.forEach(pair => {
+                ws.addRow({
                     'الدرجة': pair.score.toFixed(4),
-                    'اسمالمرأة': record.womanName,
-                    'اسمالزوج': record.husbandName,
-                    'الرقمالقومي': record.nationalId,
-                    'الهاتف': record.phone,
-                    'الأطفال': (record.children || []).join(', '),
+                    'اسمالمرأة': pair.a.womanName, 'اسمالزوج': pair.a.husbandName, 'الرقمالقومي': pair.a.nationalId, 'الهاتف': pair.a.phone, 'الأطفال': (pair.a.children || []).join(', '),
                 });
-                const addedRow = ws.lastRow!;
-                const scoreCell = addedRow.getCell('الدرجة');
-                scoreCell.font = { bold: true };
-                if (pair.score > 0.9) scoreCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFC7CE' } };
-                else if (pair.score > 0.8) scoreCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFEB9C' } };
-            };
-            
-            addRecordToSheet(pair.a);
-            addRecordToSheet(pair.b);
-        });
-
+                 ws.addRow({
+                    'اسمالمرأة': pair.b.womanName, 'اسمالزوج': pair.b.husbandName, 'الرقمالقومي': pair.b.nationalId, 'الهاتف': pair.b.phone, 'الأطفال': (pair.b.children || []).join(', '),
+                });
+            });
+        } else {
+            cluster.forEach(record => {
+                 ws.addRow({
+                    'اسمالمرأة': record.womanName, 'اسمالزوج': record.husbandName, 'الرقمالقومي': record.nationalId, 'الهاتف': record.phone, 'الأطفال': (record.children || []).join(', '),
+                });
+            });
+        }
+        
         // Merge cells for Cluster ID and AI Summary
         if (clusterRowCount > 0) {
-            // Merge Cluster ID
             ws.mergeCells(`A${startRow}:A${endRow}`);
             const clusterIdCell = ws.getCell(`A${startRow}`);
             clusterIdCell.value = clusterId;
             clusterIdCell.alignment = { vertical: 'middle', horizontal: 'center' };
 
-            // Merge AI Summary
             ws.mergeCells(`B${startRow}:B${endRow}`);
             const summaryCell = ws.getCell(`B${startRow}`);
             summaryCell.value = aiSummary;
-            summaryCell.alignment = { vertical: 'middle', horizontal: 'right', wrapText: true };
+            summaryCell.alignment = { vertical: 'top', horizontal: 'right', wrapText: true };
         }
 
-        // Apply thick border around the entire cluster block
         for (let i = startRow; i <= endRow; i++) {
             const row = ws.getRow(i);
+            const scoreCell = row.getCell('الدرجة');
+            const score = parseFloat(scoreCell.value as string);
+             if (score) {
+                scoreCell.font = { bold: true };
+                if (score > 0.9) scoreCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFC7CE' } };
+                else if (score > 0.8) scoreCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFEB9C' } };
+            }
+
             row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
                 const border: Partial<ExcelJS.Borders> = {};
                 if (i === startRow) border.top = { style: 'thick', color: { argb: 'FF4F81BD' } };
                 if (i === endRow) border.bottom = { style: 'thick', color: { argb: 'FF4F81BD' } };
                 if (colNumber === 1) border.left = { style: 'thick', color: { argb: 'FF4F81BD' } };
                 if (colNumber === ws.columns.length) border.right = { style: 'thick', color: { argb: 'FF4F81BD' } };
-                
-                // Add thin inner borders
                 if (i < endRow && !border.bottom) border.bottom = { style: 'thin', color: { argb: 'FFD9D9D9' }};
                 if (colNumber > 1 && !border.left) border.left = {style: 'thin', color: { argb: 'FFD9D9D9' }};
-
                 cell.border = { ...cell.border, ...border };
             });
         }

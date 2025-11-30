@@ -6,7 +6,7 @@ import type { RecordRow } from "@/lib/fuzzyCluster";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, Search, ChevronLeft, AlertTriangle, ChevronRight, FileDown } from "lucide-react";
+import { Loader2, Search, ChevronLeft, AlertTriangle, ChevronRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
 import { ClusterCard } from "@/components/ClusterCard";
@@ -16,12 +16,9 @@ type Cluster = RecordRow[];
 
 export default function ReviewPage() {
   const [allClusters, setAllClusters] = useState<Cluster[]>([]);
-  const [allRows, setAllRows] = useState<RecordRow[]>([]);
   const [filteredClusters, setFilteredClusters] = useState<Cluster[]>([]);
   const [selectedCluster, setSelectedCluster] = useState<Cluster | null>(null);
   const [loading, setLoading] = useState(false);
-  const [exporting, setExporting] = useState(false);
-  const [exportMessage, setExportMessage] = useState('');
   const [search, setSearch] = useState("");
   const { toast } = useToast();
 
@@ -57,92 +54,54 @@ export default function ReviewPage() {
   async function loadClusters() {
     setLoading(true);
     try {
-      const res = await fetch("/api/cluster-cache");
-      const data = await res.json();
-      if (res.ok) {
-        const clusters = data.clusters || [];
-        const rows = data.rows || [];
-        setAllClusters(clusters);
-        setFilteredClusters(clusters);
-        setAllRows(rows);
-        if (clusters.length === 0) {
-          toast({ title: "No Data", description: "No clusters found in cache. Please upload data first." });
+        const storedClusters = sessionStorage.getItem('clusters');
+        if (storedClusters) {
+            const clusters = JSON.parse(storedClusters);
+            setAllClusters(clusters);
+            setFilteredClusters(clusters);
+            if (clusters.length === 0) {
+                toast({ title: "No Data", description: "No clusters found in session. Please upload data first." });
+            }
+        } else {
+             toast({ title: "Error", description: "Failed to load clusters from session.", variant: "destructive" });
         }
-      } else {
-        toast({ title: "Error", description: "Failed to load clusters.", variant: "destructive" });
-      }
     } catch (error) {
-      toast({ title: "Network Error", description: "Could not connect to the server.", variant: "destructive" });
+      toast({ title: "Error", description: "Failed to parse cluster data from session.", variant: "destructive" });
     } finally {
       setLoading(false);
     }
   }
 
-  const exportToExcel = async () => {
-     if (filteredClusters.length === 0) {
-      toast({ title: "No Data", description: "No clusters to export.", variant: "destructive" });
-      return;
-    }
-    setExporting(true);
-    setExportMessage('Generating AI summaries...');
-
-    try {
-      // Step 1: Generate AI summaries for all filtered clusters in parallel
-      const summaryPromises = filteredClusters.map(cluster => 
-        fetch('/api/ai/describe-cluster', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ cluster }),
-        }).then(res => res.json())
-      );
-
-      const summaryResults = await Promise.all(summaryPromises);
-      
-      const aiSummaries: { [key: number]: string } = {};
-      summaryResults.forEach((result, index) => {
-        if (result.description) {
-            // Find the original index of the cluster to use as a key
-            const cluster = filteredClusters[index];
-            const originalIndex = allClusters.findIndex(c => c[0]._internalId === cluster[0]._internalId);
-            aiSummaries[originalIndex + 1] = result.description;
+  const handleInspect = (cluster: Cluster) => {
+    // Generate AI summaries for all clusters when one is inspected
+    // and store it for the export page.
+    const generateAndStoreSummaries = async () => {
+        try {
+            const summaryPromises = allClusters.map(c => 
+                fetch('/api/ai/describe-cluster', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ cluster: c }),
+                }).then(res => res.json())
+            );
+            const summaryResults = await Promise.all(summaryPromises);
+            const aiSummaries: { [key: number]: string } = {};
+            summaryResults.forEach((result, index) => {
+                if (result.description) {
+                    const originalClusterIndex = allClusters.findIndex(c => c[0]._internalId === allClusters[index][0]._internalId);
+                    aiSummaries[originalClusterIndex + 1] = result.description;
+                }
+            });
+            sessionStorage.setItem('aiSummaries', JSON.stringify(aiSummaries));
+        } catch (e) {
+            console.error("Failed to generate AI summaries for export");
         }
-      });
-      
-      setExportMessage('Generating Excel report...');
-      
-      // Step 2: Call the new export API endpoint
-      const response = await fetch('/api/review/export', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-            clusters: allClusters, // Send all clusters to get correct IDs
-            allRecords: allRows,
-            aiSummaries: aiSummaries,
-        }),
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to generate Excel file.');
-      }
+    };
 
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'cluster-review-report.xlsx';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
-      toast({ title: "Export Successful", description: "Your Excel file has been downloaded." });
-    } catch (error) {
-      console.error(error);
-      toast({ title: "Export Error", description: "Could not export data to Excel.", variant: "destructive" });
-    } finally {
-      setExporting(false);
-      setExportMessage('');
-    }
-  };
+    generateAndStoreSummaries();
+    setSelectedCluster(cluster);
+  }
+
 
   // Pagination logic
   const indexOfLastItem = currentPage * itemsPerPage;
@@ -174,10 +133,6 @@ export default function ReviewPage() {
                         Back to Upload
                     </Link>
                 </Button>
-                 <Button onClick={exportToExcel} variant="outline" disabled={exporting}>
-                    {exporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
-                    {exporting ? exportMessage : 'Export to Excel'}
-                </Button>
                 <Button asChild>
                     <Link href="/audit">
                         Go to Audit
@@ -199,10 +154,6 @@ export default function ReviewPage() {
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
-            <Button onClick={loadClusters} disabled={loading} className="w-full sm:w-auto">
-              {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Refresh Data
-            </Button>
           </div>
           
           {loading && allClusters.length === 0 ? (
@@ -218,7 +169,7 @@ export default function ReviewPage() {
                     key={idx} 
                     cluster={c} 
                     clusterNumber={(currentPage - 1) * itemsPerPage + idx + 1}
-                    onInspect={() => setSelectedCluster(c)}
+                    onInspect={() => handleInspect(c)}
                   />
                 ))}
               </div>

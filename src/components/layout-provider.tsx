@@ -1,3 +1,4 @@
+
 "use client";
 
 import { usePathname } from "next/navigation";
@@ -14,7 +15,7 @@ import {
   SidebarTrigger,
   SidebarInset,
 } from "@/components/ui/sidebar";
-import { FileBarChart2, Upload, Microscope, ClipboardList, Home, Settings } from "lucide-react";
+import { FileBarChart2, Upload, Microscope, ClipboardList, Home, Settings, FileDown } from "lucide-react";
 
 export function LayoutProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -60,6 +61,14 @@ export function LayoutProvider({ children }: { children: React.ReactNode }) {
                 <Link href="/audit">
                   <ClipboardList />
                   <span>Run Audit</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+             <SidebarMenuItem>
+              <SidebarMenuButton asChild isActive={isActive("/export")}>
+                <Link href="/export">
+                  <FileDown />
+                  <span>Export Report</span>
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>

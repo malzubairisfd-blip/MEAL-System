@@ -11,11 +11,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
-import { FileUp, Loader2, PartyPopper, ChevronRight, FileDown, CheckCircle, AlertCircle, Settings, Users, Bot, Sigma, FileSpreadsheet, Plus, Key, ArrowDownUp, SortAsc, Palette, Download, Group, FileInput, Blocks } from "lucide-react";
+import { FileUp, Loader2, PartyPopper, ChevronRight, Settings, Users, Sigma, Blocks, AlertCircle, Group } from "lucide-react";
 import Link from "next/link";
 import { fullPairwiseBreakdown } from "@/lib/fuzzyCluster";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { CheckCircle } from "lucide-react";
 
 type Mapping = {
   [key: string]: string;
@@ -34,20 +35,19 @@ type ProcessedRecord = RecordRow & {
     childrenScore?: number;
 }
 
+const MAPPING_KEY = 'beneficiary-insights-mapping';
+
 export default function UploadPage() {
   const [file, setFile] = useState<File | null>(null);
   const [rawData, setRawData] = useState<any[]>([]);
   const [columns, setColumns] = useState<string[]>([]);
   const [mapping, setMapping] = useState<Mapping>({});
-  const [loading, setLoading] = useState({ process: false, cluster: false, export: false });
+  const [loading, setLoading] = useState({ process: false, cluster: false });
   const [progress, setProgress] = useState(0);
   const [clusters, setClusters] = useState<Cluster[]>([]);
   const [fileName, setFileName] = useState<string>("");
   const [settings, setSettings] = useState({ minPairScore: 0.60, minInternalScore: 0.50 });
   const { toast } = useToast();
-
-  const [showExportWorkflow, setShowExportWorkflow] = useState(false);
-  const [processedRecords, setProcessedRecords] = useState<ProcessedRecord[]>([]);
 
   useEffect(() => {
     try {
@@ -55,16 +55,29 @@ export default function UploadPage() {
         if (savedSettings) {
             setSettings(JSON.parse(savedSettings));
         }
+        const savedMapping = localStorage.getItem(MAPPING_KEY);
+        if (savedMapping) {
+            setMapping(JSON.parse(savedMapping));
+        }
     } catch (e) {
         console.warn("Could not load settings from localStorage");
     }
   }, []);
 
-  const optionalFields = ["beneficiaryId"];
+  const handleMappingChange = (field: string, value: string) => {
+    const newMapping = { ...mapping, [field]: value };
+    setMapping(newMapping);
+    try {
+      localStorage.setItem(MAPPING_KEY, JSON.stringify(newMapping));
+    } catch (e) {
+      console.warn("Could not save mapping to localStorage");
+    }
+  };
+
   const requiredFields = [
     "womanName", "husbandName", "children", "phone", "nationalId", "subdistrict", "village",
   ];
-  const allMappingFields = ["beneficiaryId", "womanName", "husbandName", "children", "phone", "nationalId", "subdistrict", "village"];
+  const allMappingFields = ["beneficiaryId", ...requiredFields];
 
   const allRequiredFieldsMapped = requiredFields.every((field) => mapping[field]);
   
@@ -93,10 +106,24 @@ export default function UploadPage() {
         return;
       }
       
+      const fileColumns = Object.keys(json[0] as object);
       setRawData(json);
-      setColumns(Object.keys(json[0] as object));
+      setColumns(fileColumns);
       setClusters([]);
-      setShowExportWorkflow(false);
+
+      // Auto-apply saved mappings
+      const savedMapping = localStorage.getItem(MAPPING_KEY);
+      if (savedMapping) {
+        const parsedMapping = JSON.parse(savedMapping);
+        const newMapping = { ...parsedMapping };
+        Object.keys(parsedMapping).forEach(field => {
+            if (!fileColumns.includes(parsedMapping[field])) {
+                delete newMapping[field]; // Remove mapping if column not in new file
+            }
+        });
+        setMapping(newMapping);
+      }
+
       setProgress(100);
       toast({ title: "Success", description: "File processed. Please map the columns.", });
     } catch (error) {
@@ -114,12 +141,11 @@ export default function UploadPage() {
   const resetState = () => {
     setRawData([]);
     setColumns([]);
-    setMapping({});
+    // Do not reset mapping, so user can re-upload without losing it
     setClusters([]);
     setFileName("");
     setFile(null);
-    setShowExportWorkflow(false);
-    setLoading({ process: false, cluster: false, export: false });
+    setLoading({ process: false, cluster: false });
     setProgress(0);
     const fileInput = document.getElementById('file-upload') as HTMLInputElement;
     if (fileInput) fileInput.value = '';
@@ -139,8 +165,8 @@ export default function UploadPage() {
     }, 500);
 
     const rows: RecordRow[] = rawData.map((row: any, index: number) => ({
-      _internalId: `row_${index}`, // Assign internal ID
-      beneficiaryId: String(row[mapping.beneficiaryId] || `row_${index}`), // Use internalId as fallback for matching
+      _internalId: `row_${index}`,
+      beneficiaryId: String(row[mapping.beneficiaryId] || `row_${index}`),
       womanName: String(row[mapping.womanName] || ""),
       husbandName: String(row[mapping.husbandName] || ""),
       nationalId: String(row[mapping.nationalId] || ""),
@@ -162,16 +188,15 @@ export default function UploadPage() {
       clearInterval(interval);
       setProgress(100);
 
-      if (data.ok) {
+      if (res.ok && data.ok) {
         setClusters(data.result.clusters);
         
-        // Generate processed records from clusters for export
+        // --- Prepare data for session storage ---
         const clusterMap = new Map<string, any>();
         data.result.clusters.forEach((cluster: Cluster, index: number) => {
             const pairs = fullPairwiseBreakdown(cluster);
             const recordScores = new Map<string, any>();
 
-            // For each record, find the highest score it has with another record in the cluster
             for (const record of cluster) {
                 let topScoreData: any = { pairScore: 0 };
                 for (const pair of pairs) {
@@ -192,35 +217,23 @@ export default function UploadPage() {
             
             cluster.forEach(record => {
                 const scores = recordScores.get(record._internalId!);
-                clusterMap.set(record._internalId!, {
-                    ...record,
-                    clusterId: index + 1,
-                    ...scores
-                });
+                clusterMap.set(record._internalId!, { ...record, clusterId: index + 1, ...scores });
             });
         });
 
-        // Create the final list of all records, enriching those that are in a cluster
-        const allProcessed: ProcessedRecord[] = rows.map((row) => {
-            if (clusterMap.has(row._internalId!)) {
-                return clusterMap.get(row._internalId!);
-            }
-            // Return the original record if it's not in any cluster
-            return row;
-        });
+        const allProcessed: ProcessedRecord[] = rows.map((row) => clusterMap.get(row._internalId!) || row );
 
-        setProcessedRecords(allProcessed);
-
+        // --- Save to Session Storage ---
+        sessionStorage.setItem('clusters', JSON.stringify(data.result.clusters));
+        sessionStorage.setItem('processedRows', JSON.stringify(rows));
+        sessionStorage.setItem('processedRecords', JSON.stringify(allProcessed));
+        sessionStorage.setItem('originalHeaders', JSON.stringify(columns));
+        sessionStorage.setItem('idColumnName', mapping.beneficiaryId || '');
 
         toast({
           title: "Clustering Complete",
           description: `${data.result.clusters.length} clusters found.`,
           action: <PartyPopper className="text-green-500" />,
-        });
-        await fetch("/api/cluster-cache", {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ clusters: data.result.clusters, rows: rows }),
         });
       } else {
         toast({ title: "Clustering Error", description: data.error, variant: "destructive" });
@@ -245,51 +258,6 @@ export default function UploadPage() {
     const avgClusterSize = clusters.length > 0 ? (totalClustered / clusters.length).toFixed(2) : 0;
     return { totalProcessed, totalClustered, totalUnclustered, numClusters: clusters.length, avgClusterSize };
   }, [clusters, rawData]);
-
-  // --- EXPORT WORKFLOW FUNCTIONS ---
-
-  const handleDownload = async () => {
-    if (processedRecords.length === 0 || !mapping.beneficiaryId) {
-        toast({ title: "Missing Data", description: "Please ensure data is clustered and Beneficiary ID is mapped before exporting.", variant: "destructive"});
-        return;
-    }
-
-    setLoading(prev => ({...prev, export: true}));
-    
-    try {
-        const response = await fetch('/api/export-enriched', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                processedRecords,
-                originalHeaders: columns,
-                idColumnName: mapping.beneficiaryId
-            }),
-        });
-
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || 'Failed to generate enriched Excel file.');
-        }
-
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `enriched_${fileName || 'report.xlsx'}`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        window.URL.revokeObjectURL(url);
-        toast({ title: "Download Started", description: "Your enriched file is being downloaded." });
-
-    } catch (error: any) {
-        console.error(error);
-        toast({ title: "Export Error", description: error.message, variant: "destructive" });
-    } finally {
-        setLoading(prev => ({...prev, export: false}));
-    }
-  };
 
   return (
     <div className="space-y-6">
@@ -320,7 +288,7 @@ export default function UploadPage() {
                 <Input id="file-upload" type="file" className="hidden" accept=".xlsx,.xls,.xlsm,.xlsb,.csv,.txt" onChange={handleFile} disabled={loading.process} />
             </Label>
             {fileName && (
-              <Button variant="outline" onClick={resetState} disabled={loading.process || loading.cluster || loading.export}>Clear</Button>
+              <Button variant="outline" onClick={resetState} disabled={loading.process || loading.cluster}>Clear</Button>
             )}
           </div>
           {loading.process && <Progress value={progress} className="w-full mt-4" />}
@@ -331,7 +299,7 @@ export default function UploadPage() {
         <Card>
           <CardHeader>
             <CardTitle>Step 2: Map Columns</CardTitle>
-            <CardDescription>Match the required fields to the columns from your uploaded file. Beneficiary ID is required for the export workflow.</CardDescription>
+            <CardDescription>Match the required fields to the columns from your uploaded file. Your selections will be saved for future uploads.</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -347,9 +315,9 @@ export default function UploadPage() {
                       <ScrollArea className="h-32 w-full">
                         <RadioGroup
                           value={mapping[field] || ""}
-                          onValueChange={(value) => setMapping((m) => ({ ...m, [field]: value }))}
+                          onValueChange={(value) => handleMappingChange(field, value)}
                           className="grid grid-cols-2 gap-x-4 gap-y-2 p-2"
-                          disabled={loading.process || loading.cluster || loading.export}
+                          disabled={loading.process || loading.cluster}
                         >
                           {columns.map((c) => (
                             <div key={`${field}-${c}`} className="flex items-center space-x-2">
@@ -366,7 +334,7 @@ export default function UploadPage() {
             </div>
             <div className="mt-6 flex flex-col sm:flex-row gap-4 items-start">
               <div className="flex-1 w-full sm:w-auto">
-                <Button onClick={runClustering} disabled={loading.process || loading.cluster || loading.export || !allRequiredFieldsMapped} className="w-full sm:w-auto">
+                <Button onClick={runClustering} disabled={loading.process || loading.cluster || !allRequiredFieldsMapped} className="w-full sm:w-auto">
                   {loading.cluster ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ChevronRight className="mr-2 h-4 w-4" />}
                   Run Clustering
                 </Button>
@@ -384,7 +352,7 @@ export default function UploadPage() {
         <Card>
           <CardHeader>
               <CardTitle>Step 3: Results</CardTitle>
-              <CardDescription>A summary of the clustering analysis. You can now proceed to review the clusters or create a detailed export.</CardDescription>
+              <CardDescription>A summary of the clustering analysis. You can now proceed to review the clusters.</CardDescription>
           </CardHeader>
           <CardContent>
             {summaryStats && (
@@ -393,78 +361,48 @@ export default function UploadPage() {
                         <CardHeader className="pb-2"><Group className="mx-auto h-6 w-6 text-primary" /></CardHeader>
                         <CardContent>
                             <p className="text-2xl font-bold">{summaryStats.totalProcessed}</p>
-                            <p className="text-xs text-muted-foreground">إجمالي السجلات</p>
+                            <p className="text-xs text-muted-foreground">Total Records</p>
                         </CardContent>
                     </Card>
                      <Card>
                         <CardHeader className="pb-2"><Users className="mx-auto h-6 w-6 text-green-600" /></CardHeader>
                         <CardContent>
                             <p className="text-2xl font-bold">{summaryStats.totalClustered}</p>
-                            <p className="text-xs text-muted-foreground">السجلات المجمعة</p>
+                            <p className="text-xs text-muted-foreground">Clustered</p>
                         </CardContent>
                     </Card>
                      <Card>
                         <CardHeader className="pb-2"><Users className="mx-auto h-6 w-6 text-slate-500" /></CardHeader>
                         <CardContent>
                             <p className="text-2xl font-bold">{summaryStats.totalUnclustered}</p>
-                            <p className="text-xs text-muted-foreground">السجلات غير المجمعة</p>
+                            <p className="text-xs text-muted-foreground">Unclustered</p>
                         </CardContent>
                     </Card>
                      <Card>
                         <CardHeader className="pb-2"><Blocks className="mx-auto h-6 w-6 text-blue-600" /></CardHeader>
                         <CardContent>
                             <p className="text-2xl font-bold">{summaryStats.numClusters}</p>
-                            <p className="text-xs text-muted-foreground">عدد المجموعات</p>
+                            <p className="text-xs text-muted-foreground">Clusters Found</p>
                         </CardContent>
                     </Card>
                     <Card className="col-span-2 lg:col-span-1">
                         <CardHeader className="pb-2"><Sigma className="mx-auto h-6 w-6 text-purple-600" /></CardHeader>
                         <CardContent>
                             <p className="text-2xl font-bold">{summaryStats.avgClusterSize}</p>
-                            <p className="text-xs text-muted-foreground">متوسط حجم المجموعة</p>                        </CardContent>
+                            <p className="text-xs text-muted-foreground">Avg. Cluster Size</p>
+                        </CardContent>
                     </Card>
                 </div>
             )}
             <div className="flex gap-4">
-                <Button onClick={() => setShowExportWorkflow(!showExportWorkflow)}>
-                    <FileSpreadsheet className="mr-2 h-4 w-4" />
-                    {showExportWorkflow ? "Hide Export Workflow" : "Export Full Report"}
-                </Button>
-                <Button asChild variant="outline">
+                <Button asChild>
                     <Link href="/review">
-                       Review Clusters
+                       Go to Review
                        <ChevronRight className="ml-2 h-4 w-4" />
                     </Link>
                 </Button>
             </div>
           </CardContent>
-        </Card>
-      )}
-
-      {showExportWorkflow && (
-        <Card>
-            <CardHeader>
-                <CardTitle>Step 4: Generate Enriched Report</CardTitle>
-                <CardDescription>Generate and download a fully enriched Excel file with all analysis data, sorting, and professional formatting applied.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-                <div className="p-4 rounded-lg border border-primary">
-                    <h4 className="font-semibold flex items-center"><Download className="mr-2 h-5 w-5 text-primary" /> Download Enriched Report</h4>
-                    <p className="text-sm text-muted-foreground mt-2">
-                        Click the button below to generate a new Excel file. This file will contain your original data enriched with the following:
-                    </p>
-                    <ul className="text-sm text-muted-foreground mt-2 list-disc list-inside space-y-1">
-                        <li>New columns for Cluster ID and all similarity scores.</li>
-                        <li>Data sorted by Cluster ID to group potential duplicates.</li>
-                        <li>Professional styling with colors, borders, and RTL layout for easy analysis.</li>
-                    </ul>
-                     <Button onClick={handleDownload} disabled={loading.export || !mapping.beneficiaryId} className="mt-4">
-                        {loading.export ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
-                        Generate and Download Report
-                    </Button>
-                    {!mapping.beneficiaryId && <p className="text-xs text-destructive mt-2">Beneficiary ID must be mapped in Step 2 to enable export.</p>}
-                </div>
-            </CardContent>
         </Card>
       )}
     </div>

@@ -7,11 +7,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
-import { AlertTriangle, ShieldCheck, Loader2, ChevronLeft, FileDown, FileText } from "lucide-react";
+import { AlertTriangle, ShieldCheck, Loader2, ChevronLeft, FileDown, FileText, ArrowRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
+import { useRouter } from "next/navigation";
 
 // Extend jsPDF with the autoTable method
 interface jsPDFWithAutoTable extends jsPDF {
@@ -22,8 +23,9 @@ interface jsPDFWithAutoTable extends jsPDF {
 export default function AuditPage() {
   const [rows, setRows] = useState<RecordRow[]>([]);
   const [findings, setFindings] = useState<AuditFinding[]>([]);
-  const [loading, setLoading] = useState({ data: false, audit: false, export: false });
+  const [loading, setLoading] = useState({ data: false, audit: false });
   const { toast } = useToast();
+  const router = useRouter();
 
   useEffect(() => {
     loadData();
@@ -32,21 +34,20 @@ export default function AuditPage() {
   async function loadData() {
     setLoading(prev => ({...prev, data: true}));
     try {
-        const res = await fetch("/api/cluster-cache");
-        const data = await res.json();
-        if (res.ok && data.clusters) {
-            const flattenedRows: RecordRow[] = data.clusters.flat();
-            setRows(flattenedRows);
-            if (flattenedRows.length > 0) {
-              toast({ title: "Data Loaded", description: `${flattenedRows.length} records ready for audit.` });
+        const storedRows = sessionStorage.getItem('processedRows');
+        if (storedRows) {
+            const parsedRows = JSON.parse(storedRows);
+            setRows(parsedRows);
+             if (parsedRows.length > 0) {
+              toast({ title: "Data Loaded", description: `${parsedRows.length} records ready for audit.` });
             } else {
-              toast({ title: "No Data", description: "No data in cache. Please upload and process a file first." });
+              toast({ title: "No Data", description: "No data in session. Please upload and process a file first." });
             }
         } else {
-            toast({ title: "Error", description: "Failed to load data from cache.", variant: "destructive" });
+            toast({ title: "Error", description: "Failed to load data from session storage.", variant: "destructive" });
         }
     } catch (error) {
-        toast({ title: "Network Error", description: "Could not connect to the server.", variant: "destructive" });
+        toast({ title: "Error", description: "Could not parse data from session storage.", variant: "destructive" });
     } finally {
         setLoading(prev => ({...prev, data: false}));
     }
@@ -68,6 +69,7 @@ export default function AuditPage() {
         const data = await res.json();
         if (res.ok) {
             setFindings(data.findings);
+            sessionStorage.setItem('auditFindings', JSON.stringify(data.findings));
             toast({ title: "Audit Complete", description: `${data.findings.length} potential issues found.` });
         } else {
             toast({ title: "Audit Error", description: "An error occurred during the audit.", variant: "destructive" });
@@ -88,126 +90,17 @@ export default function AuditPage() {
     }
   };
 
-  const exportToExcel = async () => {
+  const goToExport = () => {
     if (findings.length === 0) {
-      toast({ title: "No Data", description: "No audit findings to export.", variant: "destructive" });
-      return;
+        toast({
+            title: "No Audit Findings",
+            description: "Please run the audit to generate findings before proceeding to export.",
+            variant: "destructive"
+        });
+        return;
     }
-    setLoading(prev => ({ ...prev, export: true }));
-    try {
-      const response = await fetch('/api/audit/export', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ findings }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to generate Excel file.');
-      }
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'audit-report.xlsx';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
-      toast({ title: "Export Successful", description: "Your Excel file has been downloaded." });
-    } catch (error) {
-      console.error(error);
-      toast({ title: "Export Error", description: "Could not export data to Excel.", variant: "destructive" });
-    } finally {
-      setLoading(prev => ({ ...prev, export: false }));
-    }
-  };
-
-  const arrayBufferToBase64 = (buffer: ArrayBuffer) => {
-    let binary = '';
-    const bytes = new Uint8Array(buffer);
-    const len = bytes.byteLength;
-    for (let i = 0; i < len; i++) {
-        binary += String.fromCharCode(bytes[i]);
-    }
-    return window.btoa(binary);
+    router.push('/export');
   }
-
-  const exportToPdf = async () => {
-    if (findings.length === 0) {
-      toast({ title: "No Data", description: "No audit findings to export.", variant: "destructive" });
-      return;
-    }
-    
-    const doc = new jsPDF() as jsPDFWithAutoTable;
-
-    try {
-      // Fetch and embed the font
-      const fontResponse = await fetch('/fonts/Amiri-Regular.ttf');
-      if (!fontResponse.ok) throw new Error("Font file not found");
-      const fontBuffer = await fontResponse.arrayBuffer();
-      const fontBase64 = arrayBufferToBase64(fontBuffer);
-
-      doc.addFileToVFS('Amiri-Regular.ttf', fontBase64);
-      doc.addFont('Amiri-Regular.ttf', 'Amiri', 'normal');
-      doc.setFont('Amiri');
-    } catch (fontError) {
-      console.error("Font loading error:", fontError);
-      toast({ title: "Font Error", description: "Could not load the required font for PDF generation. The report will be generated with a default font.", variant: "destructive" });
-      // Fallback to default font if Amiri fails to load
-      doc.setFont("helvetica");
-    }
-    
-    // Header
-    doc.setFontSize(18);
-    doc.text("تقرير تدقيق البيانات", doc.internal.pageSize.width - 14, 22, { align: 'right', lang: 'ar' });
-    doc.setFontSize(11);
-    doc.text(`تم إنشاؤه في: ${new Date().toLocaleDateString()}`, 14, 30);
-
-    const tableData = findings.flatMap(finding => 
-      finding.records.map(record => ({
-        severity: finding.severity,
-        type: finding.type,
-        description: finding.description,
-        womanName: record.womanName,
-        husbandName: record.husbandName,
-        nationalId: record.nationalId,
-        phone: record.phone,
-      }))
-    );
-
-    doc.autoTable({
-      startY: 40,
-      head: [['الرقم القومي', 'الزوج', 'الزوجة', 'الوصف', 'النوع', 'الخطورة']],
-      body: tableData.map(d => [d.nationalId, d.husbandName, d.womanName, d.description, d.type, d.severity]),
-      theme: 'grid',
-      headStyles: { fillColor: [41, 128, 185], font: 'Amiri', halign: 'right' },
-      bodyStyles: { font: 'Amiri', halign: 'right' },
-      didParseCell: function (data) {
-        if (data.section !== 'body') return;
-        // Right-align Arabic content is now set in bodyStyles
-        
-        const rowData = tableData[data.row.index];
-        if (rowData?.severity === 'high') {
-          data.cell.styles.fillColor = '#fde2e2'; // Light red
-        } else if (rowData?.severity === 'medium') {
-          data.cell.styles.fillColor = '#fef3c7'; // Light yellow
-        }
-      },
-    });
-
-    // Footer
-    const pageCount = doc.internal.getNumberOfPages();
-    for (let i = 1; i <= pageCount; i++) {
-        doc.setPage(i);
-        doc.setFontSize(9);
-        doc.text(`صفحة ${i} من ${pageCount}`, doc.internal.pageSize.width - 25, doc.internal.pageSize.height - 10);
-    }
-    
-    doc.save("audit-report.pdf");
-    toast({ title: "Export Successful", description: "Your PDF file has been downloaded." });
-  };
-
 
   return (
     <div className="space-y-6">
@@ -231,10 +124,6 @@ export default function AuditPage() {
         </CardHeader>
         <CardContent>
           <div className="flex gap-4">
-            <Button onClick={loadData} disabled={loading.data || loading.audit}>
-              {loading.data ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Reload Data
-            </Button>
             <Button onClick={runAuditNow} disabled={loading.audit || loading.data || rows.length === 0}>
               {loading.audit ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <AlertTriangle className="mr-2 h-4 w-4" />}
               Run Audit
@@ -257,13 +146,9 @@ export default function AuditPage() {
                         <CardDescription>{findings.length} issues identified.</CardDescription>
                     </div>
                     <div className="flex gap-2">
-                        <Button onClick={exportToExcel} variant="outline" disabled={loading.export}>
-                            {loading.export ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
-                            Export to Excel
-                        </Button>
-                         <Button onClick={exportToPdf} variant="outline">
-                            <FileText className="mr-2 h-4 w-4" />
-                            Export PDF Report
+                        <Button onClick={goToExport}>
+                           Go to Export Page
+                           <ArrowRight className="ml-2 h-4 w-4" />
                         </Button>
                     </div>
                 </div>
@@ -311,5 +196,3 @@ export default function AuditPage() {
     </div>
   );
 }
-
-    
