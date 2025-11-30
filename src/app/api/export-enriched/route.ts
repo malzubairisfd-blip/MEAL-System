@@ -95,16 +95,18 @@ export async function POST(req: Request) {
     }
 
     // --- Add Helper Columns ---
-    const finalData = enrichedData.map(row => {
+    let finalData = enrichedData.map(row => {
         const clusterId = row["Cluster ID"];
         let clusterSize: number | null = null;
+        let finalClusterId: number | null = null;
         if (clusterId) {
           clusterSize = clusterSizeMap.get(clusterId) || null;
+          finalClusterId = clusterMaxIdMap.get(clusterId) || null;
         }
 
         return {
             ...row,
-            "Cluster_ID": clusterId ? clusterMaxIdMap.get(clusterId) || null : null,
+            "Cluster_ID": finalClusterId,
             "Cluster Size": clusterSize,
             "Flag": getFlagForScore(row["PairScore"]),
         };
@@ -112,13 +114,6 @@ export async function POST(req: Request) {
 
     // --- Sorting ---
     finalData.sort((a: any, b: any) => {
-        const idA = a["Cluster_ID"] === null ? Infinity : a["Cluster_ID"];
-        const idB = b["Cluster_ID"] === null ? Infinity : b["Cluster_ID"];
-        
-        if (idA < idB) return -1;
-        if (idA > idB) return 1;
-
-        // If Cluster_IDs are the same, sort by PairScore descending
         const scoreA = a["PairScore"] === null ? -1 : a["PairScore"];
         const scoreB = b["PairScore"] === null ? -1 : b["PairScore"];
         return scoreB - scoreA;
@@ -152,35 +147,8 @@ export async function POST(req: Request) {
         cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
     });
     
-    let lastClusterId: number | string | null = null;
     ws.eachRow({ includeEmpty: false }, (row, rowNumber) => {
         if (rowNumber === 1) return;
-
-        const currentClusterId = row.getCell('Cluster_ID').value;
-
-        // Base border for all cells
-        row.eachCell({ includeEmpty: true }, cell => {
-            cell.border = {
-                top: { style: 'thin', color: { argb: "FFFFFFFF" } }, 
-                left: { style: 'thin' }, 
-                bottom: { style: 'thin', color: { argb: "FFFFFFFF" } }, 
-                right: { style: 'thin' }
-            };
-        });
-
-        // Apply thick TOP border for the start of a new cluster
-        if (currentClusterId && currentClusterId !== lastClusterId) {
-             row.border = { ...row.border, top: { style: 'thick', color: { argb: 'FF000000' } } };
-        }
-        
-        // Apply thick BOTTOM border for the end of a cluster
-        const nextRow = ws.getRow(rowNumber + 1);
-        const nextClusterId = nextRow.getCell('Cluster_ID').value;
-        if (currentClusterId && currentClusterId !== nextClusterId) {
-             row.border = { ...row.border, bottom: { style: 'thick', color: { argb: 'FF000000' } } };
-        }
-
-        lastClusterId = currentClusterId;
 
         // Apply formatting based on score
         const pairScoreCell = row.getCell('PairScore');
@@ -196,7 +164,7 @@ export async function POST(req: Request) {
             fillColor = 'FFFFC7CE'; // Light Red
         } else if (score >= 0.7) {
             fillColor = 'FFFFC000'; // Orange
-        } else if(score > 0 || (currentClusterId && clusterSizeMap.get(currentClusterId as number)! > 1) ) {
+        } else if (score > 0) {
             fillColor = 'FFFFFF00'; // Yellow
         }
 
@@ -204,10 +172,37 @@ export async function POST(req: Request) {
             if (fillColor) {
                 cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fillColor } };
             }
-            cell.font = { bold: true, color: { argb: fontColor } };
+            cell.font = { ...cell.font, bold: true, color: { argb: fontColor } };
             cell.alignment = { horizontal: 'right', vertical: 'middle' };
         });
     });
+
+    // --- Border Logic ---
+    let lastClusterId: number | string | null = null;
+    for (let i = 2; i <= ws.rowCount; i++) { // Start from row 2
+        const currentRow = ws.getRow(i);
+        const currentClusterId = currentRow.getCell('Cluster_ID').value;
+
+        // Determine if it's the start of a new cluster
+        const isNewClusterStart = currentClusterId !== null && currentClusterId !== lastClusterId;
+        if (isNewClusterStart) {
+             currentRow.eachCell({ includeEmpty: true }, cell => {
+                cell.border = { ...cell.border, top: { style: 'thick' } };
+            });
+        }
+        
+        // Determine if it's the end of a cluster
+        const nextRow = ws.getRow(i + 1);
+        const nextClusterId = nextRow.getCell('Cluster_ID').value;
+        const isClusterEnd = currentClusterId !== null && currentClusterId !== nextClusterId;
+        if (isClusterEnd) {
+             currentRow.eachCell({ includeEmpty: true }, cell => {
+                cell.border = { ...cell.border, bottom: { style: 'thick' } };
+            });
+        }
+        
+        lastClusterId = currentClusterId;
+    }
 
 
     const buffer = await wb.xlsx.writeBuffer();
