@@ -221,7 +221,7 @@ export default function UploadPage() {
       toast({ title: "Network Error", description: "Failed to connect to the clustering service.", variant: "destructive" });
     } finally {
        setLoading(prev => ({...prev, cluster: false}));
-       setTimeout(() => setProgress(0), 500);
+       setTimeout(() => setProgress(0), 1000);
     }
   };
 
