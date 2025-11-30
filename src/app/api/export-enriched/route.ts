@@ -114,10 +114,18 @@ export async function POST(req: Request) {
 
     // --- Sorting ---
     finalData.sort((a: any, b: any) => {
+        const clusterA = a["Cluster_ID"] === null ? Infinity : a["Cluster_ID"];
+        const clusterB = b["Cluster_ID"] === null ? Infinity : b["Cluster_ID"];
+
+        if (clusterA !== clusterB) {
+            return clusterA - clusterB;
+        }
+
         const scoreA = a["PairScore"] === null ? -1 : a["PairScore"];
         const scoreB = b["PairScore"] === null ? -1 : b["PairScore"];
         return scoreB - scoreA;
     });
+
 
     // --- Reorder and Define Headers ---
     const originalHeaders = Object.keys(originalData[0] || {});
@@ -193,7 +201,7 @@ export async function POST(req: Request) {
         
         // Determine if it's the end of a cluster
         const nextRow = ws.getRow(i + 1);
-        const nextClusterId = nextRow.getCell('Cluster_ID').value;
+        const nextClusterId = nextRow ? nextRow.getCell('Cluster_ID').value : null;
         const isClusterEnd = currentClusterId !== null && currentClusterId !== nextClusterId;
         if (isClusterEnd) {
              currentRow.eachCell({ includeEmpty: true }, cell => {
