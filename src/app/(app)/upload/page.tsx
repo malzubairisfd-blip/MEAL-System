@@ -164,7 +164,9 @@ export default function UploadPage() {
         setProgress(prev => (prev < 90 ? prev + 5 : 90));
     }, 500);
 
+    // This creates the standardized rows for the clustering algorithm
     const rows: RecordRow[] = rawData.map((row: any, index: number) => ({
+      ...row, // Preserve original data
       _internalId: `row_${index}`,
       beneficiaryId: String(row[mapping.beneficiaryId] || `row_${index}`),
       womanName: String(row[mapping.womanName] || ""),
@@ -176,11 +178,24 @@ export default function UploadPage() {
       children: String(row[mapping.children] || "").split(/[;,،]/).map((x) => x.trim()).filter(Boolean),
     }));
 
+    // We only send the required fields to the clustering API
+    const fieldsForApi = rows.map(row => ({
+      _internalId: row._internalId,
+      beneficiaryId: row.beneficiaryId,
+      womanName: row.womanName,
+      husbandName: row.husbandName,
+      nationalId: row.nationalId,
+      phone: row.phone,
+      village: row.village,
+      subdistrict: row.subdistrict,
+      children: row.children
+    }));
+
     try {
       const res = await fetch("/api/cluster", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rows, opts: settings }),
+        body: JSON.stringify({ rows: fieldsForApi, opts: settings }),
       });
 
       const data = await res.json();
@@ -192,6 +207,7 @@ export default function UploadPage() {
         setClusters(data.result.clusters);
         
         // --- Prepare data for session storage ---
+        // We will now store the full `rows` array which includes original data.
         const clusterMap = new Map<string, any>();
         data.result.clusters.forEach((cluster: Cluster, index: number) => {
             const pairs = fullPairwiseBreakdown(cluster);
@@ -217,15 +233,19 @@ export default function UploadPage() {
             
             cluster.forEach(record => {
                 const scores = recordScores.get(record._internalId!);
-                clusterMap.set(record._internalId!, { ...record, clusterId: index + 1, ...scores });
+                clusterMap.set(record._internalId!, { clusterId: index + 1, ...scores });
             });
         });
-
-        const allProcessed: ProcessedRecord[] = rows.map((row) => clusterMap.get(row._internalId!) || row );
+        
+        // `allProcessed` will be based on the full `rows` array
+        const allProcessed: ProcessedRecord[] = rows.map((row) => {
+          const clusterData = clusterMap.get(row._internalId!);
+          return { ...row, ...clusterData };
+        });
 
         // --- Save to Session Storage ---
         sessionStorage.setItem('clusters', JSON.stringify(data.result.clusters));
-        sessionStorage.setItem('processedRows', JSON.stringify(rows));
+        sessionStorage.setItem('processedRows', JSON.stringify(rows)); // `rows` now contains original data
         sessionStorage.setItem('processedRecords', JSON.stringify(allProcessed));
         sessionStorage.setItem('originalHeaders', JSON.stringify(columns));
         sessionStorage.setItem('idColumnName', mapping.beneficiaryId || '');
