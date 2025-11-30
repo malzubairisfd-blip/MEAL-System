@@ -19,6 +19,8 @@ interface jsPDFWithAutoTable extends jsPDF {
   autoTable: (options: any) => jsPDF;
 }
 
+type Cluster = RecordRow[];
+
 
 export default function AuditPage() {
   const [rows, setRows] = useState<RecordRow[]>([]);
@@ -34,20 +36,21 @@ export default function AuditPage() {
   async function loadData() {
     setLoading(prev => ({...prev, data: true}));
     try {
-        const storedRows = sessionStorage.getItem('processedRows');
-        if (storedRows) {
-            const parsedRows = JSON.parse(storedRows);
-            setRows(parsedRows);
-             if (parsedRows.length > 0) {
-              toast({ title: "Data Loaded", description: `${parsedRows.length} records ready for audit.` });
+        const storedClusters = sessionStorage.getItem('clusters');
+        if (storedClusters) {
+            const clusters: Cluster[] = JSON.parse(storedClusters);
+            const clusteredRecords = clusters.flat();
+            setRows(clusteredRecords);
+            if (clusteredRecords.length > 0) {
+              toast({ title: "Data Loaded", description: `${clusteredRecords.length} records from clusters are ready for audit.` });
             } else {
-              toast({ title: "No Data", description: "No data in session. Please upload and process a file first." });
+              toast({ title: "No Clustered Data", description: "No clustered records found to audit. Please run clustering first." });
             }
         } else {
-            toast({ title: "Error", description: "Failed to load data from session storage.", variant: "destructive" });
+            toast({ title: "Error", description: "Failed to load cluster data from session storage.", variant: "destructive" });
         }
     } catch (error) {
-        toast({ title: "Error", description: "Could not parse data from session storage.", variant: "destructive" });
+        toast({ title: "Error", description: "Could not parse cluster data from session storage.", variant: "destructive" });
     } finally {
         setLoading(prev => ({...prev, data: false}));
     }
@@ -110,8 +113,8 @@ export default function AuditPage() {
                 <div>
                   <CardTitle>Data Integrity Audit</CardTitle>
                   <CardDescription>
-                    Run a set of rules against your dataset to identify potential issues like duplicates, invalid relationships, and data entry errors.
-                    {rows.length > 0 && ` Currently loaded ${rows.length} records.`}
+                    Run a set of rules against your clustered records to identify potential issues like duplicates and invalid relationships.
+                    {rows.length > 0 && ` Currently loaded ${rows.length} clustered records.`}
                   </CardDescription>
                 </div>
                 <Button variant="outline" asChild>
