@@ -71,13 +71,16 @@ export default function ReviewPage() {
           const cacheId = sessionStorage.getItem('cacheId');
           if (!cacheId) {
             toast({ title: "No Data", description: "No clusters found from the last run. Please upload data first.", variant: "destructive" });
+            setLoading(false);
             return;
           }
 
           const res = await fetch(`/api/cluster-cache?id=${cacheId}`);
           if (!res.ok) throw new Error("Failed to load clusters from server cache.");
           
-          const { clusters, aiSummaries: cachedSummaries } = await res.json();
+          const data = await res.json();
+          const clusters = data.clusters;
+          const cachedSummaries = data.aiSummaries;
           
           if (clusters) {
               setAllClusters(clusters);
@@ -91,10 +94,10 @@ export default function ReviewPage() {
               }
 
               if (clusters.length === 0) {
-                  toast({ title: "No Data", description: "No clusters found from the last run. Please upload data first." });
+                  toast({ title: "No Clusters Found", description: "The last run did not produce any clusters. Try adjusting settings.", variant: "default" });
               }
           } else {
-               toast({ title: "Error", description: "Failed to load clusters from server cache.", variant: "destructive" });
+               toast({ title: "Error", description: "Failed to load cluster data from server cache.", variant: "destructive" });
           }
       } catch (error: any) {
         toast({ title: "Error", description: error.message, variant: "destructive" });
