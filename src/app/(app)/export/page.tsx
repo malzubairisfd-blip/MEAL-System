@@ -117,22 +117,23 @@ export default function ExportPage() {
     const handleSortData = () => {
         setLoading(true);
         try {
-            if (enrichedData.length === 0) {
+            let dataToSort: EnrichedRecord[];
+            if (enrichedData.length > 0) {
+                dataToSort = [...enrichedData];
+            } else {
                  const storedEnriched = sessionStorage.getItem('enrichedData');
                  if(!storedEnriched) throw new Error("Enriched data not found. Please complete Step 1.");
-                 setEnrichedData(JSON.parse(storedEnriched));
+                 dataToSort = JSON.parse(storedEnriched);
+                 setEnrichedData(dataToSort);
             }
             
-            const dataToSort = [...enrichedData];
             dataToSort.sort((a, b) => {
-                // Primary sort: pairScore descending
                 const scoreA = a.pairScore ?? -1;
                 const scoreB = b.pairScore ?? -1;
                 if (scoreA !== scoreB) {
                     return scoreB - scoreA;
                 }
 
-                // Secondary sort: Cluster_ID ascending
                 const clusterA = a.Cluster_ID ?? Number.MAX_SAFE_INTEGER;
                 const clusterB = b.Cluster_ID ?? Number.MAX_SAFE_INTEGER;
                 return clusterA - clusterB;
@@ -267,6 +268,3 @@ export default function ExportPage() {
         </div>
     );
 }
-
-    
-    
