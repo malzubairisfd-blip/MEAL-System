@@ -41,8 +41,14 @@ export default function ExportPage() {
 
     useEffect(() => {
         const fetchCache = async () => {
+            const cacheId = sessionStorage.getItem('cacheId');
+            if (!cacheId) {
+                toast({ title: "Cache Error", description: "No data found from previous steps.", variant: "destructive" });
+                return;
+            }
+
             try {
-                const res = await fetch('/api/cluster-cache');
+                const res = await fetch(`/api/cluster-cache?id=${cacheId}`);
                 const data = await res.json();
                 setServerCache(data);
             } catch (e) {
@@ -289,5 +295,3 @@ export default function ExportPage() {
         </div>
     );
 }
-
-    

@@ -47,6 +47,8 @@ export default function UploadPage() {
         if (savedMapping) {
             setMapping(JSON.parse(savedMapping));
         }
+        // Clear old cache on load
+        sessionStorage.removeItem('cacheId');
     } catch (e) {
         console.warn("Could not load settings from localStorage");
     }
@@ -98,6 +100,7 @@ export default function UploadPage() {
       setRawData(json);
       setColumns(fileColumns);
       setClusters([]);
+      sessionStorage.removeItem('cacheId'); // Clear previous cache ID
 
       // Auto-apply saved mappings
       const savedMapping = localStorage.getItem(MAPPING_KEY);
@@ -135,6 +138,7 @@ export default function UploadPage() {
     setFile(null);
     setLoading({ process: false, cluster: false });
     setProgress(0);
+    sessionStorage.removeItem('cacheId');
     const fileInput = document.getElementById('file-upload') as HTMLInputElement;
     if (fileInput) fileInput.value = '';
   }
@@ -178,44 +182,49 @@ export default function UploadPage() {
     }));
 
     try {
-      const res = await fetch("/api/cluster", {
+      const clusterRes = await fetch("/api/cluster", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rows: fieldsForApi, opts: settings }),
       });
 
-      const data = await res.json();
+      const clusterData = await clusterRes.json();
       
-      if (res.ok && data.ok) {
+      if (clusterRes.ok && clusterData.ok) {
         clearInterval(interval);
         setProgress(100);
-        setClusters(data.result.clusters);
+        setClusters(clusterData.result.clusters);
         
-        await fetch("/api/cluster-cache", {
+        // Now, save to the server-side file cache
+        const cacheRes = await fetch("/api/cluster-cache", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ 
-                clusters: data.result.clusters, 
+                clusters: clusterData.result.clusters, 
                 rows: rows,
                 originalHeaders: columns,
                 idColumnName: mapping.beneficiaryId || ''
             }),
         });
 
+        if (!cacheRes.ok) throw new Error("Failed to save data to server cache.");
+
+        const { cacheId } = await cacheRes.json();
+        sessionStorage.setItem('cacheId', cacheId); // Save only the ID to session storage
+
         toast({
           title: "Clustering Complete",
-          description: `${data.result.clusters.length} clusters found.`,
+          description: `${clusterData.result.clusters.length} clusters found.`,
           action: <PartyPopper className="text-green-500" />,
         });
       } else {
-        clearInterval(interval);
-        toast({ title: "Clustering Error", description: data.error, variant: "destructive" });
-        setClusters([]);
+        throw new Error(clusterData.error || "Clustering failed");
       }
-    } catch (error) {
+    } catch (error: any) {
       clearInterval(interval);
       console.error(error);
-      toast({ title: "Network Error", description: "Failed to connect to the clustering service.", variant: "destructive" });
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+      setClusters([]);
     } finally {
        setLoading(prev => ({...prev, cluster: false}));
        setTimeout(() => setProgress(0), 1000);

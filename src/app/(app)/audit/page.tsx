@@ -23,7 +23,15 @@ export default function AuditPage() {
     async function loadData() {
       setLoading(prev => ({...prev, data: true}));
       try {
-          const res = await fetch('/api/cluster-cache');
+          const cacheId = sessionStorage.getItem('cacheId');
+          if (!cacheId) {
+            toast({ title: "No Data", description: "No clustered records found to audit. Please run clustering first.", variant: "destructive" });
+            return;
+          }
+          
+          const res = await fetch(`/api/cluster-cache?id=${cacheId}`);
+          if (!res.ok) throw new Error("Failed to load data from server cache");
+
           const { clusters } = await res.json();
           
           if (clusters) {
@@ -37,8 +45,8 @@ export default function AuditPage() {
           } else {
               toast({ title: "Error", description: "Failed to load cluster data from server cache.", variant: "destructive" });
           }
-      } catch (error) {
-          toast({ title: "Error", description: "Could not fetch or parse cluster data.", variant: "destructive" });
+      } catch (error: any) {
+          toast({ title: "Error", description: error.message || "Could not fetch or parse cluster data.", variant: "destructive" });
       } finally {
           setLoading(prev => ({...prev, data: false}));
       }
@@ -68,11 +76,15 @@ export default function AuditPage() {
         setFindings(data.findings);
         
         // Save findings to server-side cache
-        await fetch('/api/cluster-cache', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ auditFindings: data.findings })
-        });
+        const cacheId = sessionStorage.getItem('cacheId');
+        if (cacheId) {
+            await fetch('/api/cluster-cache', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ cacheId, data: { auditFindings: data.findings } })
+            });
+        }
+
 
         toast({ title: "Audit Complete", description: `${data.findings.length} potential issues found.` });
 

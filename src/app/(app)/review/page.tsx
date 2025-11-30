@@ -27,7 +27,7 @@ export default function ReviewPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(9);
   
-  const generateAndStoreAllSummaries = async (clusters: Cluster[]) => {
+  const generateAndStoreAllSummaries = async (clusters: Cluster[], cacheId: string) => {
       try {
           const summaryPromises = clusters.map((c, index) => 
               fetch('/api/ai/describe-cluster', {
@@ -53,8 +53,9 @@ export default function ReviewPage() {
           await fetch('/api/cluster-cache', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ aiSummaries: summaries })
+            body: JSON.stringify({ cacheId: cacheId, data: { aiSummaries: summaries } })
           });
+
 
           toast({ title: "AI Summaries Ready", description: "AI-powered summaries for all clusters have been generated for the export." });
       } catch (e) {
@@ -67,7 +68,15 @@ export default function ReviewPage() {
     async function loadClusters() {
       setLoading(true);
       try {
-          const res = await fetch('/api/cluster-cache');
+          const cacheId = sessionStorage.getItem('cacheId');
+          if (!cacheId) {
+            toast({ title: "No Data", description: "No clusters found from the last run. Please upload data first.", variant: "destructive" });
+            return;
+          }
+
+          const res = await fetch(`/api/cluster-cache?id=${cacheId}`);
+          if (!res.ok) throw new Error("Failed to load clusters from server cache.");
+          
           const { clusters, aiSummaries: cachedSummaries } = await res.json();
           
           if (clusters) {
@@ -78,7 +87,7 @@ export default function ReviewPage() {
                   setAiSummaries(cachedSummaries);
               } else if (clusters.length > 0) {
                   // Proactively generate and store AI summaries if not already cached
-                  generateAndStoreAllSummaries(clusters);
+                  generateAndStoreAllSummaries(clusters, cacheId);
               }
 
               if (clusters.length === 0) {
@@ -87,8 +96,8 @@ export default function ReviewPage() {
           } else {
                toast({ title: "Error", description: "Failed to load clusters from server cache.", variant: "destructive" });
           }
-      } catch (error) {
-        toast({ title: "Error", description: "Failed to fetch cluster data.", variant: "destructive" });
+      } catch (error: any) {
+        toast({ title: "Error", description: error.message, variant: "destructive" });
       } finally {
         setLoading(false);
       }
