@@ -64,7 +64,7 @@ function createSummarySheet(wb: ExcelJS.Workbook, allRecords: RecordRow[], clust
     // --- Define Card Data ---
     const statsData = [
         [
-            { title: "إجمالي السجلات", value: totalRecords, icon: "👥" },
+            { title: "إجمالي السجلات المعالجة", value: totalRecords, icon: "👥" },
             { title: "عدد المجموعات", value: numClusters, icon: "📂" },
         ],
         [
@@ -130,8 +130,11 @@ function createAllRecordsSheet(wb: ExcelJS.Workbook, allRecords: RecordRow[], cl
   
   const headerRow = ws.getRow(1);
   headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' }};
-  headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0070C0' } }; // Blue
   headerRow.alignment = { horizontal: 'center' };
+  
+  headerRow.eachCell({ includeEmpty: false }, (cell) => {
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0070C0' } }; // Blue
+  });
 
 
   allRecords.forEach(record => {
