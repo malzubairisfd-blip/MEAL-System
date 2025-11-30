@@ -152,9 +152,8 @@ export default function UploadPage() {
         setProgress(prev => (prev < 90 ? prev + 5 : 90));
     }, 500);
 
-    // This creates the standardized rows for the clustering algorithm
     const rows: RecordRow[] = rawData.map((row: any, index: number) => ({
-      ...row, // Preserve original data
+      ...row,
       _internalId: `row_${index}`,
       beneficiaryId: String(row[mapping.beneficiaryId] || `row_${index}`),
       womanName: String(row[mapping.womanName] || ""),
@@ -166,7 +165,6 @@ export default function UploadPage() {
       children: String(row[mapping.children] || "").split(/[;,،]/).map((x) => x.trim()).filter(Boolean),
     }));
 
-    // We only send the required fields to the clustering API
     const fieldsForApi = rows.map(row => ({
       _internalId: row._internalId,
       beneficiaryId: row.beneficiaryId,
@@ -188,13 +186,11 @@ export default function UploadPage() {
 
       const data = await res.json();
       
-      clearInterval(interval);
-      setProgress(100);
-
       if (res.ok && data.ok) {
+        clearInterval(interval);
+        setProgress(100);
         setClusters(data.result.clusters);
         
-        // --- Save to Server-side Cache ---
         await fetch("/api/cluster-cache", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -212,6 +208,7 @@ export default function UploadPage() {
           action: <PartyPopper className="text-green-500" />,
         });
       } else {
+        clearInterval(interval);
         toast({ title: "Clustering Error", description: data.error, variant: "destructive" });
         setClusters([]);
       }
@@ -384,5 +381,3 @@ export default function UploadPage() {
     </div>
   );
 }
-
-    
