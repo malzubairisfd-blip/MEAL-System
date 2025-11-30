@@ -21,6 +21,7 @@ export default function ReviewPage() {
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
   const { toast } = useToast();
+  const [aiSummaries, setAiSummaries] = useState<{ [key: number]: string }>({});
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -54,31 +55,29 @@ export default function ReviewPage() {
   async function loadClusters() {
     setLoading(true);
     try {
-        const storedClusters = sessionStorage.getItem('clusters');
-        if (storedClusters) {
-            const clusters = JSON.parse(storedClusters);
+        const res = await fetch('/api/cluster-cache');
+        const { clusters } = await res.json();
+        
+        if (clusters) {
             setAllClusters(clusters);
             setFilteredClusters(clusters);
             if (clusters.length === 0) {
-                toast({ title: "No Data", description: "No clusters found in session. Please upload data first." });
+                toast({ title: "No Data", description: "No clusters found from the last run. Please upload data first." });
             } else {
                 // Proactively generate and store AI summaries
                 generateAndStoreAllSummaries(clusters);
             }
         } else {
-             toast({ title: "Error", description: "Failed to load clusters from session.", variant: "destructive" });
+             toast({ title: "Error", description: "Failed to load clusters from server cache.", variant: "destructive" });
         }
     } catch (error) {
-      toast({ title: "Error", description: "Failed to parse cluster data from session.", variant: "destructive" });
+      toast({ title: "Error", description: "Failed to fetch cluster data.", variant: "destructive" });
     } finally {
       setLoading(false);
     }
   }
 
   const generateAndStoreAllSummaries = async (clusters: Cluster[]) => {
-      // Don't re-generate if summaries already exist
-      if (sessionStorage.getItem('aiSummaries')) return;
-
       try {
           const summaryPromises = clusters.map((c, index) => 
               fetch('/api/ai/describe-cluster', {
@@ -90,15 +89,23 @@ export default function ReviewPage() {
 
           const summaryResults = await Promise.all(summaryPromises);
           
-          const aiSummaries: { [key: number]: string } = {};
+          const summaries: { [key: number]: string } = {};
           summaryResults.forEach((result) => {
               if (result.description) {
                   // The key is the cluster number (1-based index)
-                  aiSummaries[result.originalIndex + 1] = result.description;
+                  summaries[result.originalIndex + 1] = result.description;
               }
           });
           
-          sessionStorage.setItem('aiSummaries', JSON.stringify(aiSummaries));
+          setAiSummaries(summaries);
+          
+          // Save to server-side cache
+          await fetch('/api/cluster-cache', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ aiSummaries: summaries })
+          });
+
           toast({ title: "AI Summaries Ready", description: "AI-powered summaries for all clusters have been generated for the export." });
       } catch (e) {
           console.error("Failed to generate all AI summaries:", e);
@@ -179,6 +186,7 @@ export default function ReviewPage() {
                     cluster={c} 
                     clusterNumber={(currentPage - 1) * itemsPerPage + idx + 1}
                     onInspect={() => handleInspect(c)}
+                    precomputedDescription={aiSummaries[(currentPage - 1) * itemsPerPage + idx + 1]}
                   />
                 ))}
               </div>
@@ -216,3 +224,5 @@ export default function ReviewPage() {
     </div>
   );
 }
+
+    

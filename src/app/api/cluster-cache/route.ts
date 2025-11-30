@@ -1,12 +1,21 @@
 
-let savedClusters: any[] = [];
-let savedRows: any[] = [];
+// A simple in-memory cache for storing clustering results between steps.
+// This avoids hitting browser sessionStorage limits for large datasets.
+
+let cache: { [key: string]: any } = {
+    clusters: [],
+    rows: [],
+    originalHeaders: [],
+    idColumnName: '',
+    auditFindings: [],
+    aiSummaries: {},
+};
 
 export async function POST(req: Request) {
   try {
-    const { clusters, rows } = await req.json();
-    if (clusters) savedClusters = clusters;
-    if (rows) savedRows = rows;
+    const data = await req.json();
+    // Merge new data into the cache instead of overwriting
+    cache = { ...cache, ...data };
     return Response.json({ ok: true });
   } catch (error) {
     return Response.json({ ok: false, error: 'Invalid request body' }, { status: 400 });
@@ -14,5 +23,7 @@ export async function POST(req: Request) {
 }
 
 export async function GET() {
-  return Response.json({ clusters: savedClusters, rows: savedRows });
+  return Response.json(cache);
 }
+
+    

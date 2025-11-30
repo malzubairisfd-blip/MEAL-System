@@ -7,20 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
-import { AlertTriangle, ShieldCheck, Loader2, ChevronLeft, FileDown, FileText, ArrowRight } from "lucide-react";
+import { AlertTriangle, ShieldCheck, Loader2, ChevronLeft, ArrowRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
-import jsPDF from 'jspdf';
-import 'jspdf-autotable';
 import { useRouter } from "next/navigation";
-
-// Extend jsPDF with the autoTable method
-interface jsPDFWithAutoTable extends jsPDF {
-  autoTable: (options: any) => jsPDF;
-}
-
-type Cluster = RecordRow[];
-
 
 export default function AuditPage() {
   const [rows, setRows] = useState<RecordRow[]>([]);
@@ -36,9 +26,10 @@ export default function AuditPage() {
   async function loadData() {
     setLoading(prev => ({...prev, data: true}));
     try {
-        const storedClusters = sessionStorage.getItem('clusters');
-        if (storedClusters) {
-            const clusters: Cluster[] = JSON.parse(storedClusters);
+        const res = await fetch('/api/cluster-cache');
+        const { clusters } = await res.json();
+        
+        if (clusters) {
             const clusteredRecords = clusters.flat();
             setRows(clusteredRecords);
             if (clusteredRecords.length > 0) {
@@ -47,10 +38,10 @@ export default function AuditPage() {
               toast({ title: "No Clustered Data", description: "No clustered records found to audit. Please run clustering first." });
             }
         } else {
-            toast({ title: "Error", description: "Failed to load cluster data from session storage.", variant: "destructive" });
+            toast({ title: "Error", description: "Failed to load cluster data from server cache.", variant: "destructive" });
         }
     } catch (error) {
-        toast({ title: "Error", description: "Could not parse cluster data from session storage.", variant: "destructive" });
+        toast({ title: "Error", description: "Could not fetch or parse cluster data.", variant: "destructive" });
     } finally {
         setLoading(prev => ({...prev, data: false}));
     }
@@ -69,16 +60,25 @@ export default function AuditPage() {
         headers: { "Content-Type": "application/json" }
         });
 
-        const data = await res.json();
-        if (res.ok) {
-            setFindings(data.findings);
-            sessionStorage.setItem('auditFindings', JSON.stringify(data.findings));
-            toast({ title: "Audit Complete", description: `${data.findings.length} potential issues found.` });
-        } else {
-            toast({ title: "Audit Error", description: "An error occurred during the audit.", variant: "destructive" });
+        if (!res.ok) {
+           const errorData = await res.json();
+           throw new Error(errorData.error || "An error occurred during the audit.");
         }
-    } catch (error) {
-        toast({ title: "Network Error", description: "Could not connect to the audit service.", variant: "destructive" });
+
+        const data = await res.json();
+        setFindings(data.findings);
+        
+        // Save findings to server-side cache
+        await fetch('/api/cluster-cache', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ auditFindings: data.findings })
+        });
+
+        toast({ title: "Audit Complete", description: `${data.findings.length} potential issues found.` });
+
+    } catch (error: any) {
+        toast({ title: "Audit Error", description: error.message || "Could not connect to the audit service.", variant: "destructive" });
     } finally {
         setLoading(prev => ({...prev, audit: false}));
     }
@@ -199,3 +199,5 @@ export default function AuditPage() {
     </div>
   );
 }
+
+    

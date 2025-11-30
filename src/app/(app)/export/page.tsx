@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { CheckCircle, FileDown, Loader2, XCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { fullPairwiseBreakdown } from "@/lib/fuzzyCluster";
 
 type RecordWithScores = RecordRow & {
     clusterId?: number;
@@ -34,39 +35,73 @@ export default function ExportPage() {
     const [loading, setLoading] = useState(false);
     const { toast } = useToast();
 
-    // Data state
     const [enrichedData, setEnrichedData] = useState<EnrichedRecord[]>([]);
+    const [serverCache, setServerCache] = useState<any>(null);
+
 
     useEffect(() => {
-        // Clear old data on page load
-        if (typeof window !== 'undefined') {
-            const enriched = sessionStorage.getItem('enrichedData');
-            if (enriched) setStatus(s => ({...s, enriched: true}));
-
-            const sorted = sessionStorage.getItem('sortedData');
-            if (sorted) setStatus(s => ({...s, sorted: true, ready: true}));
-        }
-    }, []);
+        const fetchCache = async () => {
+            try {
+                const res = await fetch('/api/cluster-cache');
+                const data = await res.json();
+                setServerCache(data);
+            } catch (e) {
+                toast({ title: "Cache Error", description: "Could not load data from server cache.", variant: "destructive" });
+            }
+        };
+        fetchCache();
+    }, [toast]);
 
 
     const handleEnrichData = async () => {
         setLoading(true);
         try {
-            const processedRecordsString = sessionStorage.getItem('processedRecords');
-            if (!processedRecordsString) {
-                throw new Error("Processed records not found in session storage. Please re-run clustering.");
+            if (!serverCache?.rows || !serverCache?.clusters) {
+                throw new Error("Clustered data not found in server cache. Please re-run clustering.");
             }
-            const processedRecords: RecordWithScores[] = JSON.parse(processedRecordsString);
+            
+            const processedRows: RecordRow[] = serverCache.rows;
+            const clusters: RecordRow[][] = serverCache.clusters;
+            
+            const clusterMap = new Map<string, any>();
+            clusters.forEach((cluster: RecordRow[], index: number) => {
+                const pairs = fullPairwiseBreakdown(cluster);
+                const recordScores = new Map<string, any>();
+    
+                for (const record of cluster) {
+                    let topScoreData: any = { pairScore: 0 };
+                    for (const pair of pairs) {
+                        if ((pair.a._internalId === record._internalId || pair.b._internalId === record._internalId) && pair.score > topScoreData.pairScore) {
+                            topScoreData = {
+                                pairScore: pair.score,
+                                nameScore: pair.breakdown.nameScore,
+                                husbandScore: pair.breakdown.husbandScore,
+                                idScore: pair.breakdown.idScore,
+                                phoneScore: pair.breakdown.phoneScore,
+                                locationScore: pair.breakdown.locationScore,
+                                childrenScore: pair.breakdown.childrenScore,
+                            };
+                        }
+                    }
+                    recordScores.set(record._internalId!, topScoreData);
+                }
+                
+                cluster.forEach(record => {
+                    const scores = recordScores.get(record._internalId!);
+                    clusterMap.set(record._internalId!, { clusterId: index + 1, ...scores });
+                });
+            });
+            
+            const allProcessed: RecordWithScores[] = processedRows.map((row) => {
+              const clusterData = clusterMap.get(row._internalId!);
+              return { ...row, ...clusterData };
+            });
 
-            const idColumnName = sessionStorage.getItem('idColumnName');
-             if (!idColumnName) {
-                throw new Error("ID column name not found in session storage.");
-            }
+            const idColumnName = serverCache.idColumnName;
 
-            // --- MAX & SIZE Logic ---
             const clusterMaxIdMap = new Map<number, number>();
             const clusterSizeMap = new Map<number, number>();
-            for (const row of processedRecords) {
+            for (const row of allProcessed) {
                 if (row.clusterId) {
                     clusterSizeMap.set(row.clusterId, (clusterSizeMap.get(row.clusterId) || 0) + 1);
                     const beneficiaryId = Number(row.beneficiaryId);
@@ -79,8 +114,7 @@ export default function ExportPage() {
                 }
             }
 
-            // --- Enriched rows ---
-            const dataToEnrich: EnrichedRecord[] = processedRecords.map((row) => {
+            const dataToEnrich: EnrichedRecord[] = allProcessed.map((row) => {
                 const clusterId = row.clusterId;
                 const clusterSize = clusterId ? clusterSizeMap.get(clusterId) || null : null;
                 const finalClusterId = clusterId ? clusterMaxIdMap.get(clusterId) || null : null;
@@ -104,7 +138,6 @@ export default function ExportPage() {
             });
 
             setEnrichedData(dataToEnrich);
-            sessionStorage.setItem('enrichedData', JSON.stringify(dataToEnrich));
             setStatus({ ...status, enriched: true });
             toast({ title: "Step 1 Complete", description: "Data has been enriched." });
         } catch (e: any) {
@@ -117,15 +150,10 @@ export default function ExportPage() {
     const handleSortData = () => {
         setLoading(true);
         try {
-            let dataToSort: EnrichedRecord[];
-            if (enrichedData.length > 0) {
-                dataToSort = [...enrichedData];
-            } else {
-                 const storedEnriched = sessionStorage.getItem('enrichedData');
-                 if(!storedEnriched) throw new Error("Enriched data not found. Please complete Step 1.");
-                 dataToSort = JSON.parse(storedEnriched);
-                 setEnrichedData(dataToSort);
+            if (enrichedData.length === 0) {
+                 throw new Error("Enriched data not found. Please complete Step 1.");
             }
+            const dataToSort = [...enrichedData];
             
             dataToSort.sort((a, b) => {
                 const scoreA = a.pairScore ?? -1;
@@ -139,7 +167,7 @@ export default function ExportPage() {
                 return clusterA - clusterB;
             });
             
-            sessionStorage.setItem('sortedData', JSON.stringify(dataToSort));
+            setEnrichedData(dataToSort); // Update state with sorted data
             setStatus({ ...status, sorted: true, ready: true });
             toast({ title: "Step 2 Complete", description: "Data has been sorted." });
         } catch (e: any) {
@@ -152,24 +180,17 @@ export default function ExportPage() {
     const handleDownload = async () => {
         setLoading(true);
         try {
-            const sortedData = sessionStorage.getItem('sortedData');
-            const clusters = sessionStorage.getItem('clusters');
-            const allRecords = sessionStorage.getItem('processedRows');
-            const auditFindings = sessionStorage.getItem('auditFindings');
-            const aiSummaries = sessionStorage.getItem('aiSummaries');
-            const originalHeaders = sessionStorage.getItem('originalHeaders');
-
-            if (!sortedData || !clusters || !allRecords || !auditFindings || !originalHeaders) {
-                throw new Error("Missing necessary data in session storage. Please complete all previous steps.");
+            if (!serverCache || enrichedData.length === 0) {
+                throw new Error("Missing necessary data. Please complete all previous steps.");
             }
             
             const body = {
-                enrichedData: JSON.parse(sortedData),
-                clusters: JSON.parse(clusters),
-                allRecords: JSON.parse(allRecords),
-                auditFindings: JSON.parse(auditFindings),
-                aiSummaries: aiSummaries ? JSON.parse(aiSummaries) : {},
-                originalHeaders: JSON.parse(originalHeaders),
+                enrichedData: enrichedData,
+                clusters: serverCache.clusters,
+                allRecords: serverCache.rows,
+                auditFindings: serverCache.auditFindings || [],
+                aiSummaries: serverCache.aiSummaries || {},
+                originalHeaders: serverCache.originalHeaders,
             };
 
             const response = await fetch('/api/export/combined', {
@@ -219,7 +240,7 @@ export default function ExportPage() {
                             <h4 className="font-semibold">Step 1: Enrich Data</h4>
                             <p className="text-sm text-muted-foreground">Calculate Cluster IDs, sizes, and flags for all records.</p>
                         </div>
-                        <Button onClick={handleEnrichData} disabled={loading || status.enriched}>
+                        <Button onClick={handleEnrichData} disabled={loading || status.enriched || !serverCache}>
                             {loading && !status.enriched ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                             Enrich Data
                         </Button>
@@ -268,3 +289,5 @@ export default function ExportPage() {
         </div>
     );
 }
+
+    

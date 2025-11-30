@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { RecordRow } from "@/lib/fuzzyCluster";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,16 +15,25 @@ interface ClusterCardProps {
   cluster: Cluster;
   clusterNumber: number;
   onInspect: () => void;
+  precomputedDescription?: string;
 }
 
-export function ClusterCard({ cluster, clusterNumber, onInspect }: ClusterCardProps) {
+export function ClusterCard({ cluster, clusterNumber, onInspect, precomputedDescription }: ClusterCardProps) {
   const [loadingDescription, setLoadingDescription] = useState(false);
   const [description, setDescription] = useState<string | null>(null);
   const { toast } = useToast();
 
+  useEffect(() => {
+    if (precomputedDescription) {
+        setDescription(precomputedDescription);
+    }
+  }, [precomputedDescription]);
+
+
   const handleGenerateDescription = async () => {
+    if (description) return; // Don't re-fetch if we have it
+
     setLoadingDescription(true);
-    setDescription(null);
     try {
       const res = await fetch('/api/ai/describe-cluster', {
         method: 'POST',
@@ -62,7 +71,7 @@ export function ClusterCard({ cluster, clusterNumber, onInspect }: ClusterCardPr
           ))}
         </div>
         
-        {loadingDescription && (
+        {loadingDescription && !description && (
           <div className="flex items-center justify-center text-muted-foreground">
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             Generating AI summary...
@@ -83,15 +92,17 @@ export function ClusterCard({ cluster, clusterNumber, onInspect }: ClusterCardPr
           <Microscope className="mr-2 h-4 w-4" />
           Inspect
         </Button>
-        <Button variant="secondary" className="w-full" onClick={handleGenerateDescription} disabled={loadingDescription}>
+        <Button variant="secondary" className="w-full" onClick={handleGenerateDescription} disabled={loadingDescription || !!description}>
             {loadingDescription ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (
                 <Sparkles className="mr-2 h-4 w-4" />
             )}
-          AI Summary
+          {description ? 'Summary Loaded' : 'AI Summary'}
         </Button>
       </div>
     </Card>
   );
 }
+
+    

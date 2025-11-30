@@ -13,7 +13,6 @@ import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { FileUp, Loader2, PartyPopper, ChevronRight, Settings, Users, Sigma, Blocks, AlertCircle, Group } from "lucide-react";
 import Link from "next/link";
-import { fullPairwiseBreakdown } from "@/lib/fuzzyCluster";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { CheckCircle } from "lucide-react";
@@ -23,17 +22,6 @@ type Mapping = {
 };
 
 type Cluster = RecordRow[];
-
-type ProcessedRecord = RecordRow & {
-    clusterId?: number;
-    pairScore?: number;
-    nameScore?: number;
-    husbandScore?: number;
-    idScore?: number;
-    phoneScore?: number;
-    locationScore?: number;
-    childrenScore?: number;
-}
 
 const MAPPING_KEY = 'beneficiary-insights-mapping';
 
@@ -206,49 +194,17 @@ export default function UploadPage() {
       if (res.ok && data.ok) {
         setClusters(data.result.clusters);
         
-        // --- Prepare data for session storage ---
-        // We will now store the full `rows` array which includes original data.
-        const clusterMap = new Map<string, any>();
-        data.result.clusters.forEach((cluster: Cluster, index: number) => {
-            const pairs = fullPairwiseBreakdown(cluster);
-            const recordScores = new Map<string, any>();
-
-            for (const record of cluster) {
-                let topScoreData: any = { pairScore: 0 };
-                for (const pair of pairs) {
-                    if ((pair.a._internalId === record._internalId || pair.b._internalId === record._internalId) && pair.score > topScoreData.pairScore) {
-                        topScoreData = {
-                            pairScore: pair.score,
-                            nameScore: pair.breakdown.nameScore,
-                            husbandScore: pair.breakdown.husbandScore,
-                            idScore: pair.breakdown.idScore,
-                            phoneScore: pair.breakdown.phoneScore,
-                            locationScore: pair.breakdown.locationScore,
-                            childrenScore: pair.breakdown.childrenScore,
-                        };
-                    }
-                }
-                recordScores.set(record._internalId!, topScoreData);
-            }
-            
-            cluster.forEach(record => {
-                const scores = recordScores.get(record._internalId!);
-                clusterMap.set(record._internalId!, { clusterId: index + 1, ...scores });
-            });
+        // --- Save to Server-side Cache ---
+        await fetch("/api/cluster-cache", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ 
+                clusters: data.result.clusters, 
+                rows: rows,
+                originalHeaders: columns,
+                idColumnName: mapping.beneficiaryId || ''
+            }),
         });
-        
-        // `allProcessed` will be based on the full `rows` array
-        const allProcessed: ProcessedRecord[] = rows.map((row) => {
-          const clusterData = clusterMap.get(row._internalId!);
-          return { ...row, ...clusterData };
-        });
-
-        // --- Save to Session Storage ---
-        sessionStorage.setItem('clusters', JSON.stringify(data.result.clusters));
-        sessionStorage.setItem('processedRows', JSON.stringify(rows)); // `rows` now contains original data
-        sessionStorage.setItem('processedRecords', JSON.stringify(allProcessed));
-        sessionStorage.setItem('originalHeaders', JSON.stringify(columns));
-        sessionStorage.setItem('idColumnName', mapping.beneficiaryId || '');
 
         toast({
           title: "Clustering Complete",
@@ -265,7 +221,7 @@ export default function UploadPage() {
       toast({ title: "Network Error", description: "Failed to connect to the clustering service.", variant: "destructive" });
     } finally {
        setLoading(prev => ({...prev, cluster: false}));
-       setProgress(0);
+       setTimeout(() => setProgress(0), 500);
     }
   };
 
@@ -428,3 +384,5 @@ export default function UploadPage() {
     </div>
   );
 }
+
+    
