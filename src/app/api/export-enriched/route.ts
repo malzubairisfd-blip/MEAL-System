@@ -31,7 +31,7 @@ export async function POST(req: Request) {
   try {
     const { processedRecords = [], originalHeaders = [], idColumnName = '' } = await req.json();
 
-    if (processedRecords.length === 0 || !idColumnName) {
+    if (processedRecords.length === 0) {
       return NextResponse.json({ ok: false, error: "Missing required data for export" }, { status: 400 });
     }
 
@@ -140,7 +140,11 @@ export async function POST(req: Request) {
         if (rowNumber === 1) return;
 
         const pairScoreCell = row.getCell('PairScore');
-        const score = (pairScoreCell.value !== null && pairScoreCell.value !== undefined) ? Number(pairScoreCell.value) : -1;
+        if (pairScoreCell.value === null || pairScoreCell.value === undefined) {
+          return; // Skip formatting if there's no score
+        }
+        
+        const score = Number(pairScoreCell.value);
         
         let fillColor: string | undefined;
         let fontColor = 'FF000000'; // Default black
