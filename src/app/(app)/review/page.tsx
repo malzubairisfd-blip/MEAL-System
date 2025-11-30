@@ -18,7 +18,7 @@ export default function ReviewPage() {
   const [allClusters, setAllClusters] = useState<Cluster[]>([]);
   const [filteredClusters, setFilteredClusters] = useState<Cluster[]>([]);
   const [selectedCluster, setSelectedCluster] = useState<Cluster | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const { toast } = useToast();
   const [aiSummaries, setAiSummaries] = useState<{ [key: number]: string }>({});
@@ -26,57 +26,7 @@ export default function ReviewPage() {
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(9);
-
-  useEffect(() => {
-    loadClusters();
-  }, []);
-
-  useEffect(() => {
-    const applyFilter = () => {
-      if (!search.trim()) {
-        setFilteredClusters(allClusters);
-        return;
-      }
-      const s = search.toLowerCase();
-      const filtered = allClusters.filter((cluster) =>
-        cluster.some(
-          (r) =>
-            r.womanName?.toLowerCase().includes(s) ||
-            r.husbandName?.toLowerCase().includes(s) ||
-            r.phone?.toLowerCase().includes(s)
-        )
-      );
-      setFilteredClusters(filtered);
-      setCurrentPage(1); // Reset to first page on new search
-    };
-    applyFilter();
-  }, [search, allClusters]);
-
-  async function loadClusters() {
-    setLoading(true);
-    try {
-        const res = await fetch('/api/cluster-cache');
-        const { clusters } = await res.json();
-        
-        if (clusters) {
-            setAllClusters(clusters);
-            setFilteredClusters(clusters);
-            if (clusters.length === 0) {
-                toast({ title: "No Data", description: "No clusters found from the last run. Please upload data first." });
-            } else {
-                // Proactively generate and store AI summaries
-                generateAndStoreAllSummaries(clusters);
-            }
-        } else {
-             toast({ title: "Error", description: "Failed to load clusters from server cache.", variant: "destructive" });
-        }
-    } catch (error) {
-      toast({ title: "Error", description: "Failed to fetch cluster data.", variant: "destructive" });
-    } finally {
-      setLoading(false);
-    }
-  }
-
+  
   const generateAndStoreAllSummaries = async (clusters: Cluster[]) => {
       try {
           const summaryPromises = clusters.map((c, index) => 
@@ -112,6 +62,60 @@ export default function ReviewPage() {
           toast({ title: "AI Summary Failed", description: "Could not generate AI summaries for the report.", variant: "destructive" });
       }
   };
+
+  useEffect(() => {
+    async function loadClusters() {
+      setLoading(true);
+      try {
+          const res = await fetch('/api/cluster-cache');
+          const { clusters, aiSummaries: cachedSummaries } = await res.json();
+          
+          if (clusters) {
+              setAllClusters(clusters);
+              setFilteredClusters(clusters);
+              
+              if (cachedSummaries && Object.keys(cachedSummaries).length > 0) {
+                  setAiSummaries(cachedSummaries);
+              } else if (clusters.length > 0) {
+                  // Proactively generate and store AI summaries if not already cached
+                  generateAndStoreAllSummaries(clusters);
+              }
+
+              if (clusters.length === 0) {
+                  toast({ title: "No Data", description: "No clusters found from the last run. Please upload data first." });
+              }
+          } else {
+               toast({ title: "Error", description: "Failed to load clusters from server cache.", variant: "destructive" });
+          }
+      } catch (error) {
+        toast({ title: "Error", description: "Failed to fetch cluster data.", variant: "destructive" });
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadClusters();
+  }, [toast]);
+
+  useEffect(() => {
+    const applyFilter = () => {
+      if (!search.trim()) {
+        setFilteredClusters(allClusters);
+        return;
+      }
+      const s = search.toLowerCase();
+      const filtered = allClusters.filter((cluster) =>
+        cluster.some(
+          (r) =>
+            r.womanName?.toLowerCase().includes(s) ||
+            r.husbandName?.toLowerCase().includes(s) ||
+            r.phone?.toLowerCase().includes(s)
+        )
+      );
+      setFilteredClusters(filtered);
+      setCurrentPage(1); // Reset to first page on new search
+    };
+    applyFilter();
+  }, [search, allClusters]);
 
 
   const handleInspect = (cluster: Cluster) => {
@@ -172,7 +176,7 @@ export default function ReviewPage() {
             </div>
           </div>
           
-          {loading && allClusters.length === 0 ? (
+          {loading ? (
             <div className="text-center text-muted-foreground py-10">
                 <Loader2 className="mx-auto h-8 w-8 animate-spin" />
                 <p className="mt-2">Loading clusters...</p>
@@ -224,5 +228,3 @@ export default function ReviewPage() {
     </div>
   );
 }
-
-    
