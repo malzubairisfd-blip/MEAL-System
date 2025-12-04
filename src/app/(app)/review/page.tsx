@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
 import { ClusterCard } from "@/components/ClusterCard";
 import { PairwiseModal } from "@/components/PairwiseModal";
+import { Progress } from "@/components/ui/progress";
 
 type Cluster = RecordRow[];
 
@@ -27,49 +28,86 @@ export default function ReviewPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(9);
   
+  // AI Summary Progress State
+  const [summaryProgress, setSummaryProgress] = useState(0);
+  const [summaryStatus, setSummaryStatus] = useState({
+    completed: 0,
+    total: 0,
+    elapsed: '0s',
+    remaining: '0s'
+  });
+
   const generateAndStoreAllSummaries = async () => {
       const cacheId = sessionStorage.getItem('cacheId');
       if (!cacheId || allClusters.length === 0) {
           toast({ title: "No clusters to summarize", description: "Please run clustering first.", variant: "destructive"});
           return;
       }
+      
+      const clustersToSummarize = allClusters.filter(c => {
+          const clusterKey = c.map(r => r._internalId).sort().join('-');
+          return !aiSummaries[clusterKey];
+      });
+
+      if (clustersToSummarize.length === 0) {
+          toast({ title: "Summaries Already Generated", description: "AI summaries for all clusters are already available."});
+          return;
+      }
 
       setLoading(prev => ({ ...prev, summaries: true }));
-      try {
-          const summaryPromises = allClusters.map((c, index) => 
-              fetch('/api/ai/describe-cluster', {
+      setSummaryProgress(0);
+      const startTime = Date.now();
+      const totalToProcess = clustersToSummarize.length;
+      let completedCount = 0;
+      const newSummaries: { [key: string]: string } = {};
+
+      for (const cluster of clustersToSummarize) {
+          try {
+              const res = await fetch('/api/ai/describe-cluster', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ cluster: c }),
-              }).then(res => res.json().then(data => ({ ...data, originalIndex: index })))
-          );
-
-          const summaryResults = await Promise.all(summaryPromises);
-          
-          const newSummaries: { [key: string]: string } = {};
-          summaryResults.forEach((result) => {
-              if (result.description) {
-                  const clusterKey = allClusters[result.originalIndex].map(r => r._internalId).sort().join('-');
-                  newSummaries[clusterKey] = result.description;
+                  body: JSON.stringify({ cluster: cluster }),
+              });
+              const data = await res.json();
+              if (res.ok && data.description) {
+                  const clusterKey = cluster.map(r => r._internalId).sort().join('-');
+                  newSummaries[clusterKey] = data.description;
               }
-          });
-          
-          setAiSummaries(prev => ({ ...prev, ...newSummaries }));
-          
-          // Save to server-side cache
-          await fetch('/api/cluster-cache', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ cacheId: cacheId, data: { aiSummaries: { ...aiSummaries, ...newSummaries } } })
-          });
+          } catch (e) {
+              console.error("Failed to generate a summary for a cluster:", e);
+          } finally {
+              completedCount++;
+              const progress = (completedCount / totalToProcess) * 100;
+              setSummaryProgress(progress);
 
-          toast({ title: "AI Summaries Ready", description: "AI-powered summaries for all clusters have been generated." });
-      } catch (e) {
-          console.error("Failed to generate all AI summaries:", e);
-          toast({ title: "AI Summary Failed", description: "Could not generate AI summaries for the report.", variant: "destructive" });
-      } finally {
-          setLoading(prev => ({ ...prev, summaries: false }));
+              const elapsedMs = Date.now() - startTime;
+              const avgTimePerCluster = elapsedMs / completedCount;
+              const remainingMs = (totalToProcess - completedCount) * avgTimePerCluster;
+
+              setSummaryStatus({
+                  completed: completedCount,
+                  total: totalToProcess,
+                  elapsed: `${Math.round(elapsedMs / 1000)}s`,
+                  remaining: `${Math.round(remainingMs / 1000)}s`
+              });
+          }
       }
+      
+      setAiSummaries(prev => ({ ...prev, ...newSummaries }));
+      
+      try {
+        await fetch('/api/cluster-cache', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cacheId: cacheId, data: { aiSummaries: { ...aiSummaries, ...newSummaries } } })
+        });
+      } catch (e) {
+        console.error("Failed to save AI summaries to cache:", e);
+        toast({ title: "Cache Save Failed", description: "Could not save new AI summaries to the server.", variant: "destructive" });
+      }
+
+      setLoading(prev => ({ ...prev, summaries: false }));
+      toast({ title: "AI Summaries Ready", description: `Generated ${completedCount} new AI-powered summaries.` });
   };
 
   useEffect(() => {
@@ -88,15 +126,12 @@ export default function ReviewPage() {
           
           const data = await res.json();
           const clusters = data.clusters;
-          const cachedSummaries = data.aiSummaries;
+          const cachedSummaries = data.aiSummaries || {};
           
           if (clusters) {
               setAllClusters(clusters);
               setFilteredClusters(clusters);
-              
-              if (cachedSummaries && Object.keys(cachedSummaries).length > 0) {
-                  setAiSummaries(cachedSummaries);
-              }
+              setAiSummaries(cachedSummaries);
 
               if (clusters.length === 0) {
                   toast({ title: "No Clusters Found", description: "The last run did not produce any clusters. Try adjusting settings.", variant: "default" });
@@ -197,6 +232,22 @@ export default function ReviewPage() {
             </div>
           </div>
           
+           {loading.summaries && (
+            <div className="mb-6 p-4 border rounded-lg bg-muted/50">
+              <div className="flex justify-between items-center mb-2">
+                <h4 className="font-semibold">Generating AI Summaries...</h4>
+                <div className="text-sm text-muted-foreground font-mono">
+                  {summaryStatus.completed}/{summaryStatus.total}
+                </div>
+              </div>
+              <Progress value={summaryProgress} className="w-full mb-2" />
+              <div className="flex justify-between text-xs text-muted-foreground font-mono">
+                <span>Elapsed: {summaryStatus.elapsed}</span>
+                <span>Remaining: {summaryStatus.remaining}</span>
+              </div>
+            </div>
+          )}
+          
           {loading.data ? (
             <div className="text-center text-muted-foreground py-10">
                 <Loader2 className="mx-auto h-8 w-8 animate-spin" />
@@ -209,7 +260,7 @@ export default function ReviewPage() {
                   const clusterKey = c.map(r => r._internalId).sort().join('-');
                   return (
                     <ClusterCard 
-                      key={idx} 
+                      key={clusterKey} 
                       cluster={c} 
                       clusterNumber={(currentPage - 1) * itemsPerPage + idx + 1}
                       onInspect={() => handleInspect(c)}

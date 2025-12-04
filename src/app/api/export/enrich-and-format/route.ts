@@ -126,12 +126,13 @@ function sortData(data: EnrichedRecord[]): EnrichedRecord[] {
 }
 
 function createFormattedWorkbook(data: EnrichedRecord[], cachedData: any): ExcelJS.Workbook {
-    const { allRecords, clusters, auditFindings, aiSummaries, originalHeaders } = cachedData;
+    const { rows: allRecords, clusters, auditFindings, aiSummaries, originalHeaders } = cachedData;
     const wb = new ExcelJS.Workbook();
     wb.creator = "Beneficiary Insights";
     
     createEnrichedDataSheet(wb, data, originalHeaders);
     createSummarySheet(wb, allRecords, clusters);
+    createAllRecordsSheet(wb, allRecords, clusters);
     createClustersSheet(wb, clusters, aiSummaries);
     createAuditSheet(wb, auditFindings || []);
 
@@ -200,7 +201,15 @@ function createEnrichedDataSheet(wb: ExcelJS.Workbook, data: EnrichedRecord[], o
     
     const newHeadersPrefix = ["Cluster_ID", "Cluster_Size", "Flag", "Max_PairScore", "pairScore", "nameScore", "husbandScore", "idScore", "phoneScore"];
     const newHeadersSuffix = ["womanName", "husbandName", "children", "nationalId", "phone", "village", "subdistrict"];
-    const finalHeaders = [...newHeadersPrefix, ...originalHeaders, ...newHeadersSuffix.filter(h => !originalHeaders.includes(h))];
+    const headersToExclude = new Set(newHeadersSuffix);
+    const middleHeaders = originalHeaders.filter((h: string) => !headersToExclude.has(h));
+    
+    // Construct final headers, removing Max_PairScore as it's for sorting only
+    const finalHeaders = [
+        "Cluster_ID", "Cluster_Size", "Flag", /* "Max_PairScore" is removed */ "pairScore", "nameScore", "husbandScore", "idScore", "phoneScore",
+        ...middleHeaders,
+        ...newHeadersSuffix
+    ];
     
     ws.columns = finalHeaders.map(h => ({ header: h, key: h, width: 20 }));
 
@@ -248,8 +257,6 @@ function createEnrichedDataSheet(wb: ExcelJS.Workbook, data: EnrichedRecord[], o
         }
         lastClusterId = cid;
     }
-    
-    ws.removeColumns(finalHeaders.indexOf('Max_PairScore') + 1, 1);
 }
 
 function createSummarySheet(wb: ExcelJS.Workbook, allRecords: RecordRow[], clusters: RecordRow[][]) {
@@ -291,7 +298,31 @@ function createSummarySheet(wb: ExcelJS.Workbook, allRecords: RecordRow[], clust
 }
 
 
-function createClustersSheet(wb: ExcelJS.Workbook, clusters: RecordRow[][], aiSummaries: { [key: string]: string }) {
+function createAllRecordsSheet(wb: ExcelJS.Workbook, allRecords: RecordRow[], clusters: RecordRow[][]) {
+  const ws = wb.addWorksheet("All Records");
+  ws.views = [{ rightToLeft: true }];
+  
+  const recordToClusterIdMap = new Map<string, number>();
+  clusters.forEach((cluster, index) => {
+    cluster.forEach(record => recordToClusterIdMap.set(record._internalId!, index + 1));
+  });
+
+  const headers = Object.keys(allRecords[0] || {}).filter(h => h !== '_internalId');
+  ws.columns = [ { header: "Cluster ID", key: "clusterId", width: 15 }, ...headers.map(h => ({ header: h, key: h, width: 25 }))];
+  
+  const headerRow = ws.getRow(1);
+  headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' }};
+  headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0070C0' } };
+  headerRow.alignment = { horizontal: 'center' };
+
+  allRecords.forEach(record => {
+    const clusterId = recordToClusterIdMap.get(record._internalId!) || '';
+    ws.addRow({ ...record, clusterId });
+  });
+}
+
+
+function createClustersSheet(wb: ExcelJS.Workbook, clusters: RecordRow[][], aiSummaries: { [key: string]: string } = {}) {
     const ws = wb.addWorksheet("Cluster Details");
     ws.views = [{ rightToLeft: true }];
 
