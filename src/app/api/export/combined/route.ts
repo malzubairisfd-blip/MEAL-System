@@ -4,6 +4,9 @@ import ExcelJS from "exceljs";
 import type { AuditFinding } from "@/lib/auditEngine";
 import { fullPairwiseBreakdown, type RecordRow } from "@/lib/fuzzyCluster";
 
+// This file is now deprecated and its logic is moved to /api/export/enrich-and-format
+// It is kept for reference but will not be used in the new workflow.
+
 type EnrichedRecord = RecordRow & {
     Cluster_ID?: number | null;
     ClusterSize?: number | null;
@@ -280,5 +283,3 @@ function createAuditSheet(wb: ExcelJS.Workbook, findings: AuditFinding[]) {
         ws.addRow([]).eachCell(cell => cell.fill = {type: 'pattern', pattern: 'solid', fgColor: {argb: 'FFDDDDDD'}});
     }
 }
-
-    

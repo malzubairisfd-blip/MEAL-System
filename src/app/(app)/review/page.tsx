@@ -6,7 +6,7 @@ import type { RecordRow } from "@/lib/fuzzyCluster";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, Search, ChevronLeft, AlertTriangle, ChevronRight } from "lucide-react";
+import { Loader2, Search, ChevronLeft, AlertTriangle, ChevronRight, Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
 import { ClusterCard } from "@/components/ClusterCard";
@@ -18,18 +18,25 @@ export default function ReviewPage() {
   const [allClusters, setAllClusters] = useState<Cluster[]>([]);
   const [filteredClusters, setFilteredClusters] = useState<Cluster[]>([]);
   const [selectedCluster, setSelectedCluster] = useState<Cluster | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState({ data: true, summaries: false });
   const [search, setSearch] = useState("");
   const { toast } = useToast();
-  const [aiSummaries, setAiSummaries] = useState<{ [key: number]: string }>({});
+  const [aiSummaries, setAiSummaries] = useState<{ [key: string]: string }>({});
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(9);
   
-  const generateAndStoreAllSummaries = async (clusters: Cluster[], cacheId: string) => {
+  const generateAndStoreAllSummaries = async () => {
+      const cacheId = sessionStorage.getItem('cacheId');
+      if (!cacheId || allClusters.length === 0) {
+          toast({ title: "No clusters to summarize", description: "Please run clustering first.", variant: "destructive"});
+          return;
+      }
+
+      setLoading(prev => ({ ...prev, summaries: true }));
       try {
-          const summaryPromises = clusters.map((c, index) => 
+          const summaryPromises = allClusters.map((c, index) => 
               fetch('/api/ai/describe-cluster', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
@@ -39,39 +46,40 @@ export default function ReviewPage() {
 
           const summaryResults = await Promise.all(summaryPromises);
           
-          const summaries: { [key: number]: string } = {};
+          const newSummaries: { [key: string]: string } = {};
           summaryResults.forEach((result) => {
               if (result.description) {
-                  // The key is the cluster number (1-based index)
-                  summaries[result.originalIndex + 1] = result.description;
+                  const clusterKey = allClusters[result.originalIndex].map(r => r._internalId).sort().join('-');
+                  newSummaries[clusterKey] = result.description;
               }
           });
           
-          setAiSummaries(summaries);
+          setAiSummaries(prev => ({ ...prev, ...newSummaries }));
           
           // Save to server-side cache
           await fetch('/api/cluster-cache', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ cacheId: cacheId, data: { aiSummaries: summaries } })
+            body: JSON.stringify({ cacheId: cacheId, data: { aiSummaries: { ...aiSummaries, ...newSummaries } } })
           });
 
-
-          toast({ title: "AI Summaries Ready", description: "AI-powered summaries for all clusters have been generated for the export." });
+          toast({ title: "AI Summaries Ready", description: "AI-powered summaries for all clusters have been generated." });
       } catch (e) {
           console.error("Failed to generate all AI summaries:", e);
           toast({ title: "AI Summary Failed", description: "Could not generate AI summaries for the report.", variant: "destructive" });
+      } finally {
+          setLoading(prev => ({ ...prev, summaries: false }));
       }
   };
 
   useEffect(() => {
     async function loadClusters() {
-      setLoading(true);
+      setLoading(prev => ({ ...prev, data: true }));
       try {
           const cacheId = sessionStorage.getItem('cacheId');
           if (!cacheId) {
             toast({ title: "No Data", description: "No clusters found from the last run. Please upload data first.", variant: "destructive" });
-            setLoading(false);
+            setLoading(prev => ({ ...prev, data: false }));
             return;
           }
 
@@ -88,9 +96,6 @@ export default function ReviewPage() {
               
               if (cachedSummaries && Object.keys(cachedSummaries).length > 0) {
                   setAiSummaries(cachedSummaries);
-              } else if (clusters.length > 0) {
-                  // Proactively generate and store AI summaries if not already cached
-                  generateAndStoreAllSummaries(clusters, cacheId);
               }
 
               if (clusters.length === 0) {
@@ -102,7 +107,7 @@ export default function ReviewPage() {
       } catch (error: any) {
         toast({ title: "Error", description: error.message, variant: "destructive" });
       } finally {
-        setLoading(false);
+        setLoading(prev => ({ ...prev, data: false }));
       }
     }
     loadClusters();
@@ -165,6 +170,10 @@ export default function ReviewPage() {
                         Back to Upload
                     </Link>
                 </Button>
+                <Button onClick={generateAndStoreAllSummaries} disabled={loading.summaries || allClusters.length === 0}>
+                    {loading.summaries ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+                    Generate All AI Summaries
+                </Button>
                 <Button asChild>
                     <Link href="/audit">
                         Go to Audit
@@ -188,7 +197,7 @@ export default function ReviewPage() {
             </div>
           </div>
           
-          {loading ? (
+          {loading.data ? (
             <div className="text-center text-muted-foreground py-10">
                 <Loader2 className="mx-auto h-8 w-8 animate-spin" />
                 <p className="mt-2">Loading clusters...</p>
@@ -196,15 +205,18 @@ export default function ReviewPage() {
           ) : currentClusters.length > 0 ? (
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {currentClusters.map((c, idx) => (
-                  <ClusterCard 
-                    key={idx} 
-                    cluster={c} 
-                    clusterNumber={(currentPage - 1) * itemsPerPage + idx + 1}
-                    onInspect={() => handleInspect(c)}
-                    precomputedDescription={aiSummaries[(currentPage - 1) * itemsPerPage + idx + 1]}
-                  />
-                ))}
+                {currentClusters.map((c, idx) => {
+                  const clusterKey = c.map(r => r._internalId).sort().join('-');
+                  return (
+                    <ClusterCard 
+                      key={idx} 
+                      cluster={c} 
+                      clusterNumber={(currentPage - 1) * itemsPerPage + idx + 1}
+                      onInspect={() => handleInspect(c)}
+                      precomputedDescription={aiSummaries[clusterKey]}
+                    />
+                  )
+                })}
               </div>
               {totalPages > 1 && (
                 <div className="flex justify-center items-center gap-4 mt-6">

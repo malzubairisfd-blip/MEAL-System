@@ -26,6 +26,8 @@ export function ClusterCard({ cluster, clusterNumber, onInspect, precomputedDesc
   useEffect(() => {
     if (precomputedDescription) {
         setDescription(precomputedDescription);
+    } else {
+        setDescription(null); // Reset if precomputed is not available
     }
   }, [precomputedDescription]);
 
@@ -45,6 +47,7 @@ export function ClusterCard({ cluster, clusterNumber, onInspect, precomputedDesc
         throw new Error(data.error || 'Failed to generate description.');
       }
       setDescription(data.description);
+       // We don't save this to session/cache, it's a one-off view
     } catch (error: any) {
       toast({
         title: "Error",
@@ -104,5 +107,3 @@ export function ClusterCard({ cluster, clusterNumber, onInspect, precomputedDesc
     </Card>
   );
 }
-
-    

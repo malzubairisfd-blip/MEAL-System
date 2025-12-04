@@ -2,230 +2,137 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import type { RecordRow } from "@/lib/fuzzyCluster";
+import * as XLSX from "xlsx";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { CheckCircle, FileDown, Loader2, XCircle } from "lucide-react";
+import { CheckCircle, FileDown, Loader2, XCircle, FileUp, Settings, ChevronRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { fullPairwiseBreakdown } from "@/lib/fuzzyCluster";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Progress } from "@/components/ui/progress";
+import Link from "next/link";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
-type RecordWithScores = RecordRow & {
-    clusterId?: number;
-    pairScore?: number;
-    nameScore?: number;
-    husbandScore?: number;
-    idScore?: number;
-    phoneScore?: number;
-    locationScore?: number;
-    childrenScore?: number;
-};
 
-type EnrichedRecord = RecordWithScores & {
-    Cluster_ID?: number | null;
-    ClusterSize?: number | null;
-    Flag?: string | null;
+type DownloadVersion = {
+    id: string;
+    fileName: string;
+    version: number;
+    createdAt: string;
+    blob: Blob;
 };
 
 export default function ExportPage() {
-    const [status, setStatus] = useState({
-        enriched: false,
-        sorted: false,
-        ready: false,
+    // Component State
+    const [status, setStatus] = useState({ enriched: false, sorted: false, formatted: false, ready: false });
+    const [loading, setLoading] = useState<Record<string, boolean>>({
+        enrich: false,
+        sort: false,
+        format: false,
+        download: false,
     });
-    const [loading, setLoading] = useState(false);
     const { toast } = useToast();
 
-    const [enrichedData, setEnrichedData] = useState<EnrichedRecord[]>([]);
+    // Data State
     const [serverCache, setServerCache] = useState<any>(null);
-
-
+    const [enrichedData, setEnrichedData] = useState<any[]>([]);
+    const [downloadHistory, setDownloadHistory] = useState<DownloadVersion[]>([]);
+    
     useEffect(() => {
         const fetchCache = async () => {
             const cacheId = sessionStorage.getItem('cacheId');
             if (!cacheId) {
-                toast({ title: "Cache Error", description: "No data found from previous steps.", variant: "destructive" });
+                toast({ title: "Cache Error", description: "No data found from previous steps. Please start from the upload page.", variant: "destructive" });
                 return;
             }
-
             try {
                 const res = await fetch(`/api/cluster-cache?id=${cacheId}`);
                 const data = await res.json();
                 setServerCache(data);
+                 toast({ title: "Data Loaded", description: "Clustered data from the last run is ready." });
             } catch (e) {
                 toast({ title: "Cache Error", description: "Could not load data from server cache.", variant: "destructive" });
             }
         };
         fetchCache();
     }, [toast]);
-
-
-    const handleEnrichData = async () => {
-        setLoading(true);
-        try {
-            if (!serverCache?.rows || !serverCache?.clusters) {
-                throw new Error("Clustered data not found in server cache. Please re-run clustering.");
-            }
-            
-            const processedRows: RecordRow[] = serverCache.rows;
-            const clusters: RecordRow[][] = serverCache.clusters;
-            
-            const clusterMap = new Map<string, any>();
-            clusters.forEach((cluster: RecordRow[], index: number) => {
-                const pairs = fullPairwiseBreakdown(cluster);
-                const recordScores = new Map<string, any>();
     
-                for (const record of cluster) {
-                    let topScoreData: any = { pairScore: 0 };
-                    for (const pair of pairs) {
-                        if ((pair.a._internalId === record._internalId || pair.b._internalId === record._internalId) && pair.score > topScoreData.pairScore) {
-                            topScoreData = {
-                                pairScore: pair.score,
-                                nameScore: pair.breakdown.nameScore,
-                                husbandScore: pair.breakdown.husbandScore,
-                                idScore: pair.breakdown.idScore,
-                                phoneScore: pair.breakdown.phoneScore,
-                                locationScore: pair.breakdown.locationScore,
-                                childrenScore: pair.breakdown.childrenScore,
-                            };
-                        }
-                    }
-                    recordScores.set(record._internalId!, topScoreData);
-                }
-                
-                cluster.forEach(record => {
-                    const scores = recordScores.get(record._internalId!);
-                    clusterMap.set(record._internalId!, { clusterId: index + 1, ...scores });
-                });
-            });
-            
-            const allProcessed: RecordWithScores[] = processedRows.map((row) => {
-              const clusterData = clusterMap.get(row._internalId!);
-              return { ...row, ...clusterData };
-            });
-
-            const idColumnName = serverCache.idColumnName;
-
-            const clusterMaxIdMap = new Map<number, number>();
-            const clusterSizeMap = new Map<number, number>();
-            for (const row of allProcessed) {
-                if (row.clusterId) {
-                    clusterSizeMap.set(row.clusterId, (clusterSizeMap.get(row.clusterId) || 0) + 1);
-                    const beneficiaryId = Number(row.beneficiaryId);
-                    if (!isNaN(beneficiaryId)) {
-                        const currentMax = clusterMaxIdMap.get(row.clusterId) || 0;
-                        if (beneficiaryId > currentMax) {
-                            clusterMaxIdMap.set(row.clusterId, beneficiaryId);
-                        }
-                    }
-                }
-            }
-
-            const dataToEnrich: EnrichedRecord[] = allProcessed.map((row) => {
-                const clusterId = row.clusterId;
-                const clusterSize = clusterId ? clusterSizeMap.get(clusterId) || null : null;
-                const finalClusterId = clusterId ? clusterMaxIdMap.get(clusterId) || null : null;
-                const getFlagForScore = (scoreValue: any): string | null => {
-                    if (scoreValue === undefined || scoreValue === null) return null;
-                    const score = Number(scoreValue);
-                    if (isNaN(score) || score <= 0) return null;
-                    if (score >= 0.9) return "m?";
-                    if (score >= 0.8) return "m";
-                    if (score >= 0.7) return "??";
-                    if (score > 0) return "?";
-                    return null;
-                };
-
-                return {
-                    ...row,
-                    Cluster_ID: finalClusterId,
-                    ClusterSize: clusterSize,
-                    Flag: getFlagForScore(row.pairScore),
-                };
-            });
-
-            setEnrichedData(dataToEnrich);
-            setStatus({ ...status, enriched: true });
-            toast({ title: "Step 1 Complete", description: "Data has been enriched." });
-        } catch (e: any) {
-            toast({ title: "Enrichment Failed", description: e.message, variant: "destructive" });
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleSortData = () => {
-        setLoading(true);
+    const handleStep = async (step: 'enrich' | 'sort' | 'format' | 'download') => {
+        setLoading(prev => ({...prev, [step]: true}));
         try {
-            if (enrichedData.length === 0) {
-                 throw new Error("Enriched data not found. Please complete Step 1.");
-            }
-            const dataToSort = [...enrichedData];
-            
-            dataToSort.sort((a, b) => {
-                const scoreA = a.pairScore ?? -1;
-                const scoreB = b.pairScore ?? -1;
-                if (scoreA !== scoreB) {
-                    return scoreB - scoreA;
-                }
+            if (!serverCache) throw new Error("Cached data not available.");
 
-                const clusterA = a.Cluster_ID ?? Number.MAX_SAFE_INTEGER;
-                const clusterB = b.Cluster_ID ?? Number.MAX_SAFE_INTEGER;
-                return clusterA - clusterB;
-            });
-            
-            setEnrichedData(dataToSort); // Update state with sorted data
-            setStatus({ ...status, sorted: true, ready: true });
-            toast({ title: "Step 2 Complete", description: "Data has been sorted." });
-        } catch (e: any) {
-             toast({ title: "Sort Failed", description: e.message, variant: "destructive" });
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleDownload = async () => {
-        setLoading(true);
-        try {
-            if (!serverCache || enrichedData.length === 0) {
-                throw new Error("Missing necessary data. Please complete all previous steps.");
-            }
-            
             const body = {
-                enrichedData: enrichedData,
-                clusters: serverCache.clusters,
-                allRecords: serverCache.rows,
-                auditFindings: serverCache.auditFindings || [],
-                aiSummaries: serverCache.aiSummaries || {},
-                originalHeaders: serverCache.originalHeaders,
+                step,
+                cacheId: sessionStorage.getItem('cacheId'),
+                // For later steps, we send the already processed data
+                enrichedData: step !== 'enrich' ? enrichedData : undefined,
             };
-
-            const response = await fetch('/api/export/combined', {
+            
+            const res = await fetch('/api/export/enrich-and-format', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(body),
             });
 
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || 'Failed to generate Excel file.');
+            if (!res.ok) {
+                const errorData = await res.json();
+                throw new Error(errorData.error || `Step '${step}' failed on the server.`);
             }
 
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'combined-beneficiary-report.xlsx';
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            window.URL.revokeObjectURL(url);
-            toast({ title: "Download Started", description: "Your combined report is being downloaded." });
+            if (step === 'download') {
+                const blob = await res.blob();
+                const now = new Date();
+                const newVersion: DownloadVersion = {
+                    id: `v-${now.getTime()}`,
+                    fileName: `beneficiary-report-v${downloadHistory.length + 1}.xlsx`,
+                    version: downloadHistory.length + 1,
+                    createdAt: now.toLocaleString(),
+                    blob,
+                };
+                setDownloadHistory(prev => [newVersion, ...prev]);
+                toast({ title: "Report Ready", description: `${newVersion.fileName} has been added to the download panel.` });
+                
+                // Automatically download the first time
+                if (downloadHistory.length === 0) {
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = newVersion.fileName;
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    window.URL.revokeObjectURL(url);
+                }
+            } else {
+                const data = await res.json();
+                setEnrichedData(data.enrichedData);
+                setStatus(prev => ({ ...prev, [step === 'enrich' ? 'enriched' : step === 'sort' ? 'sorted' : 'formatted']: true, ready: step === 'format' }));
+                toast({ title: `Step Complete`, description: `Data has been ${step}ed.`});
+            }
 
         } catch (error: any) {
-            toast({ title: "Export Failed", description: error.message, variant: "destructive" });
+            toast({ title: `${step.charAt(0).toUpperCase() + step.slice(1)} Failed`, description: error.message, variant: "destructive" });
         } finally {
-            setLoading(false);
+            setLoading(prev => ({...prev, [step]: false}));
         }
+    };
+    
+    const handleDirectDownload = (blob: Blob, fileName: string) => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+        toast({ title: "Download Started", description: `Downloading ${fileName}` });
+    };
+
+    const handleDeleteVersion = (id: string) => {
+        setDownloadHistory(prev => prev.filter(v => v.id !== id));
     };
 
     const StatusIndicator = ({ done }: { done: boolean }) => {
@@ -236,31 +143,34 @@ export default function ExportPage() {
         <div className="space-y-6">
             <Card>
                 <CardHeader>
-                    <CardTitle>Combined Export Center</CardTitle>
-                    <CardDescription>Generate a single, comprehensive Excel report containing all analysis from the previous steps.</CardDescription>
+                    <CardTitle>Advanced Export Workflow</CardTitle>
+                    <CardDescription>
+                        Follow these steps to enrich, format, and download your comprehensive beneficiary analysis report.
+                        {!serverCache && " Waiting for data from previous steps..."}
+                    </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-8">
                     {/* Step 1: Enrich */}
                     <div className="flex items-center gap-4 p-4 border rounded-lg">
                         <div className="flex-1 space-y-1">
                             <h4 className="font-semibold">Step 1: Enrich Data</h4>
-                            <p className="text-sm text-muted-foreground">Calculate Cluster IDs, sizes, and flags for all records.</p>
+                            <p className="text-sm text-muted-foreground">Calculate Cluster IDs, sizes, flags, and scores for all records.</p>
                         </div>
-                        <Button onClick={handleEnrichData} disabled={loading || status.enriched || !serverCache}>
-                            {loading && !status.enriched ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                        <Button onClick={() => handleStep('enrich')} disabled={loading.enrich || status.enriched || !serverCache}>
+                            {loading.enrich ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                             Enrich Data
                         </Button>
                     </div>
 
-                    {/* Step 2: Sort */}
+                    {/* Step 2: Sort & Format */}
                      <div className="flex items-center gap-4 p-4 border rounded-lg">
                         <div className="flex-1 space-y-1">
-                            <h4 className="font-semibold">Step 2: Sort Data</h4>
-                            <p className="text-sm text-muted-foreground">Sort the enriched data by Pair Score (descending) and then by Cluster ID (ascending).</p>
+                            <h4 className="font-semibold">Step 2: Sort & Format Data</h4>
+                            <p className="text-sm text-muted-foreground">Apply professional sorting and conditional formatting rules to the dataset.</p>
                         </div>
-                        <Button onClick={handleSortData} disabled={loading || status.sorted || !status.enriched}>
-                             {loading && !status.sorted ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                            Sort Data
+                        <Button onClick={() => handleStep('format')} disabled={loading.format || status.formatted || !status.enriched}>
+                             {loading.format ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                            Sort & Format
                         </Button>
                     </div>
 
@@ -273,23 +183,57 @@ export default function ExportPage() {
                              <p className="text-sm text-muted-foreground mb-4">
                                 This will generate a single Excel file with multiple sheets: Enriched Data, Review Summary, Cluster Details, All Records, and Audit Findings.
                             </p>
-                            <Button onClick={handleDownload} disabled={loading || !status.ready}>
-                                {loading && status.ready ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
-                                Generate and Download Report
+                            <Button onClick={() => handleStep('download')} disabled={loading.download || !status.ready}>
+                                {loading.download ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
+                                Generate and Add to Downloads
                             </Button>
-                             {!status.ready && <p className="text-xs text-destructive mt-2">Please complete all previous steps to enable download.</p>}
+                             {!status.ready && <p className="text-xs text-destructive mt-2">Please complete all previous steps to enable generation.</p>}
                         </CardContent>
                     </Card>
-
-                    {/* Status Section */}
-                    <Card>
-                        <CardHeader><CardTitle>Export Status</CardTitle></CardHeader>
-                        <CardContent className="space-y-4">
-                            <div className="flex items-center justify-between"><span>Data Enriched</span> <StatusIndicator done={status.enriched} /></div>
-                            <div className="flex items-center justify-between"><span>Data Sorted</span> <StatusIndicator done={status.sorted} /></div>
-                             <div className="flex items-center justify-between font-semibold"><span>Ready to Download</span> <StatusIndicator done={status.ready} /></div>
-                        </CardContent>
-                    </Card>
+                    
+                    {/* Status & History Section */}
+                    <div className="grid md:grid-cols-2 gap-6">
+                        <Card>
+                            <CardHeader><CardTitle>Workflow Status</CardTitle></CardHeader>
+                            <CardContent className="space-y-4">
+                                <div className="flex items-center justify-between"><span>Data Enriched</span> <StatusIndicator done={status.enriched} /></div>
+                                <div className="flex items-center justify-between"><span>Data Sorted & Formatted</span> <StatusIndicator done={status.formatted} /></div>
+                                <div className="flex items-center justify-between font-semibold"><span>Ready to Generate</span> <StatusIndicator done={status.ready} /></div>
+                            </CardContent>
+                        </Card>
+                         <Card>
+                            <CardHeader><CardTitle>Download Panel</CardTitle></CardHeader>
+                            <CardContent>
+                                {downloadHistory.length === 0 ? (
+                                    <p className="text-sm text-muted-foreground text-center py-4">Generated reports will appear here.</p>
+                                ) : (
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow>
+                                                <TableHead>File Name</TableHead>
+                                                <TableHead>Version</TableHead>
+                                                <TableHead>Created</TableHead>
+                                                <TableHead className="text-right">Actions</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {downloadHistory.map(v => (
+                                                <TableRow key={v.id}>
+                                                    <TableCell className="font-medium">{v.fileName}</TableCell>
+                                                    <TableCell>{v.version}</TableCell>
+                                                    <TableCell>{v.createdAt}</TableCell>
+                                                    <TableCell className="text-right space-x-2">
+                                                        <Button variant="outline" size="sm" onClick={() => handleDirectDownload(v.blob, v.fileName)}>Download</Button>
+                                                        <Button variant="destructive" size="sm" onClick={() => handleDeleteVersion(v.id)}>Delete</Button>
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))}
+                                        </TableBody>
+                                    </Table>
+                                )}
+                            </CardContent>
+                        </Card>
+                    </div>
                 </CardContent>
             </Card>
         </div>
