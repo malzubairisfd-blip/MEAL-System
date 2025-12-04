@@ -199,14 +199,22 @@ function createEnrichedDataSheet(wb: ExcelJS.Workbook, data: EnrichedRecord[], o
     const ws = wb.addWorksheet("Enriched Data");
     ws.views = [{ rightToLeft: true }];
     
-    // Define the headers to include, explicitly excluding Max_PairScore
-    const finalHeaders = [
-        "Cluster_ID", "Cluster_Size", "Flag", "pairScore", "nameScore", "husbandScore", "idScore", "phoneScore",
-        ...originalHeaders.filter((h: string) => !["womanName", "husbandName", "children", "nationalId", "phone", "village", "subdistrict"].includes(h)),
-        "womanName", "husbandName", "children", "nationalId", "phone", "village", "subdistrict"
+    // Define the headers to include, explicitly excluding Max_PairScore for the final output
+    const headersToCreate = [
+        "Cluster_ID", "Cluster_Size", "Flag", "pairScore", "nameScore", "husbandScore", "idScore", "phoneScore"
     ];
     
-    ws.columns = finalHeaders.map(h => ({
+    // Combine new headers, original headers, and the new informational columns at the end
+    const finalHeaders = [
+        ...headersToCreate,
+        ...originalHeaders,
+        "womanName", "husbandName", "children", "nationalId", "phone", "village", "subdistrict"
+    ];
+
+    // Use a Set to ensure headers are unique, preserving order
+    const uniqueHeaders = [...new Set(finalHeaders)];
+    
+    ws.columns = uniqueHeaders.map(h => ({
       header: h,
       key: h,
       width: h === 'womanName' || h === 'husbandName' ? 25 : 15
@@ -218,16 +226,19 @@ function createEnrichedDataSheet(wb: ExcelJS.Workbook, data: EnrichedRecord[], o
         cell.alignment = { horizontal: 'center' };
     });
     
-    // Add the data rows. The `data` array still contains Max_PairScore, but it won't be added to the sheet because it's not in `finalHeaders`.
+    // Add the data rows. `data` contains Max_PairScore, which is used for formatting but not for header creation.
     ws.addRows(data);
     
     // Conditional formatting and borders
     ws.eachRow({ includeEmpty: false }, (row, rowNumber) => {
         if (rowNumber === 1) return;
-        const maxScoreCell = row.getCell('Max_PairScore');
-        if (maxScoreCell.value === null || maxScoreCell.value === undefined) return;
         
-        const score = Number(maxScoreCell.value);
+        // The 'Max_PairScore' value exists on the row model but not as a column in the sheet.
+        // We can access it directly from the `data` array for the corresponding row.
+        const rowData = data[rowNumber - 2]; // -1 for header, -1 for 0-based index
+        if (!rowData || rowData.Max_PairScore === null || rowData.Max_PairScore === undefined) return;
+        
+        const score = Number(rowData.Max_PairScore);
         let fillColor: string | undefined;
         let fontColor = 'FF000000';
 
@@ -238,13 +249,10 @@ function createEnrichedDataSheet(wb: ExcelJS.Workbook, data: EnrichedRecord[], o
 
         if (fillColor) {
             row.eachCell({ includeEmpty: true }, (cell) => {
-                // Do not apply fill to the headers that were just created
-                if (cell.row > 1) {
                   cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fillColor } };
                   if (score >= 0.9) {
                       cell.font = { ...cell.font, bold: true, color: { argb: fontColor } };
                   }
-                }
             });
         }
     });
