@@ -56,6 +56,7 @@ export default function ReviewPage() {
 
       setLoading(prev => ({ ...prev, summaries: true }));
       setSummaryProgress(0);
+      setSummaryStatus({ completed: 0, total: clustersToSummarize.length, elapsed: '0s', remaining: '0s' });
       const startTime = Date.now();
       const totalToProcess = clustersToSummarize.length;
       let completedCount = 0;

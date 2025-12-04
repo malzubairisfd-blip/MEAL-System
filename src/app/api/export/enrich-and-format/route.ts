@@ -199,26 +199,26 @@ function createEnrichedDataSheet(wb: ExcelJS.Workbook, data: EnrichedRecord[], o
     const ws = wb.addWorksheet("Enriched Data");
     ws.views = [{ rightToLeft: true }];
     
-    const newHeadersPrefix = ["Cluster_ID", "Cluster_Size", "Flag", "Max_PairScore", "pairScore", "nameScore", "husbandScore", "idScore", "phoneScore"];
-    const newHeadersSuffix = ["womanName", "husbandName", "children", "nationalId", "phone", "village", "subdistrict"];
-    const headersToExclude = new Set(newHeadersSuffix);
-    const middleHeaders = originalHeaders.filter((h: string) => !headersToExclude.has(h));
-    
-    // Construct final headers, removing Max_PairScore as it's for sorting only
+    // Define the headers to include, explicitly excluding Max_PairScore
     const finalHeaders = [
-        "Cluster_ID", "Cluster_Size", "Flag", /* "Max_PairScore" is removed */ "pairScore", "nameScore", "husbandScore", "idScore", "phoneScore",
-        ...middleHeaders,
-        ...newHeadersSuffix
+        "Cluster_ID", "Cluster_Size", "Flag", "pairScore", "nameScore", "husbandScore", "idScore", "phoneScore",
+        ...originalHeaders.filter((h: string) => !["womanName", "husbandName", "children", "nationalId", "phone", "village", "subdistrict"].includes(h)),
+        "womanName", "husbandName", "children", "nationalId", "phone", "village", "subdistrict"
     ];
     
-    ws.columns = finalHeaders.map(h => ({ header: h, key: h, width: 20 }));
+    ws.columns = finalHeaders.map(h => ({
+      header: h,
+      key: h,
+      width: h === 'womanName' || h === 'husbandName' ? 25 : 15
+    }));
 
     ws.getRow(1).eachCell(cell => {
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF002060' } };
         cell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
         cell.alignment = { horizontal: 'center' };
     });
-
+    
+    // Add the data rows. The `data` array still contains Max_PairScore, but it won't be added to the sheet because it's not in `finalHeaders`.
     ws.addRows(data);
     
     // Conditional formatting and borders
@@ -238,9 +238,12 @@ function createEnrichedDataSheet(wb: ExcelJS.Workbook, data: EnrichedRecord[], o
 
         if (fillColor) {
             row.eachCell({ includeEmpty: true }, (cell) => {
-                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fillColor } };
-                if (score >= 0.9) {
-                    cell.font = { ...cell.font, bold: true, color: { argb: fontColor } };
+                // Do not apply fill to the headers that were just created
+                if (cell.row > 1) {
+                  cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fillColor } };
+                  if (score >= 0.9) {
+                      cell.font = { ...cell.font, bold: true, color: { argb: fontColor } };
+                  }
                 }
             });
         }
