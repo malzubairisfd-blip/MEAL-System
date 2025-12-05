@@ -70,7 +70,8 @@ export default function ReviewPage() {
         });
 
         if (!res.ok || !res.body) {
-            throw new Error('Failed to start summary generation stream.');
+            const errorText = await res.text();
+            throw new Error(`Failed to start summary generation stream. Server responded with: ${errorText}`);
         }
 
         const reader = res.body.getReader();
@@ -91,8 +92,10 @@ export default function ReviewPage() {
                     try {
                         const json = JSON.parse(part.substring(6));
                         if(json.error) {
-                            console.error("An error occurred during summary generation:", json.error);
-                            toast({ title: "AI Summary Error", description: `A summary failed: ${json.error}`, variant: "destructive" });
+                            console.error("An error occurred during summary generation for a cluster:", json.error);
+                            toast({ title: "AI Summary Error", description: `A summary for a cluster failed: ${json.error}`, variant: "destructive" });
+                            // We still count it as "processed"
+                            completedCount++;
                             continue;
                         }
 
