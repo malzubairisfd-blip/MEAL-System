@@ -56,59 +56,91 @@ export default function ReviewPage() {
 
       setLoading(prev => ({ ...prev, summaries: true }));
       setSummaryProgress(0);
-      setSummaryStatus({ completed: 0, total: clustersToSummarize.length, elapsed: '0s', remaining: '0s' });
-      const startTime = Date.now();
       const totalToProcess = clustersToSummarize.length;
+      setSummaryStatus({ completed: 0, total: totalToProcess, elapsed: '0s', remaining: '0s' });
+      const startTime = Date.now();
       let completedCount = 0;
       const newSummaries: { [key: string]: string } = {};
 
-      for (const cluster of clustersToSummarize) {
-          try {
-              const res = await fetch('/api/ai/describe-cluster', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ cluster: cluster }),
-              });
-              const data = await res.json();
-              if (res.ok && data.description) {
-                  const clusterKey = cluster.map(r => r._internalId).sort().join('-');
-                  newSummaries[clusterKey] = data.description;
-              }
-          } catch (e) {
-              console.error("Failed to generate a summary for a cluster:", e);
-          } finally {
-              completedCount++;
-              const progress = (completedCount / totalToProcess) * 100;
-              setSummaryProgress(progress);
-
-              const elapsedMs = Date.now() - startTime;
-              const avgTimePerCluster = elapsedMs / completedCount;
-              const remainingMs = (totalToProcess - completedCount) * avgTimePerCluster;
-
-              setSummaryStatus({
-                  completed: completedCount,
-                  total: totalToProcess,
-                  elapsed: `${Math.round(elapsedMs / 1000)}s`,
-                  remaining: `${Math.round(remainingMs / 1000)}s`
-              });
-          }
-      }
-      
-      setAiSummaries(prev => ({ ...prev, ...newSummaries }));
-      
       try {
-        await fetch('/api/cluster-cache', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ cacheId: cacheId, data: { aiSummaries: { ...aiSummaries, ...newSummaries } } })
+        const res = await fetch('/api/ai/describe-clusters-batch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ clusters: clustersToSummarize }),
         });
-      } catch (e) {
-        console.error("Failed to save AI summaries to cache:", e);
-        toast({ title: "Cache Save Failed", description: "Could not save new AI summaries to the server.", variant: "destructive" });
+
+        if (!res.ok || !res.body) {
+            throw new Error('Failed to start summary generation stream.');
+        }
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            
+            const parts = buffer.split('\n\n');
+            buffer = parts.pop() || ''; // Keep the last, possibly incomplete, part
+
+            for (const part of parts) {
+                if (part.startsWith('data: ')) {
+                    try {
+                        const json = JSON.parse(part.substring(6));
+                        if(json.error) {
+                            console.error("An error occurred during summary generation:", json.error);
+                            toast({ title: "AI Summary Error", description: `A summary failed: ${json.error}`, variant: "destructive" });
+                            continue;
+                        }
+
+                        const { clusterKey, description } = json;
+                        newSummaries[clusterKey] = description;
+                        completedCount++;
+
+                        const progress = (completedCount / totalToProcess) * 100;
+                        setSummaryProgress(progress);
+
+                        const elapsedMs = Date.now() - startTime;
+                        const avgTimePerCluster = elapsedMs / completedCount;
+                        const remainingMs = (totalToProcess - completedCount) * avgTimePerCluster;
+
+                        setAiSummaries(prev => ({ ...prev, [clusterKey]: description }));
+
+                        setSummaryStatus({
+                            completed: completedCount,
+                            total: totalToProcess,
+                            elapsed: `${Math.round(elapsedMs / 1000)}s`,
+                            remaining: `${Math.round(remainingMs / 1000)}s`
+                        });
+                    } catch (e) {
+                         console.error("Failed to parse stream chunk:", e);
+                    }
+                }
+            }
+        }
+      } catch (error: any) {
+        console.error("Failed to generate summaries:", error);
+        toast({ title: "Error", description: error.message, variant: "destructive" });
       }
 
       setLoading(prev => ({ ...prev, summaries: false }));
-      toast({ title: "AI Summaries Ready", description: `Generated ${completedCount} new AI-powered summaries.` });
+      
+      if (Object.keys(newSummaries).length > 0) {
+        toast({ title: "AI Summaries Ready", description: `Generated ${Object.keys(newSummaries).length} new AI-powered summaries.` });
+        try {
+          await fetch('/api/cluster-cache', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cacheId: cacheId, data: { aiSummaries: { ...aiSummaries, ...newSummaries } } })
+          });
+        } catch (e) {
+          console.error("Failed to save AI summaries to cache:", e);
+          toast({ title: "Cache Save Failed", description: "Could not save new AI summaries to the server.", variant: "destructive" });
+        }
+      }
   };
 
   useEffect(() => {
