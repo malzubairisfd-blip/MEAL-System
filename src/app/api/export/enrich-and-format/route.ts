@@ -132,7 +132,6 @@ function createFormattedWorkbook(data: EnrichedRecord[], cachedData: any): Excel
     
     createEnrichedDataSheet(wb, data, originalHeaders);
     createSummarySheet(wb, allRecords, clusters);
-    createAllRecordsSheet(wb, allRecords, clusters);
     createClustersSheet(wb, clusters, aiSummaries);
     createAuditSheet(wb, auditFindings || []);
 
@@ -307,31 +306,6 @@ function createSummarySheet(wb: ExcelJS.Workbook, allRecords: RecordRow[], clust
         currentRow += 5;
     });
 }
-
-
-function createAllRecordsSheet(wb: ExcelJS.Workbook, allRecords: RecordRow[], clusters: RecordRow[][]) {
-  const ws = wb.addWorksheet("All Records");
-  ws.views = [{ rightToLeft: true }];
-  
-  const recordToClusterIdMap = new Map<string, number>();
-  clusters.forEach((cluster, index) => {
-    cluster.forEach(record => recordToClusterIdMap.set(record._internalId!, index + 1));
-  });
-
-  const headers = Object.keys(allRecords[0] || {}).filter(h => h !== '_internalId');
-  ws.columns = [ { header: "Cluster ID", key: "clusterId", width: 15 }, ...headers.map(h => ({ header: h, key: h, width: 25 }))];
-  
-  const headerRow = ws.getRow(1);
-  headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' }};
-  headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0070C0' } };
-  headerRow.alignment = { horizontal: 'center' };
-
-  allRecords.forEach(record => {
-    const clusterId = recordToClusterIdMap.get(record._internalId!) || '';
-    ws.addRow({ ...record, clusterId });
-  });
-}
-
 
 function createClustersSheet(wb: ExcelJS.Workbook, clusters: RecordRow[][], aiSummaries: { [key: string]: string } = {}) {
     const ws = wb.addWorksheet("Cluster Details");
