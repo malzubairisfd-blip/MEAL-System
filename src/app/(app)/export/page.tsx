@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import * as XLSX from "xlsx";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -32,6 +32,14 @@ export default function ExportPage() {
         format: false,
         download: false,
     });
+    const [progress, setProgress] = useState<Record<string, number>>({
+        enrich: 0,
+        sort: 0,
+        format: 0,
+        download: 0,
+    });
+    const progressIntervalRef = useRef<Record<string, NodeJS.Timeout>>({});
+
     const { toast } = useToast();
 
     // Data State
@@ -56,10 +64,37 @@ export default function ExportPage() {
             }
         };
         fetchCache();
+
+        // Cleanup interval on component unmount
+        return () => {
+            Object.values(progressIntervalRef.current).forEach(clearInterval);
+        }
     }, [toast]);
+
+    const startProgress = (step: string) => {
+        setProgress(prev => ({ ...prev, [step]: 0 }));
+        progressIntervalRef.current[step] = setInterval(() => {
+            setProgress(prev => ({
+                ...prev,
+                [step]: prev[step] >= 90 ? 90 : prev[step] + 5,
+            }));
+        }, 200);
+    };
+
+    const finishProgress = (step: string) => {
+        clearInterval(progressIntervalRef.current[step]);
+        delete progressIntervalRef.current[step];
+        setProgress(prev => ({ ...prev, [step]: 100 }));
+        setTimeout(() => {
+            setProgress(prev => ({ ...prev, [step]: 0 }));
+            setLoading(prev => ({...prev, [step]: false}));
+        }, 1000);
+    };
     
     const handleStep = async (step: 'enrich' | 'sort' | 'format' | 'download') => {
         setLoading(prev => ({...prev, [step]: true}));
+        startProgress(step);
+
         try {
             if (!serverCache) throw new Error("Cached data not available.");
 
@@ -111,11 +146,14 @@ export default function ExportPage() {
                 setStatus(prev => ({ ...prev, [step === 'enrich' ? 'enriched' : step === 'sort' ? 'sorted' : 'formatted']: true, ready: step === 'format' }));
                 toast({ title: `Step Complete`, description: `Data has been ${step}ed.`});
             }
+             finishProgress(step);
 
         } catch (error: any) {
             toast({ title: `${step.charAt(0).toUpperCase() + step.slice(1)} Failed`, description: error.message, variant: "destructive" });
-        } finally {
-            setLoading(prev => ({...prev, [step]: false}));
+             clearInterval(progressIntervalRef.current[step]);
+             delete progressIntervalRef.current[step];
+             setProgress(prev => ({ ...prev, [step]: 0 }));
+             setLoading(prev => ({...prev, [step]: false}));
         }
     };
     
@@ -155,6 +193,7 @@ export default function ExportPage() {
                         <div className="flex-1 space-y-1">
                             <h4 className="font-semibold">Step 1: Enrich Data</h4>
                             <p className="text-sm text-muted-foreground">Calculate Cluster IDs, sizes, flags, and scores for all records.</p>
+                            {loading.enrich && <Progress value={progress.enrich} className="w-full mt-2" />}
                         </div>
                         <Button onClick={() => handleStep('enrich')} disabled={loading.enrich || status.enriched || !serverCache}>
                             {loading.enrich ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
@@ -167,6 +206,7 @@ export default function ExportPage() {
                         <div className="flex-1 space-y-1">
                             <h4 className="font-semibold">Step 2: Sort & Format Data</h4>
                             <p className="text-sm text-muted-foreground">Apply professional sorting and conditional formatting rules to the dataset.</p>
+                             {loading.format && <Progress value={progress.format} className="w-full mt-2" />}
                         </div>
                         <Button onClick={() => handleStep('format')} disabled={loading.format || status.formatted || !status.enriched}>
                              {loading.format ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
@@ -183,6 +223,7 @@ export default function ExportPage() {
                              <p className="text-sm text-muted-foreground mb-4">
                                 This will generate a single Excel file with multiple sheets: Enriched Data, Review Summary, Cluster Details, All Records, and Audit Findings.
                             </p>
+                            {loading.download && <Progress value={progress.download} className="w-full mb-4" />}
                             <Button onClick={() => handleStep('download')} disabled={loading.download || !status.ready}>
                                 {loading.download ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
                                 Generate and Add to Downloads
