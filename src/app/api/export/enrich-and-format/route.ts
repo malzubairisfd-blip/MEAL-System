@@ -143,48 +143,34 @@ function createFormattedWorkbook(data: EnrichedRecord[], cachedData: any): Excel
 // ===============================================
 export async function POST(req: Request) {
     try {
-        const { step, cacheId, enrichedData: initialData } = await req.json();
+        const { cacheId } = await req.json();
 
         if (!cacheId) {
             return NextResponse.json({ error: "Cache ID is required." }, { status: 400 });
         }
         const cachedData = await getCachedData(cacheId);
 
-        let enrichedData = initialData;
-
-        if (step === 'enrich') {
-            enrichedData = await enrichData(cachedData);
-            return NextResponse.json({ enrichedData });
-        }
+        // 1. Enrich
+        let enrichedData = await enrichData(cachedData);
         
-        if (step === 'sort' || step === 'format') {
-             if (!enrichedData) throw new Error("Enriched data not provided for sorting/formatting.");
-             enrichedData = sortData(enrichedData);
-             // In this simplified flow, sort and format are combined before download
-             return NextResponse.json({ enrichedData });
-        }
+        // 2. Sort
+        let sortedData = sortData(enrichedData);
+        
+        // 3. Format and Generate Workbook
+        const wb = createFormattedWorkbook(sortedData, cachedData);
 
-        if (step === 'download') {
-            if (!enrichedData) throw new Error("Enriched data not provided for download.");
-            
-            // The final data sent from the client is already sorted.
-            // We just need to format it and create the workbook.
-            const wb = createFormattedWorkbook(enrichedData, cachedData);
-
-            const buffer = await wb.xlsx.writeBuffer();
-            return new NextResponse(buffer, {
-                status: 200,
-                headers: {
-                    "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    "Content-Disposition": "attachment; filename=formatted-beneficiary-report.xlsx",
-                },
-            });
-        }
-
-        return NextResponse.json({ error: "Invalid step provided." }, { status: 400 });
+        // 4. Send back the file
+        const buffer = await wb.xlsx.writeBuffer();
+        return new NextResponse(buffer, {
+            status: 200,
+            headers: {
+                "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                "Content-Disposition": "attachment; filename=beneficiary-report-complete.xlsx",
+            },
+        });
 
     } catch (error: any) {
-        console.error('Failed during export step:', error);
+        console.error('Failed during export process:', error);
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }
@@ -417,3 +403,5 @@ function createAuditSheet(wb: ExcelJS.Workbook, findings: AuditFinding[]) {
         }
     }
 }
+
+    

@@ -2,16 +2,11 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import * as XLSX from "xlsx";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { CheckCircle, FileDown, Loader2, XCircle, FileUp, Settings, ChevronRight } from "lucide-react";
+import { FileDown, Loader2, XCircle, CheckCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
-import Link from "next/link";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 
@@ -25,135 +20,103 @@ type DownloadVersion = {
 
 export default function ExportPage() {
     // Component State
-    const [status, setStatus] = useState({ enriched: false, sorted: false, formatted: false, ready: false });
-    const [loading, setLoading] = useState<Record<string, boolean>>({
-        enrich: false,
-        sort: false,
-        format: false,
-        download: false,
-    });
-    const [progress, setProgress] = useState<Record<string, number>>({
-        enrich: 0,
-        sort: 0,
-        format: 0,
-        download: 0,
-    });
-    const progressIntervalRef = useRef<Record<string, NodeJS.Timeout>>({});
+    const [isReady, setIsReady] = useState(false);
+    const [loading, setLoading] = useState(false);
+    const [progress, setProgress] = useState(0);
+    const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
     const { toast } = useToast();
 
     // Data State
-    const [serverCache, setServerCache] = useState<any>(null);
-    const [enrichedData, setEnrichedData] = useState<any[]>([]);
     const [downloadHistory, setDownloadHistory] = useState<DownloadVersion[]>([]);
     
     useEffect(() => {
-        const fetchCache = async () => {
+        const checkCache = async () => {
             const cacheId = sessionStorage.getItem('cacheId');
-            if (!cacheId) {
-                toast({ title: "Cache Error", description: "No data found from previous steps. Please start from the upload page.", variant: "destructive" });
-                return;
-            }
-            try {
-                const res = await fetch(`/api/cluster-cache?id=${cacheId}`);
-                const data = await res.json();
-                setServerCache(data);
-                 toast({ title: "Data Loaded", description: "Clustered data from the last run is ready." });
-            } catch (e) {
-                toast({ title: "Cache Error", description: "Could not load data from server cache.", variant: "destructive" });
+            if (cacheId) {
+                // We don't need to fetch the data, just confirm it exists to enable the button.
+                setIsReady(true);
+            } else {
+                setIsReady(false);
+                toast({ title: "No Data Found", description: "Please start from the upload page to generate data for export.", variant: "destructive" });
             }
         };
-        fetchCache();
+        checkCache();
 
         // Cleanup interval on component unmount
         return () => {
-            Object.values(progressIntervalRef.current).forEach(clearInterval);
+            if (progressIntervalRef.current) {
+                clearInterval(progressIntervalRef.current);
+            }
         }
     }, [toast]);
 
-    const startProgress = (step: string) => {
-        setProgress(prev => ({ ...prev, [step]: 0 }));
-        progressIntervalRef.current[step] = setInterval(() => {
-            setProgress(prev => ({
-                ...prev,
-                [step]: prev[step] >= 90 ? 90 : prev[step] + 5,
-            }));
-        }, 200);
+    const startProgress = () => {
+        setProgress(0);
+        progressIntervalRef.current = setInterval(() => {
+            setProgress(prev => {
+                if (prev >= 95) {
+                    if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
+                    return 95;
+                }
+                return prev + 5;
+            });
+        }, 300);
     };
 
-    const finishProgress = (step: string) => {
-        clearInterval(progressIntervalRef.current[step]);
-        delete progressIntervalRef.current[step];
-        setProgress(prev => ({ ...prev, [step]: 100 }));
+    const finishProgress = () => {
+        if (progressIntervalRef.current) {
+            clearInterval(progressIntervalRef.current);
+            progressIntervalRef.current = null;
+        }
+        setProgress(100);
         setTimeout(() => {
-            setProgress(prev => ({ ...prev, [step]: 0 }));
-            setLoading(prev => ({...prev, [step]: false}));
-        }, 1000);
+            setProgress(0);
+            setLoading(false);
+        }, 1500);
     };
     
-    const handleStep = async (step: 'enrich' | 'sort' | 'format' | 'download') => {
-        setLoading(prev => ({...prev, [step]: true}));
-        startProgress(step);
+    const handleGenerateAndDownload = async () => {
+        setLoading(true);
+        startProgress();
 
         try {
-            if (!serverCache) throw new Error("Cached data not available.");
+            const cacheId = sessionStorage.getItem('cacheId');
+            if (!cacheId) throw new Error("Cached data not available.");
 
-            const body = {
-                step,
-                cacheId: sessionStorage.getItem('cacheId'),
-                // For later steps, we send the already processed data
-                enrichedData: step !== 'enrich' ? enrichedData : undefined,
-            };
-            
             const res = await fetch('/api/export/enrich-and-format', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body),
+                body: JSON.stringify({ cacheId }),
             });
 
             if (!res.ok) {
                 const errorData = await res.json();
-                throw new Error(errorData.error || `Step '${step}' failed on the server.`);
+                throw new Error(errorData.error || `Report generation failed on the server.`);
             }
 
-            if (step === 'download') {
-                const blob = await res.blob();
-                const now = new Date();
-                const newVersion: DownloadVersion = {
-                    id: `v-${now.getTime()}`,
-                    fileName: `beneficiary-report-v${downloadHistory.length + 1}.xlsx`,
-                    version: downloadHistory.length + 1,
-                    createdAt: now.toLocaleString(),
-                    blob,
-                };
-                setDownloadHistory(prev => [newVersion, ...prev]);
-                toast({ title: "Report Ready", description: `${newVersion.fileName} has been added to the download panel.` });
-                
-                // Automatically download the first time
-                if (downloadHistory.length === 0) {
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = newVersion.fileName;
-                    document.body.appendChild(a);
-                    a.click();
-                    a.remove();
-                    window.URL.revokeObjectURL(url);
-                }
-            } else {
-                const data = await res.json();
-                setEnrichedData(data.enrichedData);
-                setStatus(prev => ({ ...prev, [step === 'enrich' ? 'enriched' : step === 'sort' ? 'sorted' : 'formatted']: true, ready: step === 'format' }));
-                toast({ title: `Step Complete`, description: `Data has been ${step}ed.`});
-            }
-             finishProgress(step);
+            const blob = await res.blob();
+            const now = new Date();
+            const newVersion: DownloadVersion = {
+                id: `v-${now.getTime()}`,
+                fileName: `beneficiary-report-v${downloadHistory.length + 1}.xlsx`,
+                version: downloadHistory.length + 1,
+                createdAt: now.toLocaleString(),
+                blob,
+            };
+            setDownloadHistory(prev => [newVersion, ...prev]);
+            toast({ title: "Report Ready", description: `${newVersion.fileName} has been added to the download panel.` });
+            
+            // Automatically trigger download
+            handleDirectDownload(blob, newVersion.fileName);
+            finishProgress();
 
         } catch (error: any) {
-            toast({ title: `${step.charAt(0).toUpperCase() + step.slice(1)} Failed`, description: error.message, variant: "destructive" });
-             clearInterval(progressIntervalRef.current[step]);
-             delete progressIntervalRef.current[step];
-             setProgress(prev => ({ ...prev, [step]: 0 }));
-             setLoading(prev => ({...prev, [step]: false}));
+            toast({ title: "Generation Failed", description: error.message, variant: "destructive" });
+             if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
+             progressIntervalRef.current = null;
+             setProgress(0);
+             setLoading(false);
         }
     };
     
@@ -183,52 +146,25 @@ export default function ExportPage() {
                 <CardHeader>
                     <CardTitle>Advanced Export Workflow</CardTitle>
                     <CardDescription>
-                        Follow these steps to enrich, format, and download your comprehensive beneficiary analysis report.
-                        {!serverCache && " Waiting for data from previous steps..."}
+                        Generate and download your comprehensive beneficiary analysis report in a single step.
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-8">
-                    {/* Step 1: Enrich */}
-                    <div className="flex items-center gap-4 p-4 border rounded-lg">
-                        <div className="flex-1 space-y-1">
-                            <h4 className="font-semibold">Step 1: Enrich Data</h4>
-                            <p className="text-sm text-muted-foreground">Calculate Cluster IDs, sizes, flags, and scores for all records.</p>
-                            {loading.enrich && <Progress value={progress.enrich} className="w-full mt-2" />}
-                        </div>
-                        <Button onClick={() => handleStep('enrich')} disabled={loading.enrich || status.enriched || !serverCache}>
-                            {loading.enrich ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                            Enrich Data
-                        </Button>
-                    </div>
-
-                    {/* Step 2: Sort & Format */}
-                     <div className="flex items-center gap-4 p-4 border rounded-lg">
-                        <div className="flex-1 space-y-1">
-                            <h4 className="font-semibold">Step 2: Sort & Format Data</h4>
-                            <p className="text-sm text-muted-foreground">Apply professional sorting and conditional formatting rules to the dataset.</p>
-                             {loading.format && <Progress value={progress.format} className="w-full mt-2" />}
-                        </div>
-                        <Button onClick={() => handleStep('format')} disabled={loading.format || status.formatted || !status.enriched}>
-                             {loading.format ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                            Sort & Format
-                        </Button>
-                    </div>
-
-                    {/* Step 3: Download */}
+                    {/* Single Step: Generate and Download */}
                     <Card className="bg-primary/10 border-primary">
                         <CardHeader>
-                            <CardTitle>Step 3: Generate and Download Report</CardTitle>
+                            <CardTitle>Generate and Download Report</CardTitle>
                         </CardHeader>
                         <CardContent>
                              <p className="text-sm text-muted-foreground mb-4">
-                                This will generate a single Excel file with multiple sheets: Enriched Data, Review Summary, Cluster Details, All Records, and Audit Findings.
+                                This will generate a single Excel file with multiple sheets: Enriched Data, Review Summary, Cluster Details, and Audit Findings. The process may take a moment.
                             </p>
-                            {loading.download && <Progress value={progress.download} className="w-full mb-4" />}
-                            <Button onClick={() => handleStep('download')} disabled={loading.download || !status.ready}>
-                                {loading.download ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
-                                Generate and Add to Downloads
+                            {loading && <Progress value={progress} className="w-full mb-4" />}
+                            <Button onClick={handleGenerateAndDownload} disabled={loading || !isReady} size="lg">
+                                {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
+                                Generate and Download Report
                             </Button>
-                             {!status.ready && <p className="text-xs text-destructive mt-2">Please complete all previous steps to enable generation.</p>}
+                             {!isReady && <p className="text-xs text-destructive mt-2">Please complete the upload and clustering steps first to enable report generation.</p>}
                         </CardContent>
                     </Card>
                     
@@ -237,9 +173,13 @@ export default function ExportPage() {
                         <Card>
                             <CardHeader><CardTitle>Workflow Status</CardTitle></CardHeader>
                             <CardContent className="space-y-4">
-                                <div className="flex items-center justify-between"><span>Data Enriched</span> <StatusIndicator done={status.enriched} /></div>
-                                <div className="flex items-center justify-between"><span>Data Sorted & Formatted</span> <StatusIndicator done={status.formatted} /></div>
-                                <div className="flex items-center justify-between font-semibold"><span>Ready to Generate</span> <StatusIndicator done={status.ready} /></div>
+                               <div className="flex items-center justify-between font-semibold">
+                                    <span>Ready to Generate</span> 
+                                    <StatusIndicator done={isReady} />
+                                </div>
+                                <p className="text-sm text-muted-foreground">
+                                    Ensure you have successfully run the clustering on the 'Upload' page. When ready, click the button above to generate your report.
+                                </p>
                             </CardContent>
                         </Card>
                          <Card>
@@ -280,3 +220,5 @@ export default function ExportPage() {
         </div>
     );
 }
+
+    
