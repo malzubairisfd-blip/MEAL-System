@@ -42,6 +42,7 @@ const generateClusterDescriptionPrompt = ai.definePrompt({
   name: 'generateClusterDescriptionPrompt',
   input: {schema: ClusterDescriptionInputSchema},
   output: {schema: ClusterDescriptionOutputSchema},
+  model: 'gemini-1.5-pro-latest',
   prompt: `You are an AI assistant helping a reviewer understand potential duplicate clusters of beneficiary records.
 
   Your task is to generate a concise description of the cluster IN ARABIC, highlighting potential connections, shared household members, and any anomalies that might indicate duplication or fraud.
