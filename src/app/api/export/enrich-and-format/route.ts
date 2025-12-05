@@ -80,6 +80,10 @@ async function enrichData(cachedData: any): Promise<EnrichedRecord[]> {
                         idScore: relevantPair.breakdown.idScore,
                         phoneScore: relevantPair.breakdown.phoneScore,
                     };
+                } else {
+                     recordPairData = {
+                        pairScore: 0, nameScore: 0, husbandScore: 0, idScore: 0, phoneScore: 0
+                    };
                 }
                 break;
             }
@@ -279,6 +283,7 @@ function createSummarySheet(wb: ExcelJS.Workbook, allRecords: RecordRow[], clust
     
     let currentRow = 4;
     statsData.forEach(rowItems => {
+        ws.getRow(currentRow).height = 45;
         rowItems.forEach((stat, colIndex) => {
             if (!stat) return;
             const startColNum = colIndex === 0 ? 2 : 5;
@@ -311,20 +316,11 @@ function createClustersSheet(wb: ExcelJS.Workbook, clusters: RecordRow[][], aiSu
         const pairs = fullPairwiseBreakdown(cluster);
         if (pairs.length === 0 && cluster.length < 2) return;
         
-        // Use a set to track unique beneficiary IDs within this cluster
-        const seenBeneficiaryIds = new Set();
-        
         const clusterKey = cluster.map(r => r._internalId).sort().join('-');
         const aiSummary = aiSummaries[clusterKey] || 'N/A';
         
-        const recordsForSheet = cluster.filter(record => {
-            if (seenBeneficiaryIds.has(record.beneficiaryId)) {
-                return false;
-            }
-            seenBeneficiaryIds.add(record.beneficiaryId);
-            return true;
-        });
-
+        const recordsForSheet = [...cluster].sort((a,b) => (a.beneficiaryId || '').localeCompare(b.beneficiaryId || ''));
+        
         if (recordsForSheet.length === 0) return;
 
         const startRow = currentRowIndex;
@@ -355,11 +351,25 @@ function createClustersSheet(wb: ExcelJS.Workbook, clusters: RecordRow[][], aiSu
         summaryCell.alignment = { vertical: 'top', horizontal: 'right', wrapText: true };
         
         for (let i = startRow; i <= endRow; i++) {
-            ws.getRow(i).getCell('B').value = recordsForSheet[i - startRow].beneficiaryId; // Re-set beneficiary ID in the correct cell
+            ws.getRow(i).getCell('B').value = recordsForSheet[i - startRow].beneficiaryId; // Re-set beneficiary ID
+            const border: Partial<ExcelJS.Borders> = {
+                top: { style: 'thin', color: {argb: 'FFD9D9D9'} },
+                left: { style: 'thin', color: {argb: 'FFD9D9D9'} },
+                bottom: { style: 'thin', color: {argb: 'FFD9D9D9'} },
+                right: { style: 'thin', color: {argb: 'FFD9D9D9'} },
+            };
             ws.getRow(i).eachCell({ includeEmpty: true }, (cell) => {
-                cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+                 cell.border = border;
             });
         }
+
+        // Add thick outer border
+        for (let i = startRow; i <= endRow; i++) {
+            ws.getRow(i).getCell(1).border.left = { style: 'thick', color: {argb: 'FF4F81BD'} };
+            ws.getRow(i).getCell(headers.length).border.right = { style: 'thick', color: {argb: 'FF4F81BD'} };
+        }
+        ws.getRow(startRow).eachCell({ includeEmpty: true }, c => c.border.top = { style: 'thick', color: {argb: 'FF4F81BD'} });
+        ws.getRow(endRow).eachCell({ includeEmpty: true }, c => c.border.bottom = { style: 'thick', color: {argb: 'FF4F81BD'} });
         
         currentRowIndex = endRow + 1;
     });
@@ -369,39 +379,70 @@ function createAuditSheet(wb: ExcelJS.Workbook, findings: AuditFinding[]) {
     const ws = wb.addWorksheet("Audit Findings");
     ws.views = [{ rightToLeft: true }];
     
-    ws.columns = [
-      { header: "Severity", key: "severity", width: 12 },
-      { header: "Finding Type", key: "type", width: 30 },
-      { header: "Description", key: "description", width: 50 },
-      { header: "Beneficiary ID", key: "beneficiaryId", width: 20 },
-      { header: "Affected Woman", key: "womanName", width: 25 },
-      { header: "Affected Husband", key: "husbandName", width: 25 },
-      { header: "National ID", key: "nationalId", width: 20 },
-      { header: "Phone", key: "phone", width: 20 },
+    const headers = [
+      { header: "الخطورة", key: "severity", width: 12 },
+      { header: "نوع النتيجة", key: "type", width: 30 },
+      { header: "الوصف", key: "description", width: 50 },
+      { header: "معرف المستفيد", key: "beneficiaryId", width: 20 },
+      { header: "المرأة المتأثرة", key: "womanName", width: 25 },
+      { header: "الزوج المتأثر", key: "husbandName", width: 25 },
+      { header: "الرقم القومي", key: "nationalId", width: 20 },
+      { header: "الهاتف", key: "phone", width: 20 },
     ];
+    ws.columns = headers;
     
-    ws.getRow(1).eachCell((cell) => {
+    const headerRow = ws.getRow(1);
+    headerRow.eachCell((cell) => {
       cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
       cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFC00000" } };
       cell.alignment = { horizontal: "center" };
     });
 
-    for (const finding of findings) {
-        for (const record of finding.records) {
+    const findingGroups = new Map<string, {finding: AuditFinding, records: RecordRow[]}>();
+
+    findings.forEach(finding => {
+        const key = `${finding.type}-${finding.description}`;
+        if (!findingGroups.has(key)) {
+            findingGroups.set(key, { finding, records: [] });
+        }
+        finding.records.forEach(r => findingGroups.get(key)!.records.push(r));
+    });
+
+    let currentRowIndex = 2;
+    findingGroups.forEach(({ finding, records }) => {
+        if (records.length === 0) return;
+
+        const startRow = currentRowIndex;
+        const endRow = startRow + records.length - 1;
+        
+        records.forEach(record => {
             const row = ws.addRow({
                 severity: finding.severity,
                 type: finding.type,
                 description: finding.description,
                 beneficiaryId: record.beneficiaryId,
-                ...record
+                womanName: record.womanName,
+                husbandName: record.husbandName,
+                nationalId: record.nationalId,
+                phone: record.phone
             });
             const severityColor = finding.severity === 'high' ? 'FFFFC7CE' : finding.severity === 'medium' ? 'FFFFEB9C' : 'FFC6EFCE';
             row.eachCell({ includeEmpty: true }, (cell) => {
                 cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: severityColor } };
                 cell.alignment = { horizontal: 'right' };
             });
+        });
+        
+        // Add thick outer border
+        for (let i = startRow; i <= endRow; i++) {
+            ws.getRow(i).getCell(1).border = { ...ws.getRow(i).getCell(1).border, left: { style: 'thick', color: {argb: 'FFC00000'} } };
+            ws.getRow(i).getCell(headers.length).border = { ...ws.getRow(i).getCell(headers.length).border, right: { style: 'thick', color: {argb: 'FFC00000'} } };
         }
-    }
+        ws.getRow(startRow).eachCell({ includeEmpty: true }, c => c.border = {...c.border, top: { style: 'thick', color: {argb: 'FFC00000'} } });
+        ws.getRow(endRow).eachCell({ includeEmpty: true }, c => c.border = {...c.border, bottom: { style: 'thick', color: {argb: 'FFC00000'} } });
+        
+        currentRowIndex = endRow + 1;
+    });
 }
 
     
