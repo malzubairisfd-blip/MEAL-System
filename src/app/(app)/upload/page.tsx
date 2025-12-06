@@ -1,27 +1,18 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
+import { useRouter } from 'next/navigation';
 import * as XLSX from "xlsx";
 
-/**
- * Upload Page + Web Worker client
- *
- * - Redesigned mapping UI with scrollable radio groups.
- * - Saves/loads mappings to/from localStorage based on file columns.
- * - Creates an inline Web Worker containing the full clustering engine.
- * - Sends parsed rows to the worker.
- * - Receives progress events and final clusters.
- */
-
-import ExcelJS from "exceljs";
-import { saveAs } from "file-saver";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { Upload, FileText, CheckCircle, XCircle } from "lucide-react";
+import { Upload, FileText, CheckCircle, XCircle, Settings, ChevronRight } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import Link from "next/link";
 
 type Mapping = {
   womanName: string;
@@ -32,23 +23,27 @@ type Mapping = {
   subdistrict: string;
   children: string;
   cluster_id?: string;
+  beneficiaryId?: string;
 };
 
-const MAPPING_FIELDS: (keyof Mapping)[] = ["womanName", "husbandName", "nationalId", "phone", "village", "subdistrict", "children", "cluster_id"];
+const MAPPING_FIELDS: (keyof Mapping)[] = ["womanName", "husbandName", "nationalId", "phone", "village", "subdistrict", "children", "cluster_id", "beneficiaryId"];
 const LOCAL_STORAGE_KEY_PREFIX = "beneficiary-mapping-";
+const SETTINGS_KEY = 'beneficiary-insights-settings';
 
 export default function UploadPage() {
   const [columns, setColumns] = useState<string[]>([]);
   const [file, setFile] = useState<File | null>(null);
   const [mapping, setMapping] = useState<Mapping>({
     womanName: "", husbandName: "", nationalId: "", phone: "",
-    village: "", subdistrict: "", children: "", cluster_id: "",
+    village: "", subdistrict: "", children: "", cluster_id: "", beneficiaryId: ""
   });
   const [workerStatus, setWorkerStatus] = useState<string>("idle");
   const [progress, setProgress] = useState<number>(0);
   const [clusters, setClusters] = useState<any[][]>([]);
   const workerRef = useRef<Worker | null>(null);
   const rowsRef = useRef<any[]>([]);
+  const { toast } = useToast();
+  const router = useRouter();
 
   // Web Worker setup
   useEffect(() => {
@@ -58,7 +53,7 @@ export default function UploadPage() {
     const w = new Worker(url);
     workerRef.current = w;
 
-    w.onmessage = (ev: MessageEvent) => {
+    w.onmessage = async (ev: MessageEvent) => {
       const msg = ev.data;
       if (!msg || !msg.type) return;
       switch (msg.type) {
@@ -70,10 +65,30 @@ export default function UploadPage() {
           setWorkerStatus("done");
           setProgress(100);
           setClusters(msg.clusters || []);
+          toast({ title: "Clustering Complete", description: `Found ${msg.clusters.length} potential duplicate clusters.` });
+
+          // Save results to server-side cache
+          try {
+            const cacheRes = await fetch('/api/cluster-cache', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    clusters: msg.clusters,
+                    rows: rowsRef.current.map((r, i) => ({ ...r, _internalId: `row_${i}` })),
+                    originalHeaders: columns
+                })
+            });
+            const cacheData = await cacheRes.json();
+            if (!cacheData.ok) throw new Error(cacheData.error || 'Failed to save to cache');
+            sessionStorage.setItem('cacheId', cacheData.cacheId);
+          } catch(error: any) {
+             toast({ title: "Error Saving Results", description: error.message, variant: "destructive" });
+          }
+
           break;
         case "error":
           setWorkerStatus("error");
-          alert("Worker error: " + msg.error);
+          toast({ title: "Worker Error", description: msg.error, variant: "destructive"});
           break;
       }
     };
@@ -82,7 +97,7 @@ export default function UploadPage() {
       w.terminate();
       URL.revokeObjectURL(url);
     };
-  }, []);
+  }, [toast, columns]);
   
   // Update mapping and save to localStorage
   useEffect(() => {
@@ -111,14 +126,12 @@ export default function UploadPage() {
     const parsedColumns = Object.keys(json[0] || {});
     setColumns(parsedColumns);
     
-    // Load saved mapping
     const storageKey = LOCAL_STORAGE_KEY_PREFIX + parsedColumns.join(',');
     const savedMapping = localStorage.getItem(storageKey);
     if(savedMapping) {
       setMapping(JSON.parse(savedMapping));
     } else {
-      // Reset if no saved mapping for this file structure
-      setMapping({ womanName: "", husbandName: "", nationalId: "", phone: "", village: "", subdistrict: "", children: "", cluster_id: "" });
+      setMapping({ womanName: "", husbandName: "", nationalId: "", phone: "", village: "", subdistrict: "", children: "", cluster_id: "", beneficiaryId: "" });
     }
   }
 
@@ -126,21 +139,38 @@ export default function UploadPage() {
     setMapping((m) => ({ ...m, [field]: value }));
   }
 
-  // Start clustering
   async function startClustering() {
     if (!workerRef.current) return alert("Worker not ready");
     if (!rowsRef.current.length) return alert("Upload data first");
     
     const required: (keyof Mapping)[] = ["womanName", "husbandName", "nationalId", "phone", "village", "subdistrict", "children"];
     for (const r of required) {
-      if (!mapping[r]) return alert(`Please map the "${r}" field.`);
+      if (!mapping[r]) {
+        toast({ title: "Mapping Incomplete", description: `Please map the "${r}" field before clustering.`, variant: "destructive"});
+        return;
+      }
+    }
+    
+    let clusteringSettings = {};
+    try {
+        const savedSettings = localStorage.getItem(SETTINGS_KEY);
+        if (savedSettings) {
+            clusteringSettings = JSON.parse(savedSettings);
+        }
+    } catch(e) {
+        console.warn("Could not load settings, using defaults.");
     }
 
     workerRef.current.postMessage({
       type: "start",
       payload: {
         mapping,
-        options: { minPairScore: 0.75, minInternalScore: 0.65, blockChunkSize: 1200 },
+        options: {
+          minPairScore: 0.75,
+          minInternalScore: 0.65,
+          blockChunkSize: 1200,
+          ...clusteringSettings
+        },
       },
     });
 
@@ -163,14 +193,23 @@ export default function UploadPage() {
       setClusters([]);
       setWorkerStatus('idle');
       setProgress(0);
-      setMapping({ womanName: "", husbandName: "", nationalId: "", phone: "", village: "", subdistrict: "", children: "", cluster_id: "" });
+      setMapping({ womanName: "", husbandName: "", nationalId: "", phone: "", village: "", subdistrict: "", children: "", cluster_id: "", beneficiaryId: "" });
   }
 
   return (
     <div className="space-y-6">
       <Card>
-        <CardHeader>
-          <CardTitle>1. Upload File</CardTitle>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div className="space-y-1.5">
+            <CardTitle>1. Upload File</CardTitle>
+            <CardDescription>Select a file from your device to begin the analysis.</CardDescription>
+          </div>
+          <Button variant="outline" asChild>
+              <Link href="/settings">
+                <Settings className="mr-2 h-4 w-4" />
+                Settings
+              </Link>
+          </Button>
         </CardHeader>
         <CardContent>
           <div className="flex items-center gap-4">
@@ -204,6 +243,7 @@ export default function UploadPage() {
         <Card>
           <CardHeader>
             <CardTitle>2. Map Columns</CardTitle>
+            <CardDescription>Match your spreadsheet columns to the required data fields.</CardDescription>
           </CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {MAPPING_FIELDS.map((field) => (
@@ -211,7 +251,7 @@ export default function UploadPage() {
                 <CardHeader className="p-4">
                   <CardTitle className="text-base capitalize flex justify-between items-center">
                     {field.replace(/_/g, ' ')}
-                    {mapping[field] && <CheckCircle className="h-5 w-5 text-green-500" />}
+                    {mapping[field] ? <CheckCircle className="h-5 w-5 text-green-500" /> : <XCircle className="h-5 w-5 text-destructive" />}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
@@ -219,7 +259,7 @@ export default function UploadPage() {
                     <RadioGroup
                       value={mapping[field]}
                       onValueChange={(value) => handleMappingChange(field, value)}
-                      className="p-4 grid grid-cols-2 gap-x-4 gap-y-2"
+                      className="p-4 grid grid-cols-1 gap-2"
                     >
                       {columns.map((col) => (
                         <div key={col} className="flex items-center space-x-2">
@@ -242,9 +282,10 @@ export default function UploadPage() {
         <Card>
           <CardHeader>
             <CardTitle>3. Run Clustering</CardTitle>
+            <CardDescription>Start the AI-powered analysis to find potential duplicates.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-             <Button onClick={startClustering} disabled={workerStatus === 'processing' || workerStatus === 'building-edges' || workerStatus === 'merging'}>
+             <Button onClick={startClustering} disabled={workerStatus !== 'idle' && workerStatus !== 'done' && workerStatus !== 'error'}>
                Start Clustering
              </Button>
              
@@ -252,7 +293,7 @@ export default function UploadPage() {
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm font-medium">
                       <span>Status: <span className="capitalize font-semibold">{workerStatus.replace(/-/g, ' ')}</span></span>
-                      <span>{progress}%</span>
+                      <span>{Math.round(progress)}%</span>
                   </div>
                   <Progress value={progress} />
                 </div>
@@ -265,23 +306,15 @@ export default function UploadPage() {
         <Card>
           <CardHeader>
             <CardTitle>4. Results</CardTitle>
+             <CardDescription>
+              Clustering complete. {clusters.length} potential duplicate clusters found. Proceed to the review page to analyze the results.
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <p className="mb-4">{clusters.length} potential duplicate clusters found.</p>
-             <ScrollArea className="h-72 border rounded-md">
-                <div className="p-4 space-y-2">
-                {clusters.slice(0, 200).map((c, i) => (
-                  <div key={i} className="p-3 rounded-md bg-muted/50">
-                    <p className="font-bold">Cluster {i + 1} ({c.length} records)</p>
-                    {c.slice(0, 10).map((r: any, idx: number) => (
-                      <p key={idx} className="text-sm truncate">
-                        {r.womanName} — {r.husbandName} — {r.phone}
-                      </p>
-                    ))}
-                  </div>
-                ))}
-                </div>
-             </ScrollArea>
+            <Button onClick={() => router.push('/review')}>
+                Go to Review Page
+                <ChevronRight className="ml-2 h-4 w-4" />
+            </Button>
           </CardContent>
         </Card>
       )}
@@ -289,7 +322,6 @@ export default function UploadPage() {
   );
 }
 
-// The worker script remains self-contained to be blob-ified.
 function createWorkerScript(): string {
   return `
   // Web Worker: receives chunks and performs clustering client-side
@@ -516,7 +548,11 @@ function refineComponent(rows, idxs, minInternal) {
       const result = [];
       for (const sc of subcomps) {
         const global = sc.map((li) => idxs[li]);
-        result.push(...refineComponent(rows, global, minInternal));
+        if (global.length < idxs.length) { // Ensure progress
+            result.push(...refineComponent(rows, global, minInternal));
+        } else {
+            result.push(global);
+        }
       }
       return result;
     }
@@ -552,7 +588,6 @@ function refineComponent(rows, idxs, minInternal) {
       for (const key in mapping) {
         mappedRow[key] = r[mapping[key]];
       }
-      // Ensure children is an array
       if (mappedRow.children && typeof mappedRow.children === 'string') {
           mappedRow.children = mappedRow.children.split(/[;,،|]/).map(x=>x.trim()).filter(Boolean);
       } else if (!mappedRow.children) {

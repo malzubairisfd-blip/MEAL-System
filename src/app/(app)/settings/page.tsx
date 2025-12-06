@@ -1,18 +1,20 @@
-
 "use client";
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { Save, RotateCcw } from 'lucide-react';
+import { Save, RotateCcw, ChevronLeft } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 
 const SETTINGS_KEY = 'beneficiary-insights-settings';
 const DEFAULT_SETTINGS = {
-  minPairScore: 0.60,
-  minInternalScore: 0.50,
+  minPairScore: 0.75,
+  minInternalScore: 0.65,
+  blockChunkSize: 1200,
 };
 
 export default function SettingsPage() {
@@ -24,7 +26,7 @@ export default function SettingsPage() {
     try {
       const savedSettings = localStorage.getItem(SETTINGS_KEY);
       if (savedSettings) {
-        setSettings(JSON.parse(savedSettings));
+        setSettings(prev => ({...prev, ...JSON.parse(savedSettings)}));
       }
     } catch (e) {
       console.warn("Could not load settings from localStorage");
@@ -87,7 +89,7 @@ export default function SettingsPage() {
           <div className="space-y-4">
             <Label htmlFor="min-pair-score" className="text-base">Minimum Pair Score</Label>
             <p className="text-sm text-muted-foreground">
-              The minimum similarity score (from 0 to 1) required for any two records to be considered a potential match and be included in the initial clustering phase.
+              The minimum similarity score (from 0 to 1) required for any two records to be considered a potential match and be included in the initial clustering phase. Default: 0.75
             </p>
             <div className="flex items-center gap-4">
               <Slider
@@ -105,7 +107,7 @@ export default function SettingsPage() {
           <div className="space-y-4">
             <Label htmlFor="min-internal-score" className="text-base">Minimum Internal Score</Label>
              <p className="text-sm text-muted-foreground">
-              When a large cluster needs to be split into smaller groups (max 4 records), this is the minimum score required for records to remain together in a subgroup.
+              When a large cluster needs to be split into smaller, more coherent groups, this is the minimum average similarity required for records to remain together. Default: 0.65
             </p>
             <div className="flex items-center gap-4">
               <Slider
@@ -120,7 +122,31 @@ export default function SettingsPage() {
               <span className="font-mono text-lg tabular-nums">{settings.minInternalScore.toFixed(2)}</span>
             </div>
           </div>
+           <div className="space-y-4">
+            <Label htmlFor="block-chunk-size" className="text-base">Block Chunk Size</Label>
+             <p className="text-sm text-muted-foreground">
+              For very large datasets, this controls the size of sub-blocks during the candidate generation phase. Smaller values are slower but more thorough. Default: 1200
+            </p>
+            <div className="flex items-center gap-4">
+               <Slider
+                id="block-chunk-size"
+                min={500}
+                max={5000}
+                step={100}
+                value={[settings.blockChunkSize]}
+                onValueChange={(val) => handleSliderChange('blockChunkSize', val)}
+                className="flex-1"
+              />
+              <span className="font-mono text-lg tabular-nums">{settings.blockChunkSize}</span>
+            </div>
+          </div>
           <div className="flex gap-4">
+             <Button variant="outline" asChild>
+                <Link href="/upload">
+                    <ChevronLeft className="mr-2 h-4 w-4" />
+                    Back to Upload
+                </Link>
+            </Button>
             <Button onClick={handleSave}>
               <Save className="mr-2 h-4 w-4" />
               Save Settings

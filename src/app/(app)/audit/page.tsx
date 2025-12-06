@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect } from "react";
@@ -32,11 +31,15 @@ export default function AuditPage() {
           const res = await fetch(`/api/cluster-cache?id=${cacheId}`);
           if (!res.ok) throw new Error("Failed to load data from server cache");
 
-          const { clusters } = await res.json();
+          const { clusters, auditFindings } = await res.json();
           
           if (clusters) {
               const clusteredRecords = clusters.flat();
               setRows(clusteredRecords);
+              if (auditFindings) {
+                setFindings(auditFindings);
+              }
+
               if (clusteredRecords.length > 0) {
                 toast({ title: "Data Loaded", description: `${clusteredRecords.length} records from clusters are ready for audit.` });
               } else {
@@ -75,7 +78,6 @@ export default function AuditPage() {
         const data = await res.json();
         setFindings(data.findings);
         
-        // Save findings to server-side cache
         const cacheId = sessionStorage.getItem('cacheId');
         if (cacheId) {
             await fetch('/api/cluster-cache', {
@@ -84,7 +86,6 @@ export default function AuditPage() {
                 body: JSON.stringify({ cacheId, data: { auditFindings: data.findings } })
             });
         }
-
 
         toast({ title: "Audit Complete", description: `${data.findings.length} potential issues found.` });
 

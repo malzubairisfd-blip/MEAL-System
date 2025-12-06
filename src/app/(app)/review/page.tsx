@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect } from "react";
@@ -24,11 +23,9 @@ export default function ReviewPage() {
   const { toast } = useToast();
   const [aiSummaries, setAiSummaries] = useState<{ [key: string]: string }>({});
 
-  // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(9);
   
-  // AI Summary Progress State
   const [summaryProgress, setSummaryProgress] = useState(0);
   const [summaryStatus, setSummaryStatus] = useState({
     completed: 0,
@@ -94,7 +91,6 @@ export default function ReviewPage() {
                         if(json.error) {
                             console.error("An error occurred during summary generation for a cluster:", json.error);
                             toast({ title: "AI Summary Error", description: `A summary for a cluster failed: ${json.error}`, variant: "destructive" });
-                            // We still count it as "processed"
                             completedCount++;
                             continue;
                         }
@@ -171,6 +167,8 @@ export default function ReviewPage() {
 
               if (clusters.length === 0) {
                   toast({ title: "No Clusters Found", description: "The last run did not produce any clusters. Try adjusting settings.", variant: "default" });
+              } else {
+                  toast({ title: "Clusters Loaded", description: `Loaded ${clusters.length} clusters for review.`, variant: "default" });
               }
           } else {
                toast({ title: "Error", description: "Failed to load cluster data from server cache.", variant: "destructive" });
@@ -210,8 +208,6 @@ export default function ReviewPage() {
     setSelectedCluster(cluster);
   }
 
-
-  // Pagination logic
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentClusters = filteredClusters.slice(indexOfFirstItem, indexOfLastItem);
