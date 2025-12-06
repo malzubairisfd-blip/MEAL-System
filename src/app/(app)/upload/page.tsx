@@ -27,6 +27,7 @@ type Mapping = {
 };
 
 const MAPPING_FIELDS: (keyof Mapping)[] = ["womanName", "husbandName", "nationalId", "phone", "village", "subdistrict", "children", "cluster_id", "beneficiaryId"];
+const REQUIRED_MAPPING_FIELDS: (keyof Mapping)[] = ["womanName", "husbandName", "nationalId", "phone", "village", "subdistrict", "children"];
 const LOCAL_STORAGE_KEY_PREFIX = "beneficiary-mapping-";
 const SETTINGS_KEY = 'beneficiary-insights-settings';
 
@@ -52,6 +53,7 @@ export default function UploadPage() {
     womanName: "", husbandName: "", nationalId: "", phone: "",
     village: "", subdistrict: "", children: "", cluster_id: "", beneficiaryId: ""
   });
+  const [isMappingComplete, setIsMappingComplete] = useState(false);
   const [workerStatus, setWorkerStatus] = useState<string>("idle");
   const [progressInfo, setProgressInfo] = useState<WorkerProgress>({ status: "idle", progress: 0 });
   const [clusters, setClusters] = useState<any[][]>([]);
@@ -138,6 +140,8 @@ export default function UploadPage() {
       const storageKey = LOCAL_STORAGE_KEY_PREFIX + columns.join(',');
       localStorage.setItem(storageKey, JSON.stringify(mapping));
     }
+    const allRequiredMapped = REQUIRED_MAPPING_FIELDS.every(field => !!mapping[field]);
+    setIsMappingComplete(allRequiredMapped);
   }, [mapping, columns]);
 
   // File input handler
@@ -175,12 +179,9 @@ export default function UploadPage() {
     if (!workerRef.current) return alert("Worker not ready");
     if (!rowsRef.current.length) return alert("Upload data first");
     
-    const required: (keyof Mapping)[] = ["womanName", "husbandName", "nationalId", "phone", "village", "subdistrict", "children"];
-    for (const r of required) {
-      if (!mapping[r]) {
-        toast({ title: "Mapping Incomplete", description: `Please map the "${r}" field before clustering.`, variant: "destructive"});
-        return;
-      }
+    if (!isMappingComplete) {
+      toast({ title: "Mapping Incomplete", description: `Please map all required fields before clustering.`, variant: "destructive"});
+      return;
     }
     
     let clusteringSettings = {};
@@ -192,6 +193,9 @@ export default function UploadPage() {
     } catch(e) {
         console.warn("Could not load settings, using defaults.");
     }
+    
+    setWorkerStatus("processing");
+    setProgressInfo({ status: "processing", progress: 1 });
 
     workerRef.current.postMessage({
       type: "start",
@@ -214,8 +218,6 @@ export default function UploadPage() {
     }
     
     workerRef.current.postMessage({ type: "end" });
-    setWorkerStatus("processing");
-    setProgressInfo({ status: "processing", progress: 1 });
   }
   
   function resetState() {
@@ -297,14 +299,17 @@ export default function UploadPage() {
         <Card>
           <CardHeader>
             <CardTitle>2. Map Columns</CardTitle>
-            <CardDescription>Match your spreadsheet columns to the required data fields.</CardDescription>
+            <CardDescription>Match your spreadsheet columns to the required data fields. Required fields are marked with *.</CardDescription>
           </CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {MAPPING_FIELDS.map((field) => (
               <Card key={field}>
                 <CardHeader className="p-4">
                   <CardTitle className="text-base capitalize flex justify-between items-center">
-                    {field.replace(/_/g, ' ')}
+                    <span>
+                      {field.replace(/_/g, ' ')}
+                      {REQUIRED_MAPPING_FIELDS.includes(field) && <span className="text-destructive">*</span>}
+                    </span>
                     {mapping[field] ? <CheckCircle className="h-5 w-5 text-green-500" /> : <XCircle className="h-5 w-5 text-destructive" />}
                   </CardTitle>
                 </CardHeader>
@@ -332,7 +337,7 @@ export default function UploadPage() {
         </Card>
       )}
 
-      {file && (
+      {file && isMappingComplete && (
         <Card>
           <CardHeader>
             <CardTitle>3. Run Clustering</CardTitle>

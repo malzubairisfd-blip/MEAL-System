@@ -289,7 +289,7 @@ function createSummarySheet(wb: ExcelJS.Workbook, allRecords: RecordRow[], clust
             const startColNum = colIndex === 0 ? 2 : 5;
             ws.mergeCells(currentRow, startColNum, currentRow + 3, startColNum + 1);
             const cardCell = ws.getCell(currentRow, startColNum);
-            cardCell.value = { richText: [ { text: `${'${stat.icon}'}\n`, font: { size: 36, name: 'Segoe UI Emoji' } }, { text: `${'${stat.title}'}\n`, font: { size: 14 } }, { text: `${'${stat.value}'}`, font: { size: 24, bold: true } } ] };
+            cardCell.value = { richText: [ { text: `${stat.icon}\n`, font: { size: 36, name: 'Segoe UI Emoji' } }, { text: `${stat.title}\n`, font: { size: 14 } }, { text: `${stat.value}`, font: { size: 24, bold: true } } ] };
             cardCell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
             cardCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE6F2FF' } };
             cardCell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
@@ -340,13 +340,13 @@ function createClustersSheet(wb: ExcelJS.Workbook, clusters: RecordRow[][], aiSu
             });
         });
         
-        ws.mergeCells(`A${'${startRow}'}:A${'${endRow}'}`);
-        const clusterIdCell = ws.getCell(`A${'${startRow}'}`);
+        ws.mergeCells(`A${startRow}:A${endRow}`);
+        const clusterIdCell = ws.getCell(`A${startRow}`);
         clusterIdCell.value = clusterId;
         clusterIdCell.alignment = { vertical: 'middle', horizontal: 'center' };
 
-        ws.mergeCells(`C${'${startRow}'}:C${'${endRow}'}`);
-        const summaryCell = ws.getCell(`C${'${startRow}'}`);
+        ws.mergeCells(`C${startRow}:C${endRow}`);
+        const summaryCell = ws.getCell(`C${startRow}`);
         summaryCell.value = aiSummary;
         summaryCell.alignment = { vertical: 'top', horizontal: 'right', wrapText: true };
         
@@ -401,7 +401,7 @@ function createAuditSheet(wb: ExcelJS.Workbook, findings: AuditFinding[]) {
     const findingGroups = new Map<string, {finding: AuditFinding, records: RecordRow[]}>();
 
     findings.forEach(finding => {
-        const key = `${'${finding.type}'}-${'${finding.description}'}`;
+        const key = `${finding.type}-${finding.description}`;
         if (!findingGroups.has(key)) {
             findingGroups.set(key, { finding, records: [] });
         }
