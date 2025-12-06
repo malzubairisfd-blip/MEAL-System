@@ -11,7 +11,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { Upload, FileText, CheckCircle, XCircle, Settings, ChevronRight } from "lucide-react";
+import { Upload, FileText, CheckCircle, XCircle, Settings, ChevronRight, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
 
@@ -31,6 +31,13 @@ const MAPPING_FIELDS: (keyof Mapping)[] = ["womanName", "husbandName", "national
 const LOCAL_STORAGE_KEY_PREFIX = "beneficiary-mapping-";
 const SETTINGS_KEY = 'beneficiary-insights-settings';
 
+type WorkerProgress = {
+  status: string;
+  progress: number;
+  completed?: number;
+  total?: number;
+}
+
 export default function UploadPage() {
   const [columns, setColumns] = useState<string[]>([]);
   const [file, setFile] = useState<File | null>(null);
@@ -39,7 +46,7 @@ export default function UploadPage() {
     village: "", subdistrict: "", children: "", cluster_id: "", beneficiaryId: ""
   });
   const [workerStatus, setWorkerStatus] = useState<string>("idle");
-  const [progress, setProgress] = useState<number>(0);
+  const [progressInfo, setProgressInfo] = useState<WorkerProgress>({ status: "idle", progress: 0 });
   const [clusters, setClusters] = useState<any[][]>([]);
   const workerRef = useRef<Worker | null>(null);
   const rowsRef = useRef<any[]>([]);
@@ -59,12 +66,17 @@ export default function UploadPage() {
       if (!msg || !msg.type) return;
       switch (msg.type) {
         case "progress":
-          setProgress(msg.progress || 0);
           setWorkerStatus(msg.status || "working");
+          setProgressInfo({
+            status: msg.status || "working",
+            progress: msg.progress || 0,
+            completed: msg.completed,
+            total: msg.total,
+          });
           break;
         case "done":
           setWorkerStatus("done");
-          setProgress(100);
+          setProgressInfo({ status: "done", progress: 100 });
           setClusters(msg.clusters || []);
           toast({ title: "Clustering Complete", description: `Found ${msg.clusters.length} potential duplicate clusters.` });
 
@@ -115,7 +127,7 @@ export default function UploadPage() {
     
     setFile(file);
     setWorkerStatus('idle');
-    setProgress(0);
+    setProgressInfo({ status: "idle", progress: 0 });
     setClusters([]);
 
     const buffer = await file.arrayBuffer();
@@ -184,7 +196,7 @@ export default function UploadPage() {
     
     workerRef.current.postMessage({ type: "end" });
     setWorkerStatus("processing");
-    setProgress(1);
+    setProgressInfo({ status: "processing", progress: 1 });
   }
   
   function resetState() {
@@ -193,15 +205,24 @@ export default function UploadPage() {
       rowsRef.current = [];
       setClusters([]);
       setWorkerStatus('idle');
-      setProgress(0);
+      setProgressInfo({ status: "idle", progress: 0 });
       setMapping({ womanName: "", husbandName: "", nationalId: "", phone: "", village: "", subdistrict: "", children: "", cluster_id: "", beneficiaryId: "" });
+  }
+  
+  const formattedStatus = () => {
+    const { status, completed, total } = progressInfo;
+    let baseStatus = status.replace(/-/g, ' ');
+    if(completed !== undefined && total !== undefined) {
+      return `${baseStatus} (${completed}/${total})`;
+    }
+    return baseStatus;
   }
 
   return (
     <div className="space-y-6">
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div className="space-y-1.5">
+        <CardHeader className="flex flex-row items-start justify-between">
+          <div>
             <CardTitle>1. Upload File</CardTitle>
             <CardDescription>Select a file from your device to begin the analysis.</CardDescription>
           </div>
@@ -287,16 +308,17 @@ export default function UploadPage() {
           </CardHeader>
           <CardContent className="space-y-4">
              <Button onClick={startClustering} disabled={workerStatus !== 'idle' && workerStatus !== 'done' && workerStatus !== 'error'}>
-               Start Clustering
+                {workerStatus === 'processing' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                {workerStatus === 'processing' ? 'Clustering...' : 'Start Clustering'}
              </Button>
              
              {workerStatus !== 'idle' && (
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm font-medium">
-                      <span>Status: <span className="capitalize font-semibold">{workerStatus.replace(/-/g, ' ')}</span></span>
-                      <span>{Math.round(progress)}%</span>
+                      <span className="capitalize">Status: <span className="font-semibold">{formattedStatus()}</span></span>
+                      <span>{Math.round(progressInfo.progress)}%</span>
                   </div>
-                  <Progress value={progress} />
+                  <Progress value={progressInfo.progress} />
                 </div>
              )}
           </CardContent>
@@ -351,9 +373,8 @@ function createWorkerScript(): string {
     return t;
   }
 
-  function tokensOfName(s){ const n = normalizeArabic(s||""); if(!n) return []; return n.split(" ").filter(Boolean); }
-  const tokens = tokensOfName;
-
+  function tokens(s){ const n = normalizeArabic(s||""); if(!n) return []; return n.split(" ").filter(Boolean); }
+  
   // Jaro-Winkler
   function jaroWinkler(s1,s2){
     s1 = safeString(s1); s2 = safeString(s2);
@@ -404,26 +425,33 @@ function createWorkerScript(): string {
   }
 
   function pairwiseScore(a,b){
-    const aName = normalizeArabic(a.womanName||"");
-    const bName = normalizeArabic(b.womanName||"");
-    const aT = tokensOfName(aName), bT = tokensOfName(bName);
-    const firstA = aT[0]||"", firstB = bT[0]||"";
-    const familyA = aT.slice(1).join(" "), familyB = bT.slice(1).join(" ");
-    const firstScore = jaroWinkler(firstA, firstB);
-    const familyScore = jaroWinkler(familyA, familyB);
+    const wTokensA = tokens(a.womanName);
+    const wTokensB = tokens(b.womanName);
+
+    const firstNameA = wTokensA[0] || "";
+    const firstNameB = wTokensB[0] || "";
+    const familyNameA = wTokensA.slice(1).join(" ");
+    const familyNameB = wTokensB.slice(1).join(" ");
+
+    const firstNameScore = jaroWinkler(firstNameA, firstNameB);
+    const familyNameScore = jaroWinkler(familyNameA, familyNameB);
     
-    const hA = normalizeArabic(a.husbandName||""), hB = normalizeArabic(b.husbandName||"");
-    const husbandScore = Math.max(jaroWinkler(hA,hB), tokenJaccard(tokensOfName(hA), tokensOfName(hB)));
-    const idScore = (a.nationalId && b.nationalId && String(a.nationalId)===String(b.nationalId)) ? 1 : 0;
-    const phoneScore = phoneSim(a.phone,b.phone);
-    const loc = (a.village && b.village && normalizeArabic(a.village)===normalizeArabic(b.village)) ? 1 : (a.subdistrict && b.subdistrict && normalizeArabic(a.subdistrict)===normalizeArabic(b.subdistrict) ? 0.8 : 0);
-    const chA = (a.children||[]).map(x=>normalizeArabic(x)); const chB = (b.children||[]).map(x=>normalizeArabic(x));
-    const childrenScore = tokenJaccard(chA,chB);
+    const hA = normalizeArabic(a.husbandName || "");
+    const hB = normalizeArabic(b.husbandName || "");
+    const hJW = jaroWinkler(hA, hB);
+    const hPerm = tokenJaccard(tokens(hA), tokens(hB));
+    const husbandScore = Math.max(hJW, hPerm);
 
-    let score = 0.15*firstScore + 0.35*familyScore + 0.15*husbandScore + 0.15*idScore + 0.08*phoneScore + 0.02*loc + 0.10*childrenScore;
-    if(score>1) score=1; if(score<0) score=0;
+    const idMatch = (a.nationalId && b.nationalId && String(a.nationalId) === String(b.nationalId)) ? 1 : 0;
+    const phone = phoneScore(a.phone, b.phone);
+    const loc = (a.village && b.village && normalizeArabic(a.village) === normalizeArabic(b.village)) ? 1 : (a.subdistrict && b.subdistrict && normalizeArabic(a.subdistrict) === normalizeArabic(b.subdistrict) ? 0.8 : 0);
+    const chA = (a.children || []).map(normalizeArabic);
+    const chB = (b.children || []).map(normalizeArabic);
+    const children = tokenJaccard(chA, chB);
 
-    return { score, breakdown:{ firstScore, familyScore, husbandScore, idScore, phoneScore, loc, childrenScore } };
+    const score = 0.15 * firstNameScore + 0.35 * familyNameScore + 0.15 * husbandScore + 0.15 * idMatch + 0.08 * phone + 0.02 * loc + 0.10 * children;
+
+    return { score: Math.max(0, Math.min(1, score)) };
   }
 
 function buildBalancedBlocks(rows) {
@@ -445,17 +473,16 @@ function buildBalancedBlocks(rows) {
     const village = normalizeArabic(r.village || "");
     const subdistrict = normalizeArabic(r.subdistrict || "");
 
-    // Each record will participate in 6–8 overlapping blocks.
     const keys = [
-      \`wf:\${first}\`,             // Woman first name
-      \`ff:\${father}\`,            // Woman father name
-      \`wl:\${last}\`,              // Woman last name
-      \`hf:\${hFirst}\`,            // Husband first name
-      \`hl:\${hLast}\`,             // Husband last name
-      \`v:\${village}\`,            // Village
-      \`sd:\${subdistrict}\`,       // Subdistrict
-      \`ffhf:\${father}-\${hFirst}\`,// Woman father + Husband first
-      \`wfhf:\${first}-\${hFirst}\`, // Woman first + Husband first
+      \`wf:\${first}\`,
+      \`ff:\${father}\`,
+      \`wl:\${last}\`,
+      \`hf:\${hFirst}\`,
+      \`hl:\${hLast}\`,
+      \`v:\${village}\`,
+      \`sd:\${subdistrict}\`,
+      \`ffhf:\${father}-\${hFirst}\`,
+      \`wfhf:\${first}-\${hFirst}\`,
     ];
 
     for (const k of keys) {
@@ -464,46 +491,27 @@ function buildBalancedBlocks(rows) {
     }
   }
 
-  // Convert to array
   return Array.from(blocks.values()).filter(b => b.length > 1);
 }
 
-
 function buildEdges(rows, minScore, options) {
   const edges = [];
-  const seen = new Set();
   const CH = options?.blockChunkSize || 1200;
 
-  // The 'rows' here is already a pre-filtered block
-  for (let s = 0; s < rows.length; s += CH) {
-    const part = rows.slice(s, s + CH);
-    for (let i = 0; i < part.length; i++) {
-      for (let j = i + 1; j < part.length; j++) {
-        const a = part[i]; // The actual row object, not an index
-        const b = part[j]; // The actual row object, not an index
-        
-        // We need original indices to build a global graph, so we need to pass them down
-        // Or, assume indices passed into buildEdges are local to the sub-array
-        // Let's go with local indices and map them back up.
-        
-        // This won't work as-is because 'a' and 'b' are objects, not indices.
-        // And seen keys would be wrong.
-        
-        const p = pairwiseScore(a, b);
-        if (p.score >= minScore) {
-          // 'a' and 'b' are row objects, but the rest of the algo needs indices
-          // We need to pass the original indices to buildEdges or do a lookup.
-          // Let's assume the calling function will handle index mapping.
-           edges.push({ a: i, b: j, score: p.score, breakdown: p.breakdown });
-        }
+  for (let i = 0; i < rows.length; i++) {
+    for (let j = i + 1; j < rows.length; j++) {
+      const a = rows[i];
+      const b = rows[j];
+      
+      const p = pairwiseScore(a, b);
+      if (p.score >= minScore) {
+         edges.push({ a: i, b: j, score: p.score });
       }
     }
   }
   edges.sort((x, y) => y.score - x.score);
   return edges;
 }
-
-
 
 function buildAdjacency(n, edges) {
   const adj = new Map();
@@ -514,7 +522,6 @@ function buildAdjacency(n, edges) {
   }
   return adj;
 }
-
 
 function connectedComponents(n, adj) {
   const seen = new Array(n).fill(false);
@@ -658,20 +665,21 @@ function refineComponent(rows, idxs, minInternal) {
       return mappedRow;
     });
 
-    postMessage({type:'progress', progress:5, status:'building-blocks'});
+    postMessage({type:'progress', progress:5, status:'building-blocks', completed: 0, total: 0 });
 
     const minPair = options?.minPairScore || 0.75;
     const minInternal = options?.minInternalScore || 0.65;
     const blockChunkSize = options?.blockChunkSize || 1200;
 
     const blocks = buildBalancedBlocks(rows);
+    postMessage({type:'progress', progress:10, status:'building-blocks', completed: blocks.length, total: blocks.length });
 
     const edges = [];
-    for (const block of blocks) {
+    for (let i = 0; i < blocks.length; i++) {
+      const block = blocks[i];
       if (block.length > 1) {
-        const sub = block.map(i => rows[i]);
+        const sub = block.map(idx => rows[idx]);
         const subEdges = buildEdges(sub, minPair, { blockChunkSize: 500 });
-        // remap to global index
         for (const e of subEdges) {
           edges.push({
             a: block[e.a],
@@ -680,35 +688,38 @@ function refineComponent(rows, idxs, minInternal) {
           });
         }
       }
+      if (i % 50 === 0 || i === blocks.length - 1) {
+         postMessage({type:'progress', progress: 10 + Math.round(50 * (i / blocks.length)), status:'building-edges', completed: i + 1, total: blocks.length });
+      }
     }
-
-    postMessage({type:'progress', progress:15, status:'building-edges'});
-
-
-    postMessage({type:'progress', progress:70, status:'refining-components'});
     
+    postMessage({type:'progress', progress:60, status:'finding-components'});
     const n = rows.length;
     const adj = buildAdjacency(n, edges);
     const comps = connectedComponents(n, adj);
-
+    
+    postMessage({type:'progress', progress:70, status:'refining-components', completed: 0, total: comps.length});
     const finalClustersIdx = [];
 
-    for (const comp of comps) {
+    for (let i = 0; i < comps.length; i++) {
+        const comp = comps[i];
         if (comp.length <= 4) {
             finalClustersIdx.push(comp);
-            continue;
-        }
-        
-        const { scores } = computePairwiseMatrix(rows, comp);
-        let tot = 0, cnt = 0;
-        for (let i = 0; i < scores.length; i++) for (let j = i + 1; j < scores.length; j++) { tot += scores[i][j]; cnt++; }
-        const avg = cnt ? tot / cnt : 0;
-
-        if (avg >= minInternal) {
-            finalClustersIdx.push(comp);
         } else {
-            const parts = refineComponent(rows, comp, minInternal);
-            for (const p of parts) finalClustersIdx.push(p);
+            const { scores } = computePairwiseMatrix(rows, comp);
+            let tot = 0, cnt = 0;
+            for (let i = 0; i < scores.length; i++) for (let j = i + 1; j < scores.length; j++) { tot += scores[i][j]; cnt++; }
+            const avg = cnt ? tot / cnt : 0;
+
+            if (avg >= minInternal) {
+                finalClustersIdx.push(comp);
+            } else {
+                const parts = refineComponent(rows, comp, minInternal);
+                for (const p of parts) finalClustersIdx.push(p);
+            }
+        }
+         if (i % 20 === 0 || i === comps.length - 1) {
+            postMessage({type:'progress', progress: 70 + Math.round(25 * (i / comps.length)), status:'refining-components', completed: i + 1, total: comps.length});
         }
     }
     
@@ -728,7 +739,7 @@ function refineComponent(rows, idxs, minInternal) {
       inbound = [];
     } else if(msg.type==='data'){
       inbound.push(...(msg.payload.rows || []));
-      postMessage({type:'progress', progress: Math.min(5 + Math.round(10*(inbound.length/50000)), 15), status:'receiving'});
+      postMessage({type:'progress', progress: Math.min(5, 5), status:'receiving'});
     } else if(msg.type==='end'){
       setTimeout(()=>{
         try{ processAll(); }catch(err){ postMessage({type:'error', error: String(err)}); }
@@ -737,3 +748,5 @@ function refineComponent(rows, idxs, minInternal) {
   };
   `;
 }
+
+    
