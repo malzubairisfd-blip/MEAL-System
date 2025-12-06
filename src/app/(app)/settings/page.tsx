@@ -101,7 +101,7 @@ export default function SettingsPage() {
               <div>
                 <CardTitle>Clustering Settings</CardTitle>
                 <CardDescription>
-                  Adjust the sensitivity of the fuzzy matching algorithm. Lower values will create more, larger clusters. Higher values will be more strict.
+                  Adjust the sensitivity of the AI-powered clustering engine. Lower values will create more, larger clusters. Higher values will be more strict.
                 </CardDescription>
               </div>
               <Button variant="outline" asChild>
@@ -118,7 +118,7 @@ export default function SettingsPage() {
           <div className="space-y-4">
             <Label htmlFor="min-pair-score" className="text-base">Minimum Pair Score</Label>
             <p className="text-sm text-muted-foreground">
-              The minimum similarity score (from 0 to 1) required for any two records to be considered a potential match. Default: 0.75
+              The minimum similarity score (from 0 to 1) for any two records to be considered a potential match within a block. This is the first filter in the duplicate detection process. Default: 0.75
             </p>
             <Slider
               id="min-pair-score"
@@ -145,7 +145,7 @@ export default function SettingsPage() {
           <div className="space-y-4">
             <Label htmlFor="min-internal-score" className="text-base">Minimum Internal Score</Label>
              <p className="text-sm text-muted-foreground">
-              When a large cluster needs to be split, this is the minimum average similarity required for records to remain together. Default: 0.65
+              When a large cluster is being refined, this is the minimum score required to keep two records connected in the Maximum Spanning Tree. It controls how aggressively large clusters are split. Default: 0.65
             </p>
             <Slider
               id="min-internal-score"
@@ -172,7 +172,7 @@ export default function SettingsPage() {
            <div className="space-y-4">
             <Label htmlFor="block-chunk-size" className="text-base">Block Chunk Size</Label>
              <p className="text-sm text-muted-foreground">
-              For very large datasets, this controls the size of sub-blocks. Smaller values are slower but more thorough. Default: 1200
+              For high-performance blocking on large datasets (&gt;100k rows), this limits the maximum size of a candidate block. Smaller values are slower but more thorough; larger values are faster but may miss some comparisons. Default: 1200
             </p>
             <Slider
               id="block-chunk-size"
