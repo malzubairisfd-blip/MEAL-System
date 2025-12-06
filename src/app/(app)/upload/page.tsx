@@ -934,24 +934,36 @@ async function runClustering(
 
     // need to split combined set and finalize groups
     const combinedIdx = Array.from(new Set([...uf.rootMembers(ra), ...uf.rootMembers(rb)]));
-    const combinedRows = combinedIdx.map(i => rows[i]);
-    const parts = splitCluster(combinedRows, minInternal);
-
-    for (const p of parts) {
-      const globalIdxs = [];
-      for (const r of p) {
-        // find index mapping by internal id
-        const idx = combinedIdx.find(i => rows[i]._internalId === r._internalId);
-        if (idx !== undefined) {
-          globalIdxs.push(idx);
-          finalized.add(idx);
-        } else {
-          // fallback: match by normalized name + phone or id
-          const fallback = combinedIdx.find(i => normalizeArabic(rows[i].womanName) === normalizeArabic(r.womanName) || digitsOnly(rows[i].phone) === digitsOnly(r.phone));
-          if (fallback !== undefined) { globalIdxs.push(fallback); finalized.add(fallback); }
+    if (combinedIdx.length > 500) { // Optimization for very large components
+        for(let i = 0; i < combinedIdx.length; i += 500) {
+            const chunk = combinedIdx.slice(i, i + 500).map(idx => rows[idx]);
+            const parts = splitCluster(chunk, minInternal);
+            for(const p of parts) {
+                const globalIdxs = p.map(r => rows.findIndex(row => row._internalId === r._internalId)).filter(idx => idx !== -1);
+                if(globalIdxs.length) finalClustersIdx.push(globalIdxs);
+                globalIdxs.forEach(idx => finalized.add(idx));
+            }
         }
-      }
-      if (globalIdxs.length) finalClustersIdx.push(globalIdxs);
+    } else {
+        const combinedRows = combinedIdx.map(i => rows[i]);
+        const parts = splitCluster(combinedRows, minInternal);
+
+        for (const p of parts) {
+          const globalIdxs = [];
+          for (const r of p) {
+            // find index mapping by internal id
+            const idx = combinedIdx.find(i => rows[i]._internalId === r._internalId);
+            if (idx !== undefined) {
+              globalIdxs.push(idx);
+              finalized.add(idx);
+            } else {
+              // fallback: match by normalized name + phone or id
+              const fallback = combinedIdx.find(i => normalizeArabic(rows[i].womanName) === normalizeArabic(r.womanName) || digitsOnly(rows[i].phone) === digitsOnly(r.phone));
+              if (fallback !== undefined) { globalIdxs.push(fallback); finalized.add(fallback); }
+            }
+          }
+          if (globalIdxs.length) finalClustersIdx.push(globalIdxs);
+        }
     }
     edgesUsed.push(e);
   }
@@ -1000,5 +1012,56 @@ function fullPairwiseBreakdown(records) {
   }
   return out.sort((x, y) => y.score - x.score);
 }
+
+// ===================== Worker Logic =====================
+
+let inbound = [];
+let mapping = null;
+let options = null;
+
+async function processAll() {
+    postMessage({type: 'progress', progress: 1, status: 'mapping-rows'});
+    const rows = inbound.map((r, i) => {
+        const mapped = {
+            _internalId: \`row_\${i}\`,
+            womanName: "", husbandName: "", nationalId: "", phone: "",
+            village: "", subdistrict: "", children: [], cluster_id: ""
+        };
+        for (const key in mapping) {
+            const col = mapping[key];
+            if (col && r[col] !== undefined) {
+                mapped[key] = r[col];
+            }
+        }
+        return mapped;
+    });
+
+    postMessage({type: 'progress', progress: 5, status: 'starting-clustering'});
+
+    const { clusters } = await runClustering(rows, options);
+
+    postMessage({type: 'progress', progress: 99, status: 'finishing-up'});
+    postMessage({type: 'done', clusters: clusters});
+}
+
+
+onmessage = function(e) {
+    const msg = e.data;
+    if (!msg || !msg.type) return;
+
+    if (msg.type === 'start') {
+        mapping = msg.payload.mapping;
+        options = msg.payload.options || {};
+        inbound = [];
+    } else if (msg.type === 'data') {
+        inbound.push(...(msg.payload.rows || []));
+        postMessage({type: 'progress', progress: 2, status: 'receiving-data'});
+    } else if (msg.type === 'end') {
+        processAll().catch(err => {
+            postMessage({type: 'error', error: err.message || 'An unknown error occurred in the worker.'});
+        });
+    }
+};
+
 `;
 }
