@@ -124,8 +124,8 @@ export default function UploadPage() {
       payload: {
         mapping,
         options: {
-          minPairScore: 0.60,
-          minInternalScore: 0.50,
+          minPairScore: 0.75,
+          minInternalScore: 0.65,
           blockChunkSize: 1200,
         },
       },
@@ -379,7 +379,7 @@ function createWorkerScript(): string {
   }
 
   // pairwise scoring (lighter but feature-full)
-  function pairwise(a,b){
+  function pairwiseScore(a,b){
     const aName = normalizeArabic(a.womanName||"");
     const bName = normalizeArabic(b.womanName||"");
     const aT = tokensOfName(aName), bT = tokensOfName(bName);
@@ -444,30 +444,159 @@ function createWorkerScript(): string {
   UF.prototype.find = function(x){ if(this.p[x]===x) return x; this.p[x]=this.find(this.p[x]); return this.p[x]; };
   UF.prototype.merge = function(a,b){ a=this.find(a); b=this.find(b); if(a===b) return a; if(this.size[a]<this.size[b]){ const t=a; a=b; b=t; } this.p[b]=a; this.size[a]+=this.size[b]; return a; };
 
-  // split cluster recursively to max 4
-  function splitCluster(list, minInternal){
-    if(list.length<=4) return [list];
-    // simple greedy: pairwise scores, merge best edges until no merges possible under size cap
-    const pairs = [];
-    for(let i=0;i<list.length;i++) for(let j=i+1;j<list.length;j++){ const {score}=pairwise(list[i],list[j]); if(score>=minInternal) pairs.push({i,j,score}); }
-    pairs.sort((a,b)=>b.score-a.score);
-    const uf = new UF(list.length);
-    for(const p of pairs){
-      const ra = uf.find(p.i), rb=uf.find(p.j);
-      if(ra===rb) continue;
-      if(uf.size[ra]+uf.size[rb] <= 4) uf.merge(ra,rb);
-    }
-    const map = new Map();
-    for(let i=0;i<list.length;i++){ const r=uf.find(i); if(!map.has(r)) map.set(r,[]); map.get(r).push(list[i]); }
-    const res=[];
-    for(const g of map.values()){ if(g.length<=4) res.push(g); else res.push(...splitCluster(g, Math.max(minInternal,0.45))); }
-    return res;
-  }
-
   // worker state: we will receive data chunks which we append; when "end" received we process
   let inbound = [];
   let mapping = null;
   let options = null;
+
+// ---------------------- REPLACEMENT MERGE + REFINEMENT LOGIC ----------------------
+/**
+ * Helper: build adjacency list from thresholded edges
+ */
+function buildAdjacency(n, edges) {
+  const adj = new Map();
+  for (let i = 0; i < n; i++) adj.set(i, []);
+  for (const e of edges) {
+    adj.get(e.a).push({ to: e.b, score: e.score });
+    adj.get(e.b).push({ to: e.a, score: e.score });
+  }
+  return adj;
+}
+
+/**
+ * Helper: find connected components via BFS
+ */
+function connectedComponents(n, adj) {
+  const seen = new Array(n).fill(false);
+  const comps = [];
+  for (let i = 0; i < n; i++) {
+    if (seen[i]) continue;
+    const q = [i];
+    seen[i] = true;
+    const comp = [];
+    while (q.length) {
+      const u = q.shift();
+      comp.push(u);
+      for (const nb of adj.get(u) || []) {
+        if (!seen[nb.to]) {
+          seen[nb.to] = true;
+          q.push(nb.to);
+        }
+      }
+    }
+    comps.push(comp);
+  }
+  return comps;
+}
+
+/**
+ * Computes all pairwise scores within a list of indices (returns matrix and list)
+ */
+function computePairwiseMatrix(rows, idxs) {
+  const m = idxs.length;
+  const scores = Array.from({ length: m }, () => Array(m).fill(0));
+  const pairs = [];
+  for (let i = 0; i < m; i++) {
+    for (let j = i + 1; j < m; j++) {
+      const { score } = pairwiseScore(rows[idxs[i]], rows[idxs[j]]);
+      scores[i][j] = scores[j][i] = score;
+      pairs.push({ i, j, score });
+    }
+  }
+  return { scores, pairs };
+}
+
+/**
+ * Split component by removing weakest edge repeatedly until subcomponents are coherent
+ */
+function refineComponent(rows, idxs, minInternal) {
+  // base
+  if (idxs.length <= 4) return [idxs];
+
+  const { scores, pairs } = computePairwiseMatrix(rows, idxs);
+  const m = idxs.length;
+
+  // compute average internal similarity (pairwise average)
+  let total = 0;
+  let count = 0;
+  for (let i = 0; i < m; i++) {
+    for (let j = i + 1; j < m; j++) {
+      total += scores[i][j];
+      count++;
+    }
+  }
+  const avg = count > 0 ? total / count : 0;
+
+  if (avg >= minInternal) {
+    return [idxs];
+  }
+
+  // otherwise, remove the weakest edge and re-compute components
+  pairs.sort((a, b) => a.score - b.score); // ascending
+  const localAdj = new Map();
+  for (let i = 0; i < m; i++) localAdj.set(i, new Set());
+  for (let i = 0; i < m; i++) {
+    for (let j = 0; j < m; j++) {
+      if (i === j) continue;
+      if (scores[i][j] > 0) localAdj.get(i).add(j);
+    }
+  }
+
+  for (const p of pairs) {
+    localAdj.get(p.i).delete(p.j);
+    localAdj.get(p.j).delete(p.i);
+
+    const visited = new Array(m).fill(false);
+    const subcomps = [];
+    for (let s = 0; s < m; s++) {
+      if (visited[s]) continue;
+      const q = [s];
+      visited[s] = true;
+      const sub = [];
+      while (q.length) {
+        const u = q.shift();
+        sub.push(u);
+        for (const nb of Array.from(localAdj.get(u))) {
+          if (!visited[nb]) {
+            visited[nb] = true;
+            q.push(nb);
+          }
+        }
+      }
+      subcomps.push(sub);
+    }
+
+    if (subcomps.length > 1) {
+      const result = [];
+      for (const sc of subcomps) {
+        const global = sc.map((li) => idxs[li]);
+        if (global.length <= 4) result.push(global);
+        else result.push(...refineComponent(rows, global, minInternal));
+      }
+      return result;
+    }
+  }
+
+  const assigned = new Set();
+  const fallbackResult = [];
+  const SIM_THRESH = Math.max(minInternal, 0.6);
+  for (let i = 0; i < m; i++) {
+    if (assigned.has(i)) continue;
+    const group = [i];
+    assigned.add(i);
+    for (let j = 0; j < m; j++) {
+      if (assigned.has(j)) continue;
+      const avgToGroup = group.reduce((acc, gi) => acc + scores[gi][j], 0) / group.length;
+      if (avgToGroup >= SIM_THRESH && group.length < 4) {
+        group.push(j);
+        assigned.add(j);
+      }
+    }
+    fallbackResult.push(group.map(li => idxs[li]));
+  }
+  return fallbackResult;
+}
+
 
   function processAll(){
     // build normalized records (map fields)
@@ -484,22 +613,21 @@ function createWorkerScript(): string {
       };
     });
 
-    // progress update
     postMessage({type:'progress', progress:5, status:'building-blocks'});
 
-    // build blocks
     const blocks = buildBlocks(rows);
 
     postMessage({type:'progress', progress:15, status:'building-edges'});
 
-    // build edges thresholded
-    const minPair = options?.minPairScore || 0.60;
+    const minPair = options?.minPairScore || 0.75;
+    const minInternal = options?.minInternalScore || 0.65;
+    const blockChunkSize = options?.blockChunkSize || 1200;
+
     const edges=[];
     const seen = new Set();
     for(let bIdx=0;bIdx<blocks.length;bIdx++){
       const block = blocks[bIdx];
-      // if block large, chunk internal comparisons
-      const CH = options?.blockChunkSize || 1200;
+      const CH = blockChunkSize;
       for(let s=0;s<block.length;s+=CH){
         const part = block.slice(s, s+CH);
         for(let i=0;i<part.length;i++){
@@ -508,83 +636,54 @@ function createWorkerScript(): string {
             const key = a<bb ? a+'_'+bb : bb+'_'+a;
             if(seen.has(key)) continue;
             seen.add(key);
-            const p = pairwise(rows[a], rows[bb]);
+            const p = pairwiseScore(rows[a], rows[bb]);
             if(p.score >= minPair) edges.push({a, b: bb, score: p.score, breakdown: p.breakdown});
           }
         }
       }
-      if(bIdx%10===0) postMessage({type:'progress', progress:15 + Math.round(20*(bIdx/blocks.length)), status:'building-edges'});
+      if(bIdx%10===0) postMessage({type:'progress', progress:15 + Math.round(50*(bIdx/blocks.length)), status:'building-edges'});
     }
 
     edges.sort((x,y)=>y.score-x.score);
 
-    postMessage({type:'progress', progress:40, status:'merging'});
+    postMessage({type:'progress', progress:70, status:'refining-components'});
+    
+    // NEW LOGIC
+    const n = rows.length;
+    const adj = buildAdjacency(n, edges);
+    const comps = connectedComponents(n, adj);
 
-    // union by edges greedily ensuring size cap <=4, using split when needed
-    const uf = new UF(rows.length);
-    const finalized = new Set();
-    const finalClusters = [];
-    for(let eIdx=0;eIdx<edges.length;eIdx++){
-      const e = edges[eIdx];
-      if(finalized.has(e.a) || finalized.has(e.b)) continue;
-      const ra = uf.find(e.a), rb = uf.find(e.b);
-      if(ra===rb) continue;
-      const sA = uf.size[ra], sB = uf.size[rb];
-      if(sA + sB <= 4){
-        uf.merge(ra, rb);
-        continue;
-      }
-      // need to split combined set
-      const combinedIdx = Array.from(new Set([...rootMembersUF(uf, ra), ...rootMembersUF(uf, rb)]));
-      const combinedRows = combinedIdx.map(i=>rows[i]);
-      const parts = splitCluster(combinedRows, options?.minInternalScore || 0.50);
-      for(const p of parts){
-        const globalIdxs = [];
-        for(const r of p){
-          // find original index by matching womanName + nationalId + phone fallback
-          const idx = combinedIdx.find(i => rows[i].womanName === r.womanName && (rows[i].nationalId||"") === (r.nationalId||""));
-          if(idx!==undefined && idx!==-1){ globalIdxs.push(idx); finalized.add(idx); }
+    const finalClustersIdx = [];
+
+    for (const comp of comps) {
+        if (comp.length <= 4) {
+            finalClustersIdx.push(comp);
+            continue;
         }
-        if(globalIdxs.length) finalClusters.push(globalIdxs.map(i=>rows[i]));
-      }
-      // notify progress occasionally
-      if(eIdx%200===0) postMessage({type:'progress', progress:40 + Math.round(30*(eIdx/edges.length)), status:'merging'});
+        
+        const { scores } = computePairwiseMatrix(rows, comp);
+        let tot = 0, cnt = 0;
+        for (let i = 0; i < scores.length; i++) for (let j = i + 1; j < scores.length; j++) { tot += scores[i][j]; cnt++; }
+        const avg = cnt ? tot / cnt : 0;
+
+        if (avg >= minInternal) {
+            finalClustersIdx.push(comp);
+        } else {
+            const parts = refineComponent(rows, comp, minInternal);
+            for (const p of parts) finalClustersIdx.push(p);
+        }
     }
+    
+    postMessage({type:'progress', progress:95, status:'annotating'});
 
-    // collect leftovers
-    const roots = {};
-    for(let i=0;i<rows.length;i++){
-      if(finalized.has(i)) continue;
-      const r = uf.find(i);
-      if(!roots[r]) roots[r]=[];
-      roots[r].push(i);
-    }
-    Object.values(roots).forEach(arr=>{
-      if(arr.length<=4) finalClusters.push(arr.map(i=>rows[i]));
-      else {
-        const parts = splitCluster(arr.map(i=>rows[i]), options?.minInternalScore||0.50);
-        for(const p of parts) finalClusters.push(p);
-      }
-    });
+    const clustersFiltered = finalClustersIdx.map(g => g.map(i => rows[i])).filter(c => c.length > 1);
 
-    // remove singletons if you want only groups >1 (we keep groups >1)
-    const clustersFiltered = finalClusters.filter(c=>c.length>1);
-
-    // annotate each record with a simple similarity (avg pairwise within cluster) for Excel coloring
     const clustersAnnotated = clustersFiltered.map(cluster=>{
-      // compute approximate sim per record (avg of pairwise with cluster head)
       const annotated = cluster.map(rec => ({...rec, _sim:1}));
       return annotated;
     });
 
     postMessage({type:'done', clusters: clustersAnnotated});
-  }
-
-  function rootMembersUF(uf, root){
-    // reconstruct members by scanning parent array (small cost)
-    const members = [];
-    for(let i=0;i<uf.p.length;i++) if(uf.find(i)===uf.find(root)) members.push(i);
-    return members;
   }
 
   onmessage = function(e){
@@ -596,12 +695,10 @@ function createWorkerScript(): string {
       inbound = [];
     } else if(msg.type==='data'){
       const chunk = msg.payload.rows || [];
-      // append chunk (but map lazily, worker will normalize when processing)
       inbound.push(...chunk);
       postMessage({type:'progress', progress: Math.min(5 + Math.round(10*(inbound.length/ (options.estimatedRows||50000))), 25), status:'receiving'});
     } else if(msg.type==='end'){
-      // process inbound data
-      setTimeout(()=>{ // allow UI to update before heavy work
+      setTimeout(()=>{
         try{ processAll(); }catch(err){ postMessage({type:'error', error: String(err)}); }
       }, 50);
     }
