@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
@@ -372,7 +373,7 @@ export default function UploadPage() {
           </CardHeader>
           <CardContent>
             <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-5 mb-6">
-                <SummaryCard icon={<Users className="h-4 w-4 text-muted-foreground" />} title="إجمالي السجلات" value={summary.totalRecords} />
+                <SummaryCard icon={<Users className="h-4 w-4 text-muted-foreground" />} title="إجمالي السجلات المعالجة" value={summary.totalRecords} />
                 <SummaryCard icon={<Group className="h-4 w-4 text-muted-foreground" />} title="السجلات المجمعة" value={summary.clusteredRecords} />
                 <SummaryCard icon={<Unlink className="h-4 w-4 text-muted-foreground" />} title="السجلات غير المجمعة" value={summary.unclusteredRecords} />
                 <SummaryCard icon={<BoxSelect className="h-4 w-4 text-muted-foreground" />} title="عدد المجموعات" value={summary.clusterCount} />
