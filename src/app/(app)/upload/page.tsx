@@ -6,17 +6,22 @@ import * as XLSX from "xlsx";
 /**
  * Upload Page + Web Worker client
  *
- * - Creates an inline Web Worker containing the full clustering engine
- * - Sends parsed rows to the worker (mapping applied)
- * - Receives progress events and final clusters
- * - Exports final clusters to Excel with formatting (ExcelJS)
- *
- * NOTE: Install dependencies:
- *   npm install xlsx exceljs file-saver
+ * - Redesigned mapping UI with scrollable radio groups.
+ * - Saves/loads mappings to/from localStorage based on file columns.
+ * - Creates an inline Web Worker containing the full clustering engine.
+ * - Sends parsed rows to the worker.
+ * - Receives progress events and final clusters.
  */
 
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
+import { Upload, FileText, CheckCircle, XCircle } from "lucide-react";
 
 type Mapping = {
   womanName: string;
@@ -29,19 +34,15 @@ type Mapping = {
   cluster_id?: string;
 };
 
+const MAPPING_FIELDS: (keyof Mapping)[] = ["womanName", "husbandName", "nationalId", "phone", "village", "subdistrict", "children", "cluster_id"];
+const LOCAL_STORAGE_KEY_PREFIX = "beneficiary-mapping-";
+
 export default function UploadPage() {
   const [columns, setColumns] = useState<string[]>([]);
-  const [rowsPreview, setRowsPreview] = useState<any[]>([]);
-  const [fileName, setFileName] = useState<string>("");
+  const [file, setFile] = useState<File | null>(null);
   const [mapping, setMapping] = useState<Mapping>({
-    womanName: "",
-    husbandName: "",
-    nationalId: "",
-    phone: "",
-    village: "",
-    subdistrict: "",
-    children: "",
-    cluster_id: "",
+    womanName: "", husbandName: "", nationalId: "", phone: "",
+    village: "", subdistrict: "", children: "", cluster_id: "",
   });
   const [workerStatus, setWorkerStatus] = useState<string>("idle");
   const [progress, setProgress] = useState<number>(0);
@@ -49,8 +50,8 @@ export default function UploadPage() {
   const workerRef = useRef<Worker | null>(null);
   const rowsRef = useRef<any[]>([]);
 
+  // Web Worker setup
   useEffect(() => {
-    // create worker on mount
     const workerScript = createWorkerScript();
     const blob = new Blob([workerScript], { type: "application/javascript" });
     const url = URL.createObjectURL(blob);
@@ -70,10 +71,6 @@ export default function UploadPage() {
           setProgress(100);
           setClusters(msg.clusters || []);
           break;
-        case "log":
-          // optional internal logging
-          // console.log("worker:", msg.data);
-          break;
         case "error":
           setWorkerStatus("error");
           alert("Worker error: " + msg.error);
@@ -86,184 +83,215 @@ export default function UploadPage() {
       URL.revokeObjectURL(url);
     };
   }, []);
+  
+  // Update mapping and save to localStorage
+  useEffect(() => {
+    if (columns.length > 0) {
+      const storageKey = LOCAL_STORAGE_KEY_PREFIX + columns.join(',');
+      localStorage.setItem(storageKey, JSON.stringify(mapping));
+    }
+  }, [mapping, columns]);
 
-  // file input handler
+  // File input handler
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    setFileName(file.name);
+    
+    setFile(file);
+    setWorkerStatus('idle');
+    setProgress(0);
+    setClusters([]);
 
     const buffer = await file.arrayBuffer();
-    // use XLSX to parse many spreadsheet types
     const workbook = XLSX.read(buffer, { type: "array", cellDates: true });
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const json = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+    const json = XLSX.utils.sheet_to_json<any>(sheet, { defval: "" });
 
     rowsRef.current = json;
-    setRowsPreview(json.slice(0, 10));
-    setColumns(Object.keys(json[0] || {}));
+    const parsedColumns = Object.keys(json[0] || {});
+    setColumns(parsedColumns);
+    
+    // Load saved mapping
+    const storageKey = LOCAL_STORAGE_KEY_PREFIX + parsedColumns.join(',');
+    const savedMapping = localStorage.getItem(storageKey);
+    if(savedMapping) {
+      setMapping(JSON.parse(savedMapping));
+    } else {
+      // Reset if no saved mapping for this file structure
+      setMapping({ womanName: "", husbandName: "", nationalId: "", phone: "", village: "", subdistrict: "", children: "", cluster_id: "" });
+    }
   }
 
-  function handleMappingChange(field: keyof Mapping, colName: string) {
-    setMapping((m) => ({ ...m, [field]: colName }));
+  function handleMappingChange(field: keyof Mapping, value: string) {
+    setMapping((m) => ({ ...m, [field]: value }));
   }
 
-  // start clustering: send mapping and rows to worker in chunks
+  // Start clustering
   async function startClustering() {
     if (!workerRef.current) return alert("Worker not ready");
     if (!rowsRef.current.length) return alert("Upload data first");
-    // validate mapping
-    const required = ["womanName","husbandName","nationalId","phone","village","subdistrict","children"];
+    
+    const required: (keyof Mapping)[] = ["womanName", "husbandName", "nationalId", "phone", "village", "subdistrict", "children"];
     for (const r of required) {
-      if (!mapping[r as keyof Mapping]) return alert(`Please map "${r}"`);
+      if (!mapping[r]) return alert(`Please map the "${r}" field.`);
     }
 
-    // send initial message
     workerRef.current.postMessage({
       type: "start",
       payload: {
         mapping,
-        options: {
-          minPairScore: 0.75,
-          minInternalScore: 0.65,
-          blockChunkSize: 1200,
-        },
+        options: { minPairScore: 0.75, minInternalScore: 0.65, blockChunkSize: 1200 },
       },
     });
 
-    // stream rows in chunks to avoid flame of memory/bandwidth
-    const CHUNK = 2000; // chunk rows to worker (tuneable)
-    let sent = 0;
-    const rows = rowsRef.current;
-    while (sent < rows.length) {
-      const chunk = rows.slice(sent, sent + CHUNK);
+    const CHUNK = 2000;
+    for (let i = 0; i < rowsRef.current.length; i += CHUNK) {
+      const chunk = rowsRef.current.slice(i, i + CHUNK);
       workerRef.current.postMessage({ type: "data", payload: { rows: chunk } });
-      sent += CHUNK;
-      // small delay to keep UI responsive
       await new Promise((r) => setTimeout(r, 10));
     }
-    // tell worker data done
+    
     workerRef.current.postMessage({ type: "end" });
     setWorkerStatus("processing");
     setProgress(1);
   }
-
-  // Export Excel with color formatting
-  async function exportExcelWithFormatting() {
-    if (!clusters || !clusters.length) return alert("No clusters to export");
-    const wb = new ExcelJS.Workbook();
-    const ws = wb.addWorksheet("Clusters");
-
-    ws.addRow(["ClusterID","Woman Name","Husband Name","National ID","Phone","Village","Subdistrict","Children","Similarity%"]);
-
-    // header formatting
-    ws.getRow(1).eachCell((cell) => {
-      cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
-      cell.alignment = { horizontal: "center" };
-      cell.fill = {
-        type: "pattern",
-        pattern: "solid",
-        fgColor: { argb: "4B0082" } // Indigo
-      };
-    });
-
-    let cid = 1;
-    for (const cluster of clusters) {
-      // compute cluster similarity score approximate (average pairwise within cluster)
-      for (const rec of cluster) {
-        const sim = Math.round((rec._sim || 100) * 100) / 100; // already between 0..1 maybe, adjust in worker
-        const childrenStr = Array.isArray(rec.children) ? rec.children.join(", ") : String(rec.children || "");
-        const row = ws.addRow([cid, rec.womanName, rec.husbandName, rec.nationalId, rec.phone, rec.village, rec.subdistrict, childrenStr, Math.round((rec._sim || 1) * 100)]);
-        const score = Math.round((rec._sim || 1) * 100);
-
-        let bg = "FFFFFFFF";
-        let text = "000000";
-        if (score >= 95) { bg = "FF0000"; text = "FFFFFFFF"; }
-        else if (score >= 85) { bg = "8B0000"; text = "000000"; }
-        else if (score >= 75) { bg = "FFA500"; text = "000000"; }
-        else if (score >= 60) { bg = "FFFF00"; text = "000000"; }
-
-        row.eachCell((cell) => {
-          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: bg } };
-          cell.font = { color: { argb: text }, bold: true };
-          cell.border = {
-            top: { style: "thin" },
-            left: { style: "thin" },
-            bottom: { style: "thin" },
-            right: { style: "thin" }
-          };
-        });
-      }
-      cid++;
-    }
-
-    const buf = await wb.xlsx.writeBuffer();
-    const blob = new Blob([buf], { type: "application/octet-stream" });
-    saveAs(blob, `clusters_${fileName || "data"}.xlsx`);
+  
+  function resetState() {
+      setFile(null);
+      setColumns([]);
+      rowsRef.current = [];
+      setClusters([]);
+      setWorkerStatus('idle');
+      setProgress(0);
+      setMapping({ womanName: "", husbandName: "", nationalId: "", phone: "", village: "", subdistrict: "", children: "", cluster_id: "" });
   }
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      <h1 className="text-2xl font-bold mb-4">
-        Upload &amp; Cluster (Client-side, Web Worker)
-      </h1>
-
-      <input type="file" accept=".xlsx,.xls,.xlsm,.xlsb,.csv,.txt" onChange={handleFile} className="mb-4" />
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>1. Upload File</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center gap-4">
+             <label htmlFor="file-upload" className="flex-1">
+                <div className="flex items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer hover:bg-muted">
+                    <div className="flex flex-col items-center justify-center pt-5 pb-6 text-center">
+                        <Upload className="w-10 h-10 mb-3 text-muted-foreground" />
+                        {file ? (
+                          <>
+                            <p className="font-semibold text-primary">{file.name}</p>
+                            <p className="text-xs text-muted-foreground">{rowsRef.current.length} rows detected</p>
+                          </>
+                        ) : (
+                          <>
+                           <p className="mb-2 text-sm text-muted-foreground"><span className="font-semibold">Click to upload</span> or drag and drop</p>
+                           <p className="text-xs text-muted-foreground">XLSX, XLS, CSV, etc.</p>
+                          </>
+                        )}
+                    </div>
+                    <input id="file-upload" type="file" className="hidden" onChange={handleFile} accept=".xlsx,.xls,.xlsm,.xlsb,.csv" />
+                </div>
+            </label>
+             {file && (
+                <Button onClick={resetState} variant="outline">Reset</Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       {columns.length > 0 && (
-        <div className="border p-4 rounded mb-4">
-          <h2 className="font-semibold mb-2">Map Columns</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {(["womanName","husbandName","nationalId","phone","village","subdistrict","children","cluster_id"] as (keyof Mapping)[]).map((f) => (
-              <label key={f} className="block">
-                <div className="text-sm font-medium">{f}</div>
-                <select value={mapping[f] || ""} onChange={(e) => handleMappingChange(f, e.target.value)} className="border p-2 rounded w-full">
-                  <option value="">-- select column --</option>
-                  {columns.map((c) => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </label>
+        <Card>
+          <CardHeader>
+            <CardTitle>2. Map Columns</CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {MAPPING_FIELDS.map((field) => (
+              <Card key={field}>
+                <CardHeader className="p-4">
+                  <CardTitle className="text-base capitalize flex justify-between items-center">
+                    {field.replace(/_/g, ' ')}
+                    {mapping[field] && <CheckCircle className="h-5 w-5 text-green-500" />}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <ScrollArea className="h-48 border-t">
+                    <RadioGroup
+                      value={mapping[field]}
+                      onValueChange={(value) => handleMappingChange(field, value)}
+                      className="p-4 grid grid-cols-2 gap-x-4 gap-y-2"
+                    >
+                      {columns.map((col) => (
+                        <div key={col} className="flex items-center space-x-2">
+                          <RadioGroupItem value={col} id={`${field}-${col}`} />
+                          <Label htmlFor={`${field}-${col}`} className="font-normal truncate" title={col}>
+                            {col}
+                          </Label>
+                        </div>
+                      ))}
+                    </RadioGroup>
+                  </ScrollArea>
+                </CardContent>
+              </Card>
             ))}
-          </div>
-
-          <div className="mt-4 flex gap-3">
-            <button onClick={startClustering} className="bg-indigo-600 text-white px-4 py-2 rounded">Start Clustering</button>
-            <button onClick={() => { setColumns([]); setRowsPreview([]); rowsRef.current = []; setClusters([]); }} className="px-4 py-2 border rounded">Reset</button>
-            <button onClick={exportExcelWithFormatting} className="px-4 py-2 border rounded">Export Excel</button>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       )}
 
-      <div className="mb-4">
-        <div>Status: <b>{workerStatus}</b></div>
-        <div>Progress: <b>{progress}%</b></div>
-      </div>
+      {file && (
+        <Card>
+          <CardHeader>
+            <CardTitle>3. Run Clustering</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+             <Button onClick={startClustering} disabled={workerStatus === 'processing' || workerStatus === 'building-edges' || workerStatus === 'merging'}>
+               Start Clustering
+             </Button>
+             
+             {workerStatus !== 'idle' && (
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm font-medium">
+                      <span>Status: <span className="capitalize font-semibold">{workerStatus.replace(/-/g, ' ')}</span></span>
+                      <span>{progress}%</span>
+                  </div>
+                  <Progress value={progress} />
+                </div>
+             )}
+          </CardContent>
+        </Card>
+      )}
 
-      <div>
-        <h3 className="font-semibold">Preview (first 10 rows)</h3>
-        <pre className="bg-gray-100 p-3 rounded max-h-48 overflow-auto text-xs">{JSON.stringify(rowsPreview, null, 2)}</pre>
-      </div>
-
-      <div className="mt-6">
-        <h3 className="font-semibold">Clusters ({clusters.length})</h3>
-        {clusters.slice(0, 200).map((c, i) => (
-          <div key={i} className="border p-3 rounded mb-2">
-            <div className="font-bold">Cluster {i+1} ({c.length})</div>
-            {c.slice(0,10).map((r:any, idx:number) => <div key={idx} className="text-sm">{r.womanName} — {r.husbandName} — {r.phone}</div>)}
-          </div>
-        ))}
-      </div>
+      {clusters.length > 0 && workerStatus === 'done' && (
+        <Card>
+          <CardHeader>
+            <CardTitle>4. Results</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="mb-4">{clusters.length} potential duplicate clusters found.</p>
+             <ScrollArea className="h-72 border rounded-md">
+                <div className="p-4 space-y-2">
+                {clusters.slice(0, 200).map((c, i) => (
+                  <div key={i} className="p-3 rounded-md bg-muted/50">
+                    <p className="font-bold">Cluster {i + 1} ({c.length} records)</p>
+                    {c.slice(0, 10).map((r: any, idx: number) => (
+                      <p key={idx} className="text-sm truncate">
+                        {r.womanName} — {r.husbandName} — {r.phone}
+                      </p>
+                    ))}
+                  </div>
+                ))}
+                </div>
+             </ScrollArea>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
 
-/* -------------------------------------------------
-   Inline worker creation: returns the worker JS code
-   ------------------------------------------------- */
+// The worker script remains self-contained to be blob-ified.
 function createWorkerScript(): string {
-  // The worker code is plain JS. It contains the clustering engine (normalized & lighter).
-  // Keep it compact but full-featured (advanced Arabic rules included).
   return `
-
   // Web Worker: receives chunks and performs clustering client-side
 
   // Utilities
@@ -324,25 +352,6 @@ function createWorkerScript(): string {
     return jaro + prefix*0.1*(1-jaro);
   }
 
-  function levDist(a,b){
-    a = safeString(a); b = safeString(b);
-    if(a===b) return 0;
-    if(!a.length) return b.length;
-    if(!b.length) return a.length;
-    const v0 = new Array(b.length+1), v1 = new Array(b.length+1);
-    for(let j=0;j<=b.length;j++) v0[j]=j;
-    for(let i=0;i<a.length;i++){
-      v1[0]=i+1;
-      for(let j=0;j<b.length;j++){
-        const cost = a[i]===b[j] ? 0 : 1;
-        v1[j+1] = Math.min(v1[j]+1, v0[j+1]+1, v0[j]+cost);
-      }
-      for(let j=0;j<=b.length;j++) v0[j]=v1[j];
-    }
-    return v1[b.length];
-  }
-  function normalizedLev(a,b){ const d=levDist(a,b); const maxLen=Math.max(1,a.length,b.length); return 1 - d/maxLen; }
-
   function tokenJaccard(a,b){
     if(!a||!b) return 0;
     const A=new Set(a), B=new Set(b);
@@ -360,25 +369,6 @@ function createWorkerScript(): string {
     return 0;
   }
 
-  function extractPaternal(fullName){
-    const parts = tokensOfName(fullName);
-    return { father: parts[1]||"", grandfather: parts[2]||"" };
-  }
-  function extractMaternal(fullName){
-    const parts = tokensOfName(fullName); const L = parts.length;
-    return { mother: parts[L-2]||"", grandmother: parts[L-3]||"" };
-  }
-  function extractTribal(fullName){
-    const parts = tokensOfName(fullName);
-    for(let i=parts.length-1;i>=0;i--) if(parts[i].startsWith("ال")) return parts[i];
-    return "";
-  }
-  function reduceRoot(fullName){
-    const parts = tokensOfName(fullName);
-    return parts.map(p=>p.slice(0,3)).join(" ");
-  }
-
-  // pairwise scoring (lighter but feature-full)
   function pairwiseScore(a,b){
     const aName = normalizeArabic(a.womanName||"");
     const bName = normalizeArabic(b.womanName||"");
@@ -387,14 +377,7 @@ function createWorkerScript(): string {
     const familyA = aT.slice(1).join(" "), familyB = bT.slice(1).join(" ");
     const firstScore = jaroWinkler(firstA, firstB);
     const familyScore = jaroWinkler(familyA, familyB);
-
-    const aRoot = reduceRoot(aName), bRoot = reduceRoot(bName);
-    let advancedNameScore = 0;
-    if(aRoot && bRoot && aRoot===bRoot) advancedNameScore+=0.35;
-    if(aRoot && bRoot && (aRoot.startsWith(bRoot)||bRoot.startsWith(aRoot))) advancedNameScore+=0.20;
-    const inter = aRoot.split(" ").filter(x=>bRoot.split(" ").includes(x));
-    if(inter.length>=2) advancedNameScore+=0.25; if(advancedNameScore>0.40) advancedNameScore=0.40;
-
+    
     const hA = normalizeArabic(a.husbandName||""), hB = normalizeArabic(b.husbandName||"");
     const husbandScore = Math.max(jaroWinkler(hA,hB), tokenJaccard(tokensOfName(hA), tokensOfName(hB)));
     const idScore = (a.nationalId && b.nationalId && String(a.nationalId)===String(b.nationalId)) ? 1 : 0;
@@ -402,20 +385,13 @@ function createWorkerScript(): string {
     const loc = (a.village && b.village && normalizeArabic(a.village)===normalizeArabic(b.village)) ? 1 : (a.subdistrict && b.subdistrict && normalizeArabic(a.subdistrict)===normalizeArabic(b.subdistrict) ? 0.8 : 0);
     const chA = (a.children||[]).map(x=>normalizeArabic(x)); const chB = (b.children||[]).map(x=>normalizeArabic(x));
     const childrenScore = tokenJaccard(chA,chB);
-    const aPat = extractPaternal(aName), bPat = extractPaternal(bName);
-    let patronym = 0; if(aPat.father && aPat.father===bPat.father) patronym+=0.35; if(aPat.grandfather && aPat.grandfather===bPat.grandfather) patronym+=0.25; if(patronym>0.5) patronym=0.5;
-    let sharedHusbandPat = 0; if(jaroWinkler(hA,hB)>=0.92){ if(aPat.father===bPat.father && aPat.father) sharedHusbandPat+=0.25; if(aPat.grandfather===bPat.grandfather && aPat.grandfather) sharedHusbandPat+=0.20; if(sharedHusbandPat>=0.40) sharedHusbandPat=0.55;}
-    const tribalScore = (extractTribal(aName) && extractTribal(bName) && extractTribal(aName)===extractTribal(bName)) ? 0.40 : 0;
 
-    let score = 0;
-    score += 0.15*firstScore + 0.35*familyScore + 0.15*husbandScore + 0.15*idScore + 0.08*phoneScore + 0.02*loc + 0.10*childrenScore;
-    score += patronym*0.9; score += sharedHusbandPat*1.2; score += advancedNameScore*1.1; score += tribalScore*1.1;
+    let score = 0.15*firstScore + 0.35*familyScore + 0.15*husbandScore + 0.15*idScore + 0.08*phoneScore + 0.02*loc + 0.10*childrenScore;
     if(score>1) score=1; if(score<0) score=0;
 
-    return { score, breakdown:{ firstScore, familyScore, advancedNameScore, husbandScore, idScore, phoneScore, loc, childrenScore, patronym, sharedHusbandPat, tribalScore } };
+    return { score, breakdown:{ firstScore, familyScore, husbandScore, idScore, phoneScore, loc, childrenScore } };
   }
 
-  // simple blocking (multi-key)
   function buildBlocks(rows){
     const blocks = new Map();
     for(let i=0;i<rows.length;i++){
@@ -436,23 +412,6 @@ function createWorkerScript(): string {
     return Array.from(blocks.values());
   }
 
-  // union-find
-  function UF(n){
-    this.p = Array.from({length:n},(_,i)=>i);
-    this.size = Array(n).fill(1);
-  }
-  UF.prototype.find = function(x){ if(this.p[x]===x) return x; this.p[x]=this.find(this.p[x]); return this.p[x]; };
-  UF.prototype.merge = function(a,b){ a=this.find(a); b=this.find(b); if(a===b) return a; if(this.size[a]<this.size[b]){ const t=a; a=b; b=t; } this.p[b]=a; this.size[a]+=this.size[b]; return a; };
-
-  // worker state: we will receive data chunks which we append; when "end" received we process
-  let inbound = [];
-  let mapping = null;
-  let options = null;
-
-// ---------------------- REPLACEMENT MERGE + REFINEMENT LOGIC ----------------------
-/**
- * Helper: build adjacency list from thresholded edges
- */
 function buildAdjacency(n, edges) {
   const adj = new Map();
   for (let i = 0; i < n; i++) adj.set(i, []);
@@ -463,9 +422,6 @@ function buildAdjacency(n, edges) {
   return adj;
 }
 
-/**
- * Helper: find connected components via BFS
- */
 function connectedComponents(n, adj) {
   const seen = new Array(n).fill(false);
   const comps = [];
@@ -489,9 +445,6 @@ function connectedComponents(n, adj) {
   return comps;
 }
 
-/**
- * Computes all pairwise scores within a list of indices (returns matrix and list)
- */
 function computePairwiseMatrix(rows, idxs) {
   const m = idxs.length;
   const scores = Array.from({ length: m }, () => Array(m).fill(0));
@@ -506,17 +459,12 @@ function computePairwiseMatrix(rows, idxs) {
   return { scores, pairs };
 }
 
-/**
- * Split component by removing weakest edge repeatedly until subcomponents are coherent
- */
 function refineComponent(rows, idxs, minInternal) {
-  // base
   if (idxs.length <= 4) return [idxs];
 
   const { scores, pairs } = computePairwiseMatrix(rows, idxs);
   const m = idxs.length;
 
-  // compute average internal similarity (pairwise average)
   let total = 0;
   let count = 0;
   for (let i = 0; i < m; i++) {
@@ -531,14 +479,12 @@ function refineComponent(rows, idxs, minInternal) {
     return [idxs];
   }
 
-  // otherwise, remove the weakest edge and re-compute components
-  pairs.sort((a, b) => a.score - b.score); // ascending
+  pairs.sort((a, b) => a.score - b.score);
   const localAdj = new Map();
   for (let i = 0; i < m; i++) localAdj.set(i, new Set());
   for (let i = 0; i < m; i++) {
     for (let j = 0; j < m; j++) {
-      if (i === j) continue;
-      if (scores[i][j] > 0) localAdj.get(i).add(j);
+      if (i !== j && scores[i][j] > 0) localAdj.get(i).add(j);
     }
   }
 
@@ -570,13 +516,12 @@ function refineComponent(rows, idxs, minInternal) {
       const result = [];
       for (const sc of subcomps) {
         const global = sc.map((li) => idxs[li]);
-        if (global.length <= 4) result.push(global);
-        else result.push(...refineComponent(rows, global, minInternal));
+        result.push(...refineComponent(rows, global, minInternal));
       }
       return result;
     }
   }
-
+  
   const assigned = new Set();
   const fallbackResult = [];
   const SIM_THRESH = Math.max(minInternal, 0.6);
@@ -597,31 +542,34 @@ function refineComponent(rows, idxs, minInternal) {
   return fallbackResult;
 }
 
+  let inbound = [];
+  let mapping = null;
+  let options = null;
 
   function processAll(){
-    // build normalized records (map fields)
-    const rows = inbound.map(r=>{
-      return {
-        womanName: r[mapping.womanName] || r.womanName || "",
-        husbandName: r[mapping.husbandName] || r.husbandName || "",
-        nationalId: r[mapping.nationalId] || r.nationalId || "",
-        phone: r[mapping.phone] || r.phone || "",
-        village: r[mapping.village] || r.village || "",
-        subdistrict: r[mapping.subdistrict] || r.subdistrict || "",
-        children: Array.isArray(r[mapping.children]||r.children) ? (r[mapping.children]||r.children) : (String(r[mapping.children]||r.children||"").split(/[;,،|]/).map(x=>x.trim()).filter(Boolean)),
-        cluster_id: r[mapping.cluster_id] || r.cluster_id || r.clusterId || ""
-      };
+    const rows = inbound.map((r, i) => {
+      const mappedRow = { _internalId: \`row_\${i}\` };
+      for (const key in mapping) {
+        mappedRow[key] = r[mapping[key]];
+      }
+      // Ensure children is an array
+      if (mappedRow.children && typeof mappedRow.children === 'string') {
+          mappedRow.children = mappedRow.children.split(/[;,،|]/).map(x=>x.trim()).filter(Boolean);
+      } else if (!mappedRow.children) {
+          mappedRow.children = [];
+      }
+      return mappedRow;
     });
 
     postMessage({type:'progress', progress:5, status:'building-blocks'});
 
-    const blocks = buildBlocks(rows);
-
-    postMessage({type:'progress', progress:15, status:'building-edges'});
-
     const minPair = options?.minPairScore || 0.75;
     const minInternal = options?.minInternalScore || 0.65;
     const blockChunkSize = options?.blockChunkSize || 1200;
+
+    const blocks = buildBlocks(rows);
+
+    postMessage({type:'progress', progress:15, status:'building-edges'});
 
     const edges=[];
     const seen = new Set();
@@ -644,11 +592,8 @@ function refineComponent(rows, idxs, minInternal) {
       if(bIdx%10===0) postMessage({type:'progress', progress:15 + Math.round(50*(bIdx/blocks.length)), status:'building-edges'});
     }
 
-    edges.sort((x,y)=>y.score-x.score);
-
     postMessage({type:'progress', progress:70, status:'refining-components'});
     
-    // NEW LOGIC
     const n = rows.length;
     const adj = buildAdjacency(n, edges);
     const comps = connectedComponents(n, adj);
@@ -678,12 +623,7 @@ function refineComponent(rows, idxs, minInternal) {
 
     const clustersFiltered = finalClustersIdx.map(g => g.map(i => rows[i])).filter(c => c.length > 1);
 
-    const clustersAnnotated = clustersFiltered.map(cluster=>{
-      const annotated = cluster.map(rec => ({...rec, _sim:1}));
-      return annotated;
-    });
-
-    postMessage({type:'done', clusters: clustersAnnotated});
+    postMessage({type:'done', clusters: clustersFiltered});
   }
 
   onmessage = function(e){
@@ -694,15 +634,13 @@ function refineComponent(rows, idxs, minInternal) {
       options = msg.payload.options || {};
       inbound = [];
     } else if(msg.type==='data'){
-      const chunk = msg.payload.rows || [];
-      inbound.push(...chunk);
-      postMessage({type:'progress', progress: Math.min(5 + Math.round(10*(inbound.length/ (options.estimatedRows||50000))), 25), status:'receiving'});
+      inbound.push(...(msg.payload.rows || []));
+      postMessage({type:'progress', progress: Math.min(5 + Math.round(10*(inbound.length/50000)), 15), status:'receiving'});
     } else if(msg.type==='end'){
       setTimeout(()=>{
         try{ processAll(); }catch(err){ postMessage({type:'error', error: String(err)}); }
       }, 50);
     }
   };
-
-  `; // end worker string
+  `;
 }
