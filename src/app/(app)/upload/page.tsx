@@ -185,6 +185,9 @@ export default function UploadPage() {
       return;
     }
     
+    setWorkerStatus("processing");
+    setProgressInfo({ status: "processing", progress: 1 });
+    
     let clusteringSettings = {};
     try {
         const savedSettings = localStorage.getItem(SETTINGS_KEY);
@@ -194,18 +197,15 @@ export default function UploadPage() {
     } catch(e) {
         console.warn("Could not load settings, using defaults.");
     }
-    
-    setWorkerStatus("processing");
-    setProgressInfo({ status: "processing", progress: 1 });
 
     workerRef.current.postMessage({
       type: "start",
       payload: {
         mapping,
         options: {
-          minPairScore: 0.75,
-          minInternalScore: 0.65,
-          blockChunkSize: 1200,
+          minPairScore: 0.45,
+          minInternalScore: 0.67,
+          blockChunkSize: 5000,
           ...clusteringSettings
         },
       },

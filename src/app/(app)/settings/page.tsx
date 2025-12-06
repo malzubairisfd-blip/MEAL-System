@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -12,9 +13,9 @@ import { Input } from '@/components/ui/input';
 
 const SETTINGS_KEY = 'beneficiary-insights-settings';
 const DEFAULT_SETTINGS = {
-  minPairScore: 0.75,
-  minInternalScore: 0.65,
-  blockChunkSize: 1200,
+  minPairScore: 0.45,
+  minInternalScore: 0.67,
+  blockChunkSize: 5000,
 };
 
 type SettingsKeys = keyof typeof DEFAULT_SETTINGS;
@@ -118,7 +119,7 @@ export default function SettingsPage() {
           <div className="space-y-4">
             <Label htmlFor="min-pair-score" className="text-base">Minimum Pair Score</Label>
             <p className="text-sm text-muted-foreground">
-              The minimum similarity score (from 0 to 1) for any two records to be considered a potential match within a block. This is the first filter in the duplicate detection process. Default: 0.75
+              The minimum similarity score (from 0 to 1) for any two records to be considered a potential match within a block. This is the first filter in the duplicate detection process. Default: 0.45
             </p>
             <Slider
               id="min-pair-score"
@@ -145,7 +146,7 @@ export default function SettingsPage() {
           <div className="space-y-4">
             <Label htmlFor="min-internal-score" className="text-base">Minimum Internal Score</Label>
              <p className="text-sm text-muted-foreground">
-              When a large cluster is being refined, this is the minimum score required to keep two records connected in the Maximum Spanning Tree. It controls how aggressively large clusters are split. Default: 0.65
+              When a large cluster is being refined, this is the minimum score required to keep two records connected in the Maximum Spanning Tree. It controls how aggressively large clusters are split. Default: 0.67
             </p>
             <Slider
               id="min-internal-score"
@@ -172,7 +173,7 @@ export default function SettingsPage() {
            <div className="space-y-4">
             <Label htmlFor="block-chunk-size" className="text-base">Block Chunk Size</Label>
              <p className="text-sm text-muted-foreground">
-              For high-performance blocking on large datasets (&gt;100k rows), this limits the maximum size of a candidate block. Smaller values are slower but more thorough; larger values are faster but may miss some comparisons. Default: 1200
+              For high-performance blocking on large datasets (&gt;100k rows), this limits the maximum size of a candidate block. Smaller values are slower but more thorough; larger values are faster but may miss some comparisons. Default: 5000
             </p>
             <Slider
               id="block-chunk-size"
