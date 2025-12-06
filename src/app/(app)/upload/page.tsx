@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
@@ -351,6 +352,7 @@ function createWorkerScript(): string {
   }
 
   function tokensOfName(s){ const n = normalizeArabic(s||""); if(!n) return []; return n.split(" ").filter(Boolean); }
+  const tokens = tokensOfName;
 
   // Jaro-Winkler
   function jaroWinkler(s1,s2){
@@ -424,25 +426,77 @@ function createWorkerScript(): string {
     return { score, breakdown:{ firstScore, familyScore, husbandScore, idScore, phoneScore, loc, childrenScore } };
   }
 
-  function buildBlocks(rows){
-    const blocks = new Map();
-    for(let i=0;i<rows.length;i++){
-      const r = rows[i];
-      const toks = tokensOfName(r.womanName||"");
-      const first = toks[0] ? toks[0].slice(0,4) : "";
-      const last = toks.length? toks[toks.length-1].slice(0,4) : "";
-      const ph = digitsOnly(r.phone||"").slice(-6);
-      const vg = normalizeArabic(r.village||"").slice(0,6);
-      const keys=[];
-      if(first) keys.push('fn:'+first);
-      if(last) keys.push('ln:'+last);
-      if(ph) keys.push('ph:'+ph);
-      if(vg) keys.push('vl:'+vg);
-      if(keys.length===0) keys.push('blk:all');
-      for(const k of keys){ if(!blocks.has(k)) blocks.set(k,[]); blocks.get(k).push(i); }
-    }
-    return Array.from(blocks.values());
+function buildStrongBlocks(rows) {
+  const map = new Map();
+
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+
+    const w = tokens(r.womanName);
+    const h = tokens(r.husbandName);
+    
+    const first = w[0] || "";
+    const father = w[1] || "";
+    const nameLen = w.length; // 4 vs 5
+    const hFirst = h[0] || "";
+
+    const village = normalizeArabic(r.village || "");
+    const subdistrict = normalizeArabic(r.subdistrict || "");
+
+    const keys = [
+      \`v:\${village}\`,
+      \`sd:\${subdistrict}\`,
+      \`wf:\${first}\`,
+      \`ff:\${father}\`,
+      \`hl:\${hFirst}\`,
+      \`nl:\${nameLen}\`
+    ];
+
+    const key = keys.join("|");
+
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(i);
   }
+
+  return Array.from(map.values());
+}
+
+
+function buildEdges(rows, minScore, options) {
+  const edges = [];
+  const seen = new Set();
+  const CH = options?.blockChunkSize || 1200;
+
+  // The 'rows' here is already a pre-filtered block
+  for (let s = 0; s < rows.length; s += CH) {
+    const part = rows.slice(s, s + CH);
+    for (let i = 0; i < part.length; i++) {
+      for (let j = i + 1; j < part.length; j++) {
+        const a = part[i]; // The actual row object, not an index
+        const b = part[j]; // The actual row object, not an index
+        
+        // We need original indices to build a global graph, so we need to pass them down
+        // Or, assume indices passed into buildEdges are local to the sub-array
+        // Let's go with local indices and map them back up.
+        
+        // This won't work as-is because 'a' and 'b' are objects, not indices.
+        // And seen keys would be wrong.
+        
+        const p = pairwiseScore(a, b);
+        if (p.score >= minScore) {
+          // 'a' and 'b' are row objects, but the rest of the algo needs indices
+          // We need to pass the original indices to buildEdges or do a lookup.
+          // Let's assume the calling function will handle index mapping.
+           edges.push({ a: i, b: j, score: p.score, breakdown: p.breakdown });
+        }
+      }
+    }
+  }
+  edges.sort((x, y) => y.score - x.score);
+  return edges;
+}
+
+
 
 function buildAdjacency(n, edges) {
   const adj = new Map();
@@ -453,6 +507,7 @@ function buildAdjacency(n, edges) {
   }
   return adj;
 }
+
 
 function connectedComponents(n, adj) {
   const seen = new Array(n).fill(false);
@@ -602,30 +657,26 @@ function refineComponent(rows, idxs, minInternal) {
     const minInternal = options?.minInternalScore || 0.65;
     const blockChunkSize = options?.blockChunkSize || 1200;
 
-    const blocks = buildBlocks(rows);
+    const blocks = buildStrongBlocks(rows);
+
+    const edges = [];
+    for (const block of blocks) {
+      if (block.length > 1) {
+        const sub = block.map(i => rows[i]);
+        const subEdges = buildEdges(sub, minPair, { blockChunkSize: 500 });
+        // remap to global index
+        for (const e of subEdges) {
+          edges.push({
+            a: block[e.a],
+            b: block[e.b],
+            score: e.score
+          });
+        }
+      }
+    }
 
     postMessage({type:'progress', progress:15, status:'building-edges'});
 
-    const edges=[];
-    const seen = new Set();
-    for(let bIdx=0;bIdx<blocks.length;bIdx++){
-      const block = blocks[bIdx];
-      const CH = blockChunkSize;
-      for(let s=0;s<block.length;s+=CH){
-        const part = block.slice(s, s+CH);
-        for(let i=0;i<part.length;i++){
-          for(let j=i+1;j<part.length;j++){
-            const a = part[i], bb = part[j];
-            const key = a<bb ? a+'_'+bb : bb+'_'+a;
-            if(seen.has(key)) continue;
-            seen.add(key);
-            const p = pairwiseScore(rows[a], rows[bb]);
-            if(p.score >= minPair) edges.push({a, b: bb, score: p.score, breakdown: p.breakdown});
-          }
-        }
-      }
-      if(bIdx%10===0) postMessage({type:'progress', progress:15 + Math.round(50*(bIdx/blocks.length)), status:'building-edges'});
-    }
 
     postMessage({type:'progress', progress:70, status:'refining-components'});
     
