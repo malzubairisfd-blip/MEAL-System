@@ -404,386 +404,271 @@ export default function UploadPage() {
 function createWorkerScript(): string {
   return `
 
-  // ---------- Utilities ----------
-  function safeString(x){ return x==null ? "" : String(x); }
-  function digitsOnly(s){ return safeString(s).replace(/\\D/g,""); }
+// ---------- Utilities ----------
+function safeString(x){ return x==null ? "" : String(x); }
+function digitsOnly(s){ return safeString(s).replace(/\\D/g,""); }
 
-  // Arabic normalization (keeps Arabic letters + digits + spaces)
-  function normalizeArabic(text){
-    if(!text) return "";
-    let t = safeString(text).trim().replace(/\\s+/g," ");
-    t = t.replace(/[أإآٱ]/g,"ا")
-         .replace(/ة/g,"ه")
-         .replace(/ى/g,"ي")
-         .replace(/[ؤئ]/g,"ي")
-         .replace(/[^\\u0600-\\u06FF0-9 ]/g,"")
-         .replace(/ـ/g,"");
-    return t;
+function normalizeArabic(text){
+if(!text) return "";
+let t = safeString(text).trim().replace(/\\s+/g," ");
+t = t.replace(/[أإآٱ]/g,"ا")
+.replace(/ة/g,"ه")
+.replace(/ى/g,"ي")
+.replace(/[ؤئ]/g,"ي")
+.replace(/[^\\u0600-\\u06FF0-9 ]/g,"")
+.replace(/ـ/g,"");
+return t;
+}
+
+function tokens(s){ const n = normalizeArabic(s||""); if(!n) return []; return n.split(" ").filter(Boolean); }
+
+function jaroWinkler(s1,s2){
+s1 = safeString(s1); s2 = safeString(s2);
+if(!s1 || !s2) return 0;
+const len1=s1.length,len2=s2.length;
+const matchDist = Math.floor(Math.max(len1,len2)/2)-1;
+const s1m = Array(len1).fill(false), s2m = Array(len2).fill(false);
+let matches=0;
+for(let i=0;i<len1;i++){
+const start=Math.max(0,i-matchDist), end=Math.min(i+matchDist+1,len2);
+for(let j=start;j<end;j++){
+if(s2m[j]) continue;
+if(s1[i]!==s2[j]) continue;
+s1m[i]=true; s2m[j]=true; matches++; break;
+}
+}
+if(matches===0) return 0;
+let k=0, trans=0;
+for(let i=0;i<len1;i++){
+if(!s1m[i]) continue;
+while(!s2m[k]) k++;
+if(s1[i]!==s2[k]) trans++;
+k++;
+}
+trans = trans/2.0;
+const m = matches;
+const jaro = (m/len1 + m/len2 + (m-trans)/m)/3.0;
+let prefix=0, maxPrefix=4;
+for(let i=0;i<Math.min(maxPrefix,len1,len2);i++){ if(s1[i]===s2[i]) prefix++; else break; }
+return jaro + prefix*0.1*(1-jaro);
+}
+
+function tokenJaccard(a,b){
+if(!a||!b) return 0;
+const A=new Set(a), B=new Set(b);
+let inter=0; for(const x of A) if(B.has(x)) inter++;
+const uni = new Set([...A,...B]).size;
+if(uni===0) return 0; return inter/uni;
+}
+
+function phoneSim(a,b){
+const A = digitsOnly(a), B = digitsOnly(b);
+if(!A||!B) return 0;
+if(A===B) return 1;
+if(A.slice(-6)===B.slice(-6)) return 0.85;
+if(A.slice(-4)===B.slice(-4)) return 0.6;
+return 0;
+}
+
+function pairwiseScore(a,b){
+const wTokensA = tokens(a.womanName);
+const wTokensB = tokens(b.womanName);
+const hTokensA = tokens(a.husbandName);
+const hTokensB = tokens(b.husbandName);
+
+const womanScore = Math.max(jaroWinkler(a.womanName,b.womanName), tokenJaccard(wTokensA,wTokensB));
+const husbandScore = Math.max(jaroWinkler(a.husbandName,b.husbandName), tokenJaccard(hTokensA,hTokensB));
+const idScore = a.nationalId && b.nationalId && a.nationalId===b.nationalId ? 1 : 0;
+const phoneScore = phoneSim(a.phone, b.phone);
+const locScore = (normalizeArabic(a.village)===normalizeArabic(b.village))?1
+                 :((normalizeArabic(a.subdistrict)===normalizeArabic(b.subdistrict))?0.8:0);
+const childrenScore = tokenJaccard(Array.isArray(a.children)?a.children:[], Array.isArray(b.children)?b.children:[]);
+
+const score = 0.3*womanScore + 0.25*husbandScore + 0.2*idScore + 0.1*phoneScore + 0.05*locScore + 0.1*childrenScore;
+return { score: Math.max(0,Math.min(1,score)) };
+
+}
+
+function buildBalancedBlocks(rows){
+const blocks = new Map();
+for(let i=0;i<rows.length;i++){
+const r = rows[i];
+const w = tokens(r.womanName), h = tokens(r.husbandName);
+const first = w[0]||"", father=w[1]||"", last=w[w.length-1]||"";
+const hFirst = h[0]||"", hLast=h[h.length-1]||"";
+const village = normalizeArabic(r.village||""), subdistrict=normalizeArabic(r.subdistrict||"");
+const keys = [
+\`wf:\${first}\`, \`ff:\${father}\`, \`wl:\${last}\`,
+\`hf:\${hFirst}\`, \`hl:\${hLast}\`,
+\`v:\${village}\`, \`sd:\${subdistrict}\`,
+\`ffhf:\${father}-\${hFirst}\`, \`wfhf:\${first}-\${hFirst}\`,
+\`wflh:\${first}-\${last}\`, \`wfhhl:\${first}-\${hFirst}-\${hLast}\`
+];
+for(const k of keys){
+if(!blocks.has(k)) blocks.set(k,[]);
+blocks.get(k).push(i);
+}
+}
+return Array.from(blocks.values()).filter(b=>b.length>1);
+}
+
+function buildEdgesInBlock(rows, idxList, minScore){
+const edges = [];
+const seenPairs = new Set();
+for(let i=0;i<idxList.length;i++){
+for(let j=i+1;j<idxList.length;j++){
+const u = idxList[i], v = idxList[j];
+const key = u<v?\`\${u}-\${v}\`:\`\${v}-\${u}\`;
+if(seenPairs.has(key)) continue;
+seenPairs.add(key);
+const p = pairwiseScore(rows[u], rows[v]);
+if(p.score>=minScore) edges.push({a:u,b:v,score:p.score});
+}
+}
+return edges;
+}
+
+function buildAdjacency(n, edges){
+const adj = Array.from({length:n},()=>[]);
+for(const e of edges){
+adj[e.a].push({to:e.b,score:e.score});
+adj[e.b].push({to:e.a,score:e.score});
+}
+return adj;
+}
+
+function connectedComponents(n, adj){
+const seen = Array(n).fill(false), comps=[];
+for(let i=0;i<n;i++){
+if(seen[i]) continue;
+const q=[i]; seen[i]=true; const comp=[];
+while(q.length){
+const u=q.shift(); comp.push(u);
+for(const nb of adj[u]) if(!seen[nb.to]){seen[nb.to]=true;q.push(nb.to);}
+}
+comps.push(comp);
+}
+return comps;
+}
+
+function buildLocalEdgesForComp(compSet, globalEdges){
+const set = new Set(compSet);
+return globalEdges.filter(e=>set.has(e.a)&&set.has(e.b)).map(e=>({u:e.a,v:e.b,score:e.score}));
+}
+
+function buildMST(nodes, edges){
+edges.sort((a,b)=>b.score-a.score);
+const parent = new Map(), rk=new Map();
+for(const n of nodes){parent.set(n,n); rk.set(n,0);}
+function find(x){while(parent.get(x)!==x){parent.set(x,parent.get(parent.get(x)));x=parent.get(x);}return x;}
+function union(a,b){a=find(a);b=find(b);if(a===b)return false; const ra=rk.get(a), rb=rk.get(b); if(ra<rb) parent.set(a,b); else if(rb<ra) parent.set(b,a); else { parent.set(b,a); rk.set(a,ra+1);} return true;}
+const mst=[];
+for(const e of edges) if(union(e.u,e.v)) mst.push(e);
+return mst;
+}
+
+function splitByThreshold(nodes,mst,threshold){
+const adj = new Map(); nodes.forEach(n=>adj.set(n,[]));
+mst.forEach(e=>{if(e.score>=threshold){adj.get(e.u).push(e.v); adj.get(e.v).push(e.u);}});
+const seen=new Set(), comps=[];
+for(const n of nodes) if(!seen.has(n)){const q=[n]; const comp=[]; seen.add(n); while(q.length){const x=q.shift(); comp.push(x); for(const nb of adj.get(x)) if(!seen.has(nb)){seen.add(nb);q.push(nb);}} comps.push(comp);}
+return comps;
+}
+
+function processAll(){
+const rows = inbound.map((r,i)=>{
+const mapped = {_internalId:\`row_\${i}\`, womanName:"", husbandName:"", nationalId:"", phone:"", village:"", subdistrict:"", children:[]};
+for(const key in mapping){
+const col = mapping[key];
+if(col) mapped[key]=r[col];
+}
+if(mapped.children && typeof mapped.children==="string") mapped.children = mapped.children.split(/[;,،|]/).map(x=>x.trim()).filter(Boolean);
+else if (!Array.isArray(mapped.children)) mapped.children = [];
+mapped.womanName=String(mapped.womanName||"");
+mapped.husbandName=String(mapped.husbandName||"");
+mapped.nationalId=String(mapped.nationalId||"");
+mapped.phone=String(mapped.phone||"");
+mapped.village=String(mapped.village||"");
+mapped.subdistrict=String(mapped.subdistrict||"");
+return mapped;
+});
+
+postMessage({type:'progress',progress:5,status:'building-blocks'});
+
+const minPair = options?.minPairScore ?? 0.75;
+const minInternal = options?.minInternalScore ?? 0.65;
+
+const blocks = buildBalancedBlocks(rows);
+postMessage({type:'progress',progress:10,status:'building-blocks',completed:blocks.length,total:blocks.length});
+
+const globalEdges=[], seenPairs = new Set();
+for(let i=0;i<blocks.length;i++){
+  const blockEdges = buildEdgesInBlock(rows, blocks[i], minPair);
+  for(const e of blockEdges){
+    const key = e.a<e.b?\`\${e.a}-\${e.b}\`:\`\${e.b}-\${e.a}\`;
+    if(!seenPairs.has(key)){globalEdges.push(e); seenPairs.add(key);}
   }
+  if(i%50===0||i===blocks.length-1) postMessage({type:'progress',progress:10+Math.round(45*(i/blocks.length)),status:'building-edges',completed:i+1,total:blocks.length});
+}
 
-  function tokens(s){ const n = normalizeArabic(s||""); if(!n) return []; return n.split(" ").filter(Boolean); }
+const adj = buildAdjacency(rows.length, globalEdges);
+const comps = connectedComponents(rows.length, adj);
+const finalClustersIdx = [];
 
-  // Jaro-Winkler (pure JS)
-  function jaroWinkler(s1,s2){
-    s1 = safeString(s1); s2 = safeString(s2);
-    if(!s1 || !s2) return 0;
-    const len1=s1.length,len2=s2.length;
-    const matchDist = Math.floor(Math.max(len1,len2)/2)-1;
-    const s1m = Array(len1).fill(false), s2m = Array(len2).fill(false);
-    let matches=0;
-    for(let i=0;i<len1;i++){
-      const start=Math.max(0,i-matchDist), end=Math.min(i+matchDist+1,len2);
-      for(let j=start;j<end;j++){
-        if(s2m[j]) continue;
-        if(s1[i]!==s2[j]) continue;
-        s1m[i]=true; s2m[j]=true; matches++; break;
+for(let ci=0;ci<comps.length;ci++){
+  const comp = comps[ci];
+  if(comp.length<=1) continue;
+  else if(comp.length<=4) finalClustersIdx.push(comp);
+  else{
+    let localEdges = buildLocalEdgesForComp(comp, globalEdges);
+    if(localEdges.length<comp.length-1){
+      const cappedEdges=[];
+      const K=25;
+      for(let i=0;i<comp.length;i++){
+        const u=comp[i]; const neigh=[];
+        for(let j=0;j<comp.length;j++){if(i===j) continue; const v=comp[j]; const {score} = pairwiseScore(rows[u], rows[v]); if(score>minInternal) neigh.push({u,v,score});}
+        neigh.sort((a,b)=>b.score-a.score); cappedEdges.push(...neigh.slice(0,K));
       }
+      const edgeMap=new Map();
+      for(const e of cappedEdges){const key=e.u<e.v?\`\${e.u}_\${e.v}\`:\`\${e.v}_\${e.u}\`; if(!edgeMap.has(key)||edgeMap.get(key).score<e.score) edgeMap.set(key,e);}
+      localEdges.push(...edgeMap.values());
     }
-    if(matches===0) return 0;
-    let k=0, trans=0;
-    for(let i=0;i<len1;i++){
-      if(!s1m[i]) continue;
-      while(!s2m[k]) k++;
-      if(s1[i]!==s2[k]) trans++;
-      k++;
-    }
-    trans = trans/2.0;
-    const m = matches;
-    const jaro = (m/len1 + m/len2 + (m-trans)/m)/3.0;
-    let prefix=0, maxPrefix=4;
-    for(let i=0;i<Math.min(maxPrefix,len1,len2);i++){ if(s1[i]===s2[i]) prefix++; else break; }
-    return jaro + prefix*0.1*(1-jaro);
+    const mst = buildMST(comp, localEdges);
+    const parts = splitByThreshold(comp,mst,minInternal);
+    for(const p of parts) if(p.length>1) finalClustersIdx.push(p);
   }
+  if(ci%10===0||ci===comps.length-1) postMessage({type:'progress',progress:70+Math.round(25*(ci/comps.length)),status:'refining-components',completed:ci+1,total:comps.length});
+}
 
-  function tokenJaccard(a,b){
-    if(!a||!b) return 0;
-    const A=new Set(a), B=new Set(b);
-    let inter=0; for(const x of A) if(B.has(x)) inter++;
-    const uni = new Set([...A,...B]).size;
-    if(uni===0) return 0; return inter/uni;
-  }
+const clustersFiltered = finalClustersIdx.map(g=>g.map(i=>rows[i])).filter(c=>c.length>1);
 
-  function phoneSim(a,b){
-    const A = digitsOnly(a), B = digitsOnly(b);
-    if(!A||!B) return 0;
-    if(A===B) return 1;
-    if(A.slice(-6)===B.slice(-6)) return 0.85;
-    if(A.slice(-4)===B.slice(-4)) return 0.6;
-    return 0;
-  }
+postMessage({type:'progress',progress:95,status:'annotating'});
 
-  // Pairwise scoring (lightweight)
-  function pairwiseScore(a,b){
-    const wTokensA = tokens(a.womanName);
-    const wTokensB = tokens(b.womanName);
+// Optional: Detect multi-marriages and forbidden marriages
+clustersFiltered.forEach(cluster=>{
+  const husbandMap = new Map();
+  const womanMap = new Map();
+  cluster.forEach(r=>{
+    if(r.husbandName){const list=husbandMap.get(r.husbandName)||[]; list.push(r.womanName); husbandMap.set(r.husbandName,list);}
+    if(r.womanName){const list=womanMap.get(r.womanName)||[]; list.push(r.husbandName); womanMap.set(r.womanName,list);}
+  });
+  // Attach metadata for review
+  cluster._warnings=[];
+  husbandMap.forEach((wives,h)=>{if(wives.length>1&&wives.length<=4) cluster._warnings.push({type:'multi-wife',husband:h,wives});});
+  womanMap.forEach((husbands,w)=>{if(husbands.length>1) cluster._warnings.push({type:'multi-husband',woman:w,husbands});});
+});
 
-    const firstNameA = wTokensA[0] || "";
-    const firstNameB = wTokensB[0] || "";
-    const familyNameA = wTokensA.slice(1).join(" ");
-    const familyNameB = wTokensB.slice(1).join(" ");
+postMessage({type:'done',clusters:clustersFiltered});
 
-    const firstNameScore = jaroWinkler(firstNameA, firstNameB);
-    const familyNameScore = jaroWinkler(familyNameA, familyNameB);
+}
 
-    const hA = normalizeArabic(a.husbandName || "");
-    const hB = normalizeArabic(b.husbandName || "");
-    const hJW = jaroWinkler(hA, hB);
-    const hPerm = tokenJaccard(tokens(hA), tokens(hB));
-    const husbandScore = Math.max(hJW, hPerm);
-
-    const idMatch = (a.nationalId && b.nationalId && String(a.nationalId) === String(b.nationalId)) ? 1 : 0;
-    const phone = phoneSim(a.phone, b.phone);
-    const loc = (a.village && b.village && normalizeArabic(a.village) === normalizeArabic(b.village)) ? 1 : (a.subdistrict && b.subdistrict && normalizeArabic(a.subdistrict) === normalizeArabic(b.subdistrict) ? 0.8 : 0);
-    const chA = Array.isArray(a.children) ? a.children.map(normalizeArabic) : [];
-    const chB = Array.isArray(b.children) ? b.children.map(normalizeArabic) : [];
-    const children = tokenJaccard(chA, chB);
-
-    const score = 0.15 * firstNameScore + 0.35 * familyNameScore + 0.15 * husbandScore + 0.15 * idMatch + 0.08 * phone + 0.02 * loc + 0.10 * children;
-
-    return { score: Math.max(0, Math.min(1, score)) };
-  }
-
-  // ---- Balanced blocking (overlapping keys) ----
-  function buildBalancedBlocks(rows) {
-    const blocks = new Map();
-    for (let i = 0; i < rows.length; i++) {
-      const r = rows[i];
-      const w = tokens(r.womanName);
-      const h = tokens(r.husbandName);
-      const first = w[0] || "";
-      const father = w[1] || "";
-      const last = w[w.length - 1] || "";
-      const hFirst = h[0] || "";
-      const hLast = h[h.length - 1] || "";
-      const village = normalizeArabic(r.village || "");
-      const subdistrict = normalizeArabic(r.subdistrict || "");
-      const keys = [
-        \`wf:\${first}\`,
-        \`ff:\${father}\`,
-        \`wl:\${last}\`,
-        \`hf:\${hFirst}\`,
-        \`hl:\${hLast}\`,
-        \`v:\${village}\`,
-        \`sd:\${subdistrict}\`,
-        \`ffhf:\${father}-\${hFirst}\`,
-        \`wfhf:\${first}-\${hFirst}\`,
-      ];
-      for (const k of keys) {
-        if (!blocks.has(k)) blocks.set(k, []);
-        blocks.get(k).push(i);
-      }
-    }
-    return Array.from(blocks.values()).filter(b => b.length > 1);
-  }
-
-  // ---- Build edges inside a list of indices (simple pairwise but limited per-block) ----
-  function buildEdgesInBlock(rows, idxList, minScore) {
-    const edges = [];
-    const n = idxList.length;
-    const seenPairs = new Set();
-    for (let i = 0; i < n; i++) {
-      for (let j = i + 1; j < n; j++) {
-        const u = idxList[i], v = idxList[j];
-        const key = u < v ? \`\${u}-\${v}\` : \`\${v}-\${u}\`;
-        if (seenPairs.has(key)) continue;
-        seenPairs.add(key);
-        
-        const p = pairwiseScore(rows[u], rows[v]);
-        if (p.score >= minScore) edges.push({ a: u, b: v, score: p.score });
-      }
-    }
-    return edges;
-  }
-
-  // ---- adjacency + connected components ----
-  function buildAdjacency(n, edges) {
-    const adj = new Array(n).fill(0).map(() => []);
-    for (const e of edges) {
-      adj[e.a].push({ to: e.b, score: e.score });
-      adj[e.b].push({ to: e.a, score: e.score });
-    }
-    return adj;
-  }
-
-  function connectedComponents(n, adj) {
-    const seen = new Array(n).fill(false);
-    const comps = [];
-    for (let i = 0; i < n; i++) {
-      if (seen[i]) continue;
-      const q = [i];
-      seen[i] = true;
-      const comp = [];
-      while (q.length) {
-        const u = q.shift();
-        comp.push(u);
-        for (const nb of adj[u] || []) {
-          if (!seen[nb.to]) { seen[nb.to] = true; q.push(nb.to); }
-        }
-      }
-      comps.push(comp);
-    }
-    return comps;
-  }
-
-  // ---- Build local edges for a given component (re-uses global edges array to avoid recompute) ----
-  function buildLocalEdgesForComp(compSet, globalEdges) {
-    const set = new Set(compSet);
-    const local = [];
-    for (const e of globalEdges) {
-      if (set.has(e.a) && set.has(e.b)) local.push({ u: e.a, v: e.b, score: e.score });
-    }
-    return local;
-  }
-
-  // ---- Build maximum spanning tree (Kruskal) ----
-  function buildMST(nodes, edges) {
-    // edges descending by score
-    edges.sort((a,b)=>b.score-a.score);
-    const parent = new Map();
-    const rk = new Map();
-    for (const n of nodes) { parent.set(n,n); rk.set(n,0); }
-    function find(x){ while(parent.get(x)!==x) { parent.set(x, parent.get(parent.get(x))); x = parent.get(x); } return x; }
-    function union(a,b){
-      a = find(a); b = find(b); if(a===b) return false;
-      const ra = rk.get(a)||0, rb = rk.get(b)||0;
-      if(ra<rb) parent.set(a,b); else if(rb<ra) parent.set(b,a); else { parent.set(b,a); rk.set(a, ra+1); }
-      return true;
-    }
-    const mst = [];
-    for (const e of edges) {
-      if (union(e.u,e.v)) mst.push(e);
-      if (mst.length === nodes.length - 1) break;
-    }
-    return mst;
-  }
-
-  // ---- split MST by cutting edges below threshold ----
-  function splitByThreshold(nodes, mst, threshold) {
-    const adj = new Map();
-    for (const n of nodes) adj.set(n, []);
-    for (const e of mst) {
-      if (e.score >= threshold) {
-        adj.get(e.u).push(e.v);
-        adj.get(e.v).push(e.u);
-      }
-    }
-    const seen = new Set();
-    const comps = [];
-    for (const n of nodes) {
-      if (seen.has(n)) continue;
-      const q = [n]; seen.add(n); const comp = [];
-      while (q.length) {
-        const x = q.shift();
-        comp.push(x);
-        for (const nb of adj.get(x) || []) {
-          if (!seen.has(nb)) { seen.add(nb); q.push(nb); }
-        }
-      }
-      comps.push(comp);
-    }
-    return comps;
-  }
-
-  // ---- Main processing state ----
-  let inbound = [];
-  let mapping = null;
-  let options = null;
-
-  function processAll(){
-    // Map inbound rows to standardized shape according to mapping
-    const rows = inbound.map((r, i) => {
-      const mapped = { _internalId: \`row_\${i}\` , womanName: "", husbandName: "", nationalId: "", phone: "", village: "", subdistrict: "", children: [] };
-      // safe mapping: mapping keys may point to column names
-      for (const key in mapping) {
-        const col = mapping[key];
-        if (!col) continue;
-        mapped[key] = r[col];
-      }
-      // ensure children is array
-      if (mapped.children && typeof mapped.children === "string") {
-        mapped.children = mapped.children.split(/[;,،|]/).map(x=>x.trim()).filter(Boolean);
-      } else if (!Array.isArray(mapped.children)) {
-        mapped.children = [];
-      }
-      // normalize strings
-      mapped.womanName = mapped.womanName ? String(mapped.womanName) : "";
-      mapped.husbandName = mapped.husbandName ? String(mapped.husbandName) : "";
-      mapped.nationalId = mapped.nationalId ? String(mapped.nationalId) : "";
-      mapped.phone = mapped.phone ? String(mapped.phone) : "";
-      mapped.village = mapped.village ? String(mapped.village) : "";
-      mapped.subdistrict = mapped.subdistrict ? String(mapped.subdistrict) : "";
-      return mapped;
-    });
-
-    postMessage({type:'progress', progress:5, status:'building-blocks', completed: 0, total: 0 });
-
-    const minPair = options?.minPairScore ?? 0.75;
-    const minInternal = options?.minInternalScore ?? 0.65;
-    const blockChunkSize = options?.blockChunkSize ?? 1200;
-
-    // 1) build blocks (balanced)
-    const blocks = buildBalancedBlocks(rows);
-    postMessage({type:'progress', progress:10, status:'building-blocks', completed: blocks.length, total: blocks.length });
-
-    // 2) for each block, build edges (global edges array)
-    const globalEdges = [];
-    const seenPairs = new Set();
-    for (let i = 0; i < blocks.length; i++) {
-      const block = blocks[i];
-      const blockEdges = buildEdgesInBlock(rows, block, minPair);
-
-      for (const e of blockEdges) {
-          const key = e.a < e.b ? \`\${e.a}-\${e.b}\` : \`\${e.b}-\${e.a}\`;
-          if(!seenPairs.has(key)){
-              globalEdges.push(e);
-              seenPairs.add(key);
-          }
-      }
-
-      if (i % 50 === 0 || i === blocks.length - 1) {
-         postMessage({type:'progress', progress: 10 + Math.round(45 * (i / blocks.length)), status:'building-edges', completed: i + 1, total: blocks.length });
-      }
-    }
-
-    // 3) adjacency + connected components across whole dataset
-    postMessage({type:'progress', progress:60, status:'finding-components'});
-    const n = rows.length;
-    const adj = buildAdjacency(n, globalEdges);
-    const comps = connectedComponents(n, adj);
-
-    postMessage({type:'progress', progress:70, status:'refining-components', completed: 0, total: comps.length});
-    const finalClustersIdx = [];
-
-    // 4) refine each component using MST splitting (no recursion heavy)
-    for (let ci = 0; ci < comps.length; ci++) {
-      const comp = comps[ci];
-      if (comp.length <= 1) { /* skip singletons */ }
-      else if (comp.length <= 4) {
-        finalClustersIdx.push(comp);
-      } else {
-        // build local edges for this component (re-using globalEdges to avoid recomputing all pairwise)
-        const localEdges = buildLocalEdgesForComp(comp, globalEdges);
-        if (localEdges.length < comp.length - 1) {
-          const cappedEdges = [];
-          const K = 25; 
-          for (let i = 0; i < comp.length; i++) {
-            const u = comp[i];
-            const neigh = [];
-            for (let j = 0; j < comp.length; j++) {
-              if (i === j) continue;
-              const v = comp[j];
-              const { score } = pairwiseScore(rows[u], rows[v]);
-              if (score > minInternal) {
-                neigh.push({ u, v, score });
-              }
-            }
-            neigh.sort((a,b)=>b.score-a.score);
-            for (let k = 0; k < Math.min(K, neigh.length); k++) cappedEdges.push(neigh[k]);
-          }
-          const edgeMap = new Map();
-          for (const e of cappedEdges) {
-            const key = e.u < e.v ? \`\${e.u}_\${e.v}\` : \`\${e.v}_\${e.u}\`;
-            if (!edgeMap.has(key) || edgeMap.get(key).score < e.score) edgeMap.set(key, e);
-          }
-          localEdges.push(...edgeMap.values());
-        }
-
-        // build MST and split by threshold
-        const mst = buildMST(comp, localEdges);
-        const parts = splitByThreshold(comp, mst, minInternal);
-
-        for (const p of parts) {
-          if (p.length > 1) finalClustersIdx.push(p);
-        }
-      }
-
-      if (ci % 10 === 0 || ci === comps.length - 1) {
-        postMessage({type:'progress', progress: 70 + Math.round(25 * (ci / comps.length)), status:'refining-components', completed: ci + 1, total: comps.length});
-      }
-    }
-
-    postMessage({type:'progress', progress:95, status:'annotating'});
-
-    const clustersFiltered = finalClustersIdx.map(g => g.map(i => rows[i])).filter(c => c.length > 1);
-
-    postMessage({type:'done', clusters: clustersFiltered});
-  }
-
-  onmessage = function(e){
-    const msg = e.data;
-    if(!msg || !msg.type) return;
-    if(msg.type==='start'){
-      mapping = msg.payload.mapping;
-      options = msg.payload.options || {};
-      inbound = [];
-    } else if(msg.type==='data'){
-      inbound.push(...(msg.payload.rows || []));
-      postMessage({type:'progress', progress: 5, status:'receiving'});
-    } else if(msg.type==='end'){
-      setTimeout(()=>{
-        try{ processAll(); }catch(err){ postMessage({type:'error', error: String(err)}); }
-      }, 50);
-    }
-  };
-  `;
+let inbound=[], mapping=null, options=null;
+onmessage=function(e){
+const msg=e.data;
+if(!msg||!msg.type) return;
+if(msg.type==='start'){mapping=msg.payload.mapping; options=msg.payload.options||{}; inbound=[];}
+else if(msg.type==='data'){inbound.push(...(msg.payload.rows||[])); postMessage({type:'progress',progress:5,status:'receiving'});}
+else if(msg.type==='end'){setTimeout(()=>{try{processAll();}catch(err){postMessage({type:'error',error:String(err)});}},50);}
+};
+`;
 }
