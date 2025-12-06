@@ -10,7 +10,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { Upload, FileText, CheckCircle, XCircle, Settings, ChevronRight, Loader2 } from "lucide-react";
+import { Upload, FileText, CheckCircle, XCircle, Settings, ChevronRight, Loader2, Users, Unlink, BoxSelect, Sigma, Group } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
 
@@ -37,6 +37,14 @@ type WorkerProgress = {
   total?: number;
 }
 
+type ClusterSummary = {
+    totalRecords: number;
+    clusteredRecords: number;
+    unclusteredRecords: number;
+    clusterCount: number;
+    avgClusterSize: number;
+}
+
 export default function UploadPage() {
   const [columns, setColumns] = useState<string[]>([]);
   const [file, setFile] = useState<File | null>(null);
@@ -47,6 +55,7 @@ export default function UploadPage() {
   const [workerStatus, setWorkerStatus] = useState<string>("idle");
   const [progressInfo, setProgressInfo] = useState<WorkerProgress>({ status: "idle", progress: 0 });
   const [clusters, setClusters] = useState<any[][]>([]);
+  const [summary, setSummary] = useState<ClusterSummary | null>(null);
   const workerRef = useRef<Worker | null>(null);
   const rowsRef = useRef<any[]>([]);
   const { toast } = useToast();
@@ -74,10 +83,22 @@ export default function UploadPage() {
           });
           break;
         case "done":
+          const resultClusters = msg.clusters || [];
           setWorkerStatus("done");
           setProgressInfo({ status: "done", progress: 100 });
-          setClusters(msg.clusters || []);
-          toast({ title: "Clustering Complete", description: `Found ${msg.clusters.length} potential duplicate clusters.` });
+          setClusters(resultClusters);
+          toast({ title: "Clustering Complete", description: `Found ${resultClusters.length} potential duplicate clusters.` });
+
+          const totalRecords = rowsRef.current.length;
+          const clusteredRecords = resultClusters.flat().length;
+          setSummary({
+              totalRecords: totalRecords,
+              clusteredRecords: clusteredRecords,
+              unclusteredRecords: totalRecords - clusteredRecords,
+              clusterCount: resultClusters.length,
+              avgClusterSize: resultClusters.length > 0 ? clusteredRecords / resultClusters.length : 0
+          });
+
 
           // Save results to server-side cache (best-effort)
           try {
@@ -85,7 +106,7 @@ export default function UploadPage() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    clusters: msg.clusters,
+                    clusters: resultClusters,
                     rows: rowsRef.current.map((r, i) => ({ ...r, _internalId: `row_${i}` })),
                     originalHeaders: columns
                 })
@@ -124,10 +145,8 @@ export default function UploadPage() {
     const f = e.target.files?.[0];
     if (!f) return;
     
+    resetState();
     setFile(f);
-    setWorkerStatus('idle');
-    setProgressInfo({ status: "idle", progress: 0 });
-    setClusters([]);
 
     const buffer = await f.arrayBuffer();
     const workbook = XLSX.read(buffer, { type: "array", cellDates: true });
@@ -143,6 +162,7 @@ export default function UploadPage() {
     if(savedMapping) {
       try { setMapping(JSON.parse(savedMapping)); } catch { /* ignore parse errors */ }
     } else {
+      // Reset to default if no saved mapping for this file structure
       setMapping({ womanName: "", husbandName: "", nationalId: "", phone: "", village: "", subdistrict: "", children: "", cluster_id: "", beneficiaryId: "" });
     }
   }
@@ -190,7 +210,6 @@ export default function UploadPage() {
     for (let i = 0; i < rowsRef.current.length; i += CHUNK) {
       const chunk = rowsRef.current.slice(i, i + CHUNK);
       workerRef.current.postMessage({ type: "data", payload: { rows: chunk } });
-      // small pause to keep UI responsive
       await new Promise((r) => setTimeout(r, 10));
     }
     
@@ -206,17 +225,30 @@ export default function UploadPage() {
       setClusters([]);
       setWorkerStatus('idle');
       setProgressInfo({ status: "idle", progress: 0 });
+      setSummary(null);
       setMapping({ womanName: "", husbandName: "", nationalId: "", phone: "", village: "", subdistrict: "", children: "", cluster_id: "", beneficiaryId: "" });
   }
   
   const formattedStatus = () => {
     const { status, completed, total } = progressInfo;
     let baseStatus = status.replace(/-/g, ' ');
-    if(completed !== undefined && total !== undefined) {
+    if(completed !== undefined && total !== undefined && total > 0) {
       return `${baseStatus} (${completed}/${total})`;
     }
     return baseStatus;
   }
+
+  const SummaryCard = ({ icon, title, value }: { icon: React.ReactNode, title: string, value: string | number }) => (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-sm font-medium">{title}</CardTitle>
+        {icon}
+      </CardHeader>
+      <CardContent>
+        <div className="text-2xl font-bold">{value}</div>
+      </CardContent>
+    </Card>
+  );
 
   return (
     <div className="space-y-6">
@@ -307,7 +339,7 @@ export default function UploadPage() {
             <CardDescription>Start the AI-powered analysis to find potential duplicates.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-             <Button onClick={startClustering} disabled={workerStatus !== 'idle' && workerStatus !== 'done' && workerStatus !== 'error'}>
+             <Button onClick={startClustering} disabled={workerStatus === 'processing'}>
                 {workerStatus === 'processing' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 {workerStatus === 'processing' ? 'Clustering...' : 'Start Clustering'}
              </Button>
@@ -325,15 +357,22 @@ export default function UploadPage() {
         </Card>
       )}
 
-      {clusters.length > 0 && workerStatus === 'done' && (
+      {summary && workerStatus === 'done' && (
         <Card>
           <CardHeader>
             <CardTitle>4. Results</CardTitle>
              <CardDescription>
-              Clustering complete. {clusters.length} potential duplicate clusters found. Proceed to the review page to analyze the results.
+              Clustering is complete. Here is a summary of the results.
             </CardDescription>
           </CardHeader>
           <CardContent>
+            <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-5 mb-6">
+                <SummaryCard icon={<Users className="h-4 w-4 text-muted-foreground" />} title="إجمالي السجلات" value={summary.totalRecords} />
+                <SummaryCard icon={<Group className="h-4 w-4 text-muted-foreground" />} title="السجلات المجمعة" value={summary.clusteredRecords} />
+                <SummaryCard icon={<Unlink className="h-4 w-4 text-muted-foreground" />} title="السجلات غير المجمعة" value={summary.unclusteredRecords} />
+                <SummaryCard icon={<BoxSelect className="h-4 w-4 text-muted-foreground" />} title="عدد المجموعات" value={summary.clusterCount} />
+                <SummaryCard icon={<Sigma className="h-4 w-4 text-muted-foreground" />} title="متوسط حجم المجموعة" value={summary.avgClusterSize.toFixed(2)} />
+            </div>
             <Button onClick={() => router.push('/review')}>
                 Go to Review Page
                 <ChevronRight className="ml-2 h-4 w-4" />
@@ -495,11 +534,16 @@ function createWorkerScript(): string {
   function buildEdgesInBlock(rows, idxList, minScore) {
     const edges = [];
     const n = idxList.length;
+    const seenPairs = new Set();
     for (let i = 0; i < n; i++) {
       for (let j = i + 1; j < n; j++) {
-        const ai = idxList[i], bi = idxList[j];
-        const p = pairwiseScore(rows[ai], rows[bi]);
-        if (p.score >= minScore) edges.push({ a: ai, b: bi, score: p.score });
+        const u = idxList[i], v = idxList[j];
+        const key = u < v ? \`\${u}-\${v}\` : \`\${v}-\${u}\`;
+        if (seenPairs.has(key)) continue;
+        seenPairs.add(key);
+        
+        const p = pairwiseScore(rows[u], rows[v]);
+        if (p.score >= minScore) edges.push({ a: u, b: v, score: p.score });
       }
     }
     return edges;
@@ -637,12 +681,19 @@ function createWorkerScript(): string {
 
     // 2) for each block, build edges (global edges array)
     const globalEdges = [];
+    const seenPairs = new Set();
     for (let i = 0; i < blocks.length; i++) {
       const block = blocks[i];
-      // limit extremely large blocks by sampling split if needed
-      const blockIndices = block.slice(0, blockChunkSize); // avoid huge per-block cost
-      const blockEdges = buildEdgesInBlock(rows, blockIndices, minPair);
-      for (const e of blockEdges) globalEdges.push(e);
+      const blockEdges = buildEdgesInBlock(rows, block, minPair);
+
+      for (const e of blockEdges) {
+          const key = e.a < e.b ? \`\${e.a}-\${e.b}\` : \`\${e.b}-\${e.a}\`;
+          if(!seenPairs.has(key)){
+              globalEdges.push(e);
+              seenPairs.add(key);
+          }
+      }
+
       if (i % 50 === 0 || i === blocks.length - 1) {
          postMessage({type:'progress', progress: 10 + Math.round(45 * (i / blocks.length)), status:'building-edges', completed: i + 1, total: blocks.length });
       }
@@ -666,11 +717,9 @@ function createWorkerScript(): string {
       } else {
         // build local edges for this component (re-using globalEdges to avoid recomputing all pairwise)
         const localEdges = buildLocalEdgesForComp(comp, globalEdges);
-        // if not enough edges found from blocks, we compute edges for comp directly but with a limit
         if (localEdges.length < comp.length - 1) {
-          // compute direct pairwise but cap work: use only top-K neighbors per node to avoid O(n^2)
           const cappedEdges = [];
-          const K = 25; // per-node neighbor cap
+          const K = 25; 
           for (let i = 0; i < comp.length; i++) {
             const u = comp[i];
             const neigh = [];
@@ -678,19 +727,19 @@ function createWorkerScript(): string {
               if (i === j) continue;
               const v = comp[j];
               const { score } = pairwiseScore(rows[u], rows[v]);
-              neigh.push({ u, v, score });
+              if (score > minInternal) {
+                neigh.push({ u, v, score });
+              }
             }
             neigh.sort((a,b)=>b.score-a.score);
             for (let k = 0; k < Math.min(K, neigh.length); k++) cappedEdges.push(neigh[k]);
           }
-          // merge capped edges
           const edgeMap = new Map();
           for (const e of cappedEdges) {
-            const key = e.u < e.v ? e.u + '_' + e.v : e.v + '_' + e.u;
+            const key = e.u < e.v ? \`\${e.u}_\${e.v}\` : \`\${e.v}_\${e.u}\`;
             if (!edgeMap.has(key) || edgeMap.get(key).score < e.score) edgeMap.set(key, e);
           }
-          localEdges.length = 0;
-          for (const v of edgeMap.values()) localEdges.push({ u: v.u, v: v.v, score: v.score });
+          localEdges.push(...edgeMap.values());
         }
 
         // build MST and split by threshold

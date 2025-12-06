@@ -18,138 +18,22 @@ export default function ReviewPage() {
   const [allClusters, setAllClusters] = useState<Cluster[]>([]);
   const [filteredClusters, setFilteredClusters] = useState<Cluster[]>([]);
   const [selectedCluster, setSelectedCluster] = useState<Cluster | null>(null);
-  const [loading, setLoading] = useState({ data: true, summaries: false });
+  const [loading, setLoading] = useState({ data: true });
   const [search, setSearch] = useState("");
   const { toast } = useToast();
   const [aiSummaries, setAiSummaries] = useState<{ [key: string]: string }>({});
 
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(9);
-  
-  const [summaryProgress, setSummaryProgress] = useState(0);
-  const [summaryStatus, setSummaryStatus] = useState({
-    completed: 0,
-    total: 0,
-    elapsed: '0s',
-    remaining: '0s'
-  });
-
-  const generateAndStoreAllSummaries = async () => {
-      const cacheId = sessionStorage.getItem('cacheId');
-      if (!cacheId || allClusters.length === 0) {
-          toast({ title: "No clusters to summarize", description: "Please run clustering first.", variant: "destructive"});
-          return;
-      }
-      
-      const clustersToSummarize = allClusters.filter(c => {
-          const clusterKey = c.map(r => r._internalId).sort().join('-');
-          return !aiSummaries[clusterKey];
-      });
-
-      if (clustersToSummarize.length === 0) {
-          toast({ title: "Summaries Already Generated", description: "AI summaries for all clusters are already available."});
-          return;
-      }
-
-      setLoading(prev => ({ ...prev, summaries: true }));
-      setSummaryProgress(0);
-      const totalToProcess = clustersToSummarize.length;
-      setSummaryStatus({ completed: 0, total: totalToProcess, elapsed: '0s', remaining: '0s' });
-      const startTime = Date.now();
-      let completedCount = 0;
-      const newSummaries: { [key: string]: string } = {};
-
-      try {
-        const res = await fetch('/api/ai/describe-clusters-batch', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ clusters: clustersToSummarize }),
-        });
-
-        if (!res.ok || !res.body) {
-            const errorText = await res.text();
-            throw new Error(`Failed to start summary generation stream. Server responded with: ${errorText}`);
-        }
-
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            buffer += decoder.decode(value, { stream: true });
-            
-            const parts = buffer.split('\n\n');
-            buffer = parts.pop() || ''; // Keep the last, possibly incomplete, part
-
-            for (const part of parts) {
-                if (part.startsWith('data: ')) {
-                    try {
-                        const json = JSON.parse(part.substring(6));
-                        if(json.error) {
-                            console.error("An error occurred during summary generation for a cluster:", json.error);
-                            toast({ title: "AI Summary Error", description: `A summary for a cluster failed: ${json.error}`, variant: "destructive" });
-                            completedCount++;
-                            continue;
-                        }
-
-                        const { clusterKey, description } = json;
-                        newSummaries[clusterKey] = description;
-                        completedCount++;
-
-                        const progress = (completedCount / totalToProcess) * 100;
-                        setSummaryProgress(progress);
-
-                        const elapsedMs = Date.now() - startTime;
-                        const avgTimePerCluster = elapsedMs / completedCount;
-                        const remainingMs = (totalToProcess - completedCount) * avgTimePerCluster;
-
-                        setAiSummaries(prev => ({ ...prev, [clusterKey]: description }));
-
-                        setSummaryStatus({
-                            completed: completedCount,
-                            total: totalToProcess,
-                            elapsed: `${Math.round(elapsedMs / 1000)}s`,
-                            remaining: `${Math.round(remainingMs / 1000)}s`
-                        });
-                    } catch (e) {
-                         console.error("Failed to parse stream chunk:", e);
-                    }
-                }
-            }
-        }
-      } catch (error: any) {
-        console.error("Failed to generate summaries:", error);
-        toast({ title: "Error", description: error.message, variant: "destructive" });
-      }
-
-      setLoading(prev => ({ ...prev, summaries: false }));
-      
-      if (Object.keys(newSummaries).length > 0) {
-        toast({ title: "AI Summaries Ready", description: `Generated ${Object.keys(newSummaries).length} new AI-powered summaries.` });
-        try {
-          await fetch('/api/cluster-cache', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ cacheId: cacheId, data: { aiSummaries: { ...aiSummaries, ...newSummaries } } })
-          });
-        } catch (e) {
-          console.error("Failed to save AI summaries to cache:", e);
-          toast({ title: "Cache Save Failed", description: "Could not save new AI summaries to the server.", variant: "destructive" });
-        }
-      }
-  };
 
   useEffect(() => {
     async function loadClusters() {
-      setLoading(prev => ({ ...prev, data: true }));
+      setLoading({ data: true });
       try {
           const cacheId = sessionStorage.getItem('cacheId');
           if (!cacheId) {
             toast({ title: "No Data", description: "No clusters found from the last run. Please upload data first.", variant: "destructive" });
-            setLoading(prev => ({ ...prev, data: false }));
+            setLoading({ data: false });
             return;
           }
 
@@ -176,7 +60,7 @@ export default function ReviewPage() {
       } catch (error: any) {
         toast({ title: "Error", description: error.message, variant: "destructive" });
       } finally {
-        setLoading(prev => ({ ...prev, data: false }));
+        setLoading({ data: false });
       }
     }
     loadClusters();
@@ -237,10 +121,6 @@ export default function ReviewPage() {
                         Back to Upload
                     </Link>
                 </Button>
-                <Button onClick={generateAndStoreAllSummaries} disabled={loading.summaries || allClusters.length === 0}>
-                    {loading.summaries ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-                    Generate All AI Summaries
-                </Button>
                 <Button asChild>
                     <Link href="/audit">
                         Go to Audit
@@ -263,23 +143,7 @@ export default function ReviewPage() {
               />
             </div>
           </div>
-          
-           {loading.summaries && (
-            <div className="mb-6 p-4 border rounded-lg bg-muted/50">
-              <div className="flex justify-between items-center mb-2">
-                <h4 className="font-semibold">Generating AI Summaries...</h4>
-                <div className="text-sm text-muted-foreground font-mono">
-                  {summaryStatus.completed}/{summaryStatus.total}
-                </div>
-              </div>
-              <Progress value={summaryProgress} className="w-full mb-2" />
-              <div className="flex justify-between text-xs text-muted-foreground font-mono">
-                <span>Elapsed: {summaryStatus.elapsed}</span>
-                <span>Remaining: {summaryStatus.remaining}</span>
-              </div>
-            </div>
-          )}
-          
+                    
           {loading.data ? (
             <div className="text-center text-muted-foreground py-10">
                 <Loader2 className="mx-auto h-8 w-8 animate-spin" />
