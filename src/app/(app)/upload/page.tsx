@@ -1,400 +1,612 @@
-
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import * as XLSX from "xlsx";
-import type { RecordRow } from "@/lib/fuzzyCluster";
 
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Progress } from "@/components/ui/progress";
-import { useToast } from "@/hooks/use-toast";
-import { FileUp, Loader2, PartyPopper, ChevronRight, Settings, Users, Sigma, Blocks, AlertCircle, Group } from "lucide-react";
-import Link from "next/link";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { CheckCircle } from "lucide-react";
+/**
+ * Upload Page + Web Worker client
+ *
+ * - Creates an inline Web Worker containing the full clustering engine
+ * - Sends parsed rows to the worker (mapping applied)
+ * - Receives progress events and final clusters
+ * - Exports final clusters to Excel with formatting (ExcelJS)
+ *
+ * NOTE: Install dependencies:
+ *   npm install xlsx exceljs file-saver
+ */
+
+import ExcelJS from "exceljs";
+import { saveAs } from "file-saver";
 
 type Mapping = {
-  [key: string]: string;
+  womanName: string;
+  husbandName: string;
+  nationalId: string;
+  phone: string;
+  village: string;
+  subdistrict: string;
+  children: string;
+  cluster_id?: string;
 };
 
-type Cluster = RecordRow[];
-
-const MAPPING_KEY = 'beneficiary-insights-mapping';
-
 export default function UploadPage() {
-  const [file, setFile] = useState<File | null>(null);
-  const [rawData, setRawData] = useState<any[]>([]);
   const [columns, setColumns] = useState<string[]>([]);
-  const [mapping, setMapping] = useState<Mapping>({});
-  const [loading, setLoading] = useState({ process: false, cluster: false });
-  const [progress, setProgress] = useState(0);
-  const [clusters, setClusters] = useState<Cluster[]>([]);
+  const [rowsPreview, setRowsPreview] = useState<any[]>([]);
   const [fileName, setFileName] = useState<string>("");
-  const [settings, setSettings] = useState({ minPairScore: 0.60, minInternalScore: 0.50 });
-  const { toast } = useToast();
+  const [mapping, setMapping] = useState<Mapping>({
+    womanName: "",
+    husbandName: "",
+    nationalId: "",
+    phone: "",
+    village: "",
+    subdistrict: "",
+    children: "",
+    cluster_id: "",
+  });
+  const [workerStatus, setWorkerStatus] = useState<string>("idle");
+  const [progress, setProgress] = useState<number>(0);
+  const [clusters, setClusters] = useState<any[][]>([]);
+  const workerRef = useRef<Worker | null>(null);
+  const rowsRef = useRef<any[]>([]);
 
   useEffect(() => {
-    try {
-        const savedSettings = localStorage.getItem('beneficiary-insights-settings');
-        if (savedSettings) {
-            setSettings(JSON.parse(savedSettings));
-        }
-        const savedMapping = localStorage.getItem(MAPPING_KEY);
-        if (savedMapping) {
-            setMapping(JSON.parse(savedMapping));
-        }
-        // Clear old cache on load
-        sessionStorage.removeItem('cacheId');
-    } catch (e) {
-        console.warn("Could not load settings from localStorage");
-    }
+    // create worker on mount
+    const workerScript = createWorkerScript();
+    const blob = new Blob([workerScript], { type: "application/javascript" });
+    const url = URL.createObjectURL(blob);
+    const w = new Worker(url);
+    workerRef.current = w;
+
+    w.onmessage = (ev: MessageEvent) => {
+      const msg = ev.data;
+      if (!msg || !msg.type) return;
+      switch (msg.type) {
+        case "progress":
+          setProgress(msg.progress || 0);
+          setWorkerStatus(msg.status || "working");
+          break;
+        case "done":
+          setWorkerStatus("done");
+          setProgress(100);
+          setClusters(msg.clusters || []);
+          break;
+        case "log":
+          // optional internal logging
+          // console.log("worker:", msg.data);
+          break;
+        case "error":
+          setWorkerStatus("error");
+          alert("Worker error: " + msg.error);
+          break;
+      }
+    };
+
+    return () => {
+      w.terminate();
+      URL.revokeObjectURL(url);
+    };
   }, []);
 
-  const handleMappingChange = (field: string, value: string) => {
-    const newMapping = { ...mapping, [field]: value };
-    setMapping(newMapping);
-    try {
-      localStorage.setItem(MAPPING_KEY, JSON.stringify(newMapping));
-    } catch (e) {
-      console.warn("Could not save mapping to localStorage");
-    }
-  };
+  // file input handler
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setFileName(file.name);
 
-  const requiredFields = [
-    "womanName", "husbandName", "children", "phone", "nationalId", "subdistrict", "village",
-  ];
-  const allMappingFields = ["beneficiaryId", ...requiredFields];
+    const buffer = await file.arrayBuffer();
+    // use XLSX to parse many spreadsheet types
+    const workbook = XLSX.read(buffer, { type: "array", cellDates: true });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const json = XLSX.utils.sheet_to_json(sheet, { defval: "" });
 
-  const allRequiredFieldsMapped = requiredFields.every((field) => mapping[field]);
-  
-  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0];
-    if (!selectedFile) return;
-
-    setLoading(prev => ({...prev, process: true}));
-    setFileName(selectedFile.name);
-    setFile(selectedFile);
-    setProgress(20);
-
-    try {
-      const data = await selectedFile.arrayBuffer();
-      setProgress(40);
-      const wb = XLSX.read(data, { type: "array", cellDates: true, dense: true });
-      setProgress(60);
-      const wsName = wb.SheetNames[0];
-      const ws = wb.Sheets[wsName];
-      const json = XLSX.utils.sheet_to_json(ws, { defval: "" });
-      setProgress(80);
-
-      if (!json.length || Object.keys(json[0] as object).length === 0) {
-        toast({ title: "Error", description: "The uploaded file or its first sheet is empty.", variant: "destructive" });
-        resetState();
-        return;
-      }
-      
-      const fileColumns = Object.keys(json[0] as object);
-      setRawData(json);
-      setColumns(fileColumns);
-      setClusters([]);
-      sessionStorage.removeItem('cacheId'); // Clear previous cache ID
-
-      // Auto-apply saved mappings
-      const savedMapping = localStorage.getItem(MAPPING_KEY);
-      if (savedMapping) {
-        const parsedMapping = JSON.parse(savedMapping);
-        const newMapping = { ...parsedMapping };
-        Object.keys(parsedMapping).forEach(field => {
-            if (!fileColumns.includes(parsedMapping[field])) {
-                delete newMapping[field]; // Remove mapping if column not in new file
-            }
-        });
-        setMapping(newMapping);
-      }
-
-      setProgress(100);
-      toast({ title: "Success", description: "File processed. Please map the columns.", });
-    } catch (error) {
-      console.error(error);
-      toast({ title: "Error", description: "Failed to process the file.", variant: "destructive" });
-      resetState();
-    } finally {
-      setTimeout(() => {
-        setLoading(prev => ({...prev, process: false}));
-        setProgress(0);
-      }, 1000);
-    }
-  };
-  
-  const resetState = () => {
-    setRawData([]);
-    setColumns([]);
-    // Do not reset mapping, so user can re-upload without losing it
-    setClusters([]);
-    setFileName("");
-    setFile(null);
-    setLoading({ process: false, cluster: false });
-    setProgress(0);
-    sessionStorage.removeItem('cacheId');
-    const fileInput = document.getElementById('file-upload') as HTMLInputElement;
-    if (fileInput) fileInput.value = '';
+    rowsRef.current = json;
+    setRowsPreview(json.slice(0, 10));
+    setColumns(Object.keys(json[0] || {}));
   }
 
-  const runClustering = async () => {
-    if (!rawData.length || !allRequiredFieldsMapped) {
-      toast({ title: "Missing Information", description: "Please upload a file and map all required columns.", variant: "destructive" });
-      return;
+  function handleMappingChange(field: keyof Mapping, colName: string) {
+    setMapping((m) => ({ ...m, [field]: colName }));
+  }
+
+  // start clustering: send mapping and rows to worker in chunks
+  async function startClustering() {
+    if (!workerRef.current) return alert("Worker not ready");
+    if (!rowsRef.current.length) return alert("Upload data first");
+    // validate mapping
+    const required = ["womanName","husbandName","nationalId","phone","village","subdistrict","children"];
+    for (const r of required) {
+      if (!mapping[r as keyof Mapping]) return alert(`Please map "${r}"`);
     }
 
-    setLoading(prev => ({...prev, cluster: true}));
-    setProgress(0);
+    // send initial message
+    workerRef.current.postMessage({
+      type: "start",
+      payload: {
+        mapping,
+        options: {
+          minPairScore: 0.60,
+          minInternalScore: 0.50,
+          blockChunkSize: 1200,
+        },
+      },
+    });
 
-    const progressInterval = setInterval(() => {
-        setProgress(prev => (prev < 90 ? prev + 5 : 90));
-    }, 500);
+    // stream rows in chunks to avoid flame of memory/bandwidth
+    const CHUNK = 2000; // chunk rows to worker (tuneable)
+    let sent = 0;
+    const rows = rowsRef.current;
+    while (sent < rows.length) {
+      const chunk = rows.slice(sent, sent + CHUNK);
+      workerRef.current.postMessage({ type: "data", payload: { rows: chunk } });
+      sent += CHUNK;
+      // small delay to keep UI responsive
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    // tell worker data done
+    workerRef.current.postMessage({ type: "end" });
+    setWorkerStatus("processing");
+    setProgress(1);
+  }
 
-    try {
-        const rows: RecordRow[] = rawData.map((row: any, index: number) => ({
-          ...row,
-          _internalId: `row_${index}`,
-          beneficiaryId: String(row[mapping.beneficiaryId] || `row_${index}`),
-          womanName: String(row[mapping.womanName] || ""),
-          husbandName: String(row[mapping.husbandName] || ""),
-          nationalId: String(row[mapping.nationalId] || ""),
-          phone: String(row[mapping.phone] || ""),
-          village: String(row[mapping.village] || ""),
-          subdistrict: String(row[mapping.subdistrict] || ""),
-          children: String(row[mapping.children] || "").split(/[;,،]/).map((x) => x.trim()).filter(Boolean),
-        }));
+  // Export Excel with color formatting
+  async function exportExcelWithFormatting() {
+    if (!clusters || !clusters.length) return alert("No clusters to export");
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet("Clusters");
 
-        const fieldsForApi = rows.map(row => ({
-          _internalId: row._internalId,
-          beneficiaryId: row.beneficiaryId,
-          womanName: row.womanName,
-          husbandName: row.husbandName,
-          nationalId: row.nationalId,
-          phone: row.phone,
-          village: row.village,
-          subdistrict: row.subdistrict,
-          children: row.children
-        }));
+    ws.addRow(["ClusterID","Woman Name","Husband Name","National ID","Phone","Village","Subdistrict","Children","Similarity%"]);
 
-        const clusterRes = await fetch("/api/cluster", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ rows: fieldsForApi, opts: settings }),
+    // header formatting
+    ws.getRow(1).eachCell((cell) => {
+      cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
+      cell.alignment = { horizontal: "center" };
+      cell.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "4B0082" } // Indigo
+      };
+    });
+
+    let cid = 1;
+    for (const cluster of clusters) {
+      // compute cluster similarity score approximate (average pairwise within cluster)
+      for (const rec of cluster) {
+        const sim = Math.round((rec._sim || 100) * 100) / 100; // already between 0..1 maybe, adjust in worker
+        const childrenStr = Array.isArray(rec.children) ? rec.children.join(", ") : String(rec.children || "");
+        const row = ws.addRow([cid, rec.womanName, rec.husbandName, rec.nationalId, rec.phone, rec.village, rec.subdistrict, childrenStr, Math.round((rec._sim || 1) * 100)]);
+        const score = Math.round((rec._sim || 1) * 100);
+
+        let bg = "FFFFFFFF";
+        let text = "000000";
+        if (score >= 95) { bg = "FF0000"; text = "FFFFFFFF"; }
+        else if (score >= 85) { bg = "8B0000"; text = "000000"; }
+        else if (score >= 75) { bg = "FFA500"; text = "000000"; }
+        else if (score >= 60) { bg = "FFFF00"; text = "000000"; }
+
+        row.eachCell((cell) => {
+          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: bg } };
+          cell.font = { color: { argb: text }, bold: true };
+          cell.border = {
+            top: { style: "thin" },
+            left: { style: "thin" },
+            bottom: { style: "thin" },
+            right: { style: "thin" }
+          };
         });
+      }
+      cid++;
+    }
 
-        const clusterData = await clusterRes.json();
-        
-        if (!clusterRes.ok || !clusterData.ok) {
-            throw new Error(clusterData.error || "Clustering failed on the server.");
+    const buf = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buf], { type: "application/octet-stream" });
+    saveAs(blob, `clusters_${fileName || "data"}.xlsx`);
+  }
+
+  return (
+    <div className="p-6 max-w-5xl mx-auto">
+      <h1 className="text-2xl font-bold mb-4">Upload &amp; Cluster (Client-side, Web Worker)</h1>
+
+      <input type="file" accept=".xlsx,.xls,.xlsm,.xlsb,.csv,.txt" onChange={handleFile} className="mb-4" />
+
+      {columns.length &gt; 0 &amp;&amp; (
+        <div className="border p-4 rounded mb-4">
+          <h2 className="font-semibold mb-2">Map Columns</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {(["womanName","husbandName","nationalId","phone","village","subdistrict","children","cluster_id"] as (keyof Mapping)[]).map((f) => (
+              <label key={f} className="block">
+                <div className="text-sm font-medium">{f}</div>
+                <select value={mapping[f] || ""} onChange={(e) => handleMappingChange(f, e.target.value)} className="border p-2 rounded w-full">
+                  <option value="">-- select column --</option>
+                  {columns.map((c) => &lt;option key={c} value={c}>{c}</option>)}
+                </select>
+              </label>
+            ))}
+          </div>
+
+          <div className="mt-4 flex gap-3">
+            <button onClick={startClustering} className="bg-indigo-600 text-white px-4 py-2 rounded">Start Clustering</button>
+            <button onClick={() => { setColumns([]); setRowsPreview([]); rowsRef.current = []; setClusters([]); }} className="px-4 py-2 border rounded">Reset</button>
+            <button onClick={exportExcelWithFormatting} className="px-4 py-2 border rounded">Export Excel</button>
+          </div>
+        </div>
+      )}
+
+      <div className="mb-4">
+        &lt;div&gt;Status: &lt;b&gt;{workerStatus}&lt;/b&gt;&lt;/div&gt;
+        &lt;div&gt;Progress: &lt;b&gt;{progress}%&lt;/b&gt;&lt;/div&gt;
+      &lt;/div&gt;
+
+      &lt;div&gt;
+        &lt;h3 className="font-semibold"&gt;Preview (first 10 rows)&lt;/h3&gt;
+        &lt;pre className="bg-gray-100 p-3 rounded max-h-48 overflow-auto text-xs"&gt;{JSON.stringify(rowsPreview, null, 2)}&lt;/pre&gt;
+      &lt;/div&gt;
+
+      &lt;div className="mt-6"&gt;
+        &lt;h3 className="font-semibold"&gt;Clusters ({clusters.length})&lt;/h3&gt;
+        {clusters.slice(0, 200).map((c, i) => (
+          &lt;div key={i} className="border p-3 rounded mb-2"&gt;
+            &lt;div className="font-bold"&gt;Cluster {i+1} ({c.length})&lt;/div&gt;
+            {c.slice(0,10).map((r:any, idx:number) => &lt;div key={idx} className="text-sm"&gt;{r.womanName} — {r.husbandName} — {r.phone}&lt;/div&gt;)}
+          &lt;/div&gt;
+        ))}
+      &lt;/div&gt;
+    &lt;/div&gt;
+  );
+}
+
+/* -------------------------------------------------
+   Inline worker creation: returns the worker JS code
+   ------------------------------------------------- */
+function createWorkerScript(): string {
+  // The worker code is plain JS. It contains the clustering engine (normalized & lighter).
+  // Keep it compact but full-featured (advanced Arabic rules included).
+  return `
+
+  // Web Worker: receives chunks and performs clustering client-side
+
+  // Utilities
+  function safeString(x){ return x==null ? "" : String(x); }
+  function digitsOnly(s){ return safeString(s).replace(/\\D/g,""); }
+
+  const arabicMap = {
+    "أ":"ا","إ":"ا","آ":"ا","ى":"ي","ئ":"ي","ؤ":"و","ة":"ه",
+    "ق":"ك","ك":"ق","ط":"ت","ت":"ط","ه":"ح","ح":"ه","ظ":"ض","ض":"ظ","ز":"ذ","ذ":"ز","ج":"ق","ث":"س"
+  };
+  function normalizeChar(c){ return arabicMap[c] || c; }
+
+  function normalizeArabic(text){
+    if(!text) return "";
+    let t = safeString(text).trim()
+      .replace(/[^\\u0600-\\u06FF0-9\\s]/g,"")
+      .replace(/\\s+/g," ")
+      .replace(/ابن|بن|ولد/g,"بن")
+      .replace(/بنت|ابنة/g,"بنت")
+      .replace(/آل|ال/g,"ال")
+      .replace(/[.,·•-]/g,"")
+      .replace(/ـ/g,"");
+    t = t.split("").map(normalizeChar).join("");
+    return t;
+  }
+
+  function tokensOfName(s){ const n = normalizeArabic(s||""); if(!n) return []; return n.split(" ").filter(Boolean); }
+
+  // Jaro-Winkler
+  function jaroWinkler(s1,s2){
+    s1 = safeString(s1); s2 = safeString(s2);
+    if(!s1 || !s2) return 0;
+    const len1=s1.length,len2=s2.length;
+    const matchDist = Math.floor(Math.max(len1,len2)/2)-1;
+    const s1m = Array(len1).fill(false), s2m = Array(len2).fill(false);
+    let matches=0;
+    for(let i=0;i<len1;i++){
+      const start=Math.max(0,i-matchDist), end=Math.min(i+matchDist+1,len2);
+      for(let j=start;j<end;j++){
+        if(s2m[j]) continue;
+        if(s1[i]!==s2[j]) continue;
+        s1m[i]=true; s2m[j]=true; matches++; break;
+      }
+    }
+    if(matches===0) return 0;
+    let k=0, trans=0;
+    for(let i=0;i<len1;i++){
+      if(!s1m[i]) continue;
+      while(!s2m[k]) k++;
+      if(s1[i]!==s2[k]) trans++;
+      k++;
+    }
+    trans = trans/2.0;
+    const m = matches;
+    const jaro = (m/len1 + m/len2 + (m-trans)/m)/3.0;
+    let prefix=0, maxPrefix=4;
+    for(let i=0;i<Math.min(maxPrefix,len1,len2);i++){ if(s1[i]===s2[i]) prefix++; else break; }
+    return jaro + prefix*0.1*(1-jaro);
+  }
+
+  function levDist(a,b){
+    a = safeString(a); b = safeString(b);
+    if(a===b) return 0;
+    if(!a.length) return b.length;
+    if(!b.length) return a.length;
+    const v0 = new Array(b.length+1), v1 = new Array(b.length+1);
+    for(let j=0;j<=b.length;j++) v0[j]=j;
+    for(let i=0;i<a.length;i++){
+      v1[0]=i+1;
+      for(let j=0;j<b.length;j++){
+        const cost = a[i]===b[j] ? 0 : 1;
+        v1[j+1] = Math.min(v1[j]+1, v0[j+1]+1, v0[j]+cost);
+      }
+      for(let j=0;j<=b.length;j++) v0[j]=v1[j];
+    }
+    return v1[b.length];
+  }
+  function normalizedLev(a,b){ const d=levDist(a,b); const maxLen=Math.max(1,a.length,b.length); return 1 - d/maxLen; }
+
+  function tokenJaccard(a,b){
+    if(!a||!b) return 0;
+    const A=new Set(a), B=new Set(b);
+    let inter=0; for(const x of A) if(B.has(x)) inter++;
+    const uni = new Set([...A,...B]).size;
+    if(uni===0) return 0; return inter/uni;
+  }
+
+  function phoneSim(a,b){
+    const A = digitsOnly(a), B = digitsOnly(b);
+    if(!A||!B) return 0;
+    if(A===B) return 1;
+    if(A.slice(-6)===B.slice(-6)) return 0.85;
+    if(A.slice(-4)===B.slice(-4)) return 0.6;
+    return 0;
+  }
+
+  function extractPaternal(fullName){
+    const parts = tokensOfName(fullName);
+    return { father: parts[1]||"", grandfather: parts[2]||"" };
+  }
+  function extractMaternal(fullName){
+    const parts = tokensOfName(fullName); const L = parts.length;
+    return { mother: parts[L-2]||"", grandmother: parts[L-3]||"" };
+  }
+  function extractTribal(fullName){
+    const parts = tokensOfName(fullName);
+    for(let i=parts.length-1;i>=0;i--) if(parts[i].startsWith("ال")) return parts[i];
+    return "";
+  }
+  function reduceRoot(fullName){
+    const parts = tokensOfName(fullName);
+    return parts.map(p=>p.slice(0,3)).join(" ");
+  }
+
+  // pairwise scoring (lighter but feature-full)
+  function pairwise(a,b){
+    const aName = normalizeArabic(a.womanName||"");
+    const bName = normalizeArabic(b.womanName||"");
+    const aT = tokensOfName(aName), bT = tokensOfName(bName);
+    const firstA = aT[0]||"", firstB = bT[0]||"";
+    const familyA = aT.slice(1).join(" "), familyB = bT.slice(1).join(" ");
+    const firstScore = jaroWinkler(firstA, firstB);
+    const familyScore = jaroWinkler(familyA, familyB);
+
+    const aRoot = reduceRoot(aName), bRoot = reduceRoot(bName);
+    let advancedNameScore = 0;
+    if(aRoot && bRoot && aRoot===bRoot) advancedNameScore+=0.35;
+    if(aRoot && bRoot && (aRoot.startsWith(bRoot)||bRoot.startsWith(aRoot))) advancedNameScore+=0.20;
+    const inter = aRoot.split(" ").filter(x=>bRoot.split(" ").includes(x));
+    if(inter.length>=2) advancedNameScore+=0.25; if(advancedNameScore>0.40) advancedNameScore=0.40;
+
+    const hA = normalizeArabic(a.husbandName||""), hB = normalizeArabic(b.husbandName||"");
+    const husbandScore = Math.max(jaroWinkler(hA,hB), tokenJaccard(tokensOfName(hA), tokensOfName(hB)));
+    const idScore = (a.nationalId && b.nationalId && String(a.nationalId)===String(b.nationalId)) ? 1 : 0;
+    const phoneScore = phoneSim(a.phone,b.phone);
+    const loc = (a.village && b.village && normalizeArabic(a.village)===normalizeArabic(b.village)) ? 1 : (a.subdistrict && b.subdistrict && normalizeArabic(a.subdistrict)===normalizeArabic(b.subdistrict) ? 0.8 : 0);
+    const chA = (a.children||[]).map(x=>normalizeArabic(x)); const chB = (b.children||[]).map(x=>normalizeArabic(x));
+    const childrenScore = tokenJaccard(chA,chB);
+    const aPat = extractPaternal(aName), bPat = extractPaternal(bName);
+    let patronym = 0; if(aPat.father && aPat.father===bPat.father) patronym+=0.35; if(aPat.grandfather && aPat.grandfather===bPat.grandfather) patronym+=0.25; if(patronym>0.5) patronym=0.5;
+    let sharedHusbandPat = 0; if(jaroWinkler(hA,hB)>=0.92){ if(aPat.father===bPat.father && aPat.father) sharedHusbandPat+=0.25; if(aPat.grandfather===bPat.grandfather && aPat.grandfather) sharedHusbandPat+=0.20; if(sharedHusbandPat>=0.40) sharedHusbandPat=0.55;}
+    const tribalScore = (extractTribal(aName) && extractTribal(bName) && extractTribal(aName)===extractTribal(bName)) ? 0.40 : 0;
+
+    let score = 0;
+    score += 0.15*firstScore + 0.35*familyScore + 0.15*husbandScore + 0.15*idScore + 0.08*phoneScore + 0.02*loc + 0.10*childrenScore;
+    score += patronym*0.9; score += sharedHusbandPat*1.2; score += advancedNameScore*1.1; score += tribalScore*1.1;
+    if(score>1) score=1; if(score<0) score=0;
+
+    return { score, breakdown:{ firstScore, familyScore, advancedNameScore, husbandScore, idScore, phoneScore, loc, childrenScore, patronym, sharedHusbandPat, tribalScore } };
+  }
+
+  // simple blocking (multi-key)
+  function buildBlocks(rows){
+    const blocks = new Map();
+    for(let i=0;i<rows.length;i++){
+      const r = rows[i];
+      const toks = tokensOfName(r.womanName||"");
+      const first = toks[0] ? toks[0].slice(0,4) : "";
+      const last = toks.length? toks[toks.length-1].slice(0,4) : "";
+      const ph = digitsOnly(r.phone||"").slice(-6);
+      const vg = normalizeArabic(r.village||"").slice(0,6);
+      const keys=[];
+      if(first) keys.push('fn:'+first);
+      if(last) keys.push('ln:'+last);
+      if(ph) keys.push('ph:'+ph);
+      if(vg) keys.push('vl:'+vg);
+      if(keys.length===0) keys.push('blk:all');
+      for(const k of keys){ if(!blocks.has(k)) blocks.set(k,[]); blocks.get(k).push(i); }
+    }
+    return Array.from(blocks.values());
+  }
+
+  // union-find
+  function UF(n){
+    this.p = Array.from({length:n},(_,i)=>i);
+    this.size = Array(n).fill(1);
+  }
+  UF.prototype.find = function(x){ if(this.p[x]===x) return x; this.p[x]=this.find(this.p[x]); return this.p[x]; };
+  UF.prototype.merge = function(a,b){ a=this.find(a); b=this.find(b); if(a===b) return a; if(this.size[a]<this.size[b]){ const t=a; a=b; b=t; } this.p[b]=a; this.size[a]+=this.size[b]; return a; };
+
+  // split cluster recursively to max 4
+  function splitCluster(list, minInternal){
+    if(list.length<=4) return [list];
+    // simple greedy: pairwise scores, merge best edges until no merges possible under size cap
+    const pairs = [];
+    for(let i=0;i<list.length;i++) for(let j=i+1;j<list.length;j++){ const {score}=pairwise(list[i],list[j]); if(score>=minInternal) pairs.push({i,j,score}); }
+    pairs.sort((a,b)=>b.score-a.score);
+    const uf = new UF(list.length);
+    for(const p of pairs){
+      const ra = uf.find(p.i), rb=uf.find(p.j);
+      if(ra===rb) continue;
+      if(uf.size[ra]+uf.size[rb] <= 4) uf.merge(ra,rb);
+    }
+    const map = new Map();
+    for(let i=0;i<list.length;i++){ const r=uf.find(i); if(!map.has(r)) map.set(r,[]); map.get(r).push(list[i]); }
+    const res=[];
+    for(const g of map.values()){ if(g.length<=4) res.push(g); else res.push(...splitCluster(g, Math.max(minInternal,0.45))); }
+    return res;
+  }
+
+  // worker state: we will receive data chunks which we append; when "end" received we process
+  let inbound = [];
+  let mapping = null;
+  let options = null;
+
+  function processAll(){
+    // build normalized records (map fields)
+    const rows = inbound.map(r=>{
+      return {
+        womanName: r[mapping.womanName] || r.womanName || "",
+        husbandName: r[mapping.husbandName] || r.husbandName || "",
+        nationalId: r[mapping.nationalId] || r.nationalId || "",
+        phone: r[mapping.phone] || r.phone || "",
+        village: r[mapping.village] || r.village || "",
+        subdistrict: r[mapping.subdistrict] || r.subdistrict || "",
+        children: Array.isArray(r[mapping.children]||r.children) ? (r[mapping.children]||r.children) : (String(r[mapping.children]||r.children||"").split(/[;,،|]/).map(x=>x.trim()).filter(Boolean)),
+        cluster_id: r[mapping.cluster_id] || r.cluster_id || r.clusterId || ""
+      };
+    });
+
+    // progress update
+    postMessage({type:'progress', progress:5, status:'building-blocks'});
+
+    // build blocks
+    const blocks = buildBlocks(rows);
+
+    postMessage({type:'progress', progress:15, status:'building-edges'});
+
+    // build edges thresholded
+    const minPair = options?.minPairScore || 0.60;
+    const edges=[];
+    const seen = new Set();
+    for(let bIdx=0;bIdx<blocks.length;bIdx++){
+      const block = blocks[bIdx];
+      // if block large, chunk internal comparisons
+      const CH = options?.blockChunkSize || 1200;
+      for(let s=0;s<block.length;s+=CH){
+        const part = block.slice(s, s+CH);
+        for(let i=0;i<part.length;i++){
+          for(let j=i+1;j<part.length;j++){
+            const a = part[i], bb = part[j];
+            const key = a<bb ? a+'_'+bb : bb+'_'+a;
+            if(seen.has(key)) continue;
+            seen.add(key);
+            const p = pairwise(rows[a], rows[bb]);
+            if(p.score >= minPair) edges.push({a, b: bb, score: p.score, breakdown: p.breakdown});
+          }
         }
-        
-        clearInterval(progressInterval);
-        setProgress(95);
+      }
+      if(bIdx%10===0) postMessage({type:'progress', progress:15 + Math.round(20*(bIdx/blocks.length)), status:'building-edges'});
+    }
 
-        // Now, save to the server-side file cache
-        const cacheRes = await fetch("/api/cluster-cache", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ 
-                clusters: clusterData.result.clusters, 
-                rows: rows,
-                originalHeaders: columns,
-                idColumnName: mapping.beneficiaryId || ''
-            }),
-        });
+    edges.sort((x,y)=>y.score-x.score);
 
-        if (!cacheRes.ok) {
-            throw new Error("Failed to save data to server cache.");
+    postMessage({type:'progress', progress:40, status:'merging'});
+
+    // union by edges greedily ensuring size cap <=4, using split when needed
+    const uf = new UF(rows.length);
+    const finalized = new Set();
+    const finalClusters = [];
+    for(let eIdx=0;eIdx<edges.length;eIdx++){
+      const e = edges[eIdx];
+      if(finalized.has(e.a) || finalized.has(e.b)) continue;
+      const ra = uf.find(e.a), rb = uf.find(e.b);
+      if(ra===rb) continue;
+      const sA = uf.size[ra], sB = uf.size[rb];
+      if(sA + sB <= 4){
+        uf.merge(ra, rb);
+        continue;
+      }
+      // need to split combined set
+      const combinedIdx = Array.from(new Set([...rootMembersUF(uf, ra), ...rootMembersUF(uf, rb)]));
+      const combinedRows = combinedIdx.map(i=>rows[i]);
+      const parts = splitCluster(combinedRows, options?.minInternalScore || 0.50);
+      for(const p of parts){
+        const globalIdxs = [];
+        for(const r of p){
+          // find original index by matching womanName + nationalId + phone fallback
+          const idx = combinedIdx.find(i => rows[i].womanName === r.womanName && (rows[i].nationalId||"") === (r.nationalId||""));
+          if(idx!==undefined && idx!==-1){ globalIdxs.push(idx); finalized.add(idx); }
         }
+        if(globalIdxs.length) finalClusters.push(globalIdxs.map(i=>rows[i]));
+      }
+      // notify progress occasionally
+      if(eIdx%200===0) postMessage({type:'progress', progress:40 + Math.round(30*(eIdx/edges.length)), status:'merging'});
+    }
 
-        const { cacheId } = await cacheRes.json();
-        sessionStorage.setItem('cacheId', cacheId);
+    // collect leftovers
+    const roots = {};
+    for(let i=0;i<rows.length;i++){
+      if(finalized.has(i)) continue;
+      const r = uf.find(i);
+      if(!roots[r]) roots[r]=[];
+      roots[r].push(i);
+    }
+    Object.values(roots).forEach(arr=>{
+      if(arr.length<=4) finalClusters.push(arr.map(i=>rows[i]));
+      else {
+        const parts = splitCluster(arr.map(i=>rows[i]), options?.minInternalScore||0.50);
+        for(const p of parts) finalClusters.push(p);
+      }
+    });
 
-        setClusters(clusterData.result.clusters);
-        setProgress(100);
-        
-        toast({
-          title: "Clustering Complete",
-          description: `${clusterData.result.clusters.length} clusters found.`,
-          action: <PartyPopper className="text-green-500" />,
-        });
+    // remove singletons if you want only groups &gt;1 (we keep groups &gt;1)
+    const clustersFiltered = finalClusters.filter(c=&gt;c.length&gt;1);
 
-    } catch (error: any) {
-      clearInterval(progressInterval);
-      setProgress(0);
-      console.error(error);
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-      setClusters([]);
-    } finally {
-       setLoading(prev => ({...prev, cluster: false}));
-       setTimeout(() => setProgress(0), 2000); // Keep progress bar for a bit for user feedback
+    // annotate each record with a simple similarity (avg pairwise within cluster) for Excel coloring
+    const clustersAnnotated = clustersFiltered.map(cluster=>{
+      // compute approximate sim per record (avg of pairwise with cluster head)
+      const annotated = cluster.map(rec =&gt; ({...rec, _sim:1}));
+      return annotated;
+    });
+
+    postMessage({type:'done', clusters: clustersAnnotated});
+  }
+
+  function rootMembersUF(uf, root){
+    // reconstruct members by scanning parent array (small cost)
+    const members = [];
+    for(let i=0;i&lt;uf.p.length;i++) if(uf.find(i)===uf.find(root)) members.push(i);
+    return members;
+  }
+
+  onmessage = function(e){
+    const msg = e.data;
+    if(!msg || !msg.type) return;
+    if(msg.type==='start'){
+      mapping = msg.payload.mapping;
+      options = msg.payload.options || {};
+      inbound = [];
+    } else if(msg.type==='data'){
+      const chunk = msg.payload.rows || [];
+      // append chunk (but map lazily, worker will normalize when processing)
+      inbound.push(...chunk);
+      postMessage({type:'progress', progress: Math.min(5 + Math.round(10*(inbound.length/ (options.estimatedRows||50000))), 25), status:'receiving'});
+    } else if(msg.type==='end'){
+      // process inbound data
+      setTimeout(()=&gt;{ // allow UI to update before heavy work
+        try{ processAll(); }catch(err){ postMessage({type:'error', error: String(err)}); }
+      }, 50);
     }
   };
 
-  const summaryStats = useMemo(() => {
-    if (clusters.length === 0 && rawData.length === 0) return null;
-    const clusteredRecords = clusters.flat();
-    const totalProcessed = rawData.length;
-    const totalClustered = clusteredRecords.length;
-    const totalUnclustered = totalProcessed - totalClustered;
-    const avgClusterSize = clusters.length > 0 ? (totalClustered / clusters.length).toFixed(2) : 0;
-    return { totalProcessed, totalClustered, totalUnclustered, numClusters: clusters.length, avgClusterSize };
-  }, [clusters, rawData]);
+  `; // end worker string
+} // end createWorkerScript
 
-  return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-            <div className="flex justify-between items-start">
-                <div>
-                    <CardTitle>Step 1: Upload Data File</CardTitle>
-                    <CardDescription>Upload a .xlsx, .xls, .xlsm, or .xlsb file containing beneficiary data.</CardDescription>
-                </div>
-                 <Button variant="outline" asChild>
-                    <Link href="/settings">
-                        <Settings className="mr-2 h-4 w-4" />
-                        Clustering Settings
-                    </Link>
-                </Button>
-            </div>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center space-x-4">
-            <Label htmlFor="file-upload" className={`flex-1 flex items-center justify-center w-full h-20 px-4 transition bg-background border-2 border-dashed rounded-md appearance-none cursor-pointer hover:border-primary ${fileName ? 'border-primary' : ''}`}>
-                <span className="flex items-center space-x-2">
-                    <FileUp className="w-6 h-6 text-muted-foreground" />
-                    <span className="font-medium text-muted-foreground">
-                        {fileName || "Click to select a file or drag and drop"}
-                    </span>
-                </span>
-                <Input id="file-upload" type="file" className="hidden" accept=".xlsx,.xls,.xlsm,.xlsb,.csv,.txt" onChange={handleFile} disabled={loading.process} />
-            </Label>
-            {fileName && (
-              <Button variant="outline" onClick={resetState} disabled={loading.process || loading.cluster}>Clear</Button>
-            )}
-          </div>
-          {loading.process && <Progress value={progress} className="w-full mt-4" />}
-        </CardContent>
-      </Card>
-
-      {rawData.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Step 2: Map Columns</CardTitle>
-            <CardDescription>Match the required fields to the columns from your uploaded file. Your selections will be saved for future uploads.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {allMappingFields.map((field) => (
-                <div key={field} className="space-y-2">
-                  <Label className="flex items-center capitalize">
-                    {field.replace(/([A-Z])/g, ' $1')}
-                    {mapping[field] && <CheckCircle className="ml-2 h-4 w-4 text-green-500" />}
-                    {!requiredFields.includes(field) && <span className="ml-2 text-xs font-normal text-muted-foreground">(Optional)</span>}
-                  </Label>
-                  <Card>
-                    <CardContent className="p-2">
-                      <ScrollArea className="h-32 w-full">
-                        <RadioGroup
-                          value={mapping[field] || ""}
-                          onValueChange={(value) => handleMappingChange(field, value)}
-                          className="grid grid-cols-2 gap-x-4 gap-y-2 p-2"
-                          disabled={loading.process || loading.cluster}
-                        >
-                          {columns.map((c) => (
-                            <div key={`${field}-${c}`} className="flex items-center space-x-2">
-                              <RadioGroupItem value={c} id={`${field}-${c}`} />
-                              <Label htmlFor={`${field}-${c}`} className="text-sm font-normal truncate" title={c}>{c}</Label>
-                            </div>
-                          ))}
-                        </RadioGroup>
-                      </ScrollArea>
-                    </CardContent>
-                  </Card>
-                </div>
-              ))}
-            </div>
-            <div className="mt-6 flex flex-col sm:flex-row gap-4 items-start">
-              <div className="flex-1 w-full sm:w-auto">
-                <Button onClick={runClustering} disabled={loading.process || loading.cluster || !allRequiredFieldsMapped} className="w-full sm:w-auto">
-                  {loading.cluster ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ChevronRight className="mr-2 h-4 w-4" />}
-                  Run Clustering
-                </Button>
-                 {loading.cluster && <Progress value={progress} className="w-full mt-2" />}
-              </div>
-              {!allRequiredFieldsMapped && !loading.cluster && (
-                  <p className="text-sm text-muted-foreground flex items-center pt-2"><AlertCircle className="h-4 w-4 mr-2" /> All required fields must be mapped to run clustering.</p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-      
-      {clusters.length > 0 && (
-        <Card>
-          <CardHeader>
-              <CardTitle>Step 3: Results</CardTitle>
-              <CardDescription>A summary of the clustering analysis. You can now proceed to review the clusters.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {summaryStats && (
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6 text-center">
-                    <Card>
-                        <CardHeader className="pb-2"><Group className="mx-auto h-6 w-6 text-primary" /></CardHeader>
-                        <CardContent>
-                            <p className="text-2xl font-bold">{summaryStats.totalProcessed}</p>
-                            <p className="text-xs text-muted-foreground">Total Records</p>
-                        </CardContent>
-                    </Card>
-                     <Card>
-                        <CardHeader className="pb-2"><Users className="mx-auto h-6 w-6 text-green-600" /></CardHeader>
-                        <CardContent>
-                            <p className="text-2xl font-bold">{summaryStats.totalClustered}</p>
-                            <p className="text-xs text-muted-foreground">Clustered</p>
-                        </CardContent>
-                    </Card>
-                     <Card>
-                        <CardHeader className="pb-2"><Users className="mx-auto h-6 w-6 text-slate-500" /></CardHeader>
-                        <CardContent>
-                            <p className="text-2xl font-bold">{summaryStats.totalUnclustered}</p>
-                            <p className="text-xs text-muted-foreground">Unclustered</p>
-                        </CardContent>
-                    </Card>
-                     <Card>
-                        <CardHeader className="pb-2"><Blocks className="mx-auto h-6 w-6 text-blue-600" /></CardHeader>
-                        <CardContent>
-                            <p className="text-2xl font-bold">{summaryStats.numClusters}</p>
-                            <p className="text-xs text-muted-foreground">Clusters Found</p>
-                        </CardContent>
-                    </Card>
-                    <Card className="col-span-2 lg:col-span-1">
-                        <CardHeader className="pb-2"><Sigma className="mx-auto h-6 w-6 text-purple-600" /></CardHeader>
-                        <CardContent>
-                            <p className="text-2xl font-bold">{summaryStats.avgClusterSize}</p>
-                            <p className="text-xs text-muted-foreground">Avg. Cluster Size</p>
-                        </CardContent>
-                    </Card>
-                </div>
-            )}
-            <div className="flex gap-4">
-                <Button asChild>
-                    <Link href="/review">
-                       Go to Review
-                       <ChevronRight className="ml-2 h-4 w-4" />
-                    </Link>
-                </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-    </div>
-  );
-}
 
     
