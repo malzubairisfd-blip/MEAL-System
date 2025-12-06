@@ -426,39 +426,46 @@ function createWorkerScript(): string {
     return { score, breakdown:{ firstScore, familyScore, husbandScore, idScore, phoneScore, loc, childrenScore } };
   }
 
-function buildStrongBlocks(rows) {
-  const map = new Map();
+function buildBalancedBlocks(rows) {
+  const blocks = new Map();
 
   for (let i = 0; i < rows.length; i++) {
     const r = rows[i];
 
     const w = tokens(r.womanName);
     const h = tokens(r.husbandName);
-    
+
     const first = w[0] || "";
     const father = w[1] || "";
-    const nameLen = w.length; // 4 vs 5
+    const last = w[w.length - 1] || "";
+
     const hFirst = h[0] || "";
+    const hLast = h[h.length - 1] || "";
 
     const village = normalizeArabic(r.village || "");
     const subdistrict = normalizeArabic(r.subdistrict || "");
 
+    // Each record will participate in 6–8 overlapping blocks.
     const keys = [
-      \`v:\${village}\`,
-      \`sd:\${subdistrict}\`,
-      \`wf:\${first}\`,
-      \`ff:\${father}\`,
-      \`hl:\${hFirst}\`,
-      \`nl:\${nameLen}\`
+      \`wf:\${first}\`,             // Woman first name
+      \`ff:\${father}\`,            // Woman father name
+      \`wl:\${last}\`,              // Woman last name
+      \`hf:\${hFirst}\`,            // Husband first name
+      \`hl:\${hLast}\`,             // Husband last name
+      \`v:\${village}\`,            // Village
+      \`sd:\${subdistrict}\`,       // Subdistrict
+      \`ffhf:\${father}-\${hFirst}\`,// Woman father + Husband first
+      \`wfhf:\${first}-\${hFirst}\`, // Woman first + Husband first
     ];
 
-    const key = keys.join("|");
-
-    if (!map.has(key)) map.set(key, []);
-    map.get(key).push(i);
+    for (const k of keys) {
+      if (!blocks.has(k)) blocks.set(k, []);
+      blocks.get(k).push(i);
+    }
   }
 
-  return Array.from(map.values());
+  // Convert to array
+  return Array.from(blocks.values()).filter(b => b.length > 1);
 }
 
 
@@ -657,7 +664,7 @@ function refineComponent(rows, idxs, minInternal) {
     const minInternal = options?.minInternalScore || 0.65;
     const blockChunkSize = options?.blockChunkSize || 1200;
 
-    const blocks = buildStrongBlocks(rows);
+    const blocks = buildBalancedBlocks(rows);
 
     const edges = [];
     for (const block of blocks) {
