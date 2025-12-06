@@ -204,11 +204,13 @@ export default function UploadPage() {
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
-      <h1 className="text-2xl font-bold mb-4">Upload &amp; Cluster (Client-side, Web Worker)</h1>
+      <h1 className="text-2xl font-bold mb-4">
+        Upload &amp; Cluster (Client-side, Web Worker)
+      </h1>
 
       <input type="file" accept=".xlsx,.xls,.xlsm,.xlsb,.csv,.txt" onChange={handleFile} className="mb-4" />
 
-      {columns.length &gt; 0 &amp;&amp; (
+      {columns.length > 0 && (
         <div className="border p-4 rounded mb-4">
           <h2 className="font-semibold mb-2">Map Columns</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -217,7 +219,7 @@ export default function UploadPage() {
                 <div className="text-sm font-medium">{f}</div>
                 <select value={mapping[f] || ""} onChange={(e) => handleMappingChange(f, e.target.value)} className="border p-2 rounded w-full">
                   <option value="">-- select column --</option>
-                  {columns.map((c) => &lt;option key={c} value={c}>{c}</option>)}
+                  {columns.map((c) => <option key={c} value={c}>{c}</option>)}
                 </select>
               </label>
             ))}
@@ -232,25 +234,25 @@ export default function UploadPage() {
       )}
 
       <div className="mb-4">
-        &lt;div&gt;Status: &lt;b&gt;{workerStatus}&lt;/b&gt;&lt;/div&gt;
-        &lt;div&gt;Progress: &lt;b&gt;{progress}%&lt;/b&gt;&lt;/div&gt;
-      &lt;/div&gt;
+        <div>Status: <b>{workerStatus}</b></div>
+        <div>Progress: <b>{progress}%</b></div>
+      </div>
 
-      &lt;div&gt;
-        &lt;h3 className="font-semibold"&gt;Preview (first 10 rows)&lt;/h3&gt;
-        &lt;pre className="bg-gray-100 p-3 rounded max-h-48 overflow-auto text-xs"&gt;{JSON.stringify(rowsPreview, null, 2)}&lt;/pre&gt;
-      &lt;/div&gt;
+      <div>
+        <h3 className="font-semibold">Preview (first 10 rows)</h3>
+        <pre className="bg-gray-100 p-3 rounded max-h-48 overflow-auto text-xs">{JSON.stringify(rowsPreview, null, 2)}</pre>
+      </div>
 
-      &lt;div className="mt-6"&gt;
-        &lt;h3 className="font-semibold"&gt;Clusters ({clusters.length})&lt;/h3&gt;
+      <div className="mt-6">
+        <h3 className="font-semibold">Clusters ({clusters.length})</h3>
         {clusters.slice(0, 200).map((c, i) => (
-          &lt;div key={i} className="border p-3 rounded mb-2"&gt;
-            &lt;div className="font-bold"&gt;Cluster {i+1} ({c.length})&lt;/div&gt;
-            {c.slice(0,10).map((r:any, idx:number) => &lt;div key={idx} className="text-sm"&gt;{r.womanName} — {r.husbandName} — {r.phone}&lt;/div&gt;)}
-          &lt;/div&gt;
+          <div key={i} className="border p-3 rounded mb-2">
+            <div className="font-bold">Cluster {i+1} ({c.length})</div>
+            {c.slice(0,10).map((r:any, idx:number) => <div key={idx} className="text-sm">{r.womanName} — {r.husbandName} — {r.phone}</div>)}
+          </div>
         ))}
-      &lt;/div&gt;
-    &lt;/div&gt;
+      </div>
+    </div>
   );
 }
 
@@ -565,13 +567,13 @@ function createWorkerScript(): string {
       }
     });
 
-    // remove singletons if you want only groups &gt;1 (we keep groups &gt;1)
-    const clustersFiltered = finalClusters.filter(c=&gt;c.length&gt;1);
+    // remove singletons if you want only groups >1 (we keep groups >1)
+    const clustersFiltered = finalClusters.filter(c=>c.length>1);
 
     // annotate each record with a simple similarity (avg pairwise within cluster) for Excel coloring
     const clustersAnnotated = clustersFiltered.map(cluster=>{
       // compute approximate sim per record (avg of pairwise with cluster head)
-      const annotated = cluster.map(rec =&gt; ({...rec, _sim:1}));
+      const annotated = cluster.map(rec => ({...rec, _sim:1}));
       return annotated;
     });
 
@@ -581,7 +583,7 @@ function createWorkerScript(): string {
   function rootMembersUF(uf, root){
     // reconstruct members by scanning parent array (small cost)
     const members = [];
-    for(let i=0;i&lt;uf.p.length;i++) if(uf.find(i)===uf.find(root)) members.push(i);
+    for(let i=0;i<uf.p.length;i++) if(uf.find(i)===uf.find(root)) members.push(i);
     return members;
   }
 
@@ -599,14 +601,11 @@ function createWorkerScript(): string {
       postMessage({type:'progress', progress: Math.min(5 + Math.round(10*(inbound.length/ (options.estimatedRows||50000))), 25), status:'receiving'});
     } else if(msg.type==='end'){
       // process inbound data
-      setTimeout(()=&gt;{ // allow UI to update before heavy work
+      setTimeout(()=>{ // allow UI to update before heavy work
         try{ processAll(); }catch(err){ postMessage({type:'error', error: String(err)}); }
       }, 50);
     }
   };
 
   `; // end worker string
-} // end createWorkerScript
-
-
-    
+}
