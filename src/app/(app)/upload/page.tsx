@@ -1000,39 +1000,5 @@ function fullPairwiseBreakdown(records) {
   }
   return out.sort((x, y) => y.score - x.score);
 }
-
-
-  let inbound = [], mapping = null, options = null;
-  onmessage = async function(e){
-      const msg = e.data;
-      if(!msg || !msg.type) return;
-      if(msg.type==='start'){
-          mapping = msg.payload.mapping;
-          options = msg.payload.options || {};
-          inbound = [];
-          postMessage({type:'progress', progress: 2, status:'starting'});
-      } else if(msg.type==='data'){
-          inbound.push(...(msg.payload.rows || []));
-          postMessage({type:'progress', progress: 5, status:'receiving-data'});
-      } else if(msg.type==='end'){
-          postMessage({type:'progress', progress: 10, status:'mapping-rows'});
-          const rows = inbound.map((r, i) => {
-              const mapped = { _internalId: \`row_\${i}\` };
-              for(const key in mapping){
-                  if(mapping[key]) mapped[key] = r[mapping[key]];
-              }
-              return mapped;
-          });
-          
-          try {
-            postMessage({type:'progress', progress: 20, status:'clustering-started'});
-            const { clusters } = await runClustering(rows, options);
-            postMessage({type:'progress', progress: 100, status:'complete'});
-            postMessage({type:'done', clusters});
-          } catch(err) {
-            postMessage({type:'error', error: err.message });
-          }
-      }
-  };
 `;
 }
