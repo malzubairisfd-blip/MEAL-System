@@ -9,8 +9,8 @@ export interface RecordRow {
   _internalId?: string;
   womanName: string;
   husbandName: string;
-  nationalId?: string;
-  phone?: string;
+  nationalId?: string | number;
+  phone?: string | number;
   village?: string;
   subdistrict?: string;
   children?: string[];
@@ -65,8 +65,8 @@ export function runAudit(records: RecordRow[]): AuditFinding[] {
   for (const r of records) {
     const w = r.womanName?.trim();
     const h = r.husbandName?.trim();
-    const id = r.nationalId?.trim();
-    const ph = r.phone?.trim();
+    const id = r.nationalId ? String(r.nationalId).trim() : "";
+    const ph = r.phone ? String(r.phone).trim() : "";
 
     if (w) {
         if (!byWoman.has(w)) byWoman.set(w, []);
