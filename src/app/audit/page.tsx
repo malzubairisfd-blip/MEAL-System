@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { RecordRow, AuditFinding } from "@/lib/auditEngine";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,11 +11,14 @@ import { AlertTriangle, ShieldCheck, Loader2, ChevronLeft, ArrowRight } from "lu
 import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { Progress } from "@/components/ui/progress";
 
 export default function AuditPage() {
   const [rows, setRows] = useState<RecordRow[]>([]);
   const [findings, setFindings] = useState<AuditFinding[]>([]);
   const [loading, setLoading] = useState({ data: true, audit: false });
+  const [progress, setProgress] = useState(0);
+  const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const { toast } = useToast();
   const router = useRouter();
 
@@ -38,16 +41,16 @@ export default function AuditPage() {
           const auditFindings = responseData.data?.auditFindings;
           
           if (clusters) {
-              const clusteredRecords = clusters.flat();
-              setRows(clusteredRecords);
+              const allRecords = responseData.data?.rows || [];
+              setRows(allRecords);
               if (auditFindings) {
                 setFindings(auditFindings);
               }
 
-              if (clusteredRecords.length > 0) {
-                toast({ title: "Data Loaded", description: `${clusteredRecords.length} records from clusters are ready for audit.` });
+              if (allRecords.length > 0) {
+                toast({ title: "Data Loaded", description: `${allRecords.length} records are ready for audit.` });
               } else {
-                toast({ title: "No Clustered Data", description: "No clustered records found to audit. Please run clustering first." });
+                toast({ title: "No Data", description: "No records found to audit. Please run clustering first." });
               }
           } else {
               toast({ title: "Error", description: "Failed to load cluster data from server cache.", variant: "destructive" });
@@ -59,7 +62,40 @@ export default function AuditPage() {
       }
     }
     loadData();
+    
+    return () => {
+        if (progressIntervalRef.current) {
+            clearInterval(progressIntervalRef.current);
+        }
+    }
   }, [toast]);
+
+  const startProgress = () => {
+    setProgress(0);
+    if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
+    progressIntervalRef.current = setInterval(() => {
+        setProgress(prev => {
+            if (prev >= 95) {
+                if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
+                return 95;
+            }
+            return prev + 5;
+        });
+    }, 200);
+  };
+
+  const finishProgress = () => {
+    if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+        progressIntervalRef.current = null;
+    }
+    setProgress(100);
+    setTimeout(() => {
+        setProgress(0);
+        setLoading(prev => ({ ...prev, audit: false }));
+    }, 1000);
+  };
+
 
   async function runAuditNow() {
     if (rows.length === 0) {
@@ -67,6 +103,7 @@ export default function AuditPage() {
         return;
     }
     setLoading(prev => ({...prev, audit: true}));
+    startProgress();
     try {
         const res = await fetch("/api/audit", {
         method: "POST",
@@ -96,7 +133,7 @@ export default function AuditPage() {
     } catch (error: any) {
         toast({ title: "Audit Error", description: error.message || "Could not connect to the audit service.", variant: "destructive" });
     } finally {
-        setLoading(prev => ({...prev, audit: false}));
+        finishProgress();
     }
   }
   
@@ -129,8 +166,8 @@ export default function AuditPage() {
                 <div>
                   <CardTitle>Data Integrity Audit</CardTitle>
                   <CardDescription>
-                    Run a set of rules against your clustered records to identify potential issues like duplicates and invalid relationships.
-                    {rows.length > 0 && ` Currently loaded ${rows.length} clustered records.`}
+                    Run a set of rules against your records to identify potential issues like duplicates and invalid relationships.
+                    {rows.length > 0 && ` Currently loaded ${rows.length} records.`}
                   </CardDescription>
                 </div>
                 <Button variant="outline" asChild>
@@ -157,10 +194,16 @@ export default function AuditPage() {
           <p className="mt-2">Loading latest data...</p>
         </div>
       ) : loading.audit ? (
-        <div className="text-center text-muted-foreground py-10">
-          <Loader2 className="mx-auto h-8 w-8 animate-spin" />
-          <p className="mt-2">Running audit...</p>
-        </div>
+        <Card>
+            <CardHeader>
+                <CardTitle>Auditing in Progress</CardTitle>
+                <CardDescription>Please wait while the audit is being performed on {rows.length} records.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <Progress value={progress} className="w-full" />
+                <p className="text-center text-sm text-muted-foreground mt-2">{Math.floor(rows.length * (progress / 100))} / {rows.length} records audited</p>
+            </CardContent>
+        </Card>
       ) : findings.length > 0 ? (
         <Card>
             <CardHeader>
@@ -220,3 +263,5 @@ export default function AuditPage() {
     </div>
   );
 }
+
+    
