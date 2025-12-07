@@ -117,6 +117,7 @@ export default function UploadPage() {
             const cacheData = await cacheRes.json();
             if (!cacheData.ok) throw new Error(cacheData.error || 'Failed to save to cache');
             sessionStorage.setItem('cacheId', cacheData.cacheId);
+            sessionStorage.setItem('cacheTimestamp', Date.now().toString());
           } catch(error: any) {
              toast({ title: "Error Saving Results", description: error.message, variant: "destructive" });
           }
@@ -230,6 +231,9 @@ export default function UploadPage() {
       setProgressInfo({ status: "idle", progress: 0 });
       setSummary(null);
       setMapping({ womanName: "", husbandName: "", nationalId: "", phone: "", village: "", subdistrict: "", children: "", cluster_id: "", beneficiaryId: "" });
+      // Clear cache from previous runs
+      sessionStorage.removeItem('cacheId');
+      sessionStorage.removeItem('cacheTimestamp');
   }
   
   const formattedStatus = () => {
@@ -350,7 +354,7 @@ export default function UploadPage() {
                 {workerStatus === 'processing' ? 'Clustering...' : 'Start Clustering'}
              </Button>
              
-             {workerStatus !== 'idle' && (
+             {workerStatus !== 'idle' && workerStatus !== 'done' && (
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm font-medium">
                       <span className="capitalize">Status: <span className="font-semibold">{formattedStatus()}</span></span>
@@ -910,7 +914,7 @@ async function runClustering(
 
   const minPair = opts?.minPairScore ?? 0.60;
   const minInternal = opts?.minInternalScore ?? 0.50;
-  const blockChunkSize = opts?.blockChunkSize ?? 1200;
+  const blockChunkSize = opts?.blockChunkSize ?? 5000;
 
   // Build edges (thresholded)
   const edges = buildEdges(rows, minPair, { blockChunkSize });
@@ -1063,5 +1067,5 @@ onmessage = function(e) {
     }
 };
 
-`;
+`
 }
