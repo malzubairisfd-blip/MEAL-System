@@ -65,74 +65,79 @@ export default function UploadPage() {
 
   // Web Worker setup
   useEffect(() => {
-    const workerScript = createWorkerScript();
-    const blob = new Blob([workerScript], { type: "application/javascript" });
-    const url = URL.createObjectURL(blob);
-    const w = new Worker(url);
-    workerRef.current = w;
+    if (typeof window !== 'undefined' && !workerRef.current) {
+      const workerScript = createWorkerScript();
+      const blob = new Blob([workerScript], { type: "application/javascript" });
+      const url = URL.createObjectURL(blob);
+      const w = new Worker(url);
+      workerRef.current = w;
 
-    w.onmessage = async (ev: MessageEvent) => {
-      const msg = ev.data;
-      if (!msg || !msg.type) return;
-      switch (msg.type) {
-        case "progress":
-          setWorkerStatus(msg.status || "working");
-          setProgressInfo({
-            status: msg.status || "working",
-            progress: msg.progress ?? 0,
-            completed: msg.completed,
-            total: msg.total,
-          });
-          break;
-        case "done":
-          const resultClusters = msg.clusters || [];
-          setWorkerStatus("done");
-          setProgressInfo({ status: "done", progress: 100 });
-          setClusters(resultClusters);
-          toast({ title: "Clustering Complete", description: `Found ${resultClusters.length} potential duplicate clusters.` });
-
-          const totalRecords = rowsRef.current.length;
-          const clusteredRecords = resultClusters.flat().length;
-          setSummary({
-              totalRecords: totalRecords,
-              clusteredRecords: clusteredRecords,
-              unclusteredRecords: totalRecords - clusteredRecords,
-              clusterCount: resultClusters.length,
-              avgClusterSize: resultClusters.length > 0 ? clusteredRecords / resultClusters.length : 0
-          });
-
-
-          // Save results to server-side cache (best-effort)
-          try {
-            const cacheRes = await fetch('/api/cluster-cache', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    clusters: resultClusters,
-                    rows: rowsRef.current.map((r, i) => ({ ...r, _internalId: `row_${i}` })),
-                    originalHeaders: columns
-                })
+      w.onmessage = async (ev: MessageEvent) => {
+        const msg = ev.data;
+        if (!msg || !msg.type) return;
+        switch (msg.type) {
+          case "progress":
+            setWorkerStatus(msg.status || "working");
+            setProgressInfo({
+              status: msg.status || "working",
+              progress: msg.progress ?? 0,
+              completed: msg.completed,
+              total: msg.total,
             });
-            const cacheData = await cacheRes.json();
-            if (!cacheData.ok) throw new Error(cacheData.error || 'Failed to save to cache');
-            sessionStorage.setItem('cacheId', cacheData.cacheId);
-            sessionStorage.setItem('cacheTimestamp', Date.now().toString());
-          } catch(error: any) {
-             toast({ title: "Error Saving Results", description: error.message, variant: "destructive" });
-          }
+            break;
+          case "done":
+            const resultClusters = msg.clusters || [];
+            setWorkerStatus("done");
+            setProgressInfo({ status: "done", progress: 100 });
+            setClusters(resultClusters);
+            toast({ title: "Clustering Complete", description: `Found ${resultClusters.length} potential duplicate clusters.` });
 
-          break;
-        case "error":
-          setWorkerStatus("error");
-          toast({ title: "Worker Error", description: msg.error, variant: "destructive"});
-          break;
-      }
-    };
+            const totalRecords = rowsRef.current.length;
+            const clusteredRecords = resultClusters.flat().length;
+            setSummary({
+                totalRecords: totalRecords,
+                clusteredRecords: clusteredRecords,
+                unclusteredRecords: totalRecords - clusteredRecords,
+                clusterCount: resultClusters.length,
+                avgClusterSize: resultClusters.length > 0 ? clusteredRecords / resultClusters.length : 0
+            });
 
-    return () => {
-      w.terminate();
-      URL.revokeObjectURL(url);
-    };
+
+            // Save results to server-side cache (best-effort)
+            try {
+              const cacheRes = await fetch('/api/cluster-cache', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                      clusters: resultClusters,
+                      rows: rowsRef.current.map((r, i) => ({ ...r, _internalId: `row_${i}` })),
+                      originalHeaders: columns
+                  })
+              });
+              const cacheData = await cacheRes.json();
+              if (!cacheData.ok) throw new Error(cacheData.error || 'Failed to save to cache');
+              sessionStorage.setItem('cacheId', cacheData.cacheId);
+              sessionStorage.setItem('cacheTimestamp', Date.now().toString());
+            } catch(error: any) {
+               toast({ title: "Error Saving Results", description: error.message, variant: "destructive" });
+            }
+
+            break;
+          case "error":
+            setWorkerStatus("error");
+            toast({ title: "Worker Error", description: msg.error, variant: "destructive"});
+            break;
+        }
+      };
+
+      return () => {
+        if (workerRef.current) {
+          workerRef.current.terminate();
+          URL.revokeObjectURL(url);
+          workerRef.current = null;
+        }
+      };
+    }
   }, [toast, columns]);
   
   // Update mapping and save to localStorage
