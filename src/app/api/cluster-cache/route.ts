@@ -44,7 +44,8 @@ export async function POST(req: Request) {
     // This is a new cache creation
     cacheId = cacheId || `cache-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
     const filePath = path.join(cacheDir, `${cacheId}.json`);
-    await fs.writeFile(filePath, JSON.stringify(body));
+    // The initial post now includes the data wrapper
+    await fs.writeFile(filePath, JSON.stringify({ data: body }));
 
     return NextResponse.json({ ok: true, cacheId });
 
@@ -67,6 +68,7 @@ export async function GET(req: Request) {
     const filePath = path.join(cacheDir, `${cacheId}.json`);
     const fileContent = await fs.readFile(filePath, 'utf-8');
     
+    // The entire file content is the response, which already includes the `data` wrapper
     return NextResponse.json(JSON.parse(fileContent));
 
   } catch (error: any) {

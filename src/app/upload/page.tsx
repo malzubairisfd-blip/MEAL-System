@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
@@ -111,7 +112,8 @@ export default function UploadPage() {
                   body: JSON.stringify({
                       clusters: resultClusters,
                       rows: rowsRef.current.map((r, i) => ({ ...r, _internalId: `row_${i}` })),
-                      originalHeaders: columns
+                      originalHeaders: columns,
+                      aiSummaries: {}, // Initialize with empty summaries
                   })
               });
               const cacheData = await cacheRes.json();
