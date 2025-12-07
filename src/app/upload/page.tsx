@@ -88,23 +88,12 @@ export default function UploadPage() {
             break;
           case "done":
             const resultClusters = msg.clusters || [];
-            setWorkerStatus("done");
-            setProgressInfo({ status: "done", progress: 100 });
-            setClusters(resultClusters);
-            toast({ title: "Clustering Complete", description: `Found ${resultClusters.length} potential duplicate clusters.` });
+            setProgressInfo({ status: "caching", progress: 99 });
+            setWorkerStatus("caching");
 
-            const totalRecords = rowsRef.current.length;
-            const clusteredRecords = resultClusters.flat().length;
-            setSummary({
-                totalRecords: totalRecords,
-                clusteredRecords: clusteredRecords,
-                unclusteredRecords: totalRecords - clusteredRecords,
-                clusterCount: resultClusters.length,
-                avgClusterSize: resultClusters.length > 0 ? clusteredRecords / resultClusters.length : 0
-            });
+            toast({ title: "Clustering Complete", description: `Found ${resultClusters.length} potential duplicate clusters. Caching results...` });
 
-
-            // Save results to server-side cache (best-effort)
+            // Save results to server-side cache
             try {
               const cacheRes = await fetch('/api/cluster-cache', {
                   method: 'POST',
@@ -120,7 +109,25 @@ export default function UploadPage() {
               if (!cacheData.ok) throw new Error(cacheData.error || 'Failed to save to cache');
               sessionStorage.setItem('cacheId', cacheData.cacheId);
               sessionStorage.setItem('cacheTimestamp', Date.now().toString());
+
+              setWorkerStatus("done");
+              setProgressInfo({ status: "done", progress: 100 });
+              setClusters(resultClusters);
+
+              const totalRecords = rowsRef.current.length;
+              const clusteredRecords = resultClusters.flat().length;
+              setSummary({
+                  totalRecords: totalRecords,
+                  clusteredRecords: clusteredRecords,
+                  unclusteredRecords: totalRecords - clusteredRecords,
+                  clusterCount: resultClusters.length,
+                  avgClusterSize: resultClusters.length > 0 ? clusteredRecords / resultClusters.length : 0
+              });
+              toast({ title: "Results Cached", description: `You can now proceed to the review page.` });
+
+
             } catch(error: any) {
+               setWorkerStatus("error");
                toast({ title: "Error Saving Results", description: error.message, variant: "destructive" });
             }
 
@@ -355,12 +362,14 @@ export default function UploadPage() {
             <CardDescription>Start the AI-powered analysis to find potential duplicates.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-             <Button onClick={startClustering} disabled={workerStatus === 'processing'}>
-                {workerStatus === 'processing' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                {workerStatus === 'processing' ? 'Clustering...' : 'Start Clustering'}
+             <Button onClick={startClustering} disabled={workerStatus === 'processing' || workerStatus === 'caching'}>
+                {workerStatus === 'processing' || workerStatus === 'caching' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                {workerStatus === 'processing' && 'Clustering...'}
+                {workerStatus === 'caching' && 'Caching results...'}
+                {workerStatus !== 'processing' && workerStatus !== 'caching' && 'Start Clustering'}
              </Button>
              
-             {workerStatus !== 'idle' && workerStatus !== 'done' && (
+             {workerStatus !== 'idle' && workerStatus !== 'done' && workerStatus !== 'error' && (
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm font-medium">
                       <span className="capitalize">Status: <span className="font-semibold">{formattedStatus()}</span></span>
@@ -389,7 +398,7 @@ export default function UploadPage() {
                 <SummaryCard icon={<BoxSelect className="h-4 w-4 text-muted-foreground" />} title="Cluster Count" value={summary.clusterCount} />
                 <SummaryCard icon={<Sigma className="h-4 w-4 text-muted-foreground" />} title="Avg. Cluster Size" value={summary.avgClusterSize.toFixed(2)} />
             </div>
-            <Button onClick={() => router.push('/review')}>
+            <Button onClick={() => router.push('/review')} disabled={workerStatus !== 'done'}>
                 Go to Review Page
                 <ChevronRight className="ml-2 h-4 w-4" />
             </Button>
