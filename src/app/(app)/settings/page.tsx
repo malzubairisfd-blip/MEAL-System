@@ -119,7 +119,7 @@ export default function SettingsPage() {
           <div className="space-y-4">
             <Label htmlFor="min-pair-score" className="text-base">Minimum Pair Score</Label>
             <p className="text-sm text-muted-foreground">
-              The minimum similarity score (from 0 to 1) for any two records to be considered a potential match within a block. This is the first filter in the duplicate detection process. Default: 0.45
+              The initial similarity threshold (0 to 1) for any two records to be considered a potential match. This score is a blend of name similarity (first, family, and rearranged), husband name, ID, phone, and children. A lower value increases sensitivity, finding more potential duplicates at the risk of more false positives. Default: 0.45
             </p>
             <Slider
               id="min-pair-score"
@@ -146,7 +146,7 @@ export default function SettingsPage() {
           <div className="space-y-4">
             <Label htmlFor="min-internal-score" className="text-base">Minimum Internal Score</Label>
              <p className="text-sm text-muted-foreground">
-              When a large cluster is being refined, this is the minimum score required to keep two records connected in the Maximum Spanning Tree. It controls how aggressively large clusters are split. Default: 0.67
+              When a large cluster is being refined, this score determines the "stickiness" between records. It's the minimum similarity required to keep two records connected within a refined sub-cluster. It prevents loosely related records from staying grouped together. Default: 0.67
             </p>
             <Slider
               id="min-internal-score"
@@ -173,7 +173,7 @@ export default function SettingsPage() {
            <div className="space-y-4">
             <Label htmlFor="block-chunk-size" className="text-base">Block Chunk Size</Label>
              <p className="text-sm text-muted-foreground">
-              For high-performance blocking on large datasets (&gt;100k rows), this limits the maximum size of a candidate block. Smaller values are slower but more thorough; larger values are faster but may miss some comparisons. Default: 5000
+              For performance on very large datasets, the engine groups records into "blocks." This setting defines the maximum size of any single block before it's broken into smaller chunks for processing. A smaller size is more thorough but slower; a larger size is faster but might miss some comparisons in dense blocks. Default: 5000
             </p>
             <Slider
               id="block-chunk-size"
