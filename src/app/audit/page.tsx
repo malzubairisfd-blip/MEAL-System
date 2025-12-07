@@ -41,16 +41,16 @@ export default function AuditPage() {
           const auditFindings = responseData.data?.auditFindings;
           
           if (clusters) {
-              const allRecords = responseData.data?.rows || [];
-              setRows(allRecords);
+              const clusteredRecords = clusters.flat();
+              setRows(clusteredRecords);
+
               if (auditFindings) {
                 setFindings(auditFindings);
-              }
-
-              if (allRecords.length > 0) {
-                toast({ title: "Data Loaded", description: `${allRecords.length} records are ready for audit.` });
+                toast({ title: "Loaded from Cache", description: `Loaded ${auditFindings.length} existing audit findings.` });
+              } else if (clusteredRecords.length > 0) {
+                toast({ title: "Data Loaded", description: `${clusteredRecords.length} records are ready for audit.` });
               } else {
-                toast({ title: "No Data", description: "No records found to audit. Please run clustering first." });
+                toast({ title: "No Clustered Data", description: "No records were found in clusters to audit." });
               }
           } else {
               toast({ title: "Error", description: "Failed to load cluster data from server cache.", variant: "destructive" });
@@ -166,7 +166,7 @@ export default function AuditPage() {
                 <div>
                   <CardTitle>Data Integrity Audit</CardTitle>
                   <CardDescription>
-                    Run a set of rules against your records to identify potential issues like duplicates and invalid relationships.
+                    Run a set of rules against your clustered records to identify potential issues like duplicates and invalid relationships.
                     {rows.length > 0 && ` Currently loaded ${rows.length} records.`}
                   </CardDescription>
                 </div>
