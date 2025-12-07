@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
-import { Save, RotateCcw, Upload, Download, Loader2 } from "lucide-react";
+import { Save, RotateCcw, Upload, Download, Loader2, Plus, Minus } from "lucide-react";
 
 type Settings = any;
 
@@ -71,6 +71,13 @@ export default function SettingsPage() {
     }
     cur[parts[parts.length - 1]] = value;
     setSettings(clone);
+  }
+
+  function handleWeightChange(key: string, change: number) {
+    if (!settings) return;
+    const currentValue = settings.weights[key] || 0;
+    const newValue = Math.max(0, Math.min(1, parseFloat((currentValue + change).toFixed(2))));
+    update(`weights.${key}`, newValue);
   }
 
   async function save() {
@@ -194,10 +201,14 @@ export default function SettingsPage() {
             <CardHeader><CardTitle>Weights</CardTitle></CardHeader>
             <CardContent className="space-y-6">
               {Object.entries(settings.weights).map(([k, v]: any) => (
-                <div key={k} className="grid grid-cols-6 items-center gap-4">
-                  <Label htmlFor={`w-${k}`} className="col-span-2 capitalize">{k.replace(/([A-Z])/g, ' $1')}</Label>
-                  <Slider id={`w-${k}`} min={0} max={1} step={0.01} value={[v]} onValueChange={(val)=>update(`weights.${k}`, val[0])} className="col-span-3" />
-                  <Input type="number" step="0.01" value={v} onChange={(e)=>update(`weights.${k}`, parseFloat(e.target.value))} className="col-span-1 text-center"/>
+                <div key={k} className="grid grid-cols-12 items-center gap-4">
+                  <Label htmlFor={`w-${k}`} className="col-span-3 capitalize">{k.replace(/([A-Z])/g, ' $1')}</Label>
+                  <Slider id={`w-${k}`} min={0} max={1} step={0.01} value={[v]} onValueChange={(val)=>update(`weights.${k}`, val[0])} className="col-span-6" />
+                  <div className="col-span-3 flex items-center gap-1">
+                      <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleWeightChange(k, -0.01)}><Minus className="h-4 w-4" /></Button>
+                      <Input type="number" step="0.01" value={v} onChange={(e)=>update(`weights.${k}`, parseFloat(e.target.value))} className="w-20 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"/>
+                      <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleWeightChange(k, 0.01)}><Plus className="h-4 w-4" /></Button>
+                  </div>
                 </div>
               ))}
             </CardContent>
