@@ -26,15 +26,16 @@ export default function AuditPage() {
           const cacheId = sessionStorage.getItem('cacheId');
           if (!cacheId) {
             toast({ title: "No Data", description: "No clustered records found to audit. Please run clustering first.", variant: "destructive" });
+            setLoading(prev => ({...prev, data: false}));
             return;
           }
           
           const res = await fetch(`/api/cluster-cache?id=${cacheId}`);
           if (!res.ok) throw new Error("Failed to load data from server cache");
 
-          const data = await res.json();
-          const clusters = data.clusters;
-          const auditFindings = data.auditFindings;
+          const responseData = await res.json();
+          const clusters = responseData.data?.clusters;
+          const auditFindings = responseData.data?.auditFindings;
           
           if (clusters) {
               const clusteredRecords = clusters.flat();
