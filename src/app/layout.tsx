@@ -2,7 +2,7 @@ import { LayoutProvider } from "@/components/layout-provider";
 import { Toaster } from "@/components/ui/toaster";
 import "./globals.css";
 
-export default function RootLayout({
+export default function AppLayout({
   children,
 }: {
   children: React.ReactNode;
