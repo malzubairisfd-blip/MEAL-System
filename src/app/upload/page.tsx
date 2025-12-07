@@ -95,22 +95,52 @@ export default function UploadPage() {
 
             // Save results to server-side cache
             try {
-              const payload = {
-                clusters: resultClusters,
-                rows: rowsRef.current.map((r, i) => ({ ...r, _internalId: `row_${i}` })),
-                originalHeaders: columns,
-                aiSummaries: {}, // Initialize with empty summaries
+              const cacheId = `cache-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+              sessionStorage.setItem('cacheId', cacheId);
+              
+              // Initial cache setup
+              const initialPayload = {
+                cacheId,
+                data: {
+                  originalHeaders: columns,
+                  aiSummaries: {},
+                  clusters: [],
+                  rows: []
+                }
               };
-
-              const cacheRes = await fetch('/api/cluster-cache', {
+              const initialCacheRes = await fetch('/api/cluster-cache', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify(payload)
+                  body: JSON.stringify(initialPayload)
               });
+              if (!initialCacheRes.ok) throw new Error('Failed to initialize cache.');
 
-              const cacheData = await cacheRes.json();
-              if (!cacheData.ok) throw new Error(cacheData.error || 'Failed to save to cache');
-              sessionStorage.setItem('cacheId', cacheData.cacheId);
+              const allRows = rowsRef.current.map((r, i) => ({ ...r, _internalId: `row_${i}` }));
+
+              // Send rows in chunks
+              const rowChunkSize = 2000;
+              for (let i = 0; i < allRows.length; i += rowChunkSize) {
+                  const chunk = allRows.slice(i, i + rowChunkSize);
+                  await fetch('/api/cluster-cache', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ cacheId, data: { rows: chunk } })
+                  });
+                  await new Promise(res => setTimeout(res, 20)); // Small delay
+              }
+
+              // Send clusters in chunks
+              const clusterChunkSize = 1000;
+               for (let i = 0; i < resultClusters.length; i += clusterChunkSize) {
+                  const chunk = resultClusters.slice(i, i + clusterChunkSize);
+                  await fetch('/api/cluster-cache', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ cacheId, data: { clusters: chunk } })
+                  });
+                   await new Promise(res => setTimeout(res, 20)); // Small delay
+              }
+
               sessionStorage.setItem('cacheTimestamp', Date.now().toString());
 
               setWorkerStatus("done");
@@ -1074,5 +1104,3 @@ onmessage = function(e) {
 };
 `;
 }
-
-    

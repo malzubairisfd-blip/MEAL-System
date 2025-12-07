@@ -21,32 +21,43 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
     const cacheDir = await ensureCacheDir();
-    let cacheId = body.cacheId;
+    const cacheId = body.cacheId;
     
-    if (cacheId && body.data) {
-        // This is an update to an existing cache file
-        const filePath = path.join(cacheDir, `${cacheId}.json`);
-        try {
-            const existingData = JSON.parse(await fs.readFile(filePath, 'utf-8'));
-            const updatedData = { ...existingData, ...body.data };
-            await fs.writeFile(filePath, JSON.stringify(updatedData));
-            return NextResponse.json({ ok: true, cacheId });
-        } catch (error) {
-            // If the file doesn't exist, treat it as a new cache creation
-            if (error instanceof Error && (error as NodeJS.ErrnoException).code === 'ENOENT') {
-                 // Fall through to create a new file
-            } else {
-                throw error; // Re-throw other errors
-            }
+    if (!cacheId) {
+        return NextResponse.json({ ok: false, error: 'Cache ID is required for updates.' }, { status: 400 });
+    }
+
+    const filePath = path.join(cacheDir, `${cacheId}.json`);
+    let updatedData;
+
+    try {
+        // File exists, so we update it
+        const existingData = JSON.parse(await fs.readFile(filePath, 'utf-8'));
+        
+        // Deep merge for arrays
+        const newRows = [...(existingData.data.rows || []), ...(body.data.rows || [])];
+        const newClusters = [...(existingData.data.clusters || []), ...(body.data.clusters || [])];
+
+        updatedData = {
+          ...existingData,
+          data: {
+            ...existingData.data,
+            ...body.data,
+            rows: newRows,
+            clusters: newClusters
+          }
+        };
+
+    } catch (error) {
+        // File doesn't exist, create it from scratch
+        if (error instanceof Error && (error as NodeJS.ErrnoException).code === 'ENOENT') {
+            updatedData = { data: body.data };
+        } else {
+            throw error; // Re-throw other errors
         }
     }
-    
-    // This is a new cache creation
-    cacheId = cacheId || `cache-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-    const filePath = path.join(cacheDir, `${cacheId}.json`);
-    // The initial post now includes the data wrapper
-    await fs.writeFile(filePath, JSON.stringify({ data: body }));
 
+    await fs.writeFile(filePath, JSON.stringify(updatedData));
     return NextResponse.json({ ok: true, cacheId });
 
   } catch (error: any) {
