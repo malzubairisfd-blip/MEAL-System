@@ -1066,6 +1066,5 @@ onmessage = function(e) {
         });
     }
 };
-
 `
 }
