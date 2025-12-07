@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
@@ -11,7 +10,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { Upload, FileText, CheckCircle, XCircle, Settings, ChevronRight, Loader2, Users, Unlink, BoxSelect, Sigma, Group } from "lucide-react";
+import { Upload, CheckCircle, XCircle, Settings, ChevronRight, Loader2, Users, Unlink, BoxSelect, Sigma, Group } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
 
@@ -377,11 +376,11 @@ export default function UploadPage() {
           </CardHeader>
           <CardContent>
             <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-5 mb-6">
-                <SummaryCard icon={<Users className="h-4 w-4 text-muted-foreground" />} title="إجمالي السجلات المعالجة" value={summary.totalRecords} />
-                <SummaryCard icon={<Group className="h-4 w-4 text-muted-foreground" />} title="السجلات المجمعة" value={summary.clusteredRecords} />
-                <SummaryCard icon={<Unlink className="h-4 w-4 text-muted-foreground" />} title="السجلات غير المجمعة" value={summary.unclusteredRecords} />
-                <SummaryCard icon={<BoxSelect className="h-4 w-4 text-muted-foreground" />} title="عدد المجموعات" value={summary.clusterCount} />
-                <SummaryCard icon={<Sigma className="h-4 w-4 text-muted-foreground" />} title="متوسط حجم المجموعة" value={summary.avgClusterSize.toFixed(2)} />
+                <SummaryCard icon={<Users className="h-4 w-4 text-muted-foreground" />} title="Total Records" value={summary.totalRecords} />
+                <SummaryCard icon={<Group className="h-4 w-4 text-muted-foreground" />} title="Clustered Records" value={summary.clusteredRecords} />
+                <SummaryCard icon={<Unlink className="h-4 w-4 text-muted-foreground" />} title="Unclustered Records" value={summary.unclusteredRecords} />
+                <SummaryCard icon={<BoxSelect className="h-4 w-4 text-muted-foreground" />} title="Cluster Count" value={summary.clusterCount} />
+                <SummaryCard icon={<Sigma className="h-4 w-4 text-muted-foreground" />} title="Avg. Cluster Size" value={summary.avgClusterSize.toFixed(2)} />
             </div>
             <Button onClick={() => router.push('/review')}>
                 Go to Review Page
@@ -999,24 +998,6 @@ async function runClustering(
   return { clusters, edgesUsed };
 }
 
-// ---------------------- similarityScoreDetailed ----------------------
-function similarityScoreDetailed(a, b) {
-  const { score, breakdown } = pairwiseScore(a, b);
-  return { score, breakdown };
-}
-
-// ---------------------- fullPairwiseBreakdown ----------------------
-function fullPairwiseBreakdown(records) {
-  const out = [];
-  for (let i = 0; i < records.length; i++) {
-    for (let j = i + 1; j < records.length; j++) {
-      const { score, breakdown } = pairwiseScore(records[i], records[j]);
-      out.push({ a: records[i], b: records[j], score, breakdown });
-    }
-  }
-  return out.sort((x, y) => y.score - x.score);
-}
-
 // ===================== Worker Logic =====================
 
 let inbound = [];
@@ -1066,5 +1047,5 @@ onmessage = function(e) {
         });
     }
 };
-`
+`;
 }

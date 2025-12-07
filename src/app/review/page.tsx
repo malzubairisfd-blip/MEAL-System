@@ -10,7 +10,6 @@ import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
 import { ClusterCard } from "@/components/ClusterCard";
 import { PairwiseModal } from "@/components/PairwiseModal";
-import { Progress } from "@/components/ui/progress";
 
 type Cluster = RecordRow[];
 
