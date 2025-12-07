@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
@@ -30,7 +29,6 @@ type Mapping = {
 const MAPPING_FIELDS: (keyof Mapping)[] = ["womanName", "husbandName", "nationalId", "phone", "village", "subdistrict", "children", "cluster_id", "beneficiaryId"];
 const REQUIRED_MAPPING_FIELDS: (keyof Mapping)[] = ["womanName", "husbandName", "nationalId", "phone", "village", "subdistrict", "children"];
 const LOCAL_STORAGE_KEY_PREFIX = "beneficiary-mapping-";
-const SETTINGS_KEY = 'beneficiary-insights-settings';
 
 type WorkerProgress = {
   status: string;
@@ -237,12 +235,16 @@ export default function UploadPage() {
     
     let clusteringSettings = {};
     try {
-        const savedSettings = localStorage.getItem(SETTINGS_KEY);
-        if (savedSettings) {
-            clusteringSettings = JSON.parse(savedSettings);
+        const res = await fetch('/api/settings');
+        const data = await res.json();
+        if (data.ok) {
+            clusteringSettings = data.settings;
+            toast({ title: "Loaded custom settings", description: "Running clustering with your saved settings.", variant: "default" });
+        } else {
+            throw new Error("Could not load settings from server.");
         }
     } catch(e) {
-        console.warn("Could not load settings, using defaults.");
+        console.warn("Could not load settings, using defaults.", e);
         toast({ title: "Could not load custom settings", description: "Using default clustering settings.", variant: "default" });
     }
 
@@ -250,12 +252,7 @@ export default function UploadPage() {
       type: "start",
       payload: {
         mapping,
-        options: {
-          minPairScore: 0.45,
-          minInternalScore: 0.67,
-          blockChunkSize: 5000,
-          ...clusteringSettings
-        },
+        options: clusteringSettings,
       },
     });
 
@@ -765,25 +762,30 @@ function pairwiseScore(aRaw, bRaw, weights) {
   const bTok = tokens(b.womanName).slice(0, 3).join(" ");
   const firstThreeScore = jaroWinkler(aTok, bTok);
 
-  // Compose final weighted score
-  let score =
-    (w.w_firstName ?? 0.15) * firstNameScore +
-    (w.w_familyName ?? 0.25) * familyNameScore +
-    (w.w_advancedName ?? 0.12) * advancedNameScore +
-    (w.w_tokenReorder ?? 0.10) * tokenReorderScore +
-    (w.w_husband ?? 0.12) * husbandScore +
-    (w.w_id ?? 0.08) * idScore +
-    (w.w_phone ?? 0.05) * phoneScoreVal +
-    (w.w_children ?? 0.04) * childrenScore +
-    (w.w_location ?? 0.04) * locationScore;
+  // Compose final weighted score from settings
+  const W = w.weights || {};
+  const R = w.rules || {};
+  
+  let score = 0;
+  if (R.enableOrderFreeMatching) {
+      score += (W.womanName || 0.45) * (0.65 * familyNameScore + 0.35 * firstNameScore + 0.6 * orderFree);
+  } else {
+      score += (W.womanName || 0.45) * (0.65 * familyNameScore + 0.35 * firstNameScore);
+  }
+  score += (W.husbandName || 0.25) * husbandScore;
+  score += (W.nationalId || 0.1) * idScore;
+  score += (W.phone || 0.05) * phoneScoreVal;
+  score += (W.village || 0.05) * locationScore; // Village weight applied to location score
+  // household seems to be a general weight, maybe apply to children?
+  score += (W.household || 0.1) * childrenScore;
 
-  score += patronymScore * 0.9;
-  score += sharedHusbandPatronym * 1.2;
-  score += tribalScore * 1.0;
-  score += maternalScore * 0.7;
-  score += reorderBoost * 0.8;
-  score += firstThreeScore * 0.15;
 
+  // Apply rule-based boosts if enabled
+  if (R.enableNameRootEngine) score += advancedNameScore * 0.12;
+  if (R.enableTribalLineage) score += tribalScore * 1.0;
+  if (R.enableMaternalLineage) score += maternalScore * 0.7;
+  if (R.enablePolygamyRules) score += sharedHusbandPatronym * 1.2;
+  
   // clamp
   score = Math.max(0, Math.min(1, score));
 
@@ -847,10 +849,10 @@ function buildBlocks(rows, opts) {
 
 // ---------------------- Build edges (thresholded) ----------------------
 function buildEdges(rows, minScore = 0.6, opts) {
-  const blocks = buildBlocks(rows);
+  const blocks = buildBlocks(rows, opts);
   const seen = new Set();
   const edges = [];
-  const chunk = opts?.blockChunkSize ?? 1200;
+  const chunk = opts?.blockChunkSize ?? 5000;
 
   for (let bi = 0; bi < blocks.length; bi++) {
     const block = blocks[bi];
@@ -962,12 +964,12 @@ async function runClustering(
   // normalize internal id
   rows.forEach((r, i) => r._internalId = r._internalId || \`r_\${i}\`);
 
-  const minPair = opts?.minPairScore ?? 0.60;
-  const minInternal = opts?.minInternalScore ?? 0.50;
+  const minPair = opts?.minPair ?? 0.60;
+  const minInternal = opts?.minInternal ?? 0.50;
   const blockChunkSize = opts?.blockChunkSize ?? 5000;
 
   // Build edges (thresholded)
-  const edges = buildEdges(rows, minPair, { blockChunkSize, ...opts });
+  const edges = buildEdges(rows, minPair, { ...opts, blockChunkSize });
 
   const uf = new UF(rows.length);
   const finalized = new Set();
