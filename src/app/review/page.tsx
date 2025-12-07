@@ -88,55 +88,6 @@ export default function ReviewPage() {
     applyFilter();
   }, [search, allClusters]);
 
-  const handleGenerateAllSummaries = () => {
-    if (allClusters.length === 0) return;
-    setLoading(prev => ({ ...prev, summaries: true }));
-    toast({ title: "Generating AI Summaries", description: "This may take a few moments..." });
-
-    const eventSource = new EventSource('/api/ai/describe-clusters-batch', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ clusters: allClusters }),
-    });
-
-    eventSource.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      if (data.error) {
-        console.error('Error for cluster:', data.clusterKey, data.error);
-      } else {
-        setAiSummaries(prev => ({...prev, [data.clusterKey]: data.description}));
-      }
-    };
-
-    eventSource.onerror = (err) => {
-      console.error("EventSource failed:", err);
-      toast({ title: "Error", description: "Failed to generate all summaries.", variant: "destructive" });
-      setLoading(prev => ({ ...prev, summaries: false }));
-      eventSource.close();
-    };
-    
-    eventSource.onopen = () => {
-        // This is a bit of a hack. The connection is closed by the server when done.
-        // We'll listen for the subsequent error event which fires on close.
-        const originalOnerror = eventSource.onerror;
-        eventSource.onerror = (err) => {
-            toast({ title: "Summaries Generated", description: "All AI summaries have been loaded." });
-            setLoading(prev => ({ ...prev, summaries: false }));
-            eventSource.close();
-            
-            // save to cache
-            const cacheId = sessionStorage.getItem('cacheId');
-            if(cacheId) {
-                fetch('/api/cluster-cache', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ cacheId, data: { aiSummaries } })
-                });
-            }
-        };
-    };
-  };
-
   const handleInspect = (cluster: Cluster) => {
     setSelectedCluster(cluster);
   }
@@ -191,10 +142,6 @@ export default function ReviewPage() {
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
-            <Button onClick={handleGenerateAllSummaries} disabled={loading.summaries || allClusters.length === 0}>
-                {loading.summaries ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-                Generate All AI Summaries
-            </Button>
           </div>
                     
           {loading.data ? (
