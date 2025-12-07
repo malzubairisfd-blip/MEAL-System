@@ -95,16 +95,19 @@ export default function UploadPage() {
 
             // Save results to server-side cache
             try {
+              const payload = {
+                clusters: resultClusters,
+                rows: rowsRef.current.map((r, i) => ({ ...r, _internalId: `row_${i}` })),
+                originalHeaders: columns,
+                aiSummaries: {}, // Initialize with empty summaries
+              };
+
               const cacheRes = await fetch('/api/cluster-cache', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                      clusters: resultClusters,
-                      rows: rowsRef.current.map((r, i) => ({ ...r, _internalId: `row_${i}` })),
-                      originalHeaders: columns,
-                      aiSummaries: {}, // Initialize with empty summaries
-                  })
+                  body: JSON.stringify(payload)
               });
+
               const cacheData = await cacheRes.json();
               if (!cacheData.ok) throw new Error(cacheData.error || 'Failed to save to cache');
               sessionStorage.setItem('cacheId', cacheData.cacheId);
@@ -634,8 +637,8 @@ function pairwiseScore(aRaw, bRaw) {
     husbandName: normalizeArabic(bRaw.husbandName || ""),
     nationalId: safeString(bRaw.nationalId || bRaw.id || ""),
     phone: digitsOnly(safeString(bRaw.phone || "")),
-    village: normalizeArabic(bRaw.village || ""),
-    subdistrict: normalizeArabic(bRaw.subdistrict || ""),
+    village: normalizeArabic(aRaw.village || ""),
+    subdistrict: normalizeArabic(aRaw.subdistrict || ""),
     children: normalizeChildrenField(bRaw.children),
     raw: bRaw
   };
@@ -721,7 +724,7 @@ function pairwiseScore(aRaw, bRaw) {
   const strongNameMatch = (womanExact || womanFuzzy >= 0.85 || (tokenReorderScore >= 0.85));
   const multiRegistrationFlag = strongNameMatch && (idScore < 0.5 && phoneScore < 0.5 && husbandScore < 0.5) ? 1 : 0;
 
-  // RULE: name rearrangement detection for cases like "نوريه علي عبدالله هواش" vs "نوريه علي هواش عبدالله"
+  // RULE: name rearrangement detection for cases like \"نوريه علي عبدالله هواش\" vs \"نوريه علي هواش عبدالله\"
   const reorderBoost = tokenReorderScore * 0.7;
 
   // RULE: Similarity across many parts (first, second, third)
@@ -1065,3 +1068,5 @@ onmessage = function(e) {
 };
 `;
 }
+
+    
