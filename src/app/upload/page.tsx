@@ -213,6 +213,7 @@ export default function UploadPage() {
         }
     } catch(e) {
         console.warn("Could not load settings, using defaults.");
+        toast({ title: "Could not load custom settings", description: "Using default clustering settings.", variant: "default" });
     }
 
     workerRef.current.postMessage({
@@ -620,7 +621,8 @@ function nameOrderFreeScore(aName, bName) {
 // ===================== fuzzyCluster.ts — PART 3 =====================
 // Pairwise scoring implementing the 11 requested rules and producing breakdowns.
 
-function pairwiseScore(aRaw, bRaw) {
+function pairwiseScore(aRaw, bRaw, weights) {
+  const w = weights || {};
   // Map fields and normalize important fields
   const a = {
     womanName: normalizeArabic(aRaw.womanName || ""),
@@ -669,7 +671,7 @@ function pairwiseScore(aRaw, bRaw) {
   const husbandScore = Math.max(husbandJW, husbandToken);
 
   // phone and id
-  const phoneScore = (a.phone && b.phone) ? (a.phone === b.phone ? 1 : (a.phone.slice(-6) === b.phone.slice(-6) ? 0.85 : (a.phone.slice(-4) === b.phone.slice(-4) ? 0.6 : 0))) : 0;
+  const phoneScoreVal = (a.phone && b.phone) ? (a.phone === b.phone ? 1 : (a.phone.slice(-6) === b.phone.slice(-6) ? 0.85 : (a.phone.slice(-4) === b.phone.slice(-4) ? 0.6 : 0))) : 0;
   const idScore = (a.nationalId && b.nationalId) ? (a.nationalId === b.nationalId ? 1 : (a.nationalId.slice(-5) === b.nationalId.slice(-5) ? 0.75 : 0)) : 0;
 
   // children overlap
@@ -722,7 +724,7 @@ function pairwiseScore(aRaw, bRaw) {
   // RULE: Same person with different husband/ID/phone (multiple registrations)
   // If name matches strongly but ID/phone/husband mismatch => flag multi-registration
   const strongNameMatch = (womanExact || womanFuzzy >= 0.85 || (tokenReorderScore >= 0.85));
-  const multiRegistrationFlag = strongNameMatch && (idScore < 0.5 && phoneScore < 0.5 && husbandScore < 0.5) ? 1 : 0;
+  const multiRegistrationFlag = strongNameMatch && (idScore < 0.5 && phoneScoreVal < 0.5 && husbandScore < 0.5) ? 1 : 0;
 
   // RULE: name rearrangement detection for cases like \"نوريه علي عبدالله هواش\" vs \"نوريه علي هواش عبدالله\"
   const reorderBoost = tokenReorderScore * 0.7;
@@ -735,15 +737,15 @@ function pairwiseScore(aRaw, bRaw) {
 
   // Compose final weighted score
   let score =
-    0.15 * firstNameScore +
-    0.25 * familyNameScore +
-    0.12 * advancedNameScore +
-    0.10 * tokenReorderScore +
-    0.12 * husbandScore +
-    0.08 * idScore +
-    0.05 * phoneScore +
-    0.04 * childrenScore +
-    0.04 * locationScore;
+    (w.w_firstName ?? 0.15) * firstNameScore +
+    (w.w_familyName ?? 0.25) * familyNameScore +
+    (w.w_advancedName ?? 0.12) * advancedNameScore +
+    (w.w_tokenReorder ?? 0.10) * tokenReorderScore +
+    (w.w_husband ?? 0.12) * husbandScore +
+    (w.w_id ?? 0.08) * idScore +
+    (w.w_phone ?? 0.05) * phoneScoreVal +
+    (w.w_children ?? 0.04) * childrenScore +
+    (w.w_location ?? 0.04) * locationScore;
 
   score += patronymScore * 0.9;
   score += sharedHusbandPatronym * 1.2;
@@ -763,7 +765,7 @@ function pairwiseScore(aRaw, bRaw) {
     tokenReorderScore,
     husbandScore,
     idScore,
-    phoneScore,
+    phoneScore: phoneScoreVal,
     childrenScore,
     locationScore,
     patronymScore,
@@ -826,10 +828,10 @@ function buildEdges(rows, minScore = 0.6, opts) {
     if (block.length > chunk) {
       for (let s = 0; s < block.length; s += chunk) {
         const part = block.slice(s, s + chunk);
-        pushEdgesForList(part, rows, minScore, seen, edges);
+        pushEdgesForList(part, rows, minScore, seen, edges, opts);
       }
     } else {
-      pushEdgesForList(block, rows, minScore, seen, edges);
+      pushEdgesForList(block, rows, minScore, seen, edges, opts);
     }
   }
 
@@ -837,14 +839,14 @@ function buildEdges(rows, minScore = 0.6, opts) {
   return edges;
 }
 
-function pushEdgesForList(list, rows, minScore, seen, edges) {
+function pushEdgesForList(list, rows, minScore, seen, edges, opts) {
   for (let i = 0; i < list.length; i++) {
     for (let j = i + 1; j < list.length; j++) {
       const a = list[i], b = list[j];
       const key = a < b ? \`\${a}_\${b}\` : \`\${b}_\${a}\`;
       if (seen.has(key)) continue;
       seen.add(key);
-      const { score, breakdown } = pairwiseScore(rows[a], rows[b]);
+      const { score, breakdown } = pairwiseScore(rows[a], rows[b], opts);
       if (score >= minScore) edges.push({ a, b, score, breakdown });
     }
   }
@@ -886,14 +888,14 @@ class UF {
 // Recursive splitting, main runClustering(), and export helpers.
 
 // ---------------------- Recursive split to enforce max cluster size 4 ----------------------
-function splitCluster(rowsSubset, minInternal = 0.5) {
+function splitCluster(rowsSubset, minInternal = 0.5, opts) {
   if (rowsSubset.length <= 4) return [rowsSubset];
 
   // build pairwise local edges
   const localEdges = [];
   for (let i = 0; i < rowsSubset.length; i++) {
     for (let j = i + 1; j < rowsSubset.length; j++) {
-      const { score } = pairwiseScore(rowsSubset[i], rowsSubset[j]);
+      const { score } = pairwiseScore(rowsSubset[i], rowsSubset[j], opts);
       if (score >= minInternal) localEdges.push({ a: i, b: j, score });
     }
   }
@@ -917,7 +919,7 @@ function splitCluster(rowsSubset, minInternal = 0.5) {
   for (const idxs of groups.values()) {
     const subset = idxs.map(i => rowsSubset[i]);
     if (subset.length <= 4) result.push(subset);
-    else result.push(...splitCluster(subset, Math.max(minInternal, 0.45)));
+    else result.push(...splitCluster(subset, Math.max(minInternal, 0.45), opts));
   }
   return result;
 }
@@ -935,7 +937,7 @@ async function runClustering(
   const blockChunkSize = opts?.blockChunkSize ?? 5000;
 
   // Build edges (thresholded)
-  const edges = buildEdges(rows, minPair, { blockChunkSize });
+  const edges = buildEdges(rows, minPair, { blockChunkSize, ...opts });
 
   const uf = new UF(rows.length);
   const finalized = new Set();
@@ -959,7 +961,7 @@ async function runClustering(
     if (combinedIdx.length > 500) { // Optimization for very large components
         for(let i = 0; i < combinedIdx.length; i += 500) {
             const chunk = combinedIdx.slice(i, i + 500).map(idx => rows[idx]);
-            const parts = splitCluster(chunk, minInternal);
+            const parts = splitCluster(chunk, minInternal, opts);
             for(const p of parts) {
                 const globalIdxs = p.map(r => rows.findIndex(row => row._internalId === r._internalId)).filter(idx => idx !== -1);
                 if(globalIdxs.length) finalClustersIdx.push(globalIdxs);
@@ -968,7 +970,7 @@ async function runClustering(
         }
     } else {
         const combinedRows = combinedIdx.map(i => rows[i]);
-        const parts = splitCluster(combinedRows, minInternal);
+        const parts = splitCluster(combinedRows, minInternal, opts);
 
         for (const p of parts) {
           const globalIdxs = [];
@@ -1003,7 +1005,7 @@ async function runClustering(
     if (arr.length <= 4) finalClustersIdx.push(arr);
     else {
       const subRows = arr.map(i => rows[i]);
-      const parts = splitCluster(subRows, minInternal);
+      const parts = splitCluster(subRows, minInternal, opts);
       for (const p of parts) {
         const idxs = p.map(pr => arr.find(i => rows[i]._internalId === pr._internalId)).filter((x) => x !== undefined);
         if (idxs.length) finalClustersIdx.push(idxs);
@@ -1029,12 +1031,16 @@ async function processAll() {
         const mapped = {
             _internalId: \`row_\${i}\`,
             womanName: "", husbandName: "", nationalId: "", phone: "",
-            village: "", subdistrict: "", children: [], cluster_id: ""
+            village: "", subdistrict: "", children: [], cluster_id: "", beneficiaryId: ""
         };
         for (const key in mapping) {
             const col = mapping[key];
             if (col && r[col] !== undefined) {
-                mapped[key] = r[col];
+                 if (key === 'children') {
+                    mapped[key] = normalizeChildrenField(r[col]);
+                } else {
+                    mapped[key] = r[col];
+                }
             }
         }
         return mapped;

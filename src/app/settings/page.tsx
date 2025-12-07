@@ -10,15 +10,29 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { Save, RotateCcw, ChevronLeft, Plus, Minus } from 'lucide-react';
 import { Input } from '@/components/ui/input';
+import { Separator } from '@/components/ui/separator';
 
 const SETTINGS_KEY = 'beneficiary-insights-settings';
+
 const DEFAULT_SETTINGS = {
+  // Thresholds
   minPairScore: 0.45,
   minInternalScore: 0.67,
   blockChunkSize: 5000,
+  // Weights
+  w_firstName: 0.15,
+  w_familyName: 0.25,
+  w_advancedName: 0.12,
+  w_tokenReorder: 0.10,
+  w_husband: 0.12,
+  w_id: 0.08,
+  w_phone: 0.05,
+  w_children: 0.04,
+  w_location: 0.04,
 };
 
 type SettingsKeys = keyof typeof DEFAULT_SETTINGS;
+type WeightKeys = `w_${string}`;
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
@@ -29,7 +43,7 @@ export default function SettingsPage() {
     try {
       const savedSettings = localStorage.getItem(SETTINGS_KEY);
       if (savedSettings) {
-        setSettings(prev => ({...prev, ...JSON.parse(savedSettings)}));
+        setSettings(prev => ({...DEFAULT_SETTINGS, ...JSON.parse(savedSettings)}));
       }
     } catch (e) {
       console.warn("Could not load settings from localStorage");
@@ -43,7 +57,7 @@ export default function SettingsPage() {
       localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
       toast({
         title: 'Settings Saved',
-        description: 'Your new clustering thresholds have been saved.',
+        description: 'Your new clustering settings have been saved.',
       });
     } catch (e) {
       toast({
@@ -60,7 +74,7 @@ export default function SettingsPage() {
       localStorage.setItem(SETTINGS_KEY, JSON.stringify(DEFAULT_SETTINGS));
       toast({
         title: 'Settings Reset',
-        description: 'Clustering thresholds have been reset to their default values.',
+        description: 'Clustering settings have been reset to their default values.',
       });
     } catch (e) {
        toast({
@@ -86,9 +100,37 @@ export default function SettingsPage() {
     setSettings(prev => {
       const currentValue = prev[key];
       const newValue = parseFloat((currentValue + step).toFixed(2));
-      return {...prev, [key]: newValue};
+      const clampedValue = Math.max(0, Math.min(1, newValue));
+      return {...prev, [key]: key === 'blockChunkSize' ? newValue : clampedValue };
     });
   };
+
+  const WeightSetting = ({ id, label }: { id: WeightKeys, label: string }) => (
+     <div className="space-y-4">
+        <Label htmlFor={id} className="text-base">{label}</Label>
+        <Slider
+          id={id}
+          min={0}
+          max={1}
+          step={0.01}
+          value={[settings[id]]}
+          onValueChange={(val) => handleSliderChange(id, val)}
+        />
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="icon" onClick={() => handleStep(id, -0.01)}><Minus /></Button>
+          <Input
+              type="number"
+              className="w-24 text-center font-mono"
+              value={settings[id].toFixed(2)}
+              onChange={(e) => handleInputChange(id, e.target.value)}
+              step={0.01}
+              min={0}
+              max={1}
+          />
+          <Button variant="outline" size="icon" onClick={() => handleStep(id, 0.01)}><Plus /></Button>
+        </div>
+      </div>
+  );
   
   if (!isLoaded) {
     return <div>Loading settings...</div>;
@@ -96,13 +138,13 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-6">
-      <Card>
+       <Card>
         <CardHeader>
           <div className="flex justify-between items-start">
               <div>
                 <CardTitle>Clustering Settings</CardTitle>
                 <CardDescription>
-                  Adjust the sensitivity of the AI-powered clustering engine. Lower values will create more, larger clusters. Higher values will be more strict.
+                  Adjust the sensitivity of the AI-powered clustering engine.
                 </CardDescription>
               </div>
               <Button variant="outline" asChild>
@@ -114,12 +156,33 @@ export default function SettingsPage() {
           </div>
         </CardHeader>
         <CardContent className="space-y-8">
-          
+            {/* Action Buttons */}
+            <div className="flex gap-4 pt-4 border-t">
+                <Button onClick={handleSave}>
+                <Save className="mr-2 h-4 w-4" />
+                Save Settings
+                </Button>
+                <Button onClick={handleReset} variant="destructive">
+                <RotateCcw className="mr-2 h-4 w-4" />
+                Reset to Defaults
+                </Button>
+            </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Thresholds</CardTitle>
+          <CardDescription>
+            Control the initial matching and refinement process.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-8">
           {/* Min Pair Score */}
           <div className="space-y-4">
             <Label htmlFor="min-pair-score" className="text-base">Minimum Pair Score</Label>
             <p className="text-sm text-muted-foreground">
-              The initial similarity threshold (0 to 1) for any two records to be considered a potential match. This score is a blend of name similarity (first, family, and rearranged), husband name, ID, phone, and children. A lower value increases sensitivity, finding more potential duplicates at the risk of more false positives. Default: 0.45
+              The initial similarity threshold (0 to 1) for any two records to be considered a potential match. A lower value increases sensitivity. Default: {DEFAULT_SETTINGS.minPairScore.toFixed(2)}
             </p>
             <Slider
               id="min-pair-score"
@@ -142,11 +205,13 @@ export default function SettingsPage() {
             </div>
           </div>
           
+          <Separator />
+
           {/* Min Internal Score */}
           <div className="space-y-4">
             <Label htmlFor="min-internal-score" className="text-base">Minimum Internal Score</Label>
              <p className="text-sm text-muted-foreground">
-              When a large cluster is being refined, this score determines the "stickiness" between records. It's the minimum similarity required to keep two records connected within a refined sub-cluster. It prevents loosely related records from staying grouped together. Default: 0.67
+              The minimum similarity required to keep two records connected within a large, refined cluster. Default: {DEFAULT_SETTINGS.minInternalScore.toFixed(2)}
             </p>
             <Slider
               id="min-internal-score"
@@ -169,16 +234,18 @@ export default function SettingsPage() {
             </div>
           </div>
            
+           <Separator />
+
            {/* Block Chunk Size */}
            <div className="space-y-4">
             <Label htmlFor="block-chunk-size" className="text-base">Block Chunk Size</Label>
              <p className="text-sm text-muted-foreground">
-              For performance on very large datasets, the engine groups records into "blocks." This setting defines the maximum size of any single block before it's broken into smaller chunks for processing. A smaller size is more thorough but slower; a larger size is faster but might miss some comparisons in dense blocks. Default: 5000
+              Performance setting for very large datasets. Smaller is more thorough but slower; larger is faster. Default: {DEFAULT_SETTINGS.blockChunkSize}
             </p>
             <Slider
               id="block-chunk-size"
               min={500}
-              max={5000}
+              max={10000}
               step={100}
               value={[settings.blockChunkSize]}
               onValueChange={(val) => handleSliderChange('blockChunkSize', val)}
@@ -187,7 +254,7 @@ export default function SettingsPage() {
                <Button variant="outline" size="icon" onClick={() => handleStep('blockChunkSize', -100)}><Minus /></Button>
                 <Input
                     type="number"
-                    className="w-24 text-center font-mono"
+                    className="w-32 text-center font-mono"
                     value={settings.blockChunkSize}
                     onChange={(e) => handleInputChange('blockChunkSize', e.target.value)}
                     step={100}
@@ -195,20 +262,30 @@ export default function SettingsPage() {
                 <Button variant="outline" size="icon" onClick={() => handleStep('blockChunkSize', 100)}><Plus /></Button>
             </div>
           </div>
-          
-          {/* Action Buttons */}
-          <div className="flex gap-4 pt-4 border-t">
-            <Button onClick={handleSave}>
-              <Save className="mr-2 h-4 w-4" />
-              Save Settings
-            </Button>
-             <Button onClick={handleReset} variant="destructive">
-              <RotateCcw className="mr-2 h-4 w-4" />
-              Reset to Defaults
-            </Button>
-          </div>
+        </CardContent>
+      </Card>
+      
+      <Card>
+         <CardHeader>
+            <CardTitle>Final Score Weights</CardTitle>
+            <CardDescription>
+                Adjust the importance of each component in the final similarity score. The weights do not need to sum to 1.
+            </CardDescription>
+        </CardHeader>
+        <CardContent className="grid md:grid-cols-2 gap-x-8 gap-y-12">
+            <WeightSetting id="w_firstName" label="First Name" />
+            <WeightSetting id="w_familyName" label="Family Name" />
+            <WeightSetting id="w_husband" label="Husband Name" />
+            <WeightSetting id="w_id" label="National ID" />
+            <WeightSetting id="w_phone" label="Phone Number" />
+            <WeightSetting id="w_children" label="Children's Names" />
+            <WeightSetting id="w_location" label="Location" />
+            <WeightSetting id="w_advancedName" label="Advanced Name (Internal)" />
+            <WeightSetting id="w_tokenReorder" label="Name Reorder (Internal)" />
         </CardContent>
       </Card>
     </div>
   );
 }
+
+    

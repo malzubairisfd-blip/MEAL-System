@@ -1,3 +1,4 @@
+
 // src/lib/auditEngine.ts
 
 import { similarityScoreDetailed, RecordRow as FuzzyRecordRow } from "./fuzzyCluster";
@@ -13,7 +14,7 @@ export interface RecordRow {
   phone?: string | number;
   village?: string;
   subdistrict?: string;
-  children?: string[];
+  children?: string[] | string;
 }
 
 export interface AuditFinding {
@@ -65,8 +66,8 @@ export function runAudit(records: RecordRow[]): AuditFinding[] {
   for (const r of records) {
     const w = r.womanName?.trim();
     const h = r.husbandName?.trim();
-    const id = r.nationalId ? String(r.nationalId).trim() : "";
-    const ph = r.phone ? String(r.phone).trim() : "";
+    const id = String(r.nationalId || "").trim();
+    const ph = String(r.phone || "").trim();
 
     if (w) {
         if (!byWoman.has(w)) byWoman.set(w, []);
@@ -159,11 +160,15 @@ export function runAudit(records: RecordRow[]): AuditFinding[] {
       const a = records[i];
       const b = records[j];
       
-      const key = [a.womanName, b.womanName].sort().join('|');
+      const key = [a._internalId, b._internalId].sort().join('|');
       if(seenPairs.has(key)) continue;
       seenPairs.add(key);
 
-      const sim = similarityScoreDetailed(a as FuzzyRecordRow, b as FuzzyRecordRow);
+      // Ensure children are arrays before calling similarity score
+      const recordA_safe = { ...a, children: Array.isArray(a.children) ? a.children : (typeof a.children === 'string' ? a.children.split(/[;,،|]/) : []) };
+      const recordB_safe = { ...b, children: Array.isArray(b.children) ? b.children : (typeof b.children === 'string' ? b.children.split(/[;,،|]/) : []) };
+
+      const sim = similarityScoreDetailed(recordA_safe as FuzzyRecordRow, recordB_safe as FuzzyRecordRow);
 
       if (sim.score > 0.85) {
         findings.push({
@@ -178,3 +183,5 @@ export function runAudit(records: RecordRow[]): AuditFinding[] {
 
   return findings;
 }
+
+    
