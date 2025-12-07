@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import type { RecordRow, AuditFinding } from "@/lib/auditEngine";
+import type { RecordRow } from "@/lib/auditEngine";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
@@ -12,6 +12,14 @@ import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Progress } from "@/components/ui/progress";
+
+// Redefine AuditFinding here as it's used in this component's state
+export interface AuditFinding {
+  type: string;
+  severity: "high" | "medium" | "low";
+  description: string;
+  records: RecordRow[];
+}
 
 export default function AuditPage() {
   const [rows, setRows] = useState<RecordRow[]>([]);
@@ -40,15 +48,14 @@ export default function AuditPage() {
           const clusters = responseData.data?.clusters;
           const auditFindings = responseData.data?.auditFindings;
           
-          if (clusters) {
+          if (auditFindings) {
+            setFindings(auditFindings);
+            toast({ title: "Loaded from Cache", description: `Loaded ${auditFindings.length} existing audit findings.` });
+          } else if (clusters) {
               const clusteredRecords = clusters.flat();
               setRows(clusteredRecords);
-
-              if (auditFindings) {
-                setFindings(auditFindings);
-                toast({ title: "Loaded from Cache", description: `Loaded ${auditFindings.length} existing audit findings.` });
-              } else if (clusteredRecords.length > 0) {
-                toast({ title: "Data Loaded", description: `${clusteredRecords.length} records are ready for audit.` });
+              if (clusteredRecords.length > 0) {
+                toast({ title: "Data Ready", description: `${clusteredRecords.length} records are ready for audit.` });
               } else {
                 toast({ title: "No Clustered Data", description: "No records were found in clusters to audit." });
               }
@@ -98,17 +105,19 @@ export default function AuditPage() {
 
 
   async function runAuditNow() {
-    if (rows.length === 0) {
-        toast({ title: "No Data", description: "Please load data before running an audit.", variant: "destructive" });
+    const cacheId = sessionStorage.getItem('cacheId');
+    if (!cacheId) {
+        toast({ title: "No Data", description: "Cache ID not found. Please re-upload data.", variant: "destructive" });
         return;
     }
+    
     setLoading(prev => ({...prev, audit: true}));
     startProgress();
     try {
         const res = await fetch("/api/audit", {
-        method: "POST",
-        body: JSON.stringify({ rows }),
-        headers: { "Content-Type": "application/json" }
+            method: "POST",
+            body: JSON.stringify({ cacheId }), // Pass the cacheId to the backend
+            headers: { "Content-Type": "application/json" }
         });
 
         if (!res.ok) {
@@ -117,18 +126,17 @@ export default function AuditPage() {
         }
 
         const data = await res.json();
-        setFindings(data.findings);
+        const newFindings = data.issues || [];
+        setFindings(newFindings);
         
-        const cacheId = sessionStorage.getItem('cacheId');
-        if (cacheId) {
-            await fetch('/api/cluster-cache', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ cacheId, data: { auditFindings: data.findings } })
-            });
-        }
+        // Update the cache with the new findings
+        await fetch('/api/cluster-cache', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cacheId, data: { auditFindings: newFindings } })
+        });
 
-        toast({ title: "Audit Complete", description: `${data.findings.length} potential issues found.` });
+        toast({ title: "Audit Complete", description: `${newFindings.length} potential issues found.` });
 
     } catch (error: any) {
         toast({ title: "Audit Error", description: error.message || "Could not connect to the audit service.", variant: "destructive" });
@@ -167,7 +175,7 @@ export default function AuditPage() {
                   <CardTitle>Data Integrity Audit</CardTitle>
                   <CardDescription>
                     Run a set of rules against your clustered records to identify potential issues like duplicates and invalid relationships.
-                    {rows.length > 0 && ` Currently loaded ${rows.length} records.`}
+                    {rows.length > 0 && findings.length === 0 && ` Ready to audit ${rows.length} records.`}
                   </CardDescription>
                 </div>
                 <Button variant="outline" asChild>
@@ -180,9 +188,9 @@ export default function AuditPage() {
         </CardHeader>
         <CardContent>
           <div className="flex gap-4">
-            <Button onClick={runAuditNow} disabled={loading.audit || loading.data || rows.length === 0}>
+            <Button onClick={runAuditNow} disabled={loading.audit || loading.data || (rows.length === 0 && findings.length === 0)}>
               {loading.audit ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <AlertTriangle className="mr-2 h-4 w-4" />}
-              Run Audit
+              {findings.length > 0 ? 'Re-run Audit' : 'Run Audit'}
             </Button>
           </div>
         </CardContent>
@@ -235,7 +243,7 @@ export default function AuditPage() {
                             <div className="p-3 bg-muted/50 rounded-md">
                                 <h4 className="font-semibold mb-2">Affected Records:</h4>
                                 <ul className="space-y-1 text-sm">
-                                {f.records.map((r, idx: number) => (
+                                {f.records.map((r: RecordRow, idx: number) => (
                                     <li key={idx} className="flex justify-between">
                                     <span>{r.womanName} (Husband: {r.husbandName})</span>
                                     <span className="font-mono text-muted-foreground">ID: {r.nationalId}</span>
@@ -254,8 +262,8 @@ export default function AuditPage() {
             <Card className="text-center py-10">
                 <CardContent className="flex flex-col items-center gap-4">
                     <ShieldCheck className="h-12 w-12 text-green-500" />
-                    <h3 className="text-xl font-semibold">No Issues Found</h3>
-                    <p className="text-muted-foreground">The audit completed without finding any issues based on the current rules.</p>
+                    <h3 className="text-xl font-semibold">Ready to Audit</h3>
+                    <p className="text-muted-foreground">Click "Run Audit" to check the {rows.length} clustered records for issues.</p>
                 </CardContent>
             </Card>
         )
@@ -263,5 +271,3 @@ export default function AuditPage() {
     </div>
   );
 }
-
-    
