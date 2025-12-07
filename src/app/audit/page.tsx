@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from "react";
@@ -31,7 +32,9 @@ export default function AuditPage() {
           const res = await fetch(`/api/cluster-cache?id=${cacheId}`);
           if (!res.ok) throw new Error("Failed to load data from server cache");
 
-          const { clusters, auditFindings } = await res.json();
+          const data = await res.json();
+          const clusters = data.clusters;
+          const auditFindings = data.auditFindings;
           
           if (clusters) {
               const clusteredRecords = clusters.flat();
