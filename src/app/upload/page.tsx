@@ -577,11 +577,11 @@ export default function UploadPage(){
           setClusters(resultClusters);
           // cache to server in chunks (like earlier)
           try {
-            const cacheId = `cache-${Date.now()}-${Math.random().toString(36).slice(2,9)}`;
+            const cacheId = \`cache-\${Date.now()}-\${Math.random().toString(36).slice(2,9)}\`;
             sessionStorage.setItem('cacheId', cacheId);
             // initialize
             await fetch('/api/cluster-cache', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ cacheId, data:{ originalHeaders: columns } }) });
-            const allRows = rowsRef.current.map((r,i)=> ({ ...r, _internalId: `row_${i}` }));
+            const allRows = rowsRef.current.map((r,i)=> ({ ...r, _internalId: \`row_\${i}\` }));
             for(let i=0;i<allRows.length;i+=2000){
               const chunk = allRows.slice(i,i+2000);
               await fetch('/api/cluster-cache', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ cacheId, data:{ rows: chunk } }) });
@@ -593,7 +593,7 @@ export default function UploadPage(){
             sessionStorage.setItem('cacheTimestamp', Date.now().toString());
             setWorkerStatus('done');
             setProgressInfo({ status: 'done', progress: 100 });
-            toast({ title: "Clustering complete", description: `Found ${resultClusters.length} clusters.` });
+            toast({ title: "Clustering complete", description: \`Found \${resultClusters.length} clusters.\` });
           } catch(err:any){
             setWorkerStatus('error');
             toast({ title: "Failed to cache results", description: String(err), variant:"destructive" });
@@ -689,8 +689,13 @@ export default function UploadPage(){
 
   const formattedStatus = () => {
     const s = progressInfo.status || 'idle';
-    if(progressInfo.completed !== undefined && progressInfo.total) return `${s} (${progressInfo.completed}/${progressInfo.total})`;
-    return s;
+    let statusText = s.replace(/-/g, ' '); // a bit nicer looking
+    statusText = statusText.charAt(0).toUpperCase() + statusText.slice(1);
+    
+    if (progressInfo.completed !== undefined && progressInfo.total) {
+      return \`Status: \${statusText} (\${progressInfo.completed}/\${progressInfo.total})\`;
+    }
+    return \`Status: \${statusText}\`;
   };
   
     const SummaryCard = ({ icon, title, value }: { icon: React.ReactNode, title: string, value: string | number }) => (
@@ -730,7 +735,7 @@ export default function UploadPage(){
                         {file ? (
                           <>
                             <p className="font-semibold text-primary">{file.name}</p>
-                            <p className="text-xs text-muted-foreground">{rowsRef.current.length > 0 ? `${rowsRef.current.length} rows detected` : 'Reading file...'}</p>
+                            <p className="text-xs text-muted-foreground">{rowsRef.current.length > 0 ? \`\${rowsRef.current.length} rows detected\` : 'Reading file...'}</p>
                           </>
                         ) : (
                           <>
@@ -754,7 +759,7 @@ export default function UploadPage(){
                 }} variant="outline">Reset</Button>
             )}
           </div>
-          {file && fileReadProgress < 100 && (
+          {file && fileReadProgress > 0 && fileReadProgress < 100 && (
             <div className="mt-4">
               <Label>Reading File...</Label>
               <Progress value={fileReadProgress} />
@@ -780,8 +785,8 @@ export default function UploadPage(){
                     <RadioGroup value={mapping[field]} onValueChange={(v)=> handleMappingChange(field as keyof Mapping, v)} className="p-4 grid grid-cols-2 gap-2">
                       {columns.map(col => (
                         <div key={col} className="flex items-center space-x-2">
-                          <RadioGroupItem value={col} id={`${field}-${col}`} />
-                          <Label htmlFor={`${field}-${col}`} className="truncate font-normal" title={col}>{col}</Label>
+                          <RadioGroupItem value={col} id={\`\${field}-\${col}\`} />
+                          <Label htmlFor={\`\${field}-\${col}\`} className="truncate font-normal" title={col}>{col}</Label>
                         </div>
                       ))}
                     </RadioGroup>
@@ -795,20 +800,24 @@ export default function UploadPage(){
 
       {file && isMappingComplete && (
         <Card>
-          <CardHeader><CardTitle>3. Run Clustering</CardTitle><CardDescription>Start the analysis to find potential duplicate records.</CardDescription></CardHeader>
+          <CardHeader>
+            <CardTitle>3. Run Clustering</CardTitle>
+            <CardDescription>Start the AI-powered analysis to find potential duplicates.</CardDescription>
+          </CardHeader>
           <CardContent>
             <div className="space-y-4">
               <Button onClick={startClustering} disabled={workerStatus === 'processing' || workerStatus === 'caching'}>
                 {workerStatus === 'processing' || workerStatus === 'caching' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                {workerStatus === 'caching' ? 'Caching...' : (workerStatus === 'processing' ? 'Clustering...' : 'Start Clustering')}
+                Start Clustering
               </Button>
 
               {(workerStatus !== 'idle' && workerStatus !== 'done' && workerStatus !== 'error') && (
-                <div className="flex items-center gap-4">
-                  <Progress value={progressInfo.progress} className="flex-1" />
-                  <span className="text-sm font-semibold text-muted-foreground w-48 text-right">
-                    {formattedStatus()}
-                  </span>
+                <div className="space-y-2 mt-4">
+                  <div className="flex justify-between items-center text-sm font-medium text-muted-foreground">
+                    <span>{formattedStatus()}</span>
+                    <span>{Math.round(progressInfo.progress)}%</span>
+                  </div>
+                  <Progress value={progressInfo.progress} />
                 </div>
               )}
             </div>
