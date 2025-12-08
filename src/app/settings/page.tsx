@@ -23,15 +23,7 @@ const descriptions = {
   minPair: "The minimum score (0 to 1) for two records to be considered a potential match and form a link. High values create fewer, more confident clusters. Low values create more, but potentially noisier, clusters.",
   minInternal: "The minimum score (0 to 1) used to decide if records within a large, temporary cluster should remain together in the final, smaller clusters. High values result in smaller, more tightly-related final clusters.",
   blockChunkSize: "A performance setting for very large datasets. It breaks down large groups of potential matches into smaller chunks to manage memory. The default is usually fine.",
-  fieldWeights: {
-    womanName: "How much to value the similarity between the woman's full name.",
-    husbandName: "How much to value the similarity between the husband's name.",
-    household: "A general weight for household-level similarities (currently linked to children).",
-    nationalId: "How much to value an exact match on the National ID.",
-    phone: "How much to value a partial or exact match on the phone number.",
-    village: "How much to value a match on the village or sub-district name.",
-  },
-  finalScore: {
+  finalScoreWeights: {
     firstNameScore: "Weight for the similarity of the first name.",
     familyNameScore: "Weight for the similarity of the family name (all parts except the first).",
     advancedNameScore: "Weight for advanced name matching techniques, like root-letter matching.",
@@ -43,13 +35,10 @@ const descriptions = {
     locationScore: "Weight for matching village or sub-district names."
   },
   rules: {
-    enableArabicNormalizer: "Standardizes Arabic characters (e.g., 'أ', 'إ', 'آ' all become 'ا') to catch more matches despite variations in typing.",
     enableNameRootEngine: "An advanced technique that tries to match names based on their likely root letters, catching more complex variations.",
     enableTribalLineage: "Looks for and gives weight to matches in the tribal or family name parts of a full name.",
     enableMaternalLineage: "Gives weight to similarities found in the maternal parts of a name if they can be identified.",
-    enableOrderFreeMatching: "Detects if two names have the same set of words but in a different order (e.g., 'Fatima Ali Ahmed' vs. 'Fatima Ahmed Ali').",
     enablePolygamyRules: "Applies special logic for polygamous relationships, such as checking if two women share the same husband and paternal line.",
-    enableIncestBlocking: "Prevents the engine from clustering individuals who are identified as being in a forbidden relationship (e.g., siblings).",
   }
 }
 
@@ -80,37 +69,26 @@ export default function SettingsPage() {
 
   const getDefaultSettings = () => ({
     thresholds: {
-        minPair: 0.40,
-        minInternal: 0.52,
-        blockChunkSize: 6500
+      minPair: 0.62,
+      minInternal: 0.54,
+      blockChunkSize: 3000
     },
-    fieldWeights: {
-        womanName: 0.60,
-        husbandName: 0.25,
-        nationalId: 0.07,
-        phone: 0.03,
-        household: 0.03,
-        village: 0.02
-    },
-    finalScore: {
-        firstNameScore: 0.20,
-        familyNameScore: 0.28,
-        advancedNameScore: 0.18,
-        tokenReorderScore: 0.17,
-        husbandScore: 0.12,
-        idScore: 0.025,
-        phoneScore: 0.01,
-        childrenScore: 0.005,
-        locationScore: 0.005
+    finalScoreWeights: {
+      firstNameScore: 0.15,
+      familyNameScore: 0.25,
+      advancedNameScore: 0.12,
+      tokenReorderScore: 0.10,
+      husbandScore: 0.12,
+      idScore: 0.08,
+      phoneScore: 0.05,
+      childrenScore: 0.04,
+      locationScore: 0.04
     },
     rules: {
-        enableArabicNormalizer: true,
-        enableNameRootEngine: true,
-        enableTribalLineage: true,
-        enableMaternalLineage: true,
-        enableOrderFreeMatching: true,
-        enablePolygamyRules: true,
-        enableIncestBlocking: true
+      enableNameRootEngine: true,
+      enableTribalLineage: true,
+      enableMaternalLineage: true,
+      enablePolygamyRules: true
     }
   });
 
@@ -126,8 +104,7 @@ export default function SettingsPage() {
               ...defaults,
               ...j.settings,
               thresholds: { ...defaults.thresholds, ...j.settings.thresholds },
-              fieldWeights: { ...defaults.fieldWeights, ...j.settings.fieldWeights },
-              finalScore: { ...defaults.finalScore, ...j.settings.finalScore },
+              finalScoreWeights: { ...defaults.finalScoreWeights, ...j.settings.finalScoreWeights },
               rules: { ...defaults.rules, ...j.settings.rules },
           };
           setSettings(mergedSettings);
@@ -170,8 +147,8 @@ export default function SettingsPage() {
       update(path, newValue);
   }
 
-  function handleWeightChange(key: string, change: number, weightGroup: 'fieldWeights' | 'finalScore') {
-    handleNumericChange(`${weightGroup}.${key}`, change);
+  function handleWeightChange(key: string, change: number) {
+    handleNumericChange(`finalScoreWeights.${key}`, change);
   }
 
   async function save() {
@@ -218,7 +195,7 @@ export default function SettingsPage() {
       try {
         const parsed = JSON.parse(String(e.target?.result));
         // Simple validation
-        if (parsed.thresholds && parsed.rules && parsed.finalScore && parsed.fieldWeights) {
+        if (parsed.thresholds && parsed.rules && parsed.finalScoreWeights) {
           setSettings(parsed);
           toast({ title: "Settings Imported", description: "Imported settings previewed. Click Save to persist them." });
         } else {
@@ -247,8 +224,8 @@ export default function SettingsPage() {
           <CardHeader>
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
-                  <CardTitle className="text-2xl">Clustering — Admin Settings (Enterprise)</CardTitle>
-                  <CardDescription>Fine-tune the clustering engine, weights, and rules.</CardDescription>
+                  <CardTitle className="text-2xl">Clustering — Admin Settings (v5)</CardTitle>
+                  <CardDescription>Fine-tune the v5 clustering engine, weights, and rules.</CardDescription>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
                    <Button variant="outline" asChild>
@@ -313,38 +290,19 @@ export default function SettingsPage() {
           </Card>
 
           <Card>
-            <CardHeader><CardTitle>Field Weights (Legacy)</CardTitle></CardHeader>
-            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {Object.entries(settings.fieldWeights).map(([k, v]: any) => (
-                <div key={k} className="flex flex-col gap-2 p-3 border rounded-md">
-                  <div className="flex justify-between items-center">
-                    <Label htmlFor={`w-${k}`} className="capitalize flex items-center">{k.replace(/([A-Z])/g, ' $1')} <HelpTooltip content={descriptions.fieldWeights[k as keyof typeof descriptions.fieldWeights]} /></Label>
-                  </div>
-                  <div className="flex items-center gap-2">
-                        <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleWeightChange(k, -0.01, 'fieldWeights')}><Minus className="h-4 w-4" /></Button>
-                        <Input type="number" step="0.01" value={v} onChange={(e)=>update(`fieldWeights.${k}`, parseFloat(e.target.value))} className="w-24 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"/>
-                        <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleWeightChange(k, 0.01, 'fieldWeights')}><Plus className="h-4 w-4" /></Button>
-                  </div>
-                   <Slider id={`w-${k}`} min={0} max={1} step={0.01} value={[v]} onValueChange={(val)=>update(`fieldWeights.${k}`, val[0])} />
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-
-          <Card>
             <CardHeader><CardTitle>Final Score Composition</CardTitle></CardHeader>
             <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {Object.entries(settings.finalScore).map(([k, v]: any) => (
+              {Object.entries(settings.finalScoreWeights).map(([k, v]: any) => (
                 <div key={k} className="flex flex-col gap-2 p-3 border rounded-md">
                    <div className="flex justify-between items-center">
-                     <Label htmlFor={`fsw-${k}`} className="capitalize flex items-center">{k.replace(/([A-Z])/g, ' $1')} <HelpTooltip content={descriptions.finalScore[k as keyof typeof descriptions.finalScore]} /></Label>
+                     <Label htmlFor={`fsw-${k}`} className="capitalize flex items-center">{k.replace(/([A-Z])/g, ' $1')} <HelpTooltip content={descriptions.finalScoreWeights[k as keyof typeof descriptions.finalScoreWeights]} /></Label>
                    </div>
                    <div className="flex items-center gap-2">
-                        <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleWeightChange(k, -0.01, 'finalScore')}><Minus className="h-4 w-4" /></Button>
-                        <Input type="number" step="0.01" value={v} onChange={(e)=>update(`finalScore.${k}`, parseFloat(e.target.value))} className="w-24 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"/>
-                        <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleWeightChange(k, 0.01, 'finalScore')}><Plus className="h-4 w-4" /></Button>
+                        <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleWeightChange(k, -0.01)}><Minus className="h-4 w-4" /></Button>
+                        <Input type="number" step="0.01" value={v} onChange={(e)=>update(`finalScoreWeights.${k}`, parseFloat(e.target.value))} className="w-24 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"/>
+                        <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleWeightChange(k, 0.01)}><Plus className="h-4 w-4" /></Button>
                    </div>
-                    <Slider id={`fsw-${k}`} min={0} max={1} step={0.01} value={[v]} onValueChange={(val)=>update(`finalScore.${k}`, val[0])} />
+                    <Slider id={`fsw-${k}`} min={0} max={1} step={0.01} value={[v]} onValueChange={(val)=>update(`finalScoreWeights.${k}`, val[0])} />
                 </div>
               ))}
             </CardContent>

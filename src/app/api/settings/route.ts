@@ -24,37 +24,26 @@ async function ensureCacheDir() {
 function getDefaultSettings() {
     return {
       thresholds: {
-        minPair: 0.40,
-        minInternal: 0.52,
-        blockChunkSize: 6500
+        minPair: 0.62,
+        minInternal: 0.54,
+        blockChunkSize: 3000
       },
-      fieldWeights: {
-        womanName: 0.60,
-        husbandName: 0.25,
-        nationalId: 0.07,
-        phone: 0.03,
-        household: 0.03,
-        village: 0.02
-      },
-      finalScore: {
-        firstNameScore: 0.20,
-        familyNameScore: 0.28,
-        advancedNameScore: 0.18,
-        tokenReorderScore: 0.17,
+      finalScoreWeights: {
+        firstNameScore: 0.15,
+        familyNameScore: 0.25,
+        advancedNameScore: 0.12,
+        tokenReorderScore: 0.10,
         husbandScore: 0.12,
-        idScore: 0.025,
-        phoneScore: 0.01,
-        childrenScore: 0.005,
-        locationScore: 0.005
+        idScore: 0.08,
+        phoneScore: 0.05,
+        childrenScore: 0.04,
+        locationScore: 0.04
       },
       rules: {
-          enableArabicNormalizer: true,
           enableNameRootEngine: true,
           enableTribalLineage: true,
           enableMaternalLineage: true,
-          enableOrderFreeMatching: true,
           enablePolygamyRules: true,
-          enableIncestBlocking: true
       }
     };
 }
@@ -98,33 +87,39 @@ export async function POST(req: Request) {
     if (!body || typeof body !== "object") {
       return NextResponse.json({ ok: false, error: "Invalid payload" }, { status: 400 });
     }
-    // Sanitize numeric thresholds
-    body.thresholds = body.thresholds || {};
-    body.thresholds.minPair = Number(body.thresholds.minPair) || defaults.thresholds.minPair;
-    body.thresholds.minInternal = Number(body.thresholds.minInternal) || defaults.thresholds.minInternal;
-    body.thresholds.blockChunkSize = Number(body.thresholds.blockChunkSize) || defaults.thresholds.blockChunkSize;
+    
+    // Create a new settings object by deep merging defaults with body
+    const newSettings = {
+        ...defaults,
+        ...body,
+        thresholds: { ...defaults.thresholds, ...(body.thresholds || {}) },
+        finalScoreWeights: { ...defaults.finalScoreWeights, ...(body.finalScoreWeights || {}) },
+        rules: { ...defaults.rules, ...(body.rules || {}) },
+    };
 
-    // Ensure field weights exist
-    body.fieldWeights = body.fieldWeights || {};
-    for (const k of Object.keys(defaults.fieldWeights)) {
-      body.fieldWeights[k] = typeof body.fieldWeights[k] === "number" ? Number(body.fieldWeights[k]) : defaults.fieldWeights[k as keyof typeof defaults.fieldWeights];
+    // Sanitize numeric thresholds
+    newSettings.thresholds.minPair = Number(newSettings.thresholds.minPair) || defaults.thresholds.minPair;
+    newSettings.thresholds.minInternal = Number(newSettings.thresholds.minInternal) || defaults.thresholds.minInternal;
+    newSettings.thresholds.blockChunkSize = Number(newSettings.thresholds.blockChunkSize) || defaults.thresholds.blockChunkSize;
+
+    // Ensure final score weights exist and are numbers
+    for (const k of Object.keys(defaults.finalScoreWeights)) {
+      newSettings.finalScoreWeights[k as keyof typeof defaults.finalScoreWeights] = 
+        typeof newSettings.finalScoreWeights[k as keyof typeof defaults.finalScoreWeights] === "number" 
+        ? Number(newSettings.finalScoreWeights[k as keyof typeof defaults.finalScoreWeights]) 
+        : defaults.finalScoreWeights[k as keyof typeof defaults.finalScoreWeights];
     }
     
-    // Ensure final score weights exist
-    body.finalScore = body.finalScore || {};
-    for (const k of Object.keys(defaults.finalScore)) {
-      body.finalScore[k] = typeof body.finalScore[k] === "number" ? Number(body.finalScore[k]) : defaults.finalScore[k as keyof typeof defaults.finalScore];
-    }
-
-
-    // Ensure rules exist
-    body.rules = body.rules || {};
+    // Ensure rules exist and are booleans
     for (const k of Object.keys(defaults.rules)) {
-      body.rules[k] = typeof body.rules[k] === "boolean" ? body.rules[k] : defaults.rules[k as keyof typeof defaults.rules];
+        newSettings.rules[k as keyof typeof defaults.rules] = 
+        typeof newSettings.rules[k as keyof typeof defaults.rules] === "boolean" 
+        ? newSettings.rules[k as keyof typeof defaults.rules] 
+        : defaults.rules[k as keyof typeof defaults.rules];
     }
 
-    await fs.writeFile(SETTINGS_PATH, JSON.stringify(body, null, 2), "utf8");
-    return NextResponse.json({ ok: true, settings: body });
+    await fs.writeFile(SETTINGS_PATH, JSON.stringify(newSettings, null, 2), "utf8");
+    return NextResponse.json({ ok: true, settings: newSettings });
   } catch (err: any) {
     return NextResponse.json({ ok: false, error: "Failed to save settings", details: String(err) }, { status: 500 });
   }
