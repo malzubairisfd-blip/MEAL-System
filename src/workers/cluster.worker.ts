@@ -6,7 +6,6 @@
 
 type InMsg = any;
 declare const postMessage: any;
-declare const onmessage: any;
 
 /* -------------------------
    Utilities & Normalizers
@@ -135,10 +134,7 @@ function pairwiseScore(aRaw:any,bRaw:any, opts:any){
       enablePolygamyRules: true
     }
   };
-  const o = { ...optsDefaults, ...opts,
-    finalScoreWeights: {...optsDefaults.finalScoreWeights, ...(opts.finalScoreWeights || {})},
-    rules: {...optsDefaults.rules, ...(opts.rules || {})},
-  };
+  const o = { ...optsDefaults, ...(opts||{}) };
   const FSW = o.finalScoreWeights;
 
   const a = {
@@ -389,9 +385,9 @@ function splitCluster(rowsSubset:any[], minInternal=0.5, opts:any){
 /* runClustering - main function used by worker */
 async function runClustering(rows:any[], opts:any){
   rows.forEach((r,i)=> r._internalId = r._internalId || `r_${i}`);
-  const minPair = opts?.thresholds?.minPair ?? 0.62;
-  const minInternal = opts?.thresholds?.minInternal ?? 0.54;
-  const blockChunkSize = opts?.thresholds?.blockChunkSize ?? 3000;
+  const minPair = opts?.minPair ?? 0.62;   // tuned default
+  const minInternal = opts?.minInternal ?? 0.54;
+  const blockChunkSize = opts?.blockChunkSize ?? 3000;
 
   const edges = buildEdges(rows, minPair, { ...opts, blockChunkSize });
 
@@ -419,8 +415,8 @@ async function runClustering(rows:any[], opts:any){
         const chunkRows = chunkIdx.map(i=>rows[i]);
         const parts = splitCluster(chunkRows, minInternal, opts);
         for(const p of parts){
-          const globalIdxs = p.map((r:any)=> chunkIdx.find(i=> rows[i]._internalId === r._internalId)).filter((i:any)=> i!== undefined);
-          if(globalIdxs.length) { finalClustersIdx.push(globalIdxs); globalIdxs.forEach((i:number)=>finalized.add(i)); }
+          const globalIdxs = p.map((r:any)=> chunkIdx.find(i=> rows[i]._internalId === r._internalId)).filter(i=> i!== undefined);
+          if(globalIdxs.length) { finalClustersIdx.push(globalIdxs); globalIdxs.forEach(i=>finalized.add(i)); }
         }
       }
     } else {
@@ -488,7 +484,7 @@ function mapIncomingRowsToInternal(rows:any[], mapping:any){
   });
 }
 
-onmessage = function(e:any){
+self.addEventListener('message', function(e:any){
   const msg = e.data as InMsg;
   if(!msg || !msg.type) return;
   if(msg.type === 'start'){
@@ -513,5 +509,5 @@ onmessage = function(e:any){
       }
     }, 50);
   }
-};
+});
 export {}; // worker module

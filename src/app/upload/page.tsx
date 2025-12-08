@@ -1,4 +1,3 @@
-
 // app/(app)/upload/page.tsx
 "use client";
 
@@ -14,6 +13,9 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
+// @ts-ignore
+import Worker from '@/workers/cluster.worker.ts?worker';
+
 
 type Mapping = {
   womanName: string; husbandName: string; nationalId: string; phone: string;
@@ -46,7 +48,7 @@ export default function UploadPage(){
     if(typeof window === "undefined") return;
     if(workerRef.current) return;
     try {
-      const w = new Worker(new URL('../../../workers/cluster.worker.ts', import.meta.url), { type: "module" });
+      const w = new Worker();
       workerRef.current = w;
       w.onmessage = async (ev) => {
         const msg = ev.data;
