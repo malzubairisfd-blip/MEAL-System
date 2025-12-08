@@ -19,7 +19,7 @@ import { Info } from "lucide-react";
 
 type Settings = any;
 
-const descriptions = {
+const descriptions: Record<string, any> = {
   minPair: "The minimum score (0 to 1) for two records to be considered a potential match and form a link. High values create fewer, more confident clusters. Low values create more, but potentially noisier, clusters.",
   minInternal: "The minimum score (0 to 1) used to decide if records within a large, temporary cluster should remain together in the final, smaller clusters. High values result in smaller, more tightly-related final clusters.",
   blockChunkSize: "A performance setting for very large datasets. It breaks down large groups of potential matches into smaller chunks to manage memory. The default is usually fine.",
@@ -41,22 +41,6 @@ const descriptions = {
     enablePolygamyRules: "Applies special logic for polygamous relationships, such as checking if two women share the same husband and paternal line.",
   }
 }
-
-const HelpTooltip = ({ content }: { content: string }) => (
-  <TooltipProvider>
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <button type="button" className="ml-2 text-muted-foreground hover:text-foreground">
-          <Info className="h-4 w-4" />
-        </button>
-      </TooltipTrigger>
-      <TooltipContent className="max-w-xs">
-        <p>{content}</p>
-      </TooltipContent>
-    </Tooltip>
-  </TooltipProvider>
-);
-
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState<Settings | null>(null);
@@ -261,30 +245,30 @@ export default function SettingsPage() {
             <CardContent className="space-y-6">
               <div>
                 <div className="grid grid-cols-12 items-center gap-4">
-                  <Label htmlFor="minPair" className="col-span-12 sm:col-span-3 flex items-center">Min Pair Score: <b className="mx-1">{settings.thresholds.minPair}</b> <HelpTooltip content={descriptions.minPair} /></Label>
+                  <Label htmlFor="minPair" className="col-span-12 sm:col-span-3 flex items-center">Min Pair Score: <b className="mx-1">{settings.thresholds.minPair}</b></Label>
                   <Slider id="minPair" min={0} max={1} step={0.01} value={[settings.thresholds.minPair]} onValueChange={(v)=>update("thresholds.minPair", v[0])} className="col-span-12 sm:col-span-6" />
                   <div className="col-span-12 sm:col-span-3 flex items-center gap-1 justify-end">
                       <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleNumericChange('thresholds.minPair', -0.01)}><Minus className="h-4 w-4" /></Button>
                       <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleNumericChange('thresholds.minPair', 0.01)}><Plus className="h-4 w-4" /></Button>
                   </div>
                 </div>
-                 <p className="text-xs text-muted-foreground mt-1 pl-1">The minimum score for two records to form a match. High values = fewer, more confident matches. Low values = more, noisier matches.</p>
+                 <p className="text-xs text-muted-foreground mt-1 pl-1">{descriptions.minPair}</p>
               </div>
               <div>
                 <div className="grid grid-cols-12 items-center gap-4">
-                  <Label htmlFor="minInternal" className="col-span-12 sm:col-span-3 flex items-center">Min Internal Score: <b className="mx-1">{settings.thresholds.minInternal}</b> <HelpTooltip content={descriptions.minInternal} /></Label>
+                  <Label htmlFor="minInternal" className="col-span-12 sm:col-span-3 flex items-center">Min Internal Score: <b className="mx-1">{settings.thresholds.minInternal}</b></Label>
                   <Slider id="minInternal" min={0} max={1} step={0.01} value={[settings.thresholds.minInternal]} onValueChange={(v)=>update("thresholds.minInternal", v[0])} className="col-span-12 sm:col-span-6" />
                   <div className="col-span-12 sm:col-span-3 flex items-center gap-1 justify-end">
                       <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleNumericChange('thresholds.minInternal', -0.01)}><Minus className="h-4 w-4" /></Button>
                       <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleNumericChange('thresholds.minInternal', 0.01)}><Plus className="h-4 w-4" /></Button>
                   </div>
                 </div>
-                 <p className="text-xs text-muted-foreground mt-1 pl-1">Score to decide if records in a large group stay together. High values = smaller, tighter final clusters.</p>
+                 <p className="text-xs text-muted-foreground mt-1 pl-1">{descriptions.minInternal}</p>
               </div>
               <div>
-                <Label htmlFor="blockChunkSize" className="flex items-center">Block Chunk Size <HelpTooltip content={descriptions.blockChunkSize} /></Label>
+                <Label htmlFor="blockChunkSize">Block Chunk Size</Label>
                 <Input id="blockChunkSize" type="number" value={settings.thresholds.blockChunkSize} onChange={(e)=>update("thresholds.blockChunkSize", parseInt(e.target.value||"0"))}/>
-                <p className="text-xs text-muted-foreground mt-1">Performance setting for large datasets. Breaks work into chunks to avoid memory issues. Default is usually fine.</p>
+                <p className="text-xs text-muted-foreground mt-1">{descriptions.blockChunkSize}</p>
               </div>
             </CardContent>
           </Card>
@@ -292,10 +276,10 @@ export default function SettingsPage() {
           <Card>
             <CardHeader><CardTitle>Final Score Composition</CardTitle></CardHeader>
             <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {Object.entries(settings.finalScoreWeights).map(([k, v]: any) => (
+              {Object.entries(settings.finalScoreWeights).map(([k, v]: [string, any]) => (
                 <div key={k} className="flex flex-col gap-2 p-3 border rounded-md">
                    <div className="flex justify-between items-center">
-                     <Label htmlFor={`fsw-${k}`} className="capitalize flex items-center">{k.replace(/([A-Z])/g, ' $1')} <HelpTooltip content={descriptions.finalScoreWeights[k as keyof typeof descriptions.finalScoreWeights]} /></Label>
+                     <Label htmlFor={`fsw-${k}`} className="capitalize flex items-center">{k.replace(/([A-Z])/g, ' $1')}</Label>
                    </div>
                    <div className="flex items-center gap-2">
                         <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleWeightChange(k, -0.01)}><Minus className="h-4 w-4" /></Button>
@@ -303,6 +287,7 @@ export default function SettingsPage() {
                         <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleWeightChange(k, 0.01)}><Plus className="h-4 w-4" /></Button>
                    </div>
                     <Slider id={`fsw-${k}`} min={0} max={1} step={0.01} value={[v]} onValueChange={(val)=>update(`finalScoreWeights.${k}`, val[0])} />
+                    <p className="text-xs text-muted-foreground mt-1">{descriptions.finalScoreWeights[k]}</p>
                 </div>
               ))}
             </CardContent>
@@ -311,11 +296,11 @@ export default function SettingsPage() {
           <Card>
             <CardHeader><CardTitle>Rules</CardTitle></CardHeader>
             <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {Object.entries(settings.rules).map(([k, v]: any) => (
+              {Object.entries(settings.rules).map(([k, v]: [string, any]) => (
                 <div key={k} className="flex items-start justify-between p-3 rounded-lg border">
                   <div className="flex flex-col gap-1">
                     <Label htmlFor={`r-${k}`} className="capitalize flex items-center">{k.replace(/([A-Z])/g, ' $1').replace('Enable ', '')}</Label>
-                    <p className="text-xs text-muted-foreground">{descriptions.rules[k as keyof typeof descriptions.rules]}</p>
+                    <p className="text-xs text-muted-foreground">{descriptions.rules[k]}</p>
                   </div>
                   <Switch id={`r-${k}`} checked={v} onCheckedChange={(val)=>update(`rules.${k}`, val)} />
                 </div>

@@ -526,7 +526,6 @@ self.addEventListener('message', function(e){
 `;
 }
 
-
 type Mapping = {
   womanName: string; husbandName: string; nationalId: string; phone: string;
   village: string; subdistrict: string; children: string; cluster_id?: string; beneficiaryId?: string;
@@ -746,7 +745,7 @@ export default function UploadPage(){
       {columns.length > 0 && (
         <Card>
           <CardHeader><CardTitle>2. Map Columns</CardTitle><CardDescription>Map your sheet columns to fields.</CardDescription></CardHeader>
-          <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {MAPPING_FIELDS.map(field => (
               <Card key={field}>
                 <CardHeader className="p-3">
@@ -785,7 +784,7 @@ export default function UploadPage(){
 
               {(workerStatus !== 'idle' && workerStatus !== 'done' && workerStatus !== 'error') && (
                 <div>
-                  <div className="flex justify-between text-sm"><span>Status: <b>{formattedStatus()}</b></span><span>{Math.round(progressInfo.progress)}%</span></div>
+                  <p className="text-sm text-muted-foreground mb-2">Status: <b>{formattedStatus()}</b></p>
                   <Progress value={progressInfo.progress} />
                 </div>
               )}
