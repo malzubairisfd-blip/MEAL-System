@@ -6,7 +6,7 @@ import type { RecordRow } from "@/lib/fuzzyCluster";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, Search, ChevronLeft, AlertTriangle, ChevronRight, Sparkles } from "lucide-react";
+import { Loader2, Search, ChevronLeft, AlertTriangle, ChevronRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
 import { ClusterCard } from "@/components/ClusterCard";
@@ -18,22 +18,21 @@ export default function ReviewPage() {
   const [allClusters, setAllClusters] = useState<Cluster[]>([]);
   const [filteredClusters, setFilteredClusters] = useState<Cluster[]>([]);
   const [selectedCluster, setSelectedCluster] = useState<Cluster | null>(null);
-  const [loading, setLoading] = useState({ data: true, summaries: false });
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const { toast } = useToast();
-  const [aiSummaries, setAiSummaries] = useState<{ [key: string]: string }>({});
 
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(9);
 
   useEffect(() => {
     async function loadClusters() {
-      setLoading({ data: true, summaries: false });
+      setLoading(true);
       try {
           const cacheId = sessionStorage.getItem('cacheId');
           if (!cacheId) {
             toast({ title: "No Data", description: "No clusters found from the last run. Please upload data first.", variant: "destructive" });
-            setLoading({ data: false, summaries: false });
+            setLoading(false);
             return;
           }
 
@@ -42,12 +41,10 @@ export default function ReviewPage() {
           
           const data = await res.json();
           const clusters = data.clusters;
-          const cachedSummaries = data.aiSummaries || {};
           
           if (clusters) {
               setAllClusters(clusters);
               setFilteredClusters(clusters);
-              setAiSummaries(cachedSummaries);
 
               if (clusters.length === 0) {
                   toast({ title: "No Clusters Found", description: "The last run did not produce any clusters. Try adjusting settings.", variant: "default" });
@@ -60,7 +57,7 @@ export default function ReviewPage() {
       } catch (error: any) {
         toast({ title: "Error", description: error.message, variant: "destructive" });
       } finally {
-        setLoading({ data: false, summaries: false });
+        setLoading(false);
       }
     }
     loadClusters();
@@ -143,7 +140,7 @@ export default function ReviewPage() {
             </div>
           </div>
                     
-          {loading.data ? (
+          {loading ? (
             <div className="text-center text-muted-foreground py-10">
                 <Loader2 className="mx-auto h-8 w-8 animate-spin" />
                 <p className="mt-2">Loading clusters...</p>
@@ -159,7 +156,6 @@ export default function ReviewPage() {
                       cluster={c} 
                       clusterNumber={(currentPage - 1) * itemsPerPage + idx + 1}
                       onInspect={() => handleInspect(c)}
-                      precomputedDescription={aiSummaries[clusterKey]}
                     />
                   )
                 })}
@@ -198,5 +194,3 @@ export default function ReviewPage() {
     </div>
   );
 }
-
-    
