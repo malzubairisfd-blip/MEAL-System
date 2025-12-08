@@ -189,25 +189,19 @@ function createEnrichedDataSheet(wb: ExcelJS.Workbook, data: EnrichedRecord[], o
     const ws = wb.addWorksheet("Enriched Data");
     ws.views = [{ rightToLeft: true }];
     
-    // Define the headers to include, explicitly excluding Max_PairScore for the final output
-    const headersToCreate = [
+    const enrichmentHeaders = [
         "Cluster_ID", "Cluster_Size", "Flag", "pairScore", "nameScore", "husbandScore", "idScore", "phoneScore"
     ];
     
-    // Combine new headers, original headers, and the new informational columns at the end
     const finalHeaders = [
-        ...headersToCreate,
-        ...originalHeaders,
-        "womanName", "husbandName", "children", "nationalId", "phone", "village", "subdistrict"
+        ...enrichmentHeaders,
+        ...originalHeaders
     ];
 
-    // Use a Set to ensure headers are unique, preserving order
-    const uniqueHeaders = [...new Set(finalHeaders)];
-    
-    ws.columns = uniqueHeaders.map(h => ({
+    ws.columns = finalHeaders.map(h => ({
       header: h,
       key: h,
-      width: h === 'womanName' || h === 'husbandName' ? 25 : 15
+      width: h === 'womanName' || h === 'husbandName' || originalHeaders.includes(h) ? 25 : 15
     }));
 
     ws.getRow(1).eachCell(cell => {
@@ -216,16 +210,12 @@ function createEnrichedDataSheet(wb: ExcelJS.Workbook, data: EnrichedRecord[], o
         cell.alignment = { horizontal: 'center' };
     });
     
-    // Add the data rows. `data` contains Max_PairScore, which is used for formatting but not for header creation.
     ws.addRows(data);
     
-    // Conditional formatting and borders
     ws.eachRow({ includeEmpty: false }, (row, rowNumber) => {
         if (rowNumber === 1) return;
         
-        // The 'Max_PairScore' value exists on the row model but not as a column in the sheet.
-        // We can access it directly from the `data` array for the corresponding row.
-        const rowData = data[rowNumber - 2]; // -1 for header, -1 for 0-based index
+        const rowData = data[rowNumber - 2];
         if (!rowData || rowData.Max_PairScore === null || rowData.Max_PairScore === undefined) return;
         
         const score = Number(rowData.Max_PairScore);
@@ -445,3 +435,5 @@ function createAuditSheet(wb: ExcelJS.Workbook, findings: AuditFinding[]) {
         currentRowIndex = endRow + 1;
     });
 }
+
+    
