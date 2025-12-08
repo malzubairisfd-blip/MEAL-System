@@ -1,3 +1,4 @@
+
 // src/lib/scoringClient.ts
 type Settings = any;
 
@@ -84,13 +85,17 @@ export function computePairScore(aRaw: any, bRaw: any, settings: Settings) {
     womanName: normalizeArabic(aRaw.womanName || ""),
     husbandName: normalizeArabic(aRaw.husbandName || ""),
     nationalId: safeString(aRaw.nationalId || ""),
-    phone: digitsOnly(aRaw.phone || "")
+    phone: digitsOnly(aRaw.phone || ""),
+    children: aRaw.children || [],
+    village: normalizeArabic(aRaw.village || ""),
   };
   const b = {
     womanName: normalizeArabic(bRaw.womanName || ""),
     husbandName: normalizeArabic(bRaw.husbandName || ""),
     nationalId: safeString(bRaw.nationalId || ""),
-    phone: digitsOnly(bRaw.phone || "")
+    phone: digitsOnly(bRaw.phone || ""),
+    children: bRaw.children || [],
+    village: normalizeArabic(bRaw.village || ""),
   };
 
   const firstA = tokens(a.womanName)[0] || "";
@@ -100,22 +105,36 @@ export function computePairScore(aRaw: any, bRaw: any, settings: Settings) {
 
   const firstNameScore = jaroWinkler(firstA, firstB);
   const familyNameScore = jaroWinkler(familyA, familyB);
-  const orderFree = nameOrderFree(a.womanName, b.womanName);
+  const tokenReorderScore = nameOrderFree(a.womanName, b.womanName);
+  const advancedNameScore = 0; // Simplified for client test
   const husbandScore = Math.max(jaroWinkler(a.husbandName, b.husbandName), tokenJaccard(tokens(a.husbandName), tokens(b.husbandName)));
 
   const phoneScore = (a.phone && b.phone) ? (a.phone === b.phone ? 1 : (a.phone.slice(-6) === b.phone.slice(-6) ? 0.85 : (a.phone.slice(-4) === b.phone.slice(-4) ? 0.6 : 0))) : 0;
   const idScore = (a.nationalId && b.nationalId) ? (a.nationalId === b.nationalId ? 1 : (a.nationalId.slice(-5) === b.nationalId.slice(-5) ? 0.75 : 0)) : 0;
+  const childrenScore = tokenJaccard(a.children, b.children);
+  const locationScore = (a.village && b.village && a.village === b.village) ? 1 : 0;
 
-  const W = settings.weights || { womanName: 0.45, husbandName: 0.25, household: 0.1, nationalId: 0.1, phone: 0.05, village: 0.05 };
 
-  // Compose similarly to engine but lighter
-  let score =
-    (W.womanName || 0) * (0.65 * familyNameScore + 0.35 * firstNameScore + 0.6 * orderFree) +
-    (W.husbandName || 0) * husbandScore +
-    (W.nationalId || 0) * idScore +
-    (W.phone || 0) * phoneScore;
+  const FSW = settings.finalScoreWeights || {
+      firstNameScore: 0.15, familyNameScore: 0.25, advancedNameScore: 0.12,
+      tokenReorderScore: 0.10, husbandScore: 0.12, idScore: 0.08,
+      phoneScore: 0.05, childrenScore: 0.04, locationScore: 0.04,
+  };
+
+  // Compose similarly to engine
+  let score = 0;
+  score += FSW.firstNameScore * firstNameScore;
+  score += FSW.familyNameScore * familyNameScore;
+  score += FSW.advancedNameScore * advancedNameScore;
+  score += FSW.tokenReorderScore * tokenReorderScore;
+  score += FSW.husbandScore * husbandScore;
+  score += FSW.idScore * idScore;
+  score += FSW.phoneScore * phoneScore;
+  score += FSW.childrenScore * childrenScore;
+  score += FSW.locationScore * locationScore;
+
 
   // clamp
   score = Math.max(0, Math.min(1, score));
-  return { score, breakdown: { firstNameScore, familyNameScore, orderFree, husbandScore, idScore, phoneScore } };
+  return { score, breakdown: { firstNameScore, familyNameScore, tokenReorderScore, husbandScore, idScore, phoneScore, childrenScore, locationScore } };
 }

@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
@@ -648,8 +649,13 @@ function nameOrderFreeScore(aName, bName) {
 // ===================== fuzzyCluster.ts — PART 3 =====================
 // Pairwise scoring implementing the 11 requested rules and producing breakdowns.
 
-function pairwiseScore(aRaw, bRaw, weights) {
-  const w = weights || {};
+function pairwiseScore(aRaw, bRaw, opts) {
+  const w = opts || {};
+  const FSW = w.finalScoreWeights || {
+      firstNameScore: 0.15, familyNameScore: 0.25, advancedNameScore: 0.12,
+      tokenReorderScore: 0.10, husbandScore: 0.12, idScore: 0.08,
+      phoneScore: 0.05, childrenScore: 0.04, locationScore: 0.04,
+  };
   // Map fields and normalize important fields
   const a = {
     womanName: normalizeArabic(aRaw.womanName || ""),
@@ -682,7 +688,7 @@ function pairwiseScore(aRaw, bRaw, weights) {
   const familyNameScore = jaroWinkler(familyA, familyB);
 
   // ORDER-FREE detection (handles 4 vs 5 part names & reshuffles)
-  const orderFree = nameOrderFreeScore(a.womanName, b.womanName);
+  const tokenReorderScore = nameOrderFreeScore(a.womanName, b.womanName);
 
   // Advanced root match
   const rootA = reduceNameRoot(a.womanName);
@@ -738,15 +744,9 @@ function pairwiseScore(aRaw, bRaw, weights) {
     if (sharedHusbandPatronym >= 0.40) sharedHusbandPatronym = 0.55; // force strong indicator
   }
 
-  // RULE: token reorder (detect same tokens but different order)
-  const tokenReorderScore = orderFree;
-
   // RULE: duplicate woman/husband detection (exact or fuzzy)
   const womanExact = (a.womanName && b.womanName && a.womanName === b.womanName);
-  const husbandExact = (a.husbandName && b.husbandName && a.husbandName === b.husbandName);
-
   const womanFuzzy = (firstNameScore + familyNameScore + advancedNameScore + tokenReorderScore) / 4;
-  const husbandFuzzy = husbandScore;
 
   // RULE: Same person with different husband/ID/phone (multiple registrations)
   // If name matches strongly but ID/phone/husband mismatch => flag multi-registration
@@ -763,21 +763,18 @@ function pairwiseScore(aRaw, bRaw, weights) {
   const firstThreeScore = jaroWinkler(aTok, bTok);
 
   // Compose final weighted score from settings
-  const W = w.weights || {};
   const R = w.rules || {};
   
   let score = 0;
-  if (R.enableOrderFreeMatching) {
-      score += (W.womanName || 0.45) * (0.65 * familyNameScore + 0.35 * firstNameScore + 0.6 * orderFree);
-  } else {
-      score += (W.womanName || 0.45) * (0.65 * familyNameScore + 0.35 * firstNameScore);
-  }
-  score += (W.husbandName || 0.25) * husbandScore;
-  score += (W.nationalId || 0.1) * idScore;
-  score += (W.phone || 0.05) * phoneScoreVal;
-  score += (W.village || 0.05) * locationScore; // Village weight applied to location score
-  // household seems to be a general weight, maybe apply to children?
-  score += (W.household || 0.1) * childrenScore;
+  score += FSW.firstNameScore * firstNameScore;
+  score += FSW.familyNameScore * familyNameScore;
+  score += FSW.advancedNameScore * advancedNameScore;
+  score += FSW.tokenReorderScore * tokenReorderScore;
+  score += FSW.husbandScore * husbandScore;
+  score += FSW.idScore * idScore;
+  score += FSW.phoneScore * phoneScoreVal;
+  score += FSW.childrenScore * childrenScore;
+  score += FSW.locationScore * locationScore;
 
 
   // Apply rule-based boosts if enabled
@@ -1104,5 +1101,5 @@ onmessage = function(e) {
         });
     }
 };
-`;
+`
 }

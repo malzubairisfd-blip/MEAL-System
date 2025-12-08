@@ -1,3 +1,4 @@
+
 // src/app/settings/page.tsx
 "use client";
 
@@ -29,6 +30,17 @@ const descriptions = {
     nationalId: "How much to value an exact match on the National ID.",
     phone: "How much to value a partial or exact match on the phone number.",
     village: "How much to value a match on the village or sub-district name.",
+  },
+  finalScoreWeights: {
+    firstNameScore: "Weight for the similarity of the first name.",
+    familyNameScore: "Weight for the similarity of the family name (all parts except the first).",
+    advancedNameScore: "Weight for advanced name matching techniques, like root-letter matching.",
+    tokenReorderScore: "Weight for detecting names with the same words but in a different order.",
+    husbandScore: "Weight for the similarity of the husband's name.",
+    idScore: "Weight for matches on the National ID.",
+    phoneScore: "Weight for matches on the phone number.",
+    childrenScore: "Weight for matching children's names.",
+    locationScore: "Weight for matching village or sub-district names."
   },
   rules: {
     enableArabicNormalizer: "Standardizes Arabic characters (e.g., 'أ', 'إ', 'آ' all become 'ا') to catch more matches despite variations in typing.",
@@ -66,12 +78,49 @@ export default function SettingsPage() {
   const [lastResult, setLastResult] = useState<any>(null);
   const { toast } = useToast();
 
+  const getDefaultSettings = () => ({
+      minPair: 0.52,
+      minInternal: 0.65,
+      blockChunkSize: 5000,
+      weights: { womanName: 0.45, husbandName: 0.25, household: 0.1, nationalId: 0.1, phone: 0.05, village: 0.05 },
+      finalScoreWeights: {
+          firstNameScore: 0.15,
+          familyNameScore: 0.25,
+          advancedNameScore: 0.12,
+          tokenReorderScore: 0.10,
+          husbandScore: 0.12,
+          idScore: 0.08,
+          phoneScore: 0.05,
+          childrenScore: 0.04,
+          locationScore: 0.04,
+      },
+      rules: {
+          enableArabicNormalizer: true,
+          enableNameRootEngine: true,
+          enableTribalLineage: true,
+          enableMaternalLineage: true,
+          enableOrderFreeMatching: true,
+          enablePolygamyRules: true,
+          enableIncestBlocking: true
+      }
+  });
+
+
   useEffect(() => {
     fetch("/api/settings")
       .then((r) => r.json())
       .then((j) => {
         if (j.ok) {
-          setSettings(j.settings);
+          // Merge fetched settings with defaults to ensure all keys exist
+          const defaults = getDefaultSettings();
+          const mergedSettings = {
+              ...defaults,
+              ...j.settings,
+              weights: { ...defaults.weights, ...j.settings.weights },
+              finalScoreWeights: { ...defaults.finalScoreWeights, ...j.settings.finalScoreWeights },
+              rules: { ...defaults.rules, ...j.settings.rules },
+          };
+          setSettings(mergedSettings);
         } else {
           // If missing, load defaults
           setSettings(getDefaultSettings());
@@ -85,23 +134,6 @@ export default function SettingsPage() {
       .finally(() => setLoading(false));
   }, [toast]);
 
-  function getDefaultSettings() {
-    return {
-      minPair: 0.52,
-      minInternal: 0.65,
-      blockChunkSize: 5000,
-      weights: { womanName: 0.45, husbandName: 0.25, household: 0.1, nationalId: 0.1, phone: 0.05, village: 0.05 },
-      rules: {
-        enableArabicNormalizer: true,
-        enableNameRootEngine: true,
-        enableTribalLineage: true,
-        enableMaternalLineage: true,
-        enableOrderFreeMatching: true,
-        enablePolygamyRules: true,
-        enableIncestBlocking: true
-      }
-    };
-  }
 
   function update(path: string, value: any) {
     if (!settings) return;
@@ -128,8 +160,8 @@ export default function SettingsPage() {
       update(path, newValue);
   }
 
-  function handleWeightChange(key: string, change: number) {
-    handleNumericChange(`weights.${key}`, change);
+  function handleWeightChange(key: string, change: number, weightGroup: 'weights' | 'finalScoreWeights' = 'weights') {
+    handleNumericChange(`${weightGroup}.${key}`, change);
   }
 
   async function save() {
@@ -271,20 +303,38 @@ export default function SettingsPage() {
           </Card>
 
           <Card>
-            <CardHeader><CardTitle>Weights</CardTitle></CardHeader>
-            <CardContent className="space-y-6">
+            <CardHeader><CardTitle>Legacy Weights (deprecated)</CardTitle></CardHeader>
+            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {Object.entries(settings.weights).map(([k, v]: any) => (
-                <div key={k}>
-                  <div className="grid grid-cols-1 md:grid-cols-12 items-center gap-4">
-                    <Label htmlFor={`w-${k}`} className="col-span-12 md:col-span-3 capitalize flex items-center">{k.replace(/([A-Z])/g, ' $1')} <HelpTooltip content={descriptions.weights[k as keyof typeof descriptions.weights]} /></Label>
-                    <Slider id={`w-${k}`} min={0} max={1} step={0.01} value={[v]} onValueChange={(val)=>update(`weights.${k}`, val[0])} className="col-span-12 md:col-span-6" />
-                    <div className="col-span-12 md:col-span-3 flex items-center gap-1">
-                        <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleWeightChange(k, -0.01)}><Minus className="h-4 w-4" /></Button>
-                        <Input type="number" step="0.01" value={v} onChange={(e)=>update(`weights.${k}`, parseFloat(e.target.value))} className="w-24 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"/>
-                        <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleWeightChange(k, 0.01)}><Plus className="h-4 w-4" /></Button>
-                    </div>
+                <div key={k} className="flex flex-col gap-2 p-3 border rounded-md">
+                  <div className="flex justify-between items-center">
+                    <Label htmlFor={`w-${k}`} className="capitalize flex items-center">{k.replace(/([A-Z])/g, ' $1')} <HelpTooltip content={descriptions.weights[k as keyof typeof descriptions.weights]} /></Label>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1 md:ml-[26%]">{descriptions.weights[k as keyof typeof descriptions.weights]}</p>
+                  <div className="flex items-center gap-2">
+                        <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleWeightChange(k, -0.01, 'weights')}><Minus className="h-4 w-4" /></Button>
+                        <Input type="number" step="0.01" value={v} onChange={(e)=>update(`weights.${k}`, parseFloat(e.target.value))} className="w-24 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"/>
+                        <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleWeightChange(k, 0.01, 'weights')}><Plus className="h-4 w-4" /></Button>
+                  </div>
+                   <Slider id={`w-${k}`} min={0} max={1} step={0.01} value={[v]} onValueChange={(val)=>update(`weights.${k}`, val[0])} />
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader><CardTitle>Final Score Composition</CardTitle></CardHeader>
+            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {Object.entries(settings.finalScoreWeights).map(([k, v]: any) => (
+                <div key={k} className="flex flex-col gap-2 p-3 border rounded-md">
+                   <div className="flex justify-between items-center">
+                     <Label htmlFor={`fsw-${k}`} className="capitalize flex items-center">{k.replace(/([A-Z])/g, ' $1')} <HelpTooltip content={descriptions.finalScoreWeights[k as keyof typeof descriptions.finalScoreWeights]} /></Label>
+                   </div>
+                   <div className="flex items-center gap-2">
+                        <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleWeightChange(k, -0.01, 'finalScoreWeights')}><Minus className="h-4 w-4" /></Button>
+                        <Input type="number" step="0.01" value={v} onChange={(e)=>update(`finalScoreWeights.${k}`, parseFloat(e.target.value))} className="w-24 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"/>
+                        <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleWeightChange(k, 0.01, 'finalScoreWeights')}><Plus className="h-4 w-4" /></Button>
+                   </div>
+                    <Slider id={`fsw-${k}`} min={0} max={1} step={0.01} value={[v]} onValueChange={(val)=>update(`finalScoreWeights.${k}`, val[0])} />
                 </div>
               ))}
             </CardContent>
