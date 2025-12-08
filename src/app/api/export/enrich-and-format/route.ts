@@ -34,7 +34,7 @@ async function getCachedData(cacheId: string) {
 }
 
 async function enrichData(cachedData: any): Promise<EnrichedRecord[]> {
-    const { rows: allRecords, clusters } = cachedData;
+    const { rows: allRecords, clusters } = cachedData.data; // Correctly access the nested data object
     if (!allRecords || !clusters) {
         throw new Error("Invalid cache: missing rows or clusters.");
     }
@@ -130,7 +130,7 @@ function sortData(data: EnrichedRecord[]): EnrichedRecord[] {
 }
 
 function createFormattedWorkbook(data: EnrichedRecord[], cachedData: any): ExcelJS.Workbook {
-    const { rows: allRecords, clusters, auditFindings, aiSummaries, originalHeaders } = cachedData;
+    const { rows: allRecords, clusters, auditFindings, aiSummaries, originalHeaders } = cachedData.data; // Correctly access the nested data object
     const wb = new ExcelJS.Workbook();
     wb.creator = "Beneficiary Insights";
     
