@@ -12,8 +12,50 @@ import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
 import { Save, RotateCcw, Upload, Download, Loader2, Plus, Minus, ArrowLeft } from "lucide-react";
 import Link from "next/link";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Info } from "lucide-react";
+
 
 type Settings = any;
+
+const descriptions = {
+  minPair: "The minimum score (0 to 1) for two records to be considered a potential match and form a link. High values create fewer, more confident clusters. Low values create more, but potentially noisier, clusters.",
+  minInternal: "The minimum score (0 to 1) used to decide if records within a large, temporary cluster should remain together in the final, smaller clusters. High values result in smaller, more tightly-related final clusters.",
+  blockChunkSize: "A performance setting for very large datasets. It breaks down large groups of potential matches into smaller chunks to manage memory. The default is usually fine.",
+  weights: {
+    womanName: "How much to value the similarity between the woman's full name.",
+    husbandName: "How much to value the similarity between the husband's name.",
+    household: "A general weight for household-level similarities (currently linked to children).",
+    nationalId: "How much to value an exact match on the National ID.",
+    phone: "How much to value a partial or exact match on the phone number.",
+    village: "How much to value a match on the village or sub-district name.",
+  },
+  rules: {
+    enableArabicNormalizer: "Standardizes Arabic characters (e.g., 'أ', 'إ', 'آ' all become 'ا') to catch more matches despite variations in typing.",
+    enableNameRootEngine: "An advanced technique that tries to match names based on their likely root letters, catching more complex variations.",
+    enableTribalLineage: "Looks for and gives weight to matches in the tribal or family name parts of a full name.",
+    enableMaternalLineage: "Gives weight to similarities found in the maternal parts of a name if they can be identified.",
+    enableOrderFreeMatching: "Detects if two names have the same set of words but in a different order (e.g., 'Fatima Ali Ahmed' vs. 'Fatima Ahmed Ali').",
+    enablePolygamyRules: "Applies special logic for polygamous relationships, such as checking if two women share the same husband and paternal line.",
+    enableIncestBlocking: "Prevents the engine from clustering individuals who are identified as being in a forbidden relationship (e.g., siblings).",
+  }
+}
+
+const HelpTooltip = ({ content }: { content: string }) => (
+  <TooltipProvider>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button type="button" className="ml-2 text-muted-foreground hover:text-foreground">
+          <Info className="h-4 w-4" />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent className="max-w-xs">
+        <p>{content}</p>
+      </TooltipContent>
+    </Tooltip>
+  </TooltipProvider>
+);
+
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState<Settings | null>(null);
@@ -198,25 +240,32 @@ export default function SettingsPage() {
               <CardTitle>Thresholds & Performance</CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="grid grid-cols-12 items-center gap-4">
-                <Label htmlFor="minPair" className="col-span-12 sm:col-span-3">Min Pair Score: <b>{settings.minPair}</b></Label>
-                <Slider id="minPair" min={0} max={1} step={0.01} value={[settings.minPair]} onValueChange={(v)=>update("minPair", v[0])} className="col-span-12 sm:col-span-6" />
-                <div className="col-span-12 sm:col-span-3 flex items-center gap-1 justify-end">
-                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleNumericChange('minPair', -0.01)}><Minus className="h-4 w-4" /></Button>
-                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleNumericChange('minPair', 0.01)}><Plus className="h-4 w-4" /></Button>
+              <div>
+                <div className="grid grid-cols-12 items-center gap-4">
+                  <Label htmlFor="minPair" className="col-span-12 sm:col-span-3 flex items-center">Min Pair Score: <b className="mx-1">{settings.minPair}</b> <HelpTooltip content={descriptions.minPair} /></Label>
+                  <Slider id="minPair" min={0} max={1} step={0.01} value={[settings.minPair]} onValueChange={(v)=>update("minPair", v[0])} className="col-span-12 sm:col-span-6" />
+                  <div className="col-span-12 sm:col-span-3 flex items-center gap-1 justify-end">
+                      <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleNumericChange('minPair', -0.01)}><Minus className="h-4 w-4" /></Button>
+                      <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleNumericChange('minPair', 0.01)}><Plus className="h-4 w-4" /></Button>
+                  </div>
                 </div>
-              </div>
-              <div className="grid grid-cols-12 items-center gap-4">
-                <Label htmlFor="minInternal" className="col-span-12 sm:col-span-3">Min Internal Score: <b>{settings.minInternal}</b></Label>
-                <Slider id="minInternal" min={0} max={1} step={0.01} value={[settings.minInternal]} onValueChange={(v)=>update("minInternal", v[0])} className="col-span-12 sm:col-span-6" />
-                <div className="col-span-12 sm:col-span-3 flex items-center gap-1 justify-end">
-                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleNumericChange('minInternal', -0.01)}><Minus className="h-4 w-4" /></Button>
-                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleNumericChange('minInternal', 0.01)}><Plus className="h-4 w-4" /></Button>
-                </div>
+                 <p className="text-xs text-muted-foreground mt-1 pl-1">The minimum score for two records to form a match. High values = fewer, more confident matches. Low values = more, noisier matches.</p>
               </div>
               <div>
-                <Label htmlFor="blockChunkSize">Block Chunk Size</Label>
+                <div className="grid grid-cols-12 items-center gap-4">
+                  <Label htmlFor="minInternal" className="col-span-12 sm:col-span-3 flex items-center">Min Internal Score: <b className="mx-1">{settings.minInternal}</b> <HelpTooltip content={descriptions.minInternal} /></Label>
+                  <Slider id="minInternal" min={0} max={1} step={0.01} value={[settings.minInternal]} onValueChange={(v)=>update("minInternal", v[0])} className="col-span-12 sm:col-span-6" />
+                  <div className="col-span-12 sm:col-span-3 flex items-center gap-1 justify-end">
+                      <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleNumericChange('minInternal', -0.01)}><Minus className="h-4 w-4" /></Button>
+                      <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleNumericChange('minInternal', 0.01)}><Plus className="h-4 w-4" /></Button>
+                  </div>
+                </div>
+                 <p className="text-xs text-muted-foreground mt-1 pl-1">Score to decide if records in a large group stay together. High values = smaller, tighter final clusters.</p>
+              </div>
+              <div>
+                <Label htmlFor="blockChunkSize" className="flex items-center">Block Chunk Size <HelpTooltip content={descriptions.blockChunkSize} /></Label>
                 <Input id="blockChunkSize" type="number" value={settings.blockChunkSize} onChange={(e)=>update("blockChunkSize", parseInt(e.target.value||"0"))}/>
+                <p className="text-xs text-muted-foreground mt-1">Performance setting for large datasets. Breaks work into chunks to avoid memory issues. Default is usually fine.</p>
               </div>
             </CardContent>
           </Card>
@@ -225,14 +274,17 @@ export default function SettingsPage() {
             <CardHeader><CardTitle>Weights</CardTitle></CardHeader>
             <CardContent className="space-y-6">
               {Object.entries(settings.weights).map(([k, v]: any) => (
-                <div key={k} className="grid grid-cols-1 md:grid-cols-12 items-center gap-4">
-                  <Label htmlFor={`w-${k}`} className="col-span-12 md:col-span-3 capitalize">{k.replace(/([A-Z])/g, ' $1')}</Label>
-                  <Slider id={`w-${k}`} min={0} max={1} step={0.01} value={[v]} onValueChange={(val)=>update(`weights.${k}`, val[0])} className="col-span-12 md:col-span-6" />
-                  <div className="col-span-12 md:col-span-3 flex items-center gap-1">
-                      <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleWeightChange(k, -0.01)}><Minus className="h-4 w-4" /></Button>
-                      <Input type="number" step="0.01" value={v} onChange={(e)=>update(`weights.${k}`, parseFloat(e.target.value))} className="w-24 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"/>
-                      <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleWeightChange(k, 0.01)}><Plus className="h-4 w-4" /></Button>
+                <div key={k}>
+                  <div className="grid grid-cols-1 md:grid-cols-12 items-center gap-4">
+                    <Label htmlFor={`w-${k}`} className="col-span-12 md:col-span-3 capitalize flex items-center">{k.replace(/([A-Z])/g, ' $1')} <HelpTooltip content={descriptions.weights[k as keyof typeof descriptions.weights]} /></Label>
+                    <Slider id={`w-${k}`} min={0} max={1} step={0.01} value={[v]} onValueChange={(val)=>update(`weights.${k}`, val[0])} className="col-span-12 md:col-span-6" />
+                    <div className="col-span-12 md:col-span-3 flex items-center gap-1">
+                        <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleWeightChange(k, -0.01)}><Minus className="h-4 w-4" /></Button>
+                        <Input type="number" step="0.01" value={v} onChange={(e)=>update(`weights.${k}`, parseFloat(e.target.value))} className="w-24 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"/>
+                        <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleWeightChange(k, 0.01)}><Plus className="h-4 w-4" /></Button>
+                    </div>
                   </div>
+                  <p className="text-xs text-muted-foreground mt-1 md:ml-[26%]">{descriptions.weights[k as keyof typeof descriptions.weights]}</p>
                 </div>
               ))}
             </CardContent>
@@ -242,8 +294,11 @@ export default function SettingsPage() {
             <CardHeader><CardTitle>Rules</CardTitle></CardHeader>
             <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {Object.entries(settings.rules).map(([k, v]: any) => (
-                <div key={k} className="flex items-center justify-between p-3 rounded-lg border">
-                  <Label htmlFor={`r-${k}`} className="capitalize">{k.replace(/([A-Z])/g, ' $1').replace('Enable ', '')}</Label>
+                <div key={k} className="flex items-start justify-between p-3 rounded-lg border">
+                  <div className="flex flex-col gap-1">
+                    <Label htmlFor={`r-${k}`} className="capitalize flex items-center">{k.replace(/([A-Z])/g, ' $1').replace('Enable ', '')}</Label>
+                    <p className="text-xs text-muted-foreground">{descriptions.rules[k as keyof typeof descriptions.rules]}</p>
+                  </div>
                   <Switch id={`r-${k}`} checked={v} onCheckedChange={(val)=>update(`rules.${k}`, val)} />
                 </div>
               ))}
