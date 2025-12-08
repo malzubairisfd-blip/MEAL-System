@@ -4,7 +4,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { FileDown, Loader2, XCircle, CheckCircle } from "lucide-react";
+import { FileDown, Loader2, XCircle, CheckCircle, Database, Users } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -33,36 +33,58 @@ const stepDescriptions: Record<GenerationStep, string> = {
 
 export default function ExportPage() {
     // Component State
+    const [initialLoading, setInitialLoading] = useState(true);
     const [isReady, setIsReady] = useState(false);
     const [loading, setLoading] = useState(false);
     const [progress, setProgress] = useState(0);
-    const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
     const [completedSteps, setCompletedSteps] = useState<Set<GenerationStep>>(new Set());
 
     const { toast } = useToast();
 
     // Data State
     const [downloadHistory, setDownloadHistory] = useState<DownloadVersion[]>([]);
+    const [recordCount, setRecordCount] = useState(0);
+    const [clusterCount, setClusterCount] = useState(0);
     
     useEffect(() => {
         const checkCache = async () => {
+            setInitialLoading(true);
             const cacheId = sessionStorage.getItem('cacheId');
-            if (cacheId) {
-                // We don't need to fetch the data, just confirm it exists to enable the button.
-                setIsReady(true);
-            } else {
+            if (!cacheId) {
                 setIsReady(false);
+                setInitialLoading(false);
                 toast({ title: "No Data Found", description: "Please start from the upload page to generate data for export.", variant: "destructive" });
+                return;
+            }
+            
+            try {
+                const res = await fetch(`/api/cluster-cache?id=${cacheId}`);
+                if (!res.ok) {
+                    throw new Error('Failed to fetch cached data. Please try the upload process again.');
+                }
+                const responseData = await res.json();
+                
+                const rows = responseData.data?.rows || [];
+                const clusters = responseData.data?.clusters || [];
+                
+                setRecordCount(rows.length);
+                setClusterCount(clusters.length);
+
+                if (rows.length > 0) {
+                    setIsReady(true);
+                } else {
+                     toast({ title: "No Records Found", description: "The cached data is empty. Please re-upload your file.", variant: "destructive" });
+                     setIsReady(false);
+                }
+
+            } catch (error: any) {
+                setIsReady(false);
+                toast({ title: "Error Loading Data", description: error.message, variant: "destructive" });
+            } finally {
+                setInitialLoading(false);
             }
         };
         checkCache();
-
-        // Cleanup interval on component unmount
-        return () => {
-            if (progressIntervalRef.current) {
-                clearInterval(progressIntervalRef.current);
-            }
-        }
     }, [toast]);
     
     const runSimulatedProgress = () => {
@@ -165,34 +187,46 @@ export default function ExportPage() {
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-8">
-                    {/* Single Step: Generate and Download */}
-                    <Card className="bg-primary/10 border-primary">
-                        <CardHeader>
-                            <CardTitle>Generate and Download Report</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                             <p className="text-sm text-muted-foreground mb-4">
-                                This will generate a single Excel file with multiple sheets: Enriched Data, Review Summary, Cluster Details, and Audit Findings. The process may take a moment.
-                            </p>
-                            <Button onClick={handleGenerateAndDownload} disabled={loading || !isReady} size="lg">
-                                {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
-                                {loading ? 'Generating...' : 'Generate and Download Report'}
-                            </Button>
-                             {!isReady && <p className="text-xs text-destructive mt-2">Please complete the upload and clustering steps first to enable report generation.</p>}
-                        </CardContent>
-                    </Card>
+                     {initialLoading ? (
+                        <div className="flex flex-col items-center justify-center h-40 gap-2 text-muted-foreground">
+                            <Loader2 className="h-8 w-8 animate-spin" />
+                            <p>Loading data from cache...</p>
+                        </div>
+                    ) : (
+                         <Card className="bg-primary/10 border-primary">
+                            <CardHeader>
+                                <CardTitle>Generate and Download Report</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="flex flex-wrap items-center gap-6 mb-4">
+                                     <div className="flex items-center gap-3 text-lg font-medium">
+                                        <Users className="h-6 w-6 text-primary" />
+                                        <span>{recordCount.toLocaleString()} Records Loaded</span>
+                                    </div>
+                                    <div className="flex items-center gap-3 text-lg font-medium">
+                                        <Database className="h-6 w-6 text-primary" />
+                                        <span>{clusterCount.toLocaleString()} Clusters Found</span>
+                                    </div>
+                                </div>
+                                <p className="text-sm text-muted-foreground mb-4">
+                                    This will generate a single Excel file with multiple sheets: Enriched Data, Review Summary, Cluster Details, and Audit Findings.
+                                </p>
+                                <Button onClick={handleGenerateAndDownload} disabled={loading || !isReady} size="lg">
+                                    {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
+                                    {loading ? 'Generating...' : 'Generate and Download Report'}
+                                </Button>
+                                {!isReady && <p className="text-xs text-destructive mt-2">Please complete the upload and clustering steps first to enable report generation.</p>}
+                            </CardContent>
+                        </Card>
+                    )}
                     
                     {/* Status & History Section */}
                     <div className="grid md:grid-cols-2 gap-6">
                         <Card>
                             <CardHeader><CardTitle>Generation Status</CardTitle></CardHeader>
                             <CardContent className="space-y-4">
-                               <div className="flex items-center justify-between font-semibold">
-                                    <span>Ready to Generate</span> 
-                                    <StatusIndicator done={isReady && !loading} />
-                                </div>
-                                
-                                {loading && (
+                               {
+                                 loading ? (
                                     <div className="space-y-3 pt-2">
                                         <Progress value={progress} />
                                         {allSteps.map(step => (
@@ -206,13 +240,12 @@ export default function ExportPage() {
                                              </div>
                                         ))}
                                     </div>
-                                )}
-                                
-                                {!loading &&
-                                <p className="text-sm text-muted-foreground">
-                                    Ensure you have successfully run the clustering on the 'Upload' page. When ready, click the button above to generate your report.
-                                </p>
-                                }
+                                ) : (
+                                  <p className="text-sm text-muted-foreground">
+                                      Real-time generation status will appear here once you start the process.
+                                  </p>
+                                )
+                               }
                             </CardContent>
                         </Card>
                          <Card>
