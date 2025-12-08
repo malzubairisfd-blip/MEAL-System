@@ -1,3 +1,4 @@
+
 // app/(app)/upload/page.tsx
 "use client";
 
@@ -288,12 +289,12 @@ function buildBlocks(rows, opts){
     const last = nameTokens[nameTokens.length-1]?.slice(0,prefix) || "";
     const phone = digitsOnly(r.phone||"").slice(-6);
     const village = normalizeArabic(r.village||"").slice(0,6);
-    const clusterKey = r.cluster_id ? \`cid:\${String(r.cluster_id)}\` : "";
+    const clusterKey = r.cluster_id ? 'cid:' + String(r.cluster_id) : "";
     const keys = [];
-    if(first) keys.push(\`fn:\${first}\`);
-    if(last) keys.push(\`ln:\${last}\`);
-    if(phone) keys.push(\`ph:\${phone}\`);
-    if(village) keys.push(\`vl:\${village}\`);
+    if(first) keys.push('fn:' + first);
+    if(last) keys.push('ln:' + last);
+    if(phone) keys.push('ph:' + phone);
+    if(village) keys.push('vl:' + village);
     if(clusterKey) keys.push(clusterKey);
     if(keys.length===0) keys.push("blk:all");
     for(const k of keys){
@@ -310,7 +311,7 @@ function pushEdgesForList(list, rows, minScore, seen, edges, opts){
   for(let i=0;i<list.length;i++){
     for(let j=i+1;j<list.length;j++){
       const a = list[i], b = list[j];
-      const key = a<b? \`\${a}_\${b}\`:\`\${b}_\${a}\`;
+      const key = a<b? a + '_' + b : b + '_' + a;
       if(seen.has(key)) continue;
       seen.add(key);
       const { score, breakdown } = pairwiseScore(rows[a], rows[b], opts);
@@ -397,7 +398,7 @@ function splitCluster(rowsSubset, minInternal=0.5, opts){
 
 /* runClustering - main function used by worker */
 async function runClustering(rows, opts){
-  rows.forEach((r,i)=> r._internalId = r._internalId || \`r_\${i}\`);
+  rows.forEach((r,i)=> r._internalId = r._internalId || 'r_' + i);
   const minPair = opts?.thresholds?.minPair ?? 0.62;
   const minInternal = opts?.thresholds?.minInternal ?? 0.54;
   const blockChunkSize = opts?.thresholds?.blockChunkSize ?? 3000;
@@ -485,7 +486,7 @@ let options = null;
 
 function mapIncomingRowsToInternal(rows, mapping){
   return rows.map((r,i)=>{
-    const mapped = { _internalId: \`row_\${i}\`, womanName:"", husbandName:"", nationalId:"", phone:"", village:"", subdistrict:"", children:[], cluster_id:"" };
+    const mapped = { _internalId: 'row_' + i, womanName:"", husbandName:"", nationalId:"", phone:"", village:"", subdistrict:"", children:[], cluster_id:"" };
     for(const k in mapping){
       const col = mapping[k];
       if(col && r[col]!==undefined){
@@ -577,11 +578,11 @@ export default function UploadPage(){
           setClusters(resultClusters);
           // cache to server in chunks (like earlier)
           try {
-            const cacheId = \`cache-\${Date.now()}-\${Math.random().toString(36).slice(2,9)}\`;
+            const cacheId = 'cache-' + Date.now() + '-' + Math.random().toString(36).slice(2,9);
             sessionStorage.setItem('cacheId', cacheId);
             // initialize
             await fetch('/api/cluster-cache', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ cacheId, data:{ originalHeaders: columns } }) });
-            const allRows = rowsRef.current.map((r,i)=> ({ ...r, _internalId: \`row_\${i}\` }));
+            const allRows = rowsRef.current.map((r,i)=> ({ ...r, _internalId: 'row_' + i }));
             for(let i=0;i<allRows.length;i+=2000){
               const chunk = allRows.slice(i,i+2000);
               await fetch('/api/cluster-cache', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ cacheId, data:{ rows: chunk } }) });
@@ -593,7 +594,7 @@ export default function UploadPage(){
             sessionStorage.setItem('cacheTimestamp', Date.now().toString());
             setWorkerStatus('done');
             setProgressInfo({ status: 'done', progress: 100 });
-            toast({ title: "Clustering complete", description: \`Found \${resultClusters.length} clusters.\` });
+            toast({ title: "Clustering complete", description: `Found ` + resultClusters.length + ` clusters.` });
           } catch(err:any){
             setWorkerStatus('error');
             toast({ title: "Failed to cache results", description: String(err), variant:"destructive" });
@@ -693,9 +694,9 @@ export default function UploadPage(){
     statusText = statusText.charAt(0).toUpperCase() + statusText.slice(1);
     
     if (progressInfo.completed !== undefined && progressInfo.total) {
-      return \`Status: \${statusText} (\${progressInfo.completed}/\${progressInfo.total})\`;
+      return `Status: ${statusText} (${progressInfo.completed}/${progressInfo.total})`;
     }
-    return \`Status: \${statusText}\`;
+    return `Status: ${statusText}`;
   };
   
     const SummaryCard = ({ icon, title, value }: { icon: React.ReactNode, title: string, value: string | number }) => (
@@ -735,7 +736,7 @@ export default function UploadPage(){
                         {file ? (
                           <>
                             <p className="font-semibold text-primary">{file.name}</p>
-                            <p className="text-xs text-muted-foreground">{rowsRef.current.length > 0 ? \`\${rowsRef.current.length} rows detected\` : 'Reading file...'}</p>
+                            <p className="text-xs text-muted-foreground">{rowsRef.current.length > 0 ? `${rowsRef.current.length} rows detected` : 'Reading file...'}</p>
                           </>
                         ) : (
                           <>
@@ -785,8 +786,8 @@ export default function UploadPage(){
                     <RadioGroup value={mapping[field]} onValueChange={(v)=> handleMappingChange(field as keyof Mapping, v)} className="p-4 grid grid-cols-2 gap-2">
                       {columns.map(col => (
                         <div key={col} className="flex items-center space-x-2">
-                          <RadioGroupItem value={col} id={\`\${field}-\${col}\`} />
-                          <Label htmlFor={\`\${field}-\${col}\`} className="truncate font-normal" title={col}>{col}</Label>
+                          <RadioGroupItem value={col} id={`${field}-${col}`} />
+                          <Label htmlFor={`${field}-${col}`} className="truncate font-normal" title={col}>{col}</Label>
                         </div>
                       ))}
                     </RadioGroup>
