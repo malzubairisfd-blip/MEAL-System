@@ -15,20 +15,32 @@ function digitsOnly(x: any) {
 }
 function normalizeArabic(text: any) {
   if (!text) return "";
-  return safeString(text)
-    .trim()
+  let s = safeString(text).trim().replace(/\s+/g, " ");
+
+  s = s
     .replace(/[أإآٱ]/g, "ا")
     .replace(/ة/g, "ه")
     .replace(/ى/g, "ي")
     .replace(/[ؤئ]/g, "ي")
     .replace(/ـ/g, "")
-    .replace(/[^\u0600-\u06FF0-9 ]/g, "")
-    .replace(/\s+/g, " ");
+    .replace(/[^\u0600-\u06FF0-9 ]/g, "");
+
+  return s;
 }
 
 function tokens(s: string) {
   const n = normalizeArabic(s || "");
   return n ? n.split(" ").filter(Boolean) : [];
+}
+
+function reduceNameRoot(full: string) {
+  const parts = tokens(full);
+  return parts.map(p => p.substring(0, 3)).join(" ");
+}
+
+function extractPaternal(full: string) {
+  const parts = tokens(full);
+  return { father: parts[1] || "", grandfather: parts[2] || "" };
 }
 
 function jaroWinkler(s1: string, s2: string) {
@@ -71,7 +83,7 @@ function tokenJaccard(aTokens: string[], bTokens: string[]) {
   const uni = new Set([...A, ...B]).size;
   return uni === 0 ? 0 : inter / uni;
 }
-function nameOrderFree(a: string, b: string) {
+function nameOrderFreeScore(a: string, b: string) {
   const aT = tokens(a), bT = tokens(b);
   if (!aT.length || !bT.length) return 0;
   const j = tokenJaccard(aT, bT);
@@ -86,7 +98,7 @@ export function computePairScore(aRaw: any, bRaw: any, settings: Settings) {
     husbandName: normalizeArabic(aRaw.husbandName || ""),
     nationalId: safeString(aRaw.nationalId || ""),
     phone: digitsOnly(aRaw.phone || ""),
-    children: aRaw.children || [],
+    children: (Array.isArray(aRaw.children) ? aRaw.children : String(aRaw.children||'').split(',')).map(normalizeArabic),
     village: normalizeArabic(aRaw.village || ""),
   };
   const b = {
@@ -94,9 +106,12 @@ export function computePairScore(aRaw: any, bRaw: any, settings: Settings) {
     husbandName: normalizeArabic(bRaw.husbandName || ""),
     nationalId: safeString(bRaw.nationalId || ""),
     phone: digitsOnly(bRaw.phone || ""),
-    children: bRaw.children || [],
+    children: (Array.isArray(bRaw.children) ? bRaw.children : String(bRaw.children||'').split(',')).map(normalizeArabic),
     village: normalizeArabic(bRaw.village || ""),
   };
+  
+  const FSW = settings.finalScoreWeights || {};
+  const R = settings.rules || {};
 
   const firstA = tokens(a.womanName)[0] || "";
   const firstB = tokens(b.womanName)[0] || "";
@@ -105,36 +120,61 @@ export function computePairScore(aRaw: any, bRaw: any, settings: Settings) {
 
   const firstNameScore = jaroWinkler(firstA, firstB);
   const familyNameScore = jaroWinkler(familyA, familyB);
-  const tokenReorderScore = nameOrderFree(a.womanName, b.womanName);
-  const advancedNameScore = 0; // Simplified for client test
+  const tokenReorderScore = nameOrderFreeScore(a.womanName, b.womanName);
+  
+  let advancedNameScore = 0;
+  if(R.enableNameRootEngine) {
+    const rootA = reduceNameRoot(a.womanName);
+    const rootB = reduceNameRoot(b.womanName);
+    if (rootA && rootB && rootA === rootB) advancedNameScore = 0.8;
+    else if (rootA && rootB && jaroWinkler(rootA, rootB) > 0.8) advancedNameScore = 0.5;
+  }
+  
   const husbandScore = Math.max(jaroWinkler(a.husbandName, b.husbandName), tokenJaccard(tokens(a.husbandName), tokens(b.husbandName)));
-
-  const phoneScore = (a.phone && b.phone) ? (a.phone === b.phone ? 1 : (a.phone.slice(-6) === b.phone.slice(-6) ? 0.85 : (a.phone.slice(-4) === b.phone.slice(-4) ? 0.6 : 0))) : 0;
+  const phoneScoreVal = (a.phone && b.phone) ? (a.phone === b.phone ? 1 : (a.phone.slice(-6) === b.phone.slice(-6) ? 0.85 : (a.phone.slice(-4) === b.phone.slice(-4) ? 0.6 : 0))) : 0;
   const idScore = (a.nationalId && b.nationalId) ? (a.nationalId === b.nationalId ? 1 : (a.nationalId.slice(-5) === b.nationalId.slice(-5) ? 0.75 : 0)) : 0;
   const childrenScore = tokenJaccard(a.children, b.children);
   const locationScore = (a.village && b.village && a.village === b.village) ? 1 : 0;
-
-
-  const FSW = settings.finalScoreWeights || {
-      firstNameScore: 0.15, familyNameScore: 0.25, advancedNameScore: 0.12,
-      tokenReorderScore: 0.10, husbandScore: 0.12, idScore: 0.08,
-      phoneScore: 0.05, childrenScore: 0.04, locationScore: 0.04,
-  };
-
-  // Compose similarly to engine
+  
+  let patronymScore = 0;
+  if (R.enablePolygamyRules) {
+      const aPat = extractPaternal(a.womanName);
+      const bPat = extractPaternal(b.womanName);
+      if (aPat.father && bPat.father && aPat.father === bPat.father) patronymScore += 0.35;
+      if (aPat.grandfather && bPat.grandfather && aPat.grandfather === bPat.grandfather) patronymScore += 0.25;
+      if (patronymScore > 0.5) patronymScore = 0.5;
+  }
+  
   let score = 0;
-  score += FSW.firstNameScore * firstNameScore;
-  score += FSW.familyNameScore * familyNameScore;
-  score += FSW.advancedNameScore * advancedNameScore;
-  score += FSW.tokenReorderScore * tokenReorderScore;
-  score += FSW.husbandScore * husbandScore;
-  score += FSW.idScore * idScore;
-  score += FSW.phoneScore * phoneScore;
-  score += FSW.childrenScore * childrenScore;
-  score += FSW.locationScore * locationScore;
+  score += (FSW.firstNameScore || 0) * firstNameScore;
+  score += (FSW.familyNameScore || 0) * familyNameScore;
+  score += (FSW.advancedNameScore || 0) * advancedNameScore;
+  score += (FSW.tokenReorderScore || 0) * tokenReorderScore;
+  score += (FSW.husbandScore || 0) * husbandScore;
+  score += (FSW.idScore || 0) * idScore;
+  score += (FSW.phoneScore || 0) * phoneScoreVal;
+  score += (FSW.childrenScore || 0) * childrenScore;
+  score += (FSW.locationScore || 0) * locationScore;
+  
+  if (R.enablePolygamyRules) {
+    score += patronymScore * 0.2;
+  }
 
-
-  // clamp
   score = Math.max(0, Math.min(1, score));
-  return { score, breakdown: { firstNameScore, familyNameScore, tokenReorderScore, husbandScore, idScore, phoneScore, childrenScore, locationScore } };
+
+  return { 
+      score, 
+      breakdown: { 
+          firstNameScore, 
+          familyNameScore, 
+          tokenReorderScore, 
+          advancedNameScore,
+          husbandScore, 
+          idScore, 
+          phoneScore: phoneScoreVal, 
+          childrenScore, 
+          locationScore,
+          patronymScore,
+      } 
+  };
 }

@@ -1015,7 +1015,7 @@ async function runClustering(
               if (fallback !== undefined) { globalIdxs.push(fallback); finalized.add(fallback); }
             }
           }
-          if (globalIdxs.length) finalClustersIdx.push(globalIdxs);
+          if (globalIdxs.length) finalClustersIdx.push(idxs);
         }
     }
     edgesUsed.push(e);
