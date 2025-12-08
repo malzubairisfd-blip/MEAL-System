@@ -10,7 +10,8 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
-import { Save, RotateCcw, Upload, Download, Loader2, Plus, Minus } from "lucide-react";
+import { Save, RotateCcw, Upload, Download, Loader2, Plus, Minus, ArrowLeft } from "lucide-react";
+import Link from "next/link";
 
 type Settings = any;
 
@@ -72,12 +73,21 @@ export default function SettingsPage() {
     cur[parts[parts.length - 1]] = value;
     setSettings(clone);
   }
+  
+  function handleNumericChange(path: string, change: number) {
+      if (!settings) return;
+      const parts = path.split(".");
+      let cur: any = settings;
+      for (let i = 0; i < parts.length - 1; i++) {
+        cur = cur[parts[i]];
+      }
+      const currentValue = cur[parts[parts.length - 1]] || 0;
+      const newValue = Math.max(0, Math.min(1, parseFloat((currentValue + change).toFixed(2))));
+      update(path, newValue);
+  }
 
   function handleWeightChange(key: string, change: number) {
-    if (!settings) return;
-    const currentValue = settings.weights[key] || 0;
-    const newValue = Math.max(0, Math.min(1, parseFloat((currentValue + change).toFixed(2))));
-    update(`weights.${key}`, newValue);
+    handleNumericChange(`weights.${key}`, change);
   }
 
   async function save() {
@@ -157,6 +167,12 @@ export default function SettingsPage() {
                   <CardDescription>Fine-tune the clustering engine, weights, and rules.</CardDescription>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
+                   <Button variant="outline" asChild>
+                    <Link href="/upload">
+                        <ArrowLeft className="mr-2" />
+                        Go to Upload
+                    </Link>
+                  </Button>
                   <Button onClick={exportJSON} variant="outline"><Download className="mr-2" />Export</Button>
                   <Button asChild variant="outline">
                     <Label>
@@ -182,13 +198,21 @@ export default function SettingsPage() {
               <CardTitle>Thresholds & Performance</CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div>
-                <Label htmlFor="minPair">Min Pair Score: <b>{settings.minPair}</b></Label>
-                <Slider id="minPair" min={0} max={1} step={0.01} value={[settings.minPair]} onValueChange={(v)=>update("minPair", v[0])} />
+              <div className="grid grid-cols-12 items-center gap-4">
+                <Label htmlFor="minPair" className="col-span-12 sm:col-span-3">Min Pair Score: <b>{settings.minPair}</b></Label>
+                <Slider id="minPair" min={0} max={1} step={0.01} value={[settings.minPair]} onValueChange={(v)=>update("minPair", v[0])} className="col-span-12 sm:col-span-6" />
+                <div className="col-span-12 sm:col-span-3 flex items-center gap-1 justify-end">
+                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleNumericChange('minPair', -0.01)}><Minus className="h-4 w-4" /></Button>
+                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleNumericChange('minPair', 0.01)}><Plus className="h-4 w-4" /></Button>
+                </div>
               </div>
-              <div>
-                <Label htmlFor="minInternal">Min Internal Score: <b>{settings.minInternal}</b></Label>
-                <Slider id="minInternal" min={0} max={1} step={0.01} value={[settings.minInternal]} onValueChange={(v)=>update("minInternal", v[0])} />
+              <div className="grid grid-cols-12 items-center gap-4">
+                <Label htmlFor="minInternal" className="col-span-12 sm:col-span-3">Min Internal Score: <b>{settings.minInternal}</b></Label>
+                <Slider id="minInternal" min={0} max={1} step={0.01} value={[settings.minInternal]} onValueChange={(v)=>update("minInternal", v[0])} className="col-span-12 sm:col-span-6" />
+                <div className="col-span-12 sm:col-span-3 flex items-center gap-1 justify-end">
+                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleNumericChange('minInternal', -0.01)}><Minus className="h-4 w-4" /></Button>
+                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleNumericChange('minInternal', 0.01)}><Plus className="h-4 w-4" /></Button>
+                </div>
               </div>
               <div>
                 <Label htmlFor="blockChunkSize">Block Chunk Size</Label>
@@ -201,12 +225,12 @@ export default function SettingsPage() {
             <CardHeader><CardTitle>Weights</CardTitle></CardHeader>
             <CardContent className="space-y-6">
               {Object.entries(settings.weights).map(([k, v]: any) => (
-                <div key={k} className="grid grid-cols-12 items-center gap-4">
-                  <Label htmlFor={`w-${k}`} className="col-span-3 capitalize">{k.replace(/([A-Z])/g, ' $1')}</Label>
-                  <Slider id={`w-${k}`} min={0} max={1} step={0.01} value={[v]} onValueChange={(val)=>update(`weights.${k}`, val[0])} className="col-span-6" />
-                  <div className="col-span-3 flex items-center gap-1">
+                <div key={k} className="grid grid-cols-1 md:grid-cols-12 items-center gap-4">
+                  <Label htmlFor={`w-${k}`} className="col-span-12 md:col-span-3 capitalize">{k.replace(/([A-Z])/g, ' $1')}</Label>
+                  <Slider id={`w-${k}`} min={0} max={1} step={0.01} value={[v]} onValueChange={(val)=>update(`weights.${k}`, val[0])} className="col-span-12 md:col-span-6" />
+                  <div className="col-span-12 md:col-span-3 flex items-center gap-1">
                       <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleWeightChange(k, -0.01)}><Minus className="h-4 w-4" /></Button>
-                      <Input type="number" step="0.01" value={v} onChange={(e)=>update(`weights.${k}`, parseFloat(e.target.value))} className="w-20 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"/>
+                      <Input type="number" step="0.01" value={v} onChange={(e)=>update(`weights.${k}`, parseFloat(e.target.value))} className="w-24 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"/>
                       <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleWeightChange(k, 0.01)}><Plus className="h-4 w-4" /></Button>
                   </div>
                 </div>
