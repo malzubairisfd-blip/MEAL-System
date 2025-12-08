@@ -204,18 +204,21 @@ export async function POST(req: Request) {
     try {
         const cacheRes = await fetch(fetchUrl);
         if (!cacheRes.ok) {
+          const errorText = await cacheRes.text();
+          console.error("Cache fetch failed:", errorText);
           throw new Error(`Failed to fetch from cache API: ${cacheRes.statusText}`);
         }
         cached = await cacheRes.json();
     } catch(e: any) {
-        return jsonError(`Cache file missing or invalid. fetch failed`);
+        console.error("Error fetching or parsing cache:", e);
+        return jsonError(`Cache file missing or invalid. Fetch failed.`);
     }
 
 
     const rows = cached.data?.rows;
     const clusters = cached.data?.clusters;
 
-    if (!rows || !clusters) return jsonError("Cache corrupted: rows or clusters missing.");
+    if (!clusters) return jsonError("Cache corrupted: clusters missing.");
 
     const issues: any[] = [];
     const potentialDuplicates: any[] = [];
@@ -225,13 +228,9 @@ export async function POST(req: Request) {
     /* ---------------------------------------------------------
        LOOP THROUGH CLUSTERS
     --------------------------------------------------------- */
-    const clusteredRecords = clusters.flat();
-
     for (let ci = 0; ci < clusters.length; ci++) {
-      const group = clusters[ci];
-      if (!Array.isArray(group) || group.length < 2) continue;
-
-      const members: any[] = group;
+      const members = clusters[ci];
+      if (!Array.isArray(members) || members.length < 2) continue;
 
       /* --------------------------
          1. DUPLICATE NATIONAL IDs
