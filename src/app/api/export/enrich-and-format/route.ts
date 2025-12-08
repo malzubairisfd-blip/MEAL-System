@@ -120,14 +120,19 @@ async function enrichData(cachedData: any): Promise<EnrichedRecord[]> {
 
 function sortData(data: EnrichedRecord[]): EnrichedRecord[] {
     return data.sort((a, b) => {
+        const clusterA = a.Cluster_ID ?? Number.MAX_SAFE_INTEGER;
+        const clusterB = b.Cluster_ID ?? Number.MAX_SAFE_INTEGER;
+        if (clusterA !== clusterB) {
+            return clusterA - clusterB;
+        }
+
         const scoreA = a.Max_PairScore ?? -1;
         const scoreB = b.Max_PairScore ?? -1;
         if (scoreA !== scoreB) {
             return scoreB - scoreA;
         }
-        const clusterA = a.Cluster_ID ?? Number.MAX_SAFE_INTEGER;
-        const clusterB = b.Cluster_ID ?? Number.MAX_SAFE_INTEGER;
-        return clusterA - clusterB;
+        
+        return (a.beneficiaryId || "").localeCompare(b.beneficiaryId || "");
     });
 }
 
