@@ -23,30 +23,39 @@ async function ensureCacheDir() {
 
 function getDefaultSettings() {
     return {
-        minPair: 0.52,
-        minInternal: 0.65,
-        blockChunkSize: 5000,
-        weights: { womanName: 0.45, husbandName: 0.25, household: 0.1, nationalId: 0.1, phone: 0.05, village: 0.05 },
-        finalScoreWeights: {
-            firstNameScore: 0.15,
-            familyNameScore: 0.25,
-            advancedNameScore: 0.12,
-            tokenReorderScore: 0.10,
-            husbandScore: 0.12,
-            idScore: 0.08,
-            phoneScore: 0.05,
-            childrenScore: 0.04,
-            locationScore: 0.04,
-        },
-        rules: {
-            enableArabicNormalizer: true,
-            enableNameRootEngine: true,
-            enableTribalLineage: true,
-            enableMaternalLineage: true,
-            enableOrderFreeMatching: true,
-            enablePolygamyRules: true,
-            enableIncestBlocking: true
-        }
+      thresholds: {
+        minPair: 0.40,
+        minInternal: 0.52,
+        blockChunkSize: 6500
+      },
+      fieldWeights: {
+        womanName: 0.60,
+        husbandName: 0.25,
+        nationalId: 0.07,
+        phone: 0.03,
+        household: 0.03,
+        village: 0.02
+      },
+      finalScore: {
+        firstNameScore: 0.20,
+        familyNameScore: 0.28,
+        advancedNameScore: 0.18,
+        tokenReorderScore: 0.17,
+        husbandScore: 0.12,
+        idScore: 0.025,
+        phoneScore: 0.01,
+        childrenScore: 0.005,
+        locationScore: 0.005
+      },
+      rules: {
+          enableArabicNormalizer: true,
+          enableNameRootEngine: true,
+          enableTribalLineage: true,
+          enableMaternalLineage: true,
+          enableOrderFreeMatching: true,
+          enablePolygamyRules: true,
+          enableIncestBlocking: true
+      }
     };
 }
 
@@ -90,20 +99,21 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "Invalid payload" }, { status: 400 });
     }
     // Sanitize numeric thresholds
-    body.minPair = Number(body.minPair) || defaults.minPair;
-    body.minInternal = Number(body.minInternal) || defaults.minInternal;
-    body.blockChunkSize = Number(body.blockChunkSize) || defaults.blockChunkSize;
+    body.thresholds = body.thresholds || {};
+    body.thresholds.minPair = Number(body.thresholds.minPair) || defaults.thresholds.minPair;
+    body.thresholds.minInternal = Number(body.thresholds.minInternal) || defaults.thresholds.minInternal;
+    body.thresholds.blockChunkSize = Number(body.thresholds.blockChunkSize) || defaults.thresholds.blockChunkSize;
 
-    // Ensure weights exist
-    body.weights = body.weights || {};
-    for (const k of Object.keys(defaults.weights)) {
-      body.weights[k] = typeof body.weights[k] === "number" ? Number(body.weights[k]) : defaults.weights[k as keyof typeof defaults.weights];
+    // Ensure field weights exist
+    body.fieldWeights = body.fieldWeights || {};
+    for (const k of Object.keys(defaults.fieldWeights)) {
+      body.fieldWeights[k] = typeof body.fieldWeights[k] === "number" ? Number(body.fieldWeights[k]) : defaults.fieldWeights[k as keyof typeof defaults.fieldWeights];
     }
     
     // Ensure final score weights exist
-    body.finalScoreWeights = body.finalScoreWeights || {};
-    for (const k of Object.keys(defaults.finalScoreWeights)) {
-      body.finalScoreWeights[k] = typeof body.finalScoreWeights[k] === "number" ? Number(body.finalScoreWeights[k]) : defaults.finalScoreWeights[k as keyof typeof defaults.finalScoreWeights];
+    body.finalScore = body.finalScore || {};
+    for (const k of Object.keys(defaults.finalScore)) {
+      body.finalScore[k] = typeof body.finalScore[k] === "number" ? Number(body.finalScore[k]) : defaults.finalScore[k as keyof typeof defaults.finalScore];
     }
 
 

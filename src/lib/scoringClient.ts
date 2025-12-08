@@ -110,7 +110,7 @@ export function computePairScore(aRaw: any, bRaw: any, settings: Settings) {
     village: normalizeArabic(bRaw.village || ""),
   };
   
-  const FSW = settings.finalScoreWeights || {};
+  const FSW = settings.finalScore || {};
   const R = settings.rules || {};
 
   const firstA = tokens(a.womanName)[0] || "";

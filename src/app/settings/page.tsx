@@ -23,7 +23,7 @@ const descriptions = {
   minPair: "The minimum score (0 to 1) for two records to be considered a potential match and form a link. High values create fewer, more confident clusters. Low values create more, but potentially noisier, clusters.",
   minInternal: "The minimum score (0 to 1) used to decide if records within a large, temporary cluster should remain together in the final, smaller clusters. High values result in smaller, more tightly-related final clusters.",
   blockChunkSize: "A performance setting for very large datasets. It breaks down large groups of potential matches into smaller chunks to manage memory. The default is usually fine.",
-  weights: {
+  fieldWeights: {
     womanName: "How much to value the similarity between the woman's full name.",
     husbandName: "How much to value the similarity between the husband's name.",
     household: "A general weight for household-level similarities (currently linked to children).",
@@ -31,7 +31,7 @@ const descriptions = {
     phone: "How much to value a partial or exact match on the phone number.",
     village: "How much to value a match on the village or sub-district name.",
   },
-  finalScoreWeights: {
+  finalScore: {
     firstNameScore: "Weight for the similarity of the first name.",
     familyNameScore: "Weight for the similarity of the family name (all parts except the first).",
     advancedNameScore: "Weight for advanced name matching techniques, like root-letter matching.",
@@ -79,30 +79,39 @@ export default function SettingsPage() {
   const { toast } = useToast();
 
   const getDefaultSettings = () => ({
-      minPair: 0.52,
-      minInternal: 0.65,
-      blockChunkSize: 5000,
-      weights: { womanName: 0.45, husbandName: 0.25, household: 0.1, nationalId: 0.1, phone: 0.05, village: 0.05 },
-      finalScoreWeights: {
-          firstNameScore: 0.15,
-          familyNameScore: 0.25,
-          advancedNameScore: 0.12,
-          tokenReorderScore: 0.10,
-          husbandScore: 0.12,
-          idScore: 0.08,
-          phoneScore: 0.05,
-          childrenScore: 0.04,
-          locationScore: 0.04,
-      },
-      rules: {
-          enableArabicNormalizer: true,
-          enableNameRootEngine: true,
-          enableTribalLineage: true,
-          enableMaternalLineage: true,
-          enableOrderFreeMatching: true,
-          enablePolygamyRules: true,
-          enableIncestBlocking: true
-      }
+    thresholds: {
+        minPair: 0.40,
+        minInternal: 0.52,
+        blockChunkSize: 6500
+    },
+    fieldWeights: {
+        womanName: 0.60,
+        husbandName: 0.25,
+        nationalId: 0.07,
+        phone: 0.03,
+        household: 0.03,
+        village: 0.02
+    },
+    finalScore: {
+        firstNameScore: 0.20,
+        familyNameScore: 0.28,
+        advancedNameScore: 0.18,
+        tokenReorderScore: 0.17,
+        husbandScore: 0.12,
+        idScore: 0.025,
+        phoneScore: 0.01,
+        childrenScore: 0.005,
+        locationScore: 0.005
+    },
+    rules: {
+        enableArabicNormalizer: true,
+        enableNameRootEngine: true,
+        enableTribalLineage: true,
+        enableMaternalLineage: true,
+        enableOrderFreeMatching: true,
+        enablePolygamyRules: true,
+        enableIncestBlocking: true
+    }
   });
 
 
@@ -116,8 +125,9 @@ export default function SettingsPage() {
           const mergedSettings = {
               ...defaults,
               ...j.settings,
-              weights: { ...defaults.weights, ...j.settings.weights },
-              finalScoreWeights: { ...defaults.finalScoreWeights, ...j.settings.finalScoreWeights },
+              thresholds: { ...defaults.thresholds, ...j.settings.thresholds },
+              fieldWeights: { ...defaults.fieldWeights, ...j.settings.fieldWeights },
+              finalScore: { ...defaults.finalScore, ...j.settings.finalScore },
               rules: { ...defaults.rules, ...j.settings.rules },
           };
           setSettings(mergedSettings);
@@ -160,7 +170,7 @@ export default function SettingsPage() {
       update(path, newValue);
   }
 
-  function handleWeightChange(key: string, change: number, weightGroup: 'weights' | 'finalScoreWeights' = 'weights') {
+  function handleWeightChange(key: string, change: number, weightGroup: 'fieldWeights' | 'finalScore') {
     handleNumericChange(`${weightGroup}.${key}`, change);
   }
 
@@ -208,7 +218,7 @@ export default function SettingsPage() {
       try {
         const parsed = JSON.parse(String(e.target?.result));
         // Simple validation
-        if (parsed.weights && parsed.rules) {
+        if (parsed.thresholds && parsed.rules && parsed.finalScore && parsed.fieldWeights) {
           setSettings(parsed);
           toast({ title: "Settings Imported", description: "Imported settings previewed. Click Save to persist them." });
         } else {
@@ -274,48 +284,48 @@ export default function SettingsPage() {
             <CardContent className="space-y-6">
               <div>
                 <div className="grid grid-cols-12 items-center gap-4">
-                  <Label htmlFor="minPair" className="col-span-12 sm:col-span-3 flex items-center">Min Pair Score: <b className="mx-1">{settings.minPair}</b> <HelpTooltip content={descriptions.minPair} /></Label>
-                  <Slider id="minPair" min={0} max={1} step={0.01} value={[settings.minPair]} onValueChange={(v)=>update("minPair", v[0])} className="col-span-12 sm:col-span-6" />
+                  <Label htmlFor="minPair" className="col-span-12 sm:col-span-3 flex items-center">Min Pair Score: <b className="mx-1">{settings.thresholds.minPair}</b> <HelpTooltip content={descriptions.minPair} /></Label>
+                  <Slider id="minPair" min={0} max={1} step={0.01} value={[settings.thresholds.minPair]} onValueChange={(v)=>update("thresholds.minPair", v[0])} className="col-span-12 sm:col-span-6" />
                   <div className="col-span-12 sm:col-span-3 flex items-center gap-1 justify-end">
-                      <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleNumericChange('minPair', -0.01)}><Minus className="h-4 w-4" /></Button>
-                      <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleNumericChange('minPair', 0.01)}><Plus className="h-4 w-4" /></Button>
+                      <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleNumericChange('thresholds.minPair', -0.01)}><Minus className="h-4 w-4" /></Button>
+                      <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleNumericChange('thresholds.minPair', 0.01)}><Plus className="h-4 w-4" /></Button>
                   </div>
                 </div>
                  <p className="text-xs text-muted-foreground mt-1 pl-1">The minimum score for two records to form a match. High values = fewer, more confident matches. Low values = more, noisier matches.</p>
               </div>
               <div>
                 <div className="grid grid-cols-12 items-center gap-4">
-                  <Label htmlFor="minInternal" className="col-span-12 sm:col-span-3 flex items-center">Min Internal Score: <b className="mx-1">{settings.minInternal}</b> <HelpTooltip content={descriptions.minInternal} /></Label>
-                  <Slider id="minInternal" min={0} max={1} step={0.01} value={[settings.minInternal]} onValueChange={(v)=>update("minInternal", v[0])} className="col-span-12 sm:col-span-6" />
+                  <Label htmlFor="minInternal" className="col-span-12 sm:col-span-3 flex items-center">Min Internal Score: <b className="mx-1">{settings.thresholds.minInternal}</b> <HelpTooltip content={descriptions.minInternal} /></Label>
+                  <Slider id="minInternal" min={0} max={1} step={0.01} value={[settings.thresholds.minInternal]} onValueChange={(v)=>update("thresholds.minInternal", v[0])} className="col-span-12 sm:col-span-6" />
                   <div className="col-span-12 sm:col-span-3 flex items-center gap-1 justify-end">
-                      <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleNumericChange('minInternal', -0.01)}><Minus className="h-4 w-4" /></Button>
-                      <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleNumericChange('minInternal', 0.01)}><Plus className="h-4 w-4" /></Button>
+                      <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleNumericChange('thresholds.minInternal', -0.01)}><Minus className="h-4 w-4" /></Button>
+                      <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleNumericChange('thresholds.minInternal', 0.01)}><Plus className="h-4 w-4" /></Button>
                   </div>
                 </div>
                  <p className="text-xs text-muted-foreground mt-1 pl-1">Score to decide if records in a large group stay together. High values = smaller, tighter final clusters.</p>
               </div>
               <div>
                 <Label htmlFor="blockChunkSize" className="flex items-center">Block Chunk Size <HelpTooltip content={descriptions.blockChunkSize} /></Label>
-                <Input id="blockChunkSize" type="number" value={settings.blockChunkSize} onChange={(e)=>update("blockChunkSize", parseInt(e.target.value||"0"))}/>
+                <Input id="blockChunkSize" type="number" value={settings.thresholds.blockChunkSize} onChange={(e)=>update("thresholds.blockChunkSize", parseInt(e.target.value||"0"))}/>
                 <p className="text-xs text-muted-foreground mt-1">Performance setting for large datasets. Breaks work into chunks to avoid memory issues. Default is usually fine.</p>
               </div>
             </CardContent>
           </Card>
 
           <Card>
-            <CardHeader><CardTitle>Legacy Weights (deprecated)</CardTitle></CardHeader>
+            <CardHeader><CardTitle>Field Weights (Legacy)</CardTitle></CardHeader>
             <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {Object.entries(settings.weights).map(([k, v]: any) => (
+              {Object.entries(settings.fieldWeights).map(([k, v]: any) => (
                 <div key={k} className="flex flex-col gap-2 p-3 border rounded-md">
                   <div className="flex justify-between items-center">
-                    <Label htmlFor={`w-${k}`} className="capitalize flex items-center">{k.replace(/([A-Z])/g, ' $1')} <HelpTooltip content={descriptions.weights[k as keyof typeof descriptions.weights]} /></Label>
+                    <Label htmlFor={`w-${k}`} className="capitalize flex items-center">{k.replace(/([A-Z])/g, ' $1')} <HelpTooltip content={descriptions.fieldWeights[k as keyof typeof descriptions.fieldWeights]} /></Label>
                   </div>
                   <div className="flex items-center gap-2">
-                        <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleWeightChange(k, -0.01, 'weights')}><Minus className="h-4 w-4" /></Button>
-                        <Input type="number" step="0.01" value={v} onChange={(e)=>update(`weights.${k}`, parseFloat(e.target.value))} className="w-24 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"/>
-                        <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleWeightChange(k, 0.01, 'weights')}><Plus className="h-4 w-4" /></Button>
+                        <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleWeightChange(k, -0.01, 'fieldWeights')}><Minus className="h-4 w-4" /></Button>
+                        <Input type="number" step="0.01" value={v} onChange={(e)=>update(`fieldWeights.${k}`, parseFloat(e.target.value))} className="w-24 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"/>
+                        <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleWeightChange(k, 0.01, 'fieldWeights')}><Plus className="h-4 w-4" /></Button>
                   </div>
-                   <Slider id={`w-${k}`} min={0} max={1} step={0.01} value={[v]} onValueChange={(val)=>update(`weights.${k}`, val[0])} />
+                   <Slider id={`w-${k}`} min={0} max={1} step={0.01} value={[v]} onValueChange={(val)=>update(`fieldWeights.${k}`, val[0])} />
                 </div>
               ))}
             </CardContent>
@@ -324,17 +334,17 @@ export default function SettingsPage() {
           <Card>
             <CardHeader><CardTitle>Final Score Composition</CardTitle></CardHeader>
             <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {Object.entries(settings.finalScoreWeights).map(([k, v]: any) => (
+              {Object.entries(settings.finalScore).map(([k, v]: any) => (
                 <div key={k} className="flex flex-col gap-2 p-3 border rounded-md">
                    <div className="flex justify-between items-center">
-                     <Label htmlFor={`fsw-${k}`} className="capitalize flex items-center">{k.replace(/([A-Z])/g, ' $1')} <HelpTooltip content={descriptions.finalScoreWeights[k as keyof typeof descriptions.finalScoreWeights]} /></Label>
+                     <Label htmlFor={`fsw-${k}`} className="capitalize flex items-center">{k.replace(/([A-Z])/g, ' $1')} <HelpTooltip content={descriptions.finalScore[k as keyof typeof descriptions.finalScore]} /></Label>
                    </div>
                    <div className="flex items-center gap-2">
-                        <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleWeightChange(k, -0.01, 'finalScoreWeights')}><Minus className="h-4 w-4" /></Button>
-                        <Input type="number" step="0.01" value={v} onChange={(e)=>update(`finalScoreWeights.${k}`, parseFloat(e.target.value))} className="w-24 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"/>
-                        <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleWeightChange(k, 0.01, 'finalScoreWeights')}><Plus className="h-4 w-4" /></Button>
+                        <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleWeightChange(k, -0.01, 'finalScore')}><Minus className="h-4 w-4" /></Button>
+                        <Input type="number" step="0.01" value={v} onChange={(e)=>update(`finalScore.${k}`, parseFloat(e.target.value))} className="w-24 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"/>
+                        <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleWeightChange(k, 0.01, 'finalScore')}><Plus className="h-4 w-4" /></Button>
                    </div>
-                    <Slider id={`fsw-${k}`} min={0} max={1} step={0.01} value={[v]} onValueChange={(val)=>update(`finalScoreWeights.${k}`, val[0])} />
+                    <Slider id={`fsw-${k}`} min={0} max={1} step={0.01} value={[v]} onValueChange={(val)=>update(`finalScore.${k}`, val[0])} />
                 </div>
               ))}
             </CardContent>
@@ -392,7 +402,7 @@ export default function SettingsPage() {
               {lastResult && (
                 <div className="mt-3 bg-muted p-3 rounded-lg">
                   <div className="font-bold text-lg">Score: {lastResult.score.toFixed(4)}</div>
-                  <div className="text-sm mt-2">Compare to minPair: <b>{settings.minPair}</b></div>
+                  <div className="text-sm mt-2">Compare to minPair: <b>{settings.thresholds.minPair}</b></div>
                   <details className="mt-2 text-sm">
                       <summary className="cursor-pointer font-medium">View Breakdown</summary>
                       <pre className="text-xs mt-2 bg-background p-2 rounded">{JSON.stringify(lastResult.breakdown, null, 2)}</pre>
