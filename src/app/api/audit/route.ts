@@ -1,7 +1,13 @@
 
 import { NextResponse } from "next/server";
+import fs from 'fs/promises';
+import path from 'path';
+import os from 'os';
 
 export const runtime = "nodejs"; // prevent edge runtime
+
+// Gets the temporary directory for the cache.
+const getTmpDir = () => path.join(os.tmpdir(), 'beneficiary-insights-cache');
 
 /* -------------------------------------------------------------
    SAFE JSON PARSER 
@@ -191,34 +197,29 @@ export async function POST(req: Request) {
     const body = await safeParse(req);
 
     if (!body.cacheId) {
-      return jsonError("Missing cacheId.");
+      return jsonError("Missing cacheId.", 400);
     }
-    
-    // Construct the full URL for the internal API call
-    const cacheUrl = new URL(req.url);
-    const host = req.headers.get('host');
-    const protocol = host?.startsWith('localhost') ? 'http' : 'https';
-    const fetchUrl = `${protocol}://${host}/api/cluster-cache?id=${body.cacheId}`;
     
     let cached: any;
     try {
-        const cacheRes = await fetch(fetchUrl);
-        if (!cacheRes.ok) {
-          const errorText = await cacheRes.text();
-          console.error("Cache fetch failed:", errorText);
-          throw new Error(`Failed to fetch from cache API: ${cacheRes.statusText}`);
-        }
-        cached = await cacheRes.json();
+        const cacheDir = getTmpDir();
+        const filePath = path.join(cacheDir, `${body.cacheId}.json`);
+        const fileContent = await fs.readFile(filePath, 'utf-8');
+        cached = JSON.parse(fileContent);
     } catch(e: any) {
-        console.error("Error fetching or parsing cache:", e);
-        return jsonError(`Cache file missing or invalid. Fetch failed.`);
+        if (e.code === 'ENOENT') {
+            return jsonError(`Cache file not found for ID: ${body.cacheId}. Please re-run the clustering process.`, 404);
+        }
+        return jsonError(`Cache file is invalid or could not be read. Error: ${e.message}`, 500);
     }
 
+    if (!cached.data) {
+        return jsonError("Cache corrupted: 'data' object is missing.", 500);
+    }
 
-    const rows = cached.data?.rows;
-    const clusters = cached.data?.clusters;
+    const clusters = cached.data.clusters;
 
-    if (!clusters) return jsonError("Cache corrupted: clusters missing.");
+    if (!clusters) return jsonError("Cache corrupted: clusters missing from data.", 500);
 
     const issues: any[] = [];
     const potentialDuplicates: any[] = [];
@@ -229,7 +230,7 @@ export async function POST(req: Request) {
        LOOP THROUGH CLUSTERS
     --------------------------------------------------------- */
     for (let ci = 0; ci < clusters.length; ci++) {
-      const members = clusters[ci];
+      const members = clusters[ci]; // The cluster itself is the array of members
       if (!Array.isArray(members) || members.length < 2) continue;
 
       /* --------------------------
@@ -238,17 +239,17 @@ export async function POST(req: Request) {
       const nationalIds = members.map((m: any) => safeString(m.nationalId).trim());
       const unique = new Set(nationalIds.filter(Boolean));
       if (unique.size < nationalIds.filter(Boolean).length) {
-        issues.push({ type: "DUPLICATE_ID", clusterIndex: ci, members });
+        issues.push({ type: "DUPLICATE_ID", severity: 'high', description: `Duplicate National ID found in a cluster.`, records: members });
       }
 
       /* --------------------------
          2. DUPLICATE woman+husband
       -------------------------- */
       const pairs = members.map((m: any) =>
-        `${safeString(m.womanName)}|${safeString(m.husbandName)}`
+        `${normalizeArabic(safeString(m.womanName))}|${normalizeArabic(safeString(m.husbandName))}`
       );
       if (new Set(pairs).size < pairs.length) {
-        issues.push({ type: "DUPLICATE_COUPLE", clusterIndex: ci, members });
+        issues.push({ type: "DUPLICATE_COUPLE", severity: 'high', description: `Exact duplicate Woman+Husband name pair found.`, records: members });
       }
 
       /* --------------------------
@@ -256,8 +257,8 @@ export async function POST(req: Request) {
       -------------------------- */
       const byWoman = new Map<string, Set<string>>();
       for (const m of members) {
-        const w = safeString(m.womanName).trim();
-        const h = safeString(m.husbandName).trim();
+        const w = normalizeArabic(safeString(m.womanName).trim());
+        const h = normalizeArabic(safeString(m.husbandName).trim());
         if (!byWoman.has(w)) byWoman.set(w, new Set());
         byWoman.get(w)!.add(h);
       }
@@ -265,10 +266,9 @@ export async function POST(req: Request) {
         if (hs.size > 1) {
           issues.push({
             type: "WOMAN_MULTIPLE_HUSBANDS",
-            woman: w,
-            husbands: [...hs],
-            clusterIndex: ci,
-            members
+            severity: 'high',
+            description: `Woman '${w}' appears to be registered with multiple husbands: ${[...hs].join(', ')}.`,
+            records: members.filter(m => normalizeArabic(safeString(m.womanName)) === w)
           });
         }
       }
@@ -278,8 +278,8 @@ export async function POST(req: Request) {
       -------------------------- */
       const byHusband = new Map<string, Set<string>>();
       for (const m of members) {
-        const h = safeString(m.husbandName).trim();
-        const w = safeString(m.womanName).trim();
+        const h = normalizeArabic(safeString(m.husbandName).trim());
+        const w = normalizeArabic(safeString(m.womanName).trim());
         if (!byHusband.has(h)) byHusband.set(h, new Set());
         byHusband.get(h)!.add(w);
       }
@@ -287,10 +287,9 @@ export async function POST(req: Request) {
         if (ws.size > 4) {
           issues.push({
             type: "HUSBAND_TOO_MANY_WIVES",
-            husband: h,
-            wives: [...ws],
-            clusterIndex: ci,
-            members
+            severity: 'medium',
+            description: `Husband '${h}' is registered with ${ws.size} wives, which exceeds the limit of 4.`,
+            records: members.filter(m => normalizeArabic(safeString(m.husbandName)) === h)
           });
         }
       }
@@ -300,7 +299,7 @@ export async function POST(req: Request) {
       -------------------------- */
       const womanIDs = new Map<string, Set<string>>();
       for (const m of members) {
-        const w = safeString(m.womanName).trim();
+        const w = normalizeArabic(safeString(m.womanName).trim());
         const id = safeString(m.nationalId).trim();
         if (!womanIDs.has(w)) womanIDs.set(w, new Set());
         if (id) womanIDs.get(w)!.add(id);
@@ -309,22 +308,20 @@ export async function POST(req: Request) {
         if (ids.size > 1) {
           issues.push({
             type: "MULTIPLE_NATIONAL_IDS",
-            woman: w,
-            ids: [...ids],
-            clusterIndex: ci,
-            members
+            severity: 'high',
+            description: `Woman '${w}' is associated with multiple National IDs: ${[...ids].join(', ')}.`,
+            records: members.filter(m => normalizeArabic(safeString(m.womanName)) === w)
           });
         }
       }
 
       /* ---------------------------------------------------------
-          6. POTENTIAL DUPLICATES (PAIRWISE)
+          6. POTENTIAL DUPLICATES (PAIRWISE) - This part is computationally heavy and may be removed if not needed.
       --------------------------------------------------------- */
       const M = members.length;
       const dupPairs: any[] = [];
 
-      if (M <= 600) {
-        // full pairwise
+      if (M <= 100) { // Limit pairwise check to smaller clusters to avoid performance issues
         for (let i = 0; i < M; i++) {
           for (let j = i + 1; j < M; j++) {
             const score = auditSimilarity(members[i], members[j]);
@@ -339,61 +336,15 @@ export async function POST(req: Request) {
             }
           }
         }
-      } else {
-        // top-K per member (K=25)
-        const K = 25;
-        for (let i = 0; i < M; i++) {
-          const u = members[i];
-          const scores: any[] = [];
-
-          for (let j = 0; j < M; j++) {
-            if (i === j) continue;
-            const v = members[j];
-            const score = auditSimilarity(u, v);
-            if (score > 0) scores.push({ j, score });
-          }
-
-          scores.sort((a, b) => b.score - a.score);
-
-          for (let k = 0; k < Math.min(K, scores.length); k++) {
-            if (scores[k].score >= threshold) {
-              const j = scores[k].j;
-
-              const aId = members[i]._internalId;
-              const bId = members[j]._internalId;
-              
-              const [a, b] = [aId, bId].sort();
-
-              dupPairs.push({
-                a,
-                b,
-                aRow: aId < bId ? members[i] : members[j],
-                bRow: aId < bId ? members[j] : members[i],
-                score: scores[k].score
-              });
-            }
-          }
-        }
-
-        // dedupe
-        const seen = new Set();
-        const uniq = [];
-        for (const p of dupPairs) {
-          const key = p.a + "_" + p.b;
-          if (!seen.has(key)) {
-            seen.add(key);
-            uniq.push(p);
-          }
-        }
-        dupPairs.length = 0;
-        dupPairs.push(...uniq);
       }
-
-      potentialDuplicates.push({
-        clusterIndex: ci,
-        clusterSize: M,
-        pairs: dupPairs
-      });
+      if (dupPairs.length > 0) {
+           issues.push({
+            type: "HIGH_SIMILARITY",
+            severity: 'medium',
+            description: `Found ${dupPairs.length} pair(s) with similarity score > ${threshold} in this cluster.`,
+            records: members
+           });
+      }
     }
 
     /* ---------------------------------------------------------
@@ -402,11 +353,11 @@ export async function POST(req: Request) {
     return NextResponse.json({
       ok: true,
       issues,
-      potentialDuplicates,
       count: issues.length
     });
 
   } catch (err: any) {
+    console.error("Audit API Error:", err);
     return jsonError(err.message || "Internal Server Error.");
   }
 }
