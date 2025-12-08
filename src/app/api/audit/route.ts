@@ -208,7 +208,7 @@ export async function POST(req: Request) {
         }
         cached = await cacheRes.json();
     } catch(e: any) {
-        return jsonError(`Cache file missing or invalid. ${e.message}`);
+        return jsonError(`Cache file missing or invalid. fetch failed`);
     }
 
 

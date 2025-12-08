@@ -50,6 +50,8 @@ export default function AuditPage() {
           
           if (auditFindings) {
             setFindings(auditFindings);
+            const clusteredRecords = clusters?.flat() || [];
+            setRows(clusteredRecords);
             toast({ title: "Loaded from Cache", description: `Loaded ${auditFindings.length} existing audit findings.` });
           } else if (clusters) {
               const clusteredRecords = clusters.flat();
@@ -175,7 +177,7 @@ export default function AuditPage() {
                   <CardTitle>Data Integrity Audit</CardTitle>
                   <CardDescription>
                     Run a set of rules against your clustered records to identify potential issues like duplicates and invalid relationships.
-                    {rows.length > 0 && findings.length === 0 && ` Ready to audit ${rows.length} records.`}
+                    {rows.length > 0 && ` Ready to audit ${rows.length} records.`}
                   </CardDescription>
                 </div>
                 <Button variant="outline" asChild>
@@ -188,7 +190,7 @@ export default function AuditPage() {
         </CardHeader>
         <CardContent>
           <div className="flex gap-4">
-            <Button onClick={runAuditNow} disabled={loading.audit || loading.data || (rows.length === 0 && findings.length === 0)}>
+            <Button onClick={runAuditNow} disabled={loading.audit || loading.data || rows.length === 0}>
               {loading.audit ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <AlertTriangle className="mr-2 h-4 w-4" />}
               {findings.length > 0 ? 'Re-run Audit' : 'Run Audit'}
             </Button>
@@ -246,7 +248,7 @@ export default function AuditPage() {
                                 {f.records.map((r: RecordRow, idx: number) => (
                                     <li key={idx} className="flex justify-between">
                                     <span>{r.womanName} (Husband: {r.husbandName})</span>
-                                    <span className="font-mono text-muted-foreground">ID: {r.nationalId}</span>
+                                    <span className="font-mono text-muted-foreground">ID: {String(r.nationalId)}</span>
                                     </li>
                                 ))}
                                 </ul>
