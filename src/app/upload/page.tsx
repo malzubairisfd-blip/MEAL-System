@@ -547,6 +547,7 @@ export default function UploadPage(){
   const [progressInfo, setProgressInfo] = useState<WorkerProgress>({ status:"idle", progress:0 });
   const [workerStatus, setWorkerStatus] = useState<string>("idle");
   const [clusters, setClusters] = useState<any[][]>([]);
+  const [fileReadProgress, setFileReadProgress] = useState(0);
   const rowsRef = useRef<any[]>([]);
   const workerRef = useRef<Worker|null>(null);
   const { toast } = useToast();
@@ -626,19 +627,32 @@ export default function UploadPage(){
     if(!f) return;
     setFile(f);
     setWorkerStatus('idle'); setProgressInfo({ status:'idle', progress:0 }); setClusters([]);
-    const buffer = await f.arrayBuffer();
-    const wb = XLSX.read(buffer, { type: 'array', cellDates:true });
-    const sheet = wb.Sheets[wb.SheetNames[0]];
-    const json = XLSX.utils.sheet_to_json<any>(sheet, { defval: "" });
-    rowsRef.current = json;
-    setColumns(Object.keys(json[0] || {}));
-    const storageKey = LOCAL_STORAGE_KEY_PREFIX + Object.keys(json[0]||{}).join(',');
-    const saved = localStorage.getItem(storageKey);
-    if(saved) {
-      try { setMapping(JSON.parse(saved)); } catch {}
-    } else {
-      setMapping({ womanName:"", husbandName:"", nationalId:"", phone:"", village:"", subdistrict:"", children:"", cluster_id:"", beneficiaryId:"" });
-    }
+    setFileReadProgress(0);
+
+    const reader = new FileReader();
+    reader.onprogress = (event) => {
+      if (event.lengthComputable) {
+        const percentage = (event.loaded / event.total) * 100;
+        setFileReadProgress(percentage);
+      }
+    };
+    reader.onload = (e) => {
+        const buffer = e.target?.result;
+        const wb = XLSX.read(buffer, { type: 'array', cellDates:true });
+        const sheet = wb.Sheets[wb.SheetNames[0]];
+        const json = XLSX.utils.sheet_to_json<any>(sheet, { defval: "" });
+        rowsRef.current = json;
+        setColumns(Object.keys(json[0] || {}));
+        const storageKey = LOCAL_STORAGE_KEY_PREFIX + Object.keys(json[0]||{}).join(',');
+        const saved = localStorage.getItem(storageKey);
+        if(saved) {
+          try { setMapping(JSON.parse(saved)); } catch {}
+        } else {
+          setMapping({ womanName:"", husbandName:"", nationalId:"", phone:"", village:"", subdistrict:"", children:"", cluster_id:"", beneficiaryId:"" });
+        }
+        setFileReadProgress(100);
+    };
+    reader.readAsArrayBuffer(f);
   }
 
   function handleMappingChange(field:keyof Mapping, value:string){
@@ -716,7 +730,7 @@ export default function UploadPage(){
                         {file ? (
                           <>
                             <p className="font-semibold text-primary">{file.name}</p>
-                            <p className="text-xs text-muted-foreground">{rowsRef.current.length} rows detected</p>
+                            <p className="text-xs text-muted-foreground">{rowsRef.current.length > 0 ? `${rowsRef.current.length} rows detected` : 'Reading file...'}</p>
                           </>
                         ) : (
                           <>
@@ -736,31 +750,38 @@ export default function UploadPage(){
                   setClusters([]);
                   setWorkerStatus('idle');
                   setProgressInfo({ status: 'idle', progress: 0 });
+                  setFileReadProgress(0);
                 }} variant="outline">Reset</Button>
             )}
           </div>
+          {file && fileReadProgress < 100 && (
+            <div className="mt-4">
+              <Label>Reading File...</Label>
+              <Progress value={fileReadProgress} />
+            </div>
+          )}
         </CardContent>
       </Card>
 
       {columns.length > 0 && (
         <Card>
-          <CardHeader><CardTitle>2. Map Columns</CardTitle><CardDescription>Map your sheet columns to fields.</CardDescription></CardHeader>
+          <CardHeader><CardTitle>2. Map Columns</CardTitle><CardDescription>Map your sheet columns to the required fields for analysis.</CardDescription></CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {MAPPING_FIELDS.map(field => (
               <Card key={field}>
-                <CardHeader className="p-3">
-                  <div className="flex justify-between items-center w-full">
-                    <div className="capitalize">{field.replace(/_/g,' ')}{REQUIRED_MAPPING_FIELDS.includes(field) && <span className="text-destructive">*</span>}</div>
-                    {mapping[field] ? <CheckCircle className="h-5 w-5 text-green-500" /> : <XCircle className="h-5 w-5 text-red-500" />}
-                  </div>
+                <CardHeader className="p-4 flex flex-row items-center justify-between">
+                    <div className="flex items-center gap-2">
+                         {mapping[field] ? <CheckCircle className="h-5 w-5 text-green-500" /> : <XCircle className="h-5 w-5 text-red-500" />}
+                        <Label htmlFor={field} className="capitalize font-semibold text-base">{field.replace(/_/g,' ')}{REQUIRED_MAPPING_FIELDS.includes(field) && <span className="text-destructive">*</span>}</Label>
+                    </div>
                 </CardHeader>
                 <CardContent className="p-0">
-                  <ScrollArea className="h-40">
-                    <RadioGroup value={mapping[field]} onValueChange={(v)=> handleMappingChange(field as keyof Mapping, v)} className="p-3">
+                  <ScrollArea className="h-48 border-t">
+                    <RadioGroup value={mapping[field]} onValueChange={(v)=> handleMappingChange(field as keyof Mapping, v)} className="p-4 grid grid-cols-2 gap-2">
                       {columns.map(col => (
                         <div key={col} className="flex items-center space-x-2">
                           <RadioGroupItem value={col} id={`${field}-${col}`} />
-                          <Label htmlFor={`${field}-${col}`} className="truncate" title={col}>{col}</Label>
+                          <Label htmlFor={`${field}-${col}`} className="truncate font-normal" title={col}>{col}</Label>
                         </div>
                       ))}
                     </RadioGroup>
@@ -774,7 +795,7 @@ export default function UploadPage(){
 
       {file && isMappingComplete && (
         <Card>
-          <CardHeader><CardTitle>3. Run Clustering</CardTitle><CardDescription>Start the analysis</CardDescription></CardHeader>
+          <CardHeader><CardTitle>3. Run Clustering</CardTitle><CardDescription>Start the analysis to find potential duplicate records.</CardDescription></CardHeader>
           <CardContent>
             <div className="space-y-4">
               <Button onClick={startClustering} disabled={workerStatus === 'processing' || workerStatus === 'caching'}>
@@ -783,9 +804,11 @@ export default function UploadPage(){
               </Button>
 
               {(workerStatus !== 'idle' && workerStatus !== 'done' && workerStatus !== 'error') && (
-                <div>
-                  <p className="text-sm text-muted-foreground mb-2">Status: <b>{formattedStatus()}</b></p>
-                  <Progress value={progressInfo.progress} />
+                <div className="flex items-center gap-4">
+                  <Progress value={progressInfo.progress} className="flex-1" />
+                  <span className="text-sm font-semibold text-muted-foreground w-48 text-right">
+                    {formattedStatus()}
+                  </span>
                 </div>
               )}
             </div>
@@ -795,7 +818,7 @@ export default function UploadPage(){
 
       {workerStatus === 'done' && (
         <Card>
-          <CardHeader><CardTitle>4. Results</CardTitle><CardDescription>Summary</CardDescription></CardHeader>
+          <CardHeader><CardTitle>4. Results</CardTitle><CardDescription>Summary of the clustering process.</CardDescription></CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-4">
                 <SummaryCard icon={<Users className="h-4 w-4 text-muted-foreground" />} title="Total Records" value={rowsRef.current.length} />
