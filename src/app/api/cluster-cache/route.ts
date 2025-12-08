@@ -28,34 +28,33 @@ export async function POST(req: Request) {
     }
 
     const filePath = path.join(cacheDir, `${cacheId}.json`);
-    let updatedData;
+    let updatedData = {};
 
     try {
         // File exists, so we read, merge, and update it
         const existingFileContent = await fs.readFile(filePath, 'utf-8');
         const existingData = JSON.parse(existingFileContent);
         
-        // Deep merge logic
-        const newRows = [...(existingData.data.rows || []), ...(body.data.rows || [])];
-        const newClusters = [...(existingData.data.clusters || []), ...(body.data.clusters || [])];
-        const newAiSummaries = {...(existingData.data.aiSummaries || {}), ...(body.data.aiSummaries || {})};
-
+        // Deep merge logic: This assumes the data is flat at the top level
         updatedData = {
           ...existingData,
-          data: {
-            ...existingData.data,
-            ...body.data, // This will bring in other properties like originalHeaders
-            rows: newRows,
-            clusters: newClusters,
-            aiSummaries: newAiSummaries
-          }
+          ...body, // body contains the new chunks to merge in
+          // Specifically handle array and object appends
+          rows: [...(existingData.rows || []), ...(body.rows || [])],
+          clusters: [...(existingData.clusters || []), ...(body.clusters || [])],
+          aiSummaries: {...(existingData.aiSummaries || {}), ...(body.aiSummaries || {})},
+          auditFindings: body.auditFindings || existingData.auditFindings, // Overwrite audit findings
+          originalHeaders: body.originalHeaders || existingData.originalHeaders // Overwrite headers
         };
+        // Remove the cacheId from the data itself
+        delete (updatedData as any).cacheId;
+
 
     } catch (error) {
         // File doesn't exist, create it from scratch.
-        // This happens on the first chunk.
         if (error instanceof Error && (error as NodeJS.ErrnoException).code === 'ENOENT') {
-            updatedData = { data: body.data };
+            updatedData = body;
+            delete (updatedData as any).cacheId;
         } else {
             throw error; // Re-throw other errors (e.g., parsing errors)
         }
@@ -83,7 +82,7 @@ export async function GET(req: Request) {
     const filePath = path.join(cacheDir, `${cacheId}.json`);
     const fileContent = await fs.readFile(filePath, 'utf-8');
     
-    // The entire file content is the response, which already includes the `data` wrapper
+    // The entire file content is the response
     return NextResponse.json(JSON.parse(fileContent));
 
   } catch (error: any) {
@@ -94,3 +93,5 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: false, error: 'Failed to read from cache: ' + error.message }, { status: 500 });
   }
 }
+
+    

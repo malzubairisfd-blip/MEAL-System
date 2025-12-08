@@ -26,14 +26,29 @@ type EnrichedRecord = RecordRow & {
 async function getCachedData(cacheId: string) {
     const cacheDir = getTmpDir();
     const filePath = path.join(cacheDir, `${cacheId}.json`);
+
     try {
         const fileContent = await fs.readFile(filePath, 'utf-8');
-        // The actual data is nested inside a 'data' property.
-        return JSON.parse(fileContent).data;
-    } catch (e) {
-        throw new Error("Cache not found or expired. Please start from the upload step.");
+
+        // FIX: your JSON is NOT nested under "data"
+        const parsed = JSON.parse(fileContent);
+
+        // Validate that the essential data exists. The cache structure is now flat.
+        if (!parsed.rows || !parsed.clusters) {
+            throw new Error("Cache corrupted: rows or clusters missing.");
+        }
+
+        return parsed;  // return real cached object
+    } catch (e: any) {
+        console.error("CACHE LOAD ERROR:", e);
+        // Provide a more specific error if the file doesn't exist.
+        if (e.code === 'ENOENT') {
+             throw new Error(`Cache file not found for ID: ${cacheId}. Please re-upload your file.`);
+        }
+        throw new Error(`Cache not found or expired. Please re-upload your file. Details: ${e.message}`);
     }
 }
+
 
 async function enrichData(cachedData: any): Promise<EnrichedRecord[]> {
     const { rows: allRecords, clusters } = cachedData;
@@ -441,3 +456,5 @@ function createAuditSheet(wb: ExcelJS.Workbook, findings: AuditFinding[]) {
         currentRowIndex = endRow + 1;
     });
 }
+
+    

@@ -398,7 +398,7 @@ function splitCluster(rowsSubset, minInternal=0.5, opts){
 
 /* runClustering - main function used by worker */
 async function runClustering(rows, opts){
-  rows.forEach((r,i)=> r._internalId = r._internalId || 'r_' + i);
+  rows.forEach((r,i)=> r._internalId = r._internalId || 'row_' + i);
   const minPair = opts?.thresholds?.minPair ?? 0.62;
   const minInternal = opts?.thresholds?.minInternal ?? 0.54;
   const blockChunkSize = opts?.thresholds?.blockChunkSize ?? 3000;
@@ -576,21 +576,26 @@ export default function UploadPage(){
           setProgressInfo({ status: 'caching', progress: 98 });
           const resultClusters = msg.clusters || [];
           setClusters(resultClusters);
-          // cache to server in chunks (like earlier)
+          
           try {
             const cacheId = 'cache-' + Date.now() + '-' + Math.random().toString(36).slice(2,9);
             sessionStorage.setItem('cacheId', cacheId);
-            // initialize
-            await fetch('/api/cluster-cache', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ cacheId, data:{ originalHeaders: columns } }) });
+            
             const allRows = rowsRef.current.map((r,i)=> ({ ...r, _internalId: 'row_' + i }));
-            for(let i=0;i<allRows.length;i+=2000){
-              const chunk = allRows.slice(i,i+2000);
-              await fetch('/api/cluster-cache', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ cacheId, data:{ rows: chunk } }) });
-            }
-            for(let i=0;i<resultClusters.length;i+=1000){
-              const chunk = resultClusters.slice(i,i+1000);
-              await fetch('/api/cluster-cache', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ cacheId, data:{ clusters: chunk } }) });
-            }
+            
+            // The entire dataset is now sent in one go to be cached.
+            const dataToCache = {
+                rows: allRows,
+                clusters: resultClusters,
+                originalHeaders: columns,
+            };
+
+            await fetch('/api/cluster-cache', { 
+                method:'POST', 
+                headers:{'Content-Type':'application/json'}, 
+                body: JSON.stringify({ cacheId, ...dataToCache }) 
+            });
+
             sessionStorage.setItem('cacheTimestamp', Date.now().toString());
             setWorkerStatus('done');
             setProgressInfo({ status: 'done', progress: 100 });
@@ -612,7 +617,7 @@ export default function UploadPage(){
       if(workerRef.current){ workerRef.current.terminate(); workerRef.current = null; }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [columns]); // Re-create worker if columns change, just in case.
 
   useEffect(()=>{
     const allRequiredMapped = REQUIRED_MAPPING_FIELDS.every(f => !!mapping[f]);
@@ -844,3 +849,5 @@ export default function UploadPage(){
     </div>
   );
 }
+
+    

@@ -64,8 +64,8 @@ export default function ExportPage() {
                 }
                 const responseData = await res.json();
                 
-                const rows = responseData.data?.rows || [];
-                const clusters = responseData.data?.clusters || [];
+                const rows = responseData.rows || [];
+                const clusters = responseData.clusters || [];
                 
                 setRecordCount(rows.length);
                 setClusterCount(clusters.length);
@@ -286,3 +286,5 @@ export default function ExportPage() {
         </div>
     );
 }
+
+    

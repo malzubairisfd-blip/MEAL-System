@@ -41,9 +41,8 @@ export default function ReviewPage() {
           if (!res.ok) throw new Error("Failed to load clusters from server cache.");
           
           const data = await res.json();
-          // Corrected data access
-          const clusters = data.data?.clusters;
-          const cachedSummaries = data.data?.aiSummaries || {};
+          const clusters = data.clusters;
+          const cachedSummaries = data.aiSummaries || {};
           
           if (clusters) {
               setAllClusters(clusters);
@@ -199,3 +198,5 @@ export default function ReviewPage() {
     </div>
   );
 }
+
+    

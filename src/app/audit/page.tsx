@@ -45,8 +45,8 @@ export default function AuditPage() {
           if (!res.ok) throw new Error("Failed to load data from server cache");
 
           const responseData = await res.json();
-          const clusters = responseData.data?.clusters;
-          const auditFindings = responseData.data?.auditFindings;
+          const clusters = responseData.clusters;
+          const auditFindings = responseData.auditFindings;
           
           if (auditFindings) {
             setFindings(auditFindings);
@@ -135,7 +135,7 @@ export default function AuditPage() {
         await fetch('/api/cluster-cache', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ cacheId, data: { auditFindings: newFindings } })
+            body: JSON.stringify({ cacheId, auditFindings: newFindings })
         });
 
         toast({ title: "Audit Complete", description: `${newFindings.length} potential issues found.` });
@@ -273,3 +273,5 @@ export default function AuditPage() {
     </div>
   );
 }
+
+    
