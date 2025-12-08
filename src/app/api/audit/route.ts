@@ -213,11 +213,7 @@ export async function POST(req: Request) {
         return jsonError(`Cache file is invalid or could not be read. Error: ${e.message}`, 500);
     }
 
-    if (!cached.data) {
-        return jsonError("Cache corrupted: 'data' object is missing.", 500);
-    }
-
-    const clusters = cached.data.clusters;
+    const clusters = cached.clusters;
 
     if (!clusters) return jsonError("Cache corrupted: clusters missing from data.", 500);
 
