@@ -549,9 +549,9 @@ function orderFree(n1, n2) {
 // ------------------ Pairwise Score ------------------
 function scorePair(a, b, opt) {
   const w = opt?.weights || {
-    woman: 0.50,
-    husband: 0.25,
-    id: 0.15,
+    womanName: 0.50,
+    husbandName: 0.25,
+    nationalId: 0.15,
     phone: 0.10
   };
 
@@ -580,10 +580,10 @@ function scorePair(a, b, opt) {
   }
 
   const final =
-      w.woman * wifeScore +
-      w.husband * husbandScore +
-      w.id * idScore +
-      w.phone * phoneScore;
+      (w.womanName || 0) * wifeScore +
+      (w.husbandName || 0) * husbandScore +
+      (w.nationalId || 0) * idScore +
+      (w.phone || 0) * phoneScore;
 
   return final;
 }
