@@ -31,29 +31,33 @@ export async function POST(req: Request) {
     let updatedData;
 
     try {
-        // File exists, so we update it
-        const existingData = JSON.parse(await fs.readFile(filePath, 'utf-8'));
+        // File exists, so we read, merge, and update it
+        const existingFileContent = await fs.readFile(filePath, 'utf-8');
+        const existingData = JSON.parse(existingFileContent);
         
-        // Deep merge for arrays
+        // Deep merge logic
         const newRows = [...(existingData.data.rows || []), ...(body.data.rows || [])];
         const newClusters = [...(existingData.data.clusters || []), ...(body.data.clusters || [])];
+        const newAiSummaries = {...(existingData.data.aiSummaries || {}), ...(body.data.aiSummaries || {})};
 
         updatedData = {
           ...existingData,
           data: {
             ...existingData.data,
-            ...body.data,
+            ...body.data, // This will bring in other properties like originalHeaders
             rows: newRows,
-            clusters: newClusters
+            clusters: newClusters,
+            aiSummaries: newAiSummaries
           }
         };
 
     } catch (error) {
-        // File doesn't exist, create it from scratch
+        // File doesn't exist, create it from scratch.
+        // This happens on the first chunk.
         if (error instanceof Error && (error as NodeJS.ErrnoException).code === 'ENOENT') {
             updatedData = { data: body.data };
         } else {
-            throw error; // Re-throw other errors
+            throw error; // Re-throw other errors (e.g., parsing errors)
         }
     }
 

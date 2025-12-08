@@ -28,14 +28,15 @@ async function getCachedData(cacheId: string) {
     const filePath = path.join(cacheDir, `${cacheId}.json`);
     try {
         const fileContent = await fs.readFile(filePath, 'utf-8');
-        return JSON.parse(fileContent);
+        // The actual data is nested inside a 'data' property.
+        return JSON.parse(fileContent).data;
     } catch (e) {
         throw new Error("Cache not found or expired. Please start from the upload step.");
     }
 }
 
 async function enrichData(cachedData: any): Promise<EnrichedRecord[]> {
-    const { rows: allRecords, clusters } = cachedData.data; // Correctly access the nested data object
+    const { rows: allRecords, clusters } = cachedData;
     if (!allRecords || !clusters) {
         throw new Error("Invalid cache: missing rows or clusters.");
     }
@@ -131,7 +132,7 @@ function sortData(data: EnrichedRecord[]): EnrichedRecord[] {
 }
 
 function createFormattedWorkbook(data: EnrichedRecord[], cachedData: any): ExcelJS.Workbook {
-    const { rows: allRecords, clusters, auditFindings, aiSummaries, originalHeaders } = cachedData.data; // Correctly access the nested data object
+    const { rows: allRecords, clusters, auditFindings, aiSummaries, originalHeaders } = cachedData;
     const wb = new ExcelJS.Workbook();
     wb.creator = "Beneficiary Insights";
     
@@ -435,5 +436,3 @@ function createAuditSheet(wb: ExcelJS.Workbook, findings: AuditFinding[]) {
         currentRowIndex = endRow + 1;
     });
 }
-
-    
