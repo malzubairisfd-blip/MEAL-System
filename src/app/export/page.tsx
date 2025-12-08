@@ -18,12 +18,26 @@ type DownloadVersion = {
     blob: Blob;
 };
 
+type GenerationStep = "enriching" | "sorting" | "sheets" | "audit" | "summary" | "done";
+const allSteps: GenerationStep[] = ["enriching", "sorting", "sheets", "audit", "summary"];
+
+const stepDescriptions: Record<GenerationStep, string> = {
+    enriching: "Enriching data with cluster info...",
+    sorting: "Sorting records for the report...",
+    sheets: "Creating main data sheet...",
+    audit: "Creating audit findings sheet...",
+    summary: "Creating summary and cluster sheets...",
+    done: "Done"
+};
+
+
 export default function ExportPage() {
     // Component State
     const [isReady, setIsReady] = useState(false);
     const [loading, setLoading] = useState(false);
     const [progress, setProgress] = useState(0);
     const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
+    const [completedSteps, setCompletedSteps] = useState<Set<GenerationStep>>(new Set());
 
     const { toast } = useToast();
 
@@ -50,35 +64,28 @@ export default function ExportPage() {
             }
         }
     }, [toast]);
-
-    const startProgress = () => {
+    
+    const runSimulatedProgress = () => {
+        setLoading(true);
+        setCompletedSteps(new Set());
         setProgress(0);
-        progressIntervalRef.current = setInterval(() => {
-            setProgress(prev => {
-                if (prev >= 95) {
-                    if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
-                    return 95;
-                }
-                return prev + 5;
-            });
-        }, 300);
-    };
 
-    const finishProgress = () => {
-        if (progressIntervalRef.current) {
-            clearInterval(progressIntervalRef.current);
-            progressIntervalRef.current = null;
-        }
-        setProgress(100);
-        setTimeout(() => {
-            setProgress(0);
-            setLoading(false);
-        }, 1500);
-    };
+        let stepIndex = 0;
+        const interval = setInterval(() => {
+            if (stepIndex < allSteps.length) {
+                setCompletedSteps(prev => new Set(prev).add(allSteps[stepIndex]));
+                setProgress((prev) => prev + (100 / (allSteps.length + 1)));
+                stepIndex++;
+            } else {
+                clearInterval(interval);
+            }
+        }, 800); // Simulate each step taking time
+
+        return () => clearInterval(interval);
+    }
     
     const handleGenerateAndDownload = async () => {
-        setLoading(true);
-        startProgress();
+        const clearSim = runSimulatedProgress();
 
         try {
             const cacheId = sessionStorage.getItem('cacheId');
@@ -109,14 +116,22 @@ export default function ExportPage() {
             
             // Automatically trigger download
             handleDirectDownload(blob, newVersion.fileName);
-            finishProgress();
+            
+            clearSim();
+            setCompletedSteps(new Set(allSteps));
+            setProgress(100);
+            setTimeout(() => {
+                setLoading(false);
+                setProgress(0);
+                setCompletedSteps(new Set());
+            }, 2000);
 
         } catch (error: any) {
             toast({ title: "Generation Failed", description: error.message, variant: "destructive" });
-             if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
-             progressIntervalRef.current = null;
-             setProgress(0);
+             clearSim();
              setLoading(false);
+             setProgress(0);
+             setCompletedSteps(new Set());
         }
     };
     
@@ -159,10 +174,9 @@ export default function ExportPage() {
                              <p className="text-sm text-muted-foreground mb-4">
                                 This will generate a single Excel file with multiple sheets: Enriched Data, Review Summary, Cluster Details, and Audit Findings. The process may take a moment.
                             </p>
-                            {loading && <Progress value={progress} className="w-full mb-4" />}
                             <Button onClick={handleGenerateAndDownload} disabled={loading || !isReady} size="lg">
                                 {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
-                                Generate and Download Report
+                                {loading ? 'Generating...' : 'Generate and Download Report'}
                             </Button>
                              {!isReady && <p className="text-xs text-destructive mt-2">Please complete the upload and clustering steps first to enable report generation.</p>}
                         </CardContent>
@@ -171,15 +185,34 @@ export default function ExportPage() {
                     {/* Status & History Section */}
                     <div className="grid md:grid-cols-2 gap-6">
                         <Card>
-                            <CardHeader><CardTitle>Workflow Status</CardTitle></CardHeader>
+                            <CardHeader><CardTitle>Generation Status</CardTitle></CardHeader>
                             <CardContent className="space-y-4">
                                <div className="flex items-center justify-between font-semibold">
                                     <span>Ready to Generate</span> 
-                                    <StatusIndicator done={isReady} />
+                                    <StatusIndicator done={isReady && !loading} />
                                 </div>
+                                
+                                {loading && (
+                                    <div className="space-y-3 pt-2">
+                                        <Progress value={progress} />
+                                        {allSteps.map(step => (
+                                             <div key={step} className="flex items-center justify-between text-sm">
+                                                <span>{stepDescriptions[step]}</span>
+                                                {completedSteps.has(step) ? (
+                                                    <CheckCircle className="h-5 w-5 text-green-500" />
+                                                ) : (
+                                                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                                                )}
+                                             </div>
+                                        ))}
+                                    </div>
+                                )}
+                                
+                                {!loading &&
                                 <p className="text-sm text-muted-foreground">
                                     Ensure you have successfully run the clustering on the 'Upload' page. When ready, click the button above to generate your report.
                                 </p>
+                                }
                             </CardContent>
                         </Card>
                          <Card>
