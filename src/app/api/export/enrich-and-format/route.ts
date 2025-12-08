@@ -20,6 +20,7 @@ type EnrichedRecord = RecordRow & {
     husbandScore?: number;
     idScore?: number;
     phoneScore?: number;
+    [key: string]: any; // Allow any other properties from the original file
 };
 
 async function getCachedData(cacheId: string) {
