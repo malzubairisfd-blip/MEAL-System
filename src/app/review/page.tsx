@@ -75,7 +75,7 @@ export default function ReviewPage() {
           (r) =>
             r.womanName?.toLowerCase().includes(s) ||
             r.husbandName?.toLowerCase().includes(s) ||
-            r.phone?.toLowerCase().includes(s)
+            String(r.phone ?? '').toLowerCase().includes(s)
         )
       );
       setFilteredClusters(filtered);
