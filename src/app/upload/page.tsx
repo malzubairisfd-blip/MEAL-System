@@ -25,25 +25,18 @@ function createWorkerScript() {
 /* -------------------------
    Utilities & Normalizers
    ------------------------- */
-const arabicEquivalenceMap = {
-  "إ":"ا","أ":"ا","آ":"ا","ى":"ي","ئ":"ي","ؤ":"و","ة":"ه",
-  // a few approximations
-  "ق":"ك","ك":"ق","ط":"ت","ت":"ط","ه":"ح","ح":"ه","ظ":"ض","ض":"ظ","ز":"ذ","ذ":"ز"
-};
-function normalizeChar(ch){ return arabicEquivalenceMap[ch] || ch; }
-function safeString(x){ if (x===null || x===undefined) return ""; return String(x); }
 function normalizeArabic(text){
   if(!text) return "";
-  let t = safeString(text).trim();
-  t = t.replace(/[^\\u0600-\\u06FF0-9\\s]/g," ").replace(/\\s+/g," ");
-  // normalize common words
-  t = t.replace(/ابن|بن|ولد/g,"بن");
-  t = t.replace(/آل|ال/g,"ال");
-  t = t.replace(/[.,·•\\u200C\\u200B]/g,"");
-  return t.split("").map(normalizeChar).join("").trim();
+  let s = String(text).trim();
+  s = s.replace(/[\\u064B-\\u0652\\u0670\\u0640\\u064C]/g, "");
+  s = s.replace(/[أإآء]/g, "ا");
+  s = s.replace(/ى/g, "ي");
+  s = s.replace(/ة/g, "ه");
+  s = s.replace(/\\s+/g, " ");
+  return s;
 }
 function tokens(s){ const n = normalizeArabic(s||""); if(!n) return []; return n.split(" ").filter(Boolean); }
-function digitsOnly(s){ if(!s) return ""; return safeString(s).replace(/\\D/g,""); }
+function digitsOnly(s){ if(!s) return ""; return String(s).replace(/\\D/g,""); }
 function normalizeChildrenField(val){
   if(!val) return [];
   if(Array.isArray(val)) return val.map(x=>normalizeArabic(x)).filter(Boolean);
@@ -54,7 +47,7 @@ function normalizeChildrenField(val){
    String similarity primitives
    ------------------------- */
 function jaroWinkler(s1, s2){
-  s1 = safeString(s1); s2 = safeString(s2);
+  s1 = String(s1 || ""); s2 = String(s2 || "");
   if(!s1 || !s2) return 0;
   const len1=s1.length, len2=s2.length;
   const matchDist = Math.floor(Math.max(len1,len2)/2)-1;
@@ -125,13 +118,114 @@ function nameOrderFreeScore(aName,bName){
   return 0.7*jacc + 0.3*sj;
 }
 
+function splitParts(name) {
+  if (!name) return [];
+  return name.trim().split(/\\s+/).filter(Boolean);
+}
+
+function applyAdditionalRules(a, b, jw, minPair) {
+  const wA = a.womanName || "";
+  const wB = b.womanName || "";
+  const hA = a.husbandName || "";
+  const hB = b.husbandName || "";
+
+  const WA = splitParts(wA);
+  const WB = splitParts(wB);
+  const HA = splitParts(hA);
+  const HB = splitParts(hB);
+
+  const lenWA = WA.length;
+  const lenWB = WB.length;
+  const lenHA = HA.length;
+  const lenHB = HB.length;
+
+  // Components
+  const [F1, Fa1, G1, L1] = WA;
+  const [F2, Fa2, G2, L2] = WB;
+
+  // Husband components
+  const [HF1, HFa1, HG1, HL1] = HA;
+  const [HF2, HFa2, HG2, HL2] = HB;
+
+  // Jaro-Winkler helpers
+  const sc = (x, y) => jw(x || "", y || "");
+  const s93 = (x, y) => sc(x, y) >= 0.93;
+  const s95 = (x, y) => sc(x, y) >= 0.95;
+
+  const diffHusband = sc(hA, hB) < 0.60;  // they must be DIFFERENT husbands
+
+  // RULE 1
+  if (
+    s93(F1, F2) &&
+    s93(Fa1, Fa2) &&
+    s93(G1, G2) &&
+    sc(L1, L2) < 0.80 &&
+    diffHusband
+  ) {
+    return minPair + 0.10;
+  }
+
+  // RULE 2
+  if (
+    s93(F1, F2) &&
+    s93(Fa1, Fa2) &&
+    s93(G1, G2) &&
+    s93(L1, L2) &&
+    diffHusband
+  ) {
+    return minPair + 0.12;
+  }
+
+  // RULE 3
+  if (
+    ((lenWA === 4 && lenWB === 5) || (lenWA === 5 && lenWB === 4)) &&
+    s93(F1, F2) &&
+    s93(Fa1, Fa2) &&
+    s93(G1, G2) &&
+    s93(L1, L2) &&
+    diffHusband
+  ) {
+    return minPair + 0.14;
+  }
+
+  // RULE 4
+  if (
+    ((lenWA === 4 && lenWB === 5) || (lenWA === 5 && lenWB === 4)) &&
+    s95(F1, F2) &&
+    s93(Fa1, Fa2) &&
+    sc(G1, G2) < 0.93 &&
+    sc(L1, L2) < 0.93 &&
+    s95(HF1, HF2) &&
+    sc(HFa1, HFa2) < 0.93 &&
+    s93(HL1, HL2)
+  ) {
+    return minPair + 0.15;
+  }
+
+  // RULE 5
+  if (
+    ((lenWA === 4 && lenWB === 5) || (lenWA === 5 && lenWB === 4)) &&
+    s93(F1, F2) &&
+    s93(Fa1, Fa2) &&
+    s93(G1, G2) &&
+    sc(L1, L2) < 0.93 &&
+    ((lenHA === 4 && lenHB === 5) || (lenHA === 5 && lenHB === 4)) &&
+    s93(HF1, HF2) &&
+    s93(HFa1, HFa2) &&
+    s93(HG1, HG2)
+  ) {
+    return minPair + 0.12;
+  }
+
+  return null;
+}
+
 /* -------------------------
    Pairwise scoring (rules implemented)
    ------------------------- */
 function pairwiseScore(aRaw,bRaw, opts){
   const optsDefaults = {
     finalScoreWeights: {
-      // component-level weights (these will be visible in settings UI)
       firstNameScore: 0.15,
       familyNameScore: 0.25,
       advancedNameScore: 0.12,
@@ -147,15 +241,22 @@ function pairwiseScore(aRaw,bRaw, opts){
       enableTribalLineage: true,
       enableMaternalLineage: true,
       enablePolygamyRules: true
+    },
+    thresholds: {
+        minPair: 0.62
     }
   };
-  const o = { ...optsDefaults, ...(opts||{}) };
+  const o = { ...optsDefaults, ...(opts||{}),
+    finalScoreWeights: {...optsDefaults.finalScoreWeights, ...(opts?.finalScoreWeights || {})},
+    rules: {...optsDefaults.rules, ...(opts?.rules || {})},
+    thresholds: {...optsDefaults.thresholds, ...(opts?.thresholds || {})},
+   };
   const FSW = o.finalScoreWeights;
 
   const a = {
     womanName: normalizeArabic(aRaw.womanName||""),
     husbandName: normalizeArabic(aRaw.husbandName||""),
-    nationalId: safeString(aRaw.nationalId||aRaw.id||""),
+    nationalId: String(aRaw.nationalId||aRaw.id||""),
     phone: digitsOnly(aRaw.phone||""),
     village: normalizeArabic(aRaw.village||""),
     subdistrict: normalizeArabic(aRaw.subdistrict||""),
@@ -165,7 +266,7 @@ function pairwiseScore(aRaw,bRaw, opts){
   const b = {
     womanName: normalizeArabic(bRaw.womanName||""),
     husbandName: normalizeArabic(bRaw.husbandName||""),
-    nationalId: safeString(bRaw.nationalId||bRaw.id||""),
+    nationalId: String(bRaw.nationalId||bRaw.id||""),
     phone: digitsOnly(bRaw.phone||""),
     village: normalizeArabic(bRaw.village||""),
     subdistrict: normalizeArabic(bRaw.subdistrict||""),
@@ -183,20 +284,17 @@ function pairwiseScore(aRaw,bRaw, opts){
   const familyNameScore = jaroWinkler(familyA, familyB);
   const tokenReorderScore = nameOrderFreeScore(a.womanName, b.womanName);
 
-  // advanced root
   const rootA = reduceNameRoot(a.womanName), rootB = reduceNameRoot(b.womanName);
   let advancedNameScore = 0;
   if(rootA && rootB && rootA === rootB) advancedNameScore += 0.35;
   if(rootA && rootB && (rootA.startsWith(rootB) || rootB.startsWith(rootA))) advancedNameScore += 0.2;
   advancedNameScore = Math.min(0.4, advancedNameScore);
 
-  // husband
   const husbandJW = jaroWinkler(a.husbandName, b.husbandName);
   const husbandToken = tokenJaccard(tokens(a.husbandName), tokens(b.husbandName));
   const husbandScore = Math.max(husbandJW, husbandToken);
 
-  // phone & id
-  const phoneScore = (a.phone && b.phone) ? (a.phone===b.phone ? 1 : (a.phone.slice(-6)===b.phone.slice(-6) ? 0.85 : (a.phone.slice(-4)===b.phone.slice(-4) ? 0.6 : 0))) : 0;
+  const phoneScoreVal = (a.phone && b.phone) ? (a.phone===b.phone ? 1 : (a.phone.slice(-6)===b.phone.slice(-6) ? 0.85 : (a.phone.slice(-4)===b.phone.slice(-4) ? 0.6 : 0))) : 0;
   const idScore = (a.nationalId && b.nationalId) ? (a.nationalId===b.nationalId ? 1 : (a.nationalId.slice(-5)===b.nationalId.slice(-5) ? 0.75 : 0)) : 0;
 
   const childrenScore = tokenJaccard(a.children, b.children);
@@ -206,7 +304,6 @@ function pairwiseScore(aRaw,bRaw, opts){
   if(a.subdistrict && b.subdistrict && a.subdistrict===b.subdistrict) locationScore += 0.25;
   locationScore = Math.min(0.5, locationScore);
 
-  // patronymic / maternal / tribal
   const aPat = extractPaternal(a.womanName), bPat = extractPaternal(b.womanName);
   let patronymScore = 0;
   if(aPat.father && bPat.father && aPat.father===bPat.father) patronymScore += 0.35;
@@ -221,7 +318,6 @@ function pairwiseScore(aRaw,bRaw, opts){
 
   const tribalScore = (extractTribal(a.womanName) && extractTribal(b.womanName) && extractTribal(a.womanName)===extractTribal(b.womanName)) ? 0.4 : 0;
 
-  // shared husband + paternal line boost (polygamy rule)
   let sharedHusbandPatronym = 0;
   const husbandSimilar = jaroWinkler(a.husbandName,b.husbandName) >= 0.92;
   if(husbandSimilar){
@@ -230,13 +326,41 @@ function pairwiseScore(aRaw,bRaw, opts){
     if(sharedHusbandPatronym >= 0.4) sharedHusbandPatronym = 0.55;
   }
 
-  // multi-registration detection
   const womanExact = (a.womanName && b.womanName && a.womanName===b.womanName);
   const womanFuzzy = (firstNameScore + familyNameScore + advancedNameScore + tokenReorderScore) / 4;
   const strongNameMatch = (womanExact || womanFuzzy >= 0.85 || tokenReorderScore >= 0.85);
-  const multiRegistrationFlag = strongNameMatch && (idScore < 0.5 && phoneScore < 0.5 && husbandScore < 0.5) ? 1 : 0;
+  const multiRegistrationFlag = strongNameMatch && (idScore < 0.5 && phoneScoreVal < 0.5 && husbandScore < 0.5) ? 1 : 0;
+  
+  const breakdown = {
+    firstNameScore,
+    familyNameScore,
+    advancedNameScore,
+    tokenReorderScore,
+    husbandScore,
+    idScore,
+    phoneScore: phoneScoreVal,
+    childrenScore,
+    locationScore,
+    patronymScore,
+    sharedHusbandPatronym,
+    tribalScore,
+    maternalScore,
+    multiRegistrationFlag,
+    strongNameMatch,
+    additionalRuleTriggered: false
+  };
+  
+  const extra = applyAdditionalRules(a, b, jaroWinkler, o.thresholds.minPair);
+  if (extra !== null) {
+    return {
+      score: extra,
+      breakdown: {
+        ...breakdown,
+        additionalRuleTriggered: true
+      }
+    };
+  }
 
-  // compose final score from weights
   let score = 0;
   score += FSW.firstNameScore * firstNameScore;
   score += FSW.familyNameScore * familyNameScore;
@@ -244,7 +368,7 @@ function pairwiseScore(aRaw,bRaw, opts){
   score += FSW.tokenReorderScore * tokenReorderScore;
   score += FSW.husbandScore * husbandScore;
   score += FSW.idScore * idScore;
-  score += FSW.phoneScore * phoneScore;
+  score += FSW.phoneScore * phoneScoreVal;
   score += FSW.childrenScore * childrenScore;
   score += FSW.locationScore * locationScore;
 
@@ -254,24 +378,6 @@ function pairwiseScore(aRaw,bRaw, opts){
   if(o.rules.enablePolygamyRules) score += sharedHusbandPatronym * 1.2;
 
   score = Math.max(0, Math.min(1, score));
-
-  const breakdown = {
-    firstNameScore,
-    familyNameScore,
-    advancedNameScore,
-    tokenReorderScore,
-    husbandScore,
-    idScore,
-    phoneScore,
-    childrenScore,
-    locationScore,
-    patronymScore,
-    sharedHusbandPatronym,
-    tribalScore,
-    maternalScore,
-    multiRegistrationFlag,
-    strongNameMatch
-  };
 
   return { score, breakdown };
 }
@@ -303,7 +409,6 @@ function buildBlocks(rows, opts){
       blocks.set(k,arr);
     }
   }
-  // convert to array - also merge small blocks into larger to avoid fragmentation
   return Array.from(blocks.values());
 }
 
@@ -849,5 +954,3 @@ export default function UploadPage(){
     </div>
   );
 }
-
-    
