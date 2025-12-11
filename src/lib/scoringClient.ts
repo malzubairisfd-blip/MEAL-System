@@ -1,4 +1,5 @@
 
+
 // src/lib/scoringClient.ts
 
 import type { RecordRow } from "./fuzzyCluster";
@@ -197,6 +198,16 @@ function applyAdditionalRules(a:any, b:any, jw:any, minPair:any) {
   ) {
     return minPair + 0.12;
   }
+  
+  if (
+    s93(F1, F2) &&
+    s93(Fa1, Fa2) &&
+    s93(G1, G2) &&
+    sc(HF1, HF2) < 0.90
+  ) {
+    return minPair + 0.08;
+  }
+
 
   return null;
 }

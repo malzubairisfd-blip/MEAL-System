@@ -1,4 +1,5 @@
 
+
 // app/(app)/upload/page.tsx
 "use client";
 
@@ -152,7 +153,7 @@ function applyAdditionalRules(a, b, jw, minPair) {
   const s93 = (x, y) => sc(x, y) >= 0.93;
   const s95 = (x, y) => sc(x, y) >= 0.95;
 
-  const diffHusband = sc(hA, hB) < 0.60;  // they must be DIFFERENT husbands
+  const diffHusband = sc(hA, hB) < 0.60;
 
   // RULE 1
   if (
@@ -215,6 +216,16 @@ function applyAdditionalRules(a, b, jw, minPair) {
     s93(HG1, HG2)
   ) {
     return minPair + 0.12;
+  }
+  
+  // RULE 6
+  if (
+    s93(F1, F2) &&
+    s93(Fa1, Fa2) &&
+    s93(G1, G2) &&
+    sc(HF1, HF2) < 0.90
+  ) {
+    return minPair + 0.08;
   }
 
   return null;
