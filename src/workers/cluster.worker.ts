@@ -348,7 +348,6 @@ function pairwiseScore(aRaw:any,bRaw:any, opts:any){
     additionalRuleTriggered: false
   };
 
-  // Check for custom rules
   const extra = applyAdditionalRules(a, b, jaroWinkler, o.thresholds.minPair);
   if (extra !== null) {
     breakdown.additionalRuleTriggered = true;
@@ -357,7 +356,7 @@ function pairwiseScore(aRaw:any,bRaw:any, opts:any){
       breakdown: breakdown
     };
   }
-  
+
   // If no rule matched, calculate the final weighted score
   let score = 0;
   score += FSW.firstNameScore * firstNameScore;
@@ -392,17 +391,7 @@ function buildBlocks(rows:any[], opts:any){
     
     // Key 1: Woman's first name
     const first = nameTokens[0] ? nameTokens[0].slice(0,3) : null;
-    if(first) keys.add(`fn:${first}`);
-
-    // Retain other valuable keys for robustness
-    const phone = digitsOnly(r.phone||"").slice(-6);
-    if(phone) keys.add('ph:' + phone);
-
-    const village = normalizeArabic(r.village||"").slice(0,6);
-    if(village) keys.add('vl:' + village);
-    
-    const clusterKey = r.cluster_id ? `cid:${String(r.cluster_id)}` : "";
-    if(clusterKey) keys.add(clusterKey);
+    if(first) keys.add(\`fn:\${first}\`);
 
     if(keys.size === 0) keys.add("blk:all");
 
@@ -415,11 +404,12 @@ function buildBlocks(rows:any[], opts:any){
   return Array.from(blocks.values());
 }
 
+
 function pushEdgesForList(list:number[], rows:any[], minScore:number, seen:Set<string>, edges:any[], opts:any){
   for(let i=0;i<list.length;i++){
     for(let j=i+1;j<list.length;j++){
       const a = list[i], b = list[j];
-      const key = a<b? `${a}_${b}`:`${b}_${a}`;
+      const key = a<b? \`\${a}_\${b}\`:\`\${b}_\${a}\`;
       if(seen.has(key)) continue;
       seen.add(key);
       const { score, breakdown } = pairwiseScore(rows[a], rows[b], opts);
@@ -507,7 +497,7 @@ function splitCluster(rowsSubset:any[], minInternal=0.5, opts:any){
 
 /* runClustering - main function used by worker */
 async function runClustering(rows:any[], opts:any){
-  rows.forEach((r,i)=> r._internalId = r._internalId || `r_${i}`);
+  rows.forEach((r,i)=> r._internalId = r._internalId || \`r_\${i}\`);
   const minPair = opts?.minPair ?? 0.62;   // tuned default
   const minInternal = opts?.minInternal ?? 0.54;
   const blockChunkSize = opts?.blockChunkSize ?? 3000;
@@ -595,7 +585,7 @@ let options:any = null;
 
 function mapIncomingRowsToInternal(rows:any[], mapping:any){
   return rows.map((r,i)=>{
-    const mapped:any = { _internalId: `row_${i}`, womanName:"", husbandName:"", nationalId:"", phone:"", village:"", subdistrict:"", children:[], cluster_id:"" };
+    const mapped:any = { _internalId: \`row_\${i}\`, womanName:"", husbandName:"", nationalId:"", phone:"", village:"", subdistrict:"", children:[], cluster_id:"" };
     for(const k in mapping){
       const col = mapping[k];
       if(col && r[col]!==undefined){

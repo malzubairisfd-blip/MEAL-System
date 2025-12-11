@@ -364,7 +364,6 @@ function pairwiseScore(aRaw,bRaw, opts){
     additionalRuleTriggered: false
   };
 
-  // Check for custom rules
   const extra = applyAdditionalRules(a, b, jaroWinkler, o.thresholds.minPair);
   if (extra !== null) {
     breakdown.additionalRuleTriggered = true;
@@ -373,7 +372,7 @@ function pairwiseScore(aRaw,bRaw, opts){
       breakdown: breakdown
     };
   }
-  
+
   // If no rule matched, calculate the final weighted score
   let score = 0;
   score += FSW.firstNameScore * firstNameScore;
@@ -409,16 +408,6 @@ function buildBlocks(rows, opts){
     // Key 1: Woman's first name
     const first = nameTokens[0] ? nameTokens[0].slice(0,3) : null;
     if(first) keys.add(\`fn:\${first}\`);
-
-    // Retain other valuable keys for robustness
-    const phone = digitsOnly(r.phone||"").slice(-6);
-    if(phone) keys.add('ph:' + phone);
-
-    const village = normalizeArabic(r.village||"").slice(0,6);
-    if(village) keys.add('vl:' + village);
-    
-    const clusterKey = r.cluster_id ? 'cid:' + String(r.cluster_id) : "";
-    if(clusterKey) keys.add(clusterKey);
 
     if(keys.size === 0) keys.add("blk:all");
 
