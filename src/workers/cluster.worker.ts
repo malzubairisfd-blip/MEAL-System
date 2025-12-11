@@ -15,15 +15,15 @@ function normalizeArabic(text:any){
   let s = String(text);
 
   // Character replacements
-  s = s.replace(/ط/g, "د");
-  s = s.replace(/ق/g, "ف");
+  s = s.replace(/[ط]/g, "د");
+  s = s.replace(/[ق]/g, "ف");
   s = s.replace(/[جخ]/g, "ح");
-  s = s.replace(/ذ/g, "د");
+  s = s.replace(/[ذ]/g, "د");
   s = s.replace(/[تثن]/g, "ب");
-  s = s.replace(/ش/g, "س");
-  s = s.replace(/ز/g, "ر");
+  s = s.replace(/[ش]/g, "س");
+  s = s.replace(/[ز]/g, "ر");
   s = s.replace(/[ضظ]/g, "ص");
-  s = s.replace(/غ/g, "ع");
+  s = s.replace(/[غ]/g, "ع");
 
   // Character deletions
   s = s.replace(/[يىئوؤءاأإآةه]/g, "");
@@ -404,24 +404,22 @@ function buildBlocks(rows:any[], opts:any){
     
     const womanFirst = womanNameTokens[0] ? womanNameTokens[0].slice(0,3) : null;
     const husbandFirst = husbandNameTokens[0] ? husbandNameTokens[0].slice(0,3) : null;
-    const idFirst4 = idDigits.length >= 4 ? idDigits.slice(0, 4) : null;
     const idLast4 = idDigits.length >= 4 ? idDigits.slice(-4) : null;
     const phoneLast4 = phoneDigits.length >= 4 ? phoneDigits.slice(-4) : null;
     
     // Key 1: Woman's first name
     if(womanFirst) keys.add(`w:${womanFirst}`);
     
-    // Key 2 & 3: Woman's first name + National ID (first/last 4)
-    if(womanFirst && idFirst4) keys.add(`wi1:${womanFirst}:${idFirst4}`);
+    // Key 2: Woman's first name + National ID (last 4)
     if(womanFirst && idLast4) keys.add(`wi2:${womanFirst}:${idLast4}`);
 
-    // Key 4: Woman's first name + Phone
+    // Key 3: Woman's first name + Phone
     if(womanFirst && phoneLast4) keys.add(`wp:${womanFirst}:${phoneLast4}`);
 
-    // Key 5: Husband's first name
+    // Key 4: Husband's first name
     if(husbandFirst) keys.add(`h:${husbandFirst}`);
     
-    // Key 6: Woman's first name + Husband's first name
+    // Key 5: Woman's first name + Husband's first name
     if(womanFirst && husbandFirst) keys.add(`wh:${womanFirst}:${husbandFirst}`);
 
     if(keys.size === 0) keys.add("blk:all");
