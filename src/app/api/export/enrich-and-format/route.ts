@@ -133,16 +133,16 @@ async function enrichData(cachedData: any): Promise<EnrichedRecord[]> {
 
 function sortData(data: EnrichedRecord[]): EnrichedRecord[] {
     return data.sort((a, b) => {
-        const clusterA = a.Cluster_ID ?? Number.MAX_SAFE_INTEGER;
-        const clusterB = b.Cluster_ID ?? Number.MAX_SAFE_INTEGER;
-        if (clusterA !== clusterB) {
-            return clusterA - clusterB;
-        }
-
         const scoreA = a.Max_PairScore ?? -1;
         const scoreB = b.Max_PairScore ?? -1;
         if (scoreA !== scoreB) {
-            return scoreB - scoreA;
+            return scoreB - scoreA; // Sort by Max_PairScore descending
+        }
+
+        const clusterA = a.Cluster_ID ?? Number.MAX_SAFE_INTEGER;
+        const clusterB = b.Cluster_ID ?? Number.MAX_SAFE_INTEGER;
+        if (clusterA !== clusterB) {
+            return clusterA - clusterB; // Then by Cluster_ID ascending
         }
         
         return (a.beneficiaryId || "").localeCompare(b.beneficiaryId || "");
@@ -209,7 +209,7 @@ function createEnrichedDataSheet(wb: ExcelJS.Workbook, data: EnrichedRecord[], o
     ws.views = [{ rightToLeft: true }];
     
     const enrichmentHeaders = [
-        "Cluster_ID", "Cluster_Size", "Flag", "pairScore", "nameScore", "husbandScore", "idScore", "phoneScore"
+        "Cluster_ID", "Cluster_Size", "Flag", "pairScore", "Max_PairScore", "nameScore", "husbandScore", "idScore", "phoneScore"
     ];
     
     const finalHeaders = [
