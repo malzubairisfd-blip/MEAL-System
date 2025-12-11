@@ -207,10 +207,11 @@ function applyAdditionalRules(a:any, b:any, jw:any, minPair:any) {
     s93(F1, F2) &&
     s93(Fa1, Fa2) &&
     s93(G1, G2) &&
-    sc(HF1, HF2) < 0.90
+    !s93(HF1, HF2)
   ) {
     return minPair + 0.08;
   }
+
 
   return null;
 }
@@ -268,6 +269,16 @@ function pairwiseScore(aRaw:any,bRaw:any, opts:any){
     children: normalizeChildrenField(bRaw.children||""),
     raw: bRaw
   };
+
+  const extra = applyAdditionalRules(a, b, jaroWinkler, o.thresholds.minPair);
+  if (extra !== null) {
+    return {
+      score: extra,
+      breakdown: {
+        additionalRuleTriggered: true
+      }
+    };
+  }
 
   const firstA = tokens(a.womanName)[0]||"";
   const firstB = tokens(b.womanName)[0]||"";
@@ -343,17 +354,6 @@ function pairwiseScore(aRaw:any,bRaw:any, opts:any){
     strongNameMatch,
     additionalRuleTriggered: false
   };
-
-  const extra = applyAdditionalRules(a, b, jaroWinkler, o.thresholds.minPair);
-  if (extra !== null) {
-    return {
-      score: extra,
-      breakdown: {
-        ...breakdown,
-        additionalRuleTriggered: true
-      }
-    };
-  }
   
   let score = 0;
   score += FSW.firstNameScore * firstNameScore;
@@ -377,33 +377,42 @@ function pairwiseScore(aRaw:any,bRaw:any, opts:any){
 }
 
 /* -------------------------
-   Blocking, edges and union-find for scale
+   LSH Blocking for scale
    ------------------------- */
 function buildBlocks(rows:any[], opts:any){
   const blocks = new Map<string, number[]>();
-  const prefix = opts?.blockPrefixSize ?? 4;
-  for(let i=0;i<rows.length;i++){
+  for(let i=0; i<rows.length; i++){
     const r = rows[i];
-    const nameTokens = tokens(r.womanName||"");
-    const first = nameTokens[0]?.slice(0,prefix) || "";
-    const last = nameTokens[nameTokens.length-1]?.slice(0,prefix) || "";
+    const nameTokens = tokens(r.womanName || "");
+    const keys = new Set<string>();
+
+    // Key 1: Woman's First Name (3 letters)
+    if(nameTokens[0]) keys.add('wfn:' + nameTokens[0].slice(0,3));
+
+    // Key 2: Woman's Father's Name (3 letters)
+    if(nameTokens[1]) keys.add('wfan:' + nameTokens[1].slice(0,3));
+
+    // Key 3: Woman's Grandfather's Name (3 letters)
+    if(nameTokens[2]) keys.add('wgfn:' + nameTokens[2].slice(0,3));
+    
+    // Retain other valuable keys
     const phone = digitsOnly(r.phone||"").slice(-6);
+    if(phone) keys.add('ph:' + phone);
+
     const village = normalizeArabic(r.village||"").slice(0,6);
+    if(village) keys.add('vl:' + village);
+    
     const clusterKey = r.cluster_id ? `cid:${String(r.cluster_id)}` : "";
-    const keys = [];
-    if(first) keys.push(`fn:${first}`);
-    if(last) keys.push(`ln:${last}`);
-    if(phone) keys.push(`ph:${phone}`);
-    if(village) keys.push(`vl:${village}`);
-    if(clusterKey) keys.push(clusterKey);
-    if(keys.length===0) keys.push("blk:all");
+    if(clusterKey) keys.add(clusterKey);
+
+    if(keys.size === 0) keys.add("blk:all");
+
     for(const k of keys){
       const arr = blocks.get(k) || [];
       arr.push(i);
       blocks.set(k,arr);
     }
   }
-  // convert to array - also merge small blocks into larger to avoid fragmentation
   return Array.from(blocks.values());
 }
 

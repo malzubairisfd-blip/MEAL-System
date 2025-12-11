@@ -140,22 +140,18 @@ function applyAdditionalRules(a, b, jw, minPair) {
   const lenHA = HA.length;
   const lenHB = HB.length;
 
-  // Components
   const [F1, Fa1, G1, L1] = WA;
   const [F2, Fa2, G2, L2] = WB;
 
-  // Husband components
   const [HF1, HFa1, HG1, HL1] = HA;
   const [HF2, HFa2, HG2, HL2] = HB;
 
-  // Jaro-Winkler helpers
   const sc = (x, y) => jw(x || "", y || "");
   const s93 = (x, y) => sc(x, y) >= 0.93;
   const s95 = (x, y) => sc(x, y) >= 0.95;
 
   const diffHusband = sc(hA, hB) < 0.60;
 
-  // RULE 1
   if (
     s93(F1, F2) &&
     s93(Fa1, Fa2) &&
@@ -166,7 +162,6 @@ function applyAdditionalRules(a, b, jw, minPair) {
     return minPair + 0.10;
   }
 
-  // RULE 2
   if (
     s93(F1, F2) &&
     s93(Fa1, Fa2) &&
@@ -177,7 +172,6 @@ function applyAdditionalRules(a, b, jw, minPair) {
     return minPair + 0.12;
   }
 
-  // RULE 3
   if (
     ((lenWA === 4 && lenWB === 5) || (lenWA === 5 && lenWB === 4)) &&
     s93(F1, F2) &&
@@ -189,7 +183,6 @@ function applyAdditionalRules(a, b, jw, minPair) {
     return minPair + 0.14;
   }
 
-  // RULE 4
   if (
     ((lenWA === 4 && lenWB === 5) || (lenWA === 5 && lenWB === 4)) &&
     s95(F1, F2) &&
@@ -203,7 +196,6 @@ function applyAdditionalRules(a, b, jw, minPair) {
     return minPair + 0.15;
   }
 
-  // RULE 5
   if (
     ((lenWA === 4 && lenWB === 5) || (lenWA === 5 && lenWB === 4)) &&
     s93(F1, F2) &&
@@ -218,15 +210,15 @@ function applyAdditionalRules(a, b, jw, minPair) {
     return minPair + 0.12;
   }
   
-  // RULE 6
   if (
     s93(F1, F2) &&
     s93(Fa1, Fa2) &&
     s93(G1, G2) &&
-    sc(HF1, HF2) < 0.90
+    !s93(HF1, HF2)
   ) {
     return minPair + 0.08;
   }
+
 
   return null;
 }
@@ -284,6 +276,16 @@ function pairwiseScore(aRaw,bRaw, opts){
     children: normalizeChildrenField(bRaw.children||""),
     raw: bRaw
   };
+
+  const extra = applyAdditionalRules(a, b, jaroWinkler, o.thresholds.minPair);
+  if (extra !== null) {
+    return {
+      score: extra,
+      breakdown: {
+        additionalRuleTriggered: true
+      }
+    };
+  }
 
   // components
   const firstA = tokens(a.womanName)[0]||"";
@@ -360,17 +362,6 @@ function pairwiseScore(aRaw,bRaw, opts){
     strongNameMatch,
     additionalRuleTriggered: false
   };
-  
-  const extra = applyAdditionalRules(a, b, jaroWinkler, o.thresholds.minPair);
-  if (extra !== null) {
-    return {
-      score: extra,
-      breakdown: {
-        ...breakdown,
-        additionalRuleTriggered: true
-      }
-    };
-  }
 
   let score = 0;
   score += FSW.firstNameScore * firstNameScore;
@@ -394,26 +385,36 @@ function pairwiseScore(aRaw,bRaw, opts){
 }
 
 /* -------------------------
-   Blocking, edges and union-find for scale
+   LSH Blocking for scale
    ------------------------- */
 function buildBlocks(rows, opts){
   const blocks = new Map();
-  const prefix = opts?.blockPrefixSize ?? 4;
-  for(let i=0;i<rows.length;i++){
+  for(let i=0; i<rows.length; i++){
     const r = rows[i];
-    const nameTokens = tokens(r.womanName||"");
-    const first = nameTokens[0]?.slice(0,prefix) || "";
-    const last = nameTokens[nameTokens.length-1]?.slice(0,prefix) || "";
+    const nameTokens = tokens(r.womanName || "");
+    const keys = new Set();
+
+    // Key 1: Woman's First Name (3 letters)
+    if(nameTokens[0]) keys.add('wfn:' + nameTokens[0].slice(0,3));
+
+    // Key 2: Woman's Father's Name (3 letters)
+    if(nameTokens[1]) keys.add('wfan:' + nameTokens[1].slice(0,3));
+
+    // Key 3: Woman's Grandfather's Name (3 letters)
+    if(nameTokens[2]) keys.add('wgfn:' + nameTokens[2].slice(0,3));
+    
+    // Retain other valuable keys
     const phone = digitsOnly(r.phone||"").slice(-6);
+    if(phone) keys.add('ph:' + phone);
+
     const village = normalizeArabic(r.village||"").slice(0,6);
+    if(village) keys.add('vl:' + village);
+    
     const clusterKey = r.cluster_id ? 'cid:' + String(r.cluster_id) : "";
-    const keys = [];
-    if(first) keys.push('fn:' + first);
-    if(last) keys.push('ln:' + last);
-    if(phone) keys.push('ph:' + phone);
-    if(village) keys.push('vl:' + village);
-    if(clusterKey) keys.push(clusterKey);
-    if(keys.length===0) keys.push("blk:all");
+    if(clusterKey) keys.add(clusterKey);
+
+    if(keys.size === 0) keys.add("blk:all");
+
     for(const k of keys){
       const arr = blocks.get(k) || [];
       arr.push(i);
@@ -422,6 +423,7 @@ function buildBlocks(rows, opts){
   }
   return Array.from(blocks.values());
 }
+
 
 function pushEdgesForList(list, rows, minScore, seen, edges, opts){
   for(let i=0;i<list.length;i++){
