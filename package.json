@@ -48,7 +48,7 @@
     "jspdf": "^2.5.1",
     "jspdf-autotable": "^3.8.2",
     "lucide-react": "^0.475.0",
-    "next": "15.6.0-canary.58",
+    "next": "16.0.7",
     "patch-package": "^8.0.0",
     "react": "19.2.1",
     "react-day-picker": "^9.0.5",
