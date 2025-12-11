@@ -138,6 +138,8 @@ function applyAdditionalRules(a:any, b:any, jw:any, minPair:any) {
   const s95 = (x:string, y:string) => sc(x, y) >= 0.95;
 
   const diffHusband = sc(hA, hB) < 0.60;
+  const diffHusbandFirstName = sc(HF1, HF2) < 0.90;
+
 
   // RULE 1
   if (
@@ -207,7 +209,7 @@ function applyAdditionalRules(a:any, b:any, jw:any, minPair:any) {
     s93(F1, F2) &&
     s93(Fa1, Fa2) &&
     s93(G1, G2) &&
-    !s93(HF1, HF2)
+    diffHusbandFirstName
   ) {
     return minPair + 0.08;
   }
@@ -269,27 +271,8 @@ function pairwiseScore(aRaw:any,bRaw:any, opts:any){
     children: normalizeChildrenField(bRaw.children||""),
     raw: bRaw
   };
-
-  // Step 1: Check for custom rules first
-  const extra = applyAdditionalRules(a, b, jaroWinkler, o.thresholds.minPair);
-  if (extra !== null) {
-    const breakdown = { // We still want a breakdown for analysis, even if a rule is triggered
-        firstNameScore: jaroWinkler((tokens(a.womanName)[0]||""), (tokens(b.womanName)[0]||"")),
-        familyNameScore: jaroWinkler(tokens(a.womanName).slice(1).join(" "), tokens(b.womanName).slice(1).join(" ")),
-        husbandScore: Math.max(jaroWinkler(a.husbandName, b.husbandName), tokenJaccard(tokens(a.husbandName), tokens(b.husbandName))),
-        idScore: (a.nationalId && b.nationalId) ? (a.nationalId===b.nationalId ? 1 : 0) : 0,
-        phoneScore: (a.phone && b.phone) ? (a.phone===b.phone ? 1 : (a.phone.slice(-6)===b.phone.slice(-6) ? 0.85 : 0)) : 0,
-        childrenScore: tokenJaccard(a.children, b.children),
-        locationScore: (a.village && b.village && a.village===b.village) ? 0.4 : 0,
-        additionalRuleTriggered: true
-    };
-    return {
-      score: extra,
-      breakdown: breakdown
-    };
-  }
-
-  // Step 2 & 3: If no rule matched, calculate individual scores and combine with weights
+  
+  // Step 1: Calculate individual scores for breakdown
   const firstA = tokens(a.womanName)[0]||"";
   const firstB = tokens(b.womanName)[0]||"";
   const familyA = tokens(a.womanName).slice(1).join(" ");
@@ -364,7 +347,18 @@ function pairwiseScore(aRaw:any,bRaw:any, opts:any){
     strongNameMatch,
     additionalRuleTriggered: false
   };
+  
+  // Step 2: Check for custom rules
+  const extra = applyAdditionalRules(a, b, jaroWinkler, o.thresholds.minPair);
+  if (extra !== null) {
+    breakdown.additionalRuleTriggered = true;
+    return {
+      score: extra,
+      breakdown: breakdown
+    };
+  }
 
+  // Step 3: If no rule matched, calculate the final weighted score
   let score = 0;
   score += FSW.firstNameScore * firstNameScore;
   score += FSW.familyNameScore * familyNameScore;
@@ -395,17 +389,14 @@ function buildBlocks(rows:any[], opts:any){
     const r = rows[i];
     const nameTokens = tokens(r.womanName || "");
     const keys = new Set<string>();
-
-    // Key 1: Woman's First Name (3 letters)
-    if(nameTokens[0]) keys.add('wfn:' + nameTokens[0].slice(0,3));
-
-    // Key 2: Woman's Father's Name (3 letters)
-    if(nameTokens[1]) keys.add('wfan:' + nameTokens[1].slice(0,3));
-
-    // Key 3: Woman's Grandfather's Name (3 letters)
-    if(nameTokens[2]) keys.add('wgfn:' + nameTokens[2].slice(0,3));
     
-    // Retain other valuable keys
+    // Key 1: Combined name key
+    const first = nameTokens[0] ? nameTokens[0].slice(0,3) : "___";
+    const father = nameTokens[1] ? nameTokens[1].slice(0,3) : "___";
+    const grandfather = nameTokens[2] ? nameTokens[2].slice(0,3) : "___";
+    keys.add(`nm:${first}${father}${grandfather}`);
+
+    // Retain other valuable keys for robustness
     const phone = digitsOnly(r.phone||"").slice(-6);
     if(phone) keys.add('ph:' + phone);
 
