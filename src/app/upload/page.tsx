@@ -151,7 +151,7 @@ function applyAdditionalRules(a, b, jw, minPair) {
   const s95 = (x, y) => sc(x, y) >= 0.95;
 
   const diffHusband = sc(hA, hB) < 0.60;
-
+  
   if (
     s93(F1, F2) &&
     s93(Fa1, Fa2) &&
@@ -276,18 +276,27 @@ function pairwiseScore(aRaw,bRaw, opts){
     children: normalizeChildrenField(bRaw.children||""),
     raw: bRaw
   };
-
+  
+  // Step 1: Check for custom rules first
   const extra = applyAdditionalRules(a, b, jaroWinkler, o.thresholds.minPair);
   if (extra !== null) {
+    const breakdown = { // We still want a breakdown for analysis, even if a rule is triggered
+        firstNameScore: jaroWinkler((tokens(a.womanName)[0]||""), (tokens(b.womanName)[0]||"")),
+        familyNameScore: jaroWinkler(tokens(a.womanName).slice(1).join(" "), tokens(b.womanName).slice(1).join(" ")),
+        husbandScore: Math.max(jaroWinkler(a.husbandName, b.husbandName), tokenJaccard(tokens(a.husbandName), tokens(b.husbandName))),
+        idScore: (a.nationalId && b.nationalId) ? (a.nationalId===b.nationalId ? 1 : 0) : 0,
+        phoneScore: (a.phone && b.phone) ? (a.phone===b.phone ? 1 : (a.phone.slice(-6)===b.phone.slice(-6) ? 0.85 : 0)) : 0,
+        childrenScore: tokenJaccard(a.children, b.children),
+        locationScore: (a.village && b.village && a.village===b.village) ? 0.4 : 0,
+        additionalRuleTriggered: true
+    };
     return {
       score: extra,
-      breakdown: {
-        additionalRuleTriggered: true
-      }
+      breakdown: breakdown
     };
   }
 
-  // components
+  // Step 2 & 3: If no rule matched, calculate individual scores and combine with weights
   const firstA = tokens(a.womanName)[0]||"";
   const firstB = tokens(b.womanName)[0]||"";
   const familyA = tokens(a.womanName).slice(1).join(" ");
