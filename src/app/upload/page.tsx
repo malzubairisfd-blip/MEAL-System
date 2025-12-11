@@ -402,12 +402,21 @@ function buildBlocks(rows, opts){
   const blocks = new Map();
   for(let i=0; i<rows.length; i++){
     const r = rows[i];
-    const nameTokens = tokens(r.womanName || "");
+    const womanNameTokens = tokens(r.womanName || "");
+    const husbandNameTokens = tokens(r.husbandName || "");
     const keys = new Set();
     
     // Key 1: Woman's first name
-    const first = nameTokens[0] ? nameTokens[0].slice(0,3) : null;
-    if(first) keys.add(\`fn:\${first}\`);
+    const womanFirst = womanNameTokens[0] ? womanNameTokens[0].slice(0,3) : null;
+    if(womanFirst) keys.add(\`fn:\${womanFirst}\`);
+    
+    // Key 2: Husband's first name
+    const husbandFirst = husbandNameTokens[0] ? husbandNameTokens[0].slice(0,3) : null;
+    if(husbandFirst) keys.add(\`hn:\${husbandFirst}\`);
+
+    // Key 3: Woman's first name + Husband's first name
+    if(womanFirst && husbandFirst) keys.add(\`whn:\${womanFirst}:\${husbandFirst}\`);
+
 
     if(keys.size === 0) keys.add("blk:all");
 

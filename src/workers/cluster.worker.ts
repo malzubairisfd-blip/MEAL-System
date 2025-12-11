@@ -386,12 +386,21 @@ function buildBlocks(rows:any[], opts:any){
   const blocks = new Map<string, number[]>();
   for(let i=0; i<rows.length; i++){
     const r = rows[i];
-    const nameTokens = tokens(r.womanName || "");
+    const womanNameTokens = tokens(r.womanName || "");
+    const husbandNameTokens = tokens(r.husbandName || "");
     const keys = new Set<string>();
     
     // Key 1: Woman's first name
-    const first = nameTokens[0] ? nameTokens[0].slice(0,3) : null;
-    if(first) keys.add(\`fn:\${first}\`);
+    const womanFirst = womanNameTokens[0] ? womanNameTokens[0].slice(0,3) : null;
+    if(womanFirst) keys.add(`fn:${womanFirst}`);
+    
+    // Key 2: Husband's first name
+    const husbandFirst = husbandNameTokens[0] ? husbandNameTokens[0].slice(0,3) : null;
+    if(husbandFirst) keys.add(`hn:${husbandFirst}`);
+
+    // Key 3: Woman's first name + Husband's first name
+    if(womanFirst && husbandFirst) keys.add(`whn:${womanFirst}:${husbandFirst}`);
+
 
     if(keys.size === 0) keys.add("blk:all");
 
@@ -409,7 +418,7 @@ function pushEdgesForList(list:number[], rows:any[], minScore:number, seen:Set<s
   for(let i=0;i<list.length;i++){
     for(let j=i+1;j<list.length;j++){
       const a = list[i], b = list[j];
-      const key = a<b? \`\${a}_\${b}\`:\`\${b}_\${a}\`;
+      const key = a<b? `${a}_${b}`:`${b}_${a}`;
       if(seen.has(key)) continue;
       seen.add(key);
       const { score, breakdown } = pairwiseScore(rows[a], rows[b], opts);
@@ -497,7 +506,7 @@ function splitCluster(rowsSubset:any[], minInternal=0.5, opts:any){
 
 /* runClustering - main function used by worker */
 async function runClustering(rows:any[], opts:any){
-  rows.forEach((r,i)=> r._internalId = r._internalId || \`r_\${i}\`);
+  rows.forEach((r,i)=> r._internalId = r._internalId || `r_${i}`);
   const minPair = opts?.minPair ?? 0.62;   // tuned default
   const minInternal = opts?.minInternal ?? 0.54;
   const blockChunkSize = opts?.blockChunkSize ?? 3000;
@@ -585,7 +594,7 @@ let options:any = null;
 
 function mapIncomingRowsToInternal(rows:any[], mapping:any){
   return rows.map((r,i)=>{
-    const mapped:any = { _internalId: \`row_\${i}\`, womanName:"", husbandName:"", nationalId:"", phone:"", village:"", subdistrict:"", children:[], cluster_id:"" };
+    const mapped:any = { _internalId: `row_${i}`, womanName:"", husbandName:"", nationalId:"", phone:"", village:"", subdistrict:"", children:[], cluster_id:"" };
     for(const k in mapping){
       const col = mapping[k];
       if(col && r[col]!==undefined){
