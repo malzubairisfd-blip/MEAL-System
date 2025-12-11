@@ -17,12 +17,25 @@ type Settings = any;
    ------------------------- */
 function normalizeArabic(text:any){
   if(!text) return "";
-  let s = String(text).trim();
-  s = s.replace(/[\u064B-\u0652\u0670\u0640\u064C]/g, ""); // tashkeel/tajweed
-  s = s.replace(/[أإآء]/g, "ا");
-  s = s.replace(/ى/g, "ي");
-  s = s.replace(/ة/g, "ه");
-  s = s.replace(/\s+/g, " ");
+  let s = String(text);
+
+  // Character replacements
+  s = s.replace(/ط/g, "د");
+  s = s.replace(/ق/g, "ف");
+  s = s.replace(/[جخ]/g, "ح");
+  s = s.replace(/ذ/g, "د");
+  s = s.replace(/[تثن]/g, "ب");
+  s = s.replace(/ش/g, "س");
+  s = s.replace(/ز/g, "ر");
+  s = s.replace(/[ضظ]/g, "ص");
+  s = s.replace(/غ/g, "ع");
+
+  // Character deletions
+  s = s.replace(/[يىئؤوءاأإآةه]/g, "");
+
+  // Normalize whitespace
+  s = s.replace(/\s+/g, " ").trim();
+
   return s;
 }
 function tokens(s:any){ const n = normalizeArabic(s||""); if(!n) return []; return n.split(" ").filter(Boolean); }
@@ -263,24 +276,6 @@ export function computePairScore(aRaw:any,bRaw:any, opts:any){
     raw: bRaw
   };
   
-  const extra = applyAdditionalRules(a, b, jaroWinkler, o.thresholds.minPair);
-  if (extra !== null) {
-     const breakdown = {
-        firstNameScore: jaroWinkler((tokens(a.womanName)[0]||""), (tokens(b.womanName)[0]||"")),
-        familyNameScore: jaroWinkler(tokens(a.womanName).slice(1).join(" "), tokens(b.womanName).slice(1).join(" ")),
-        husbandScore: Math.max(jaroWinkler(a.husbandName, b.husbandName), tokenJaccard(tokens(a.husbandName), tokens(b.husbandName))),
-        idScore: (a.nationalId && b.nationalId) ? (a.nationalId===b.nationalId ? 1 : 0) : 0,
-        phoneScore: (a.phone && b.phone) ? (a.phone===b.phone ? 1 : (a.phone.slice(-6)===b.phone.slice(-6) ? 0.85 : 0)) : 0,
-        childrenScore: tokenJaccard(a.children, b.children),
-        locationScore: (a.village && b.village && a.village===b.village) ? 0.4 : 0,
-        additionalRuleTriggered: true
-    };
-    return {
-      score: extra,
-      breakdown: breakdown
-    };
-  }
-
   const firstA = tokens(a.womanName)[0]||"";
   const firstB = tokens(b.womanName)[0]||"";
   const familyA = tokens(a.womanName).slice(1).join(" ");
@@ -355,6 +350,15 @@ export function computePairScore(aRaw:any,bRaw:any, opts:any){
     strongNameMatch,
     additionalRuleTriggered: false
   };
+
+  const ruleScore = applyAdditionalRules(a, b, jaroWinkler, o.thresholds.minPair);
+  if (ruleScore !== null) {
+    breakdown.additionalRuleTriggered = true;
+    return {
+      score: ruleScore,
+      breakdown: breakdown
+    };
+  }
   
   let score = 0;
   score += FSW.firstNameScore * firstNameScore;

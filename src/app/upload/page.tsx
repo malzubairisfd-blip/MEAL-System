@@ -28,12 +28,25 @@ function createWorkerScript() {
    ------------------------- */
 function normalizeArabic(text){
   if(!text) return "";
-  let s = String(text).trim();
-  s = s.replace(/[\\u064B-\\u0652\\u0670\\u0640\\u064C]/g, "");
-  s = s.replace(/[أإآء]/g, "ا");
-  s = s.replace(/ى/g, "ي");
-  s = s.replace(/ة/g, "ه");
-  s = s.replace(/\\s+/g, " ");
+  let s = String(text);
+
+  // Character replacements
+  s = s.replace(/ط/g, "د");
+  s = s.replace(/ق/g, "ف");
+  s = s.replace(/[جخ]/g, "ح");
+  s = s.replace(/ذ/g, "د");
+  s = s.replace(/[تثن]/g, "ب");
+  s = s.replace(/ش/g, "س");
+  s = s.replace(/ز/g, "ر");
+  s = s.replace(/[ضظ]/g, "ص");
+  s = s.replace(/غ/g, "ع");
+
+  // Character deletions
+  s = s.replace(/[يىئؤوءاأإآةه]/g, "");
+
+  // Normalize whitespace
+  s = s.replace(/\\s+/g, " ").trim();
+
   return s;
 }
 function tokens(s){ const n = normalizeArabic(s||""); if(!n) return []; return n.split(" ").filter(Boolean); }
@@ -411,10 +424,10 @@ function buildBlocks(rows, opts){
 
     // Key 1: Woman's first name + Husband's first name
     if(womanFirst && husbandFirst) keys.add(\`whn:\${womanFirst}:\${husbandFirst}\`);
-
+    
     // Key 2: Woman's first name
     if(womanFirst) keys.add(\`fn:\${womanFirst}\`);
-    
+
     // Key 3: Husband's first name
     if(husbandFirst) keys.add(\`hn:\${husbandFirst}\`);
 

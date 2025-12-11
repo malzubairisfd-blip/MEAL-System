@@ -108,14 +108,25 @@ export type RecordRow = {
 ------------------------------------------ */
 function normalizeArabic(s: string): string {
   if (!s) return "";
-  s = s.normalize("NFKC");
-  s = s.replace(/[ًٌٍََُِّْـ]/g, "");
-  s = s.replace(/[أإآ]/g, "ا");
-  s = s.replace(/ى/g, "ي");
-  s = s.replace(/ؤ/g, "و");
-  s = s.replace(/ئ/g, "ي");
-  s = s.replace(/[^ء-ي0-9 ]/g, " ");
+  s = String(s);
+
+  // Character replacements
+  s = s.replace(/ط/g, "د");
+  s = s.replace(/ق/g, "ف");
+  s = s.replace(/[جخ]/g, "ح");
+  s = s.replace(/ذ/g, "د");
+  s = s.replace(/[تثن]/g, "ب");
+  s = s.replace(/ش/g, "س");
+  s = s.replace(/ز/g, "ر");
+  s = s.replace(/[ضظ]/g, "ص");
+  s = s.replace(/غ/g, "ع");
+
+  // Character deletions
+  s = s.replace(/[يىئؤوءاأإآةه]/g, "");
+
+  // Normalize whitespace
   s = s.replace(/\s+/g, " ").trim();
+
   return s.toLowerCase();
 }
 
@@ -238,20 +249,23 @@ function buildBlocks(rows: RecordRow[]) {
 
   for (let i = 0; i < rows.length; i++) {
     const r = rows[i];
-    const first = tokens(r.womanName)[0]?.slice(0, 4) || "";
-    const last =
-      tokens(r.womanName)[tokens(r.womanName).length - 1]?.slice(0, 4) || "";
-    const phone = digits(r.phone).slice(0, 6);
-    const village = normalizeArabic(r.village || "").slice(0, 6);
+    const womanNameTokens = tokens(r.womanName || "");
+    const husbandNameTokens = tokens(r.husbandName || "");
+    const keys = new Set<string>();
 
-    const keys = [
-      first ? `fn:${first}` : "",
-      last ? `ln:${last}` : "",
-      phone ? `ph:${phone}` : "",
-      village ? `vl:${village}` : "",
-    ].filter(Boolean);
+    const womanFirst = womanNameTokens[0] ? womanNameTokens[0].slice(0, 3) : null;
+    const husbandFirst = husbandNameTokens[0] ? husbandNameTokens[0].slice(0, 3) : null;
 
-    if (keys.length === 0) keys.push("blk:all");
+    // Key 1: Woman's first name + Husband's first name
+    if (womanFirst && husbandFirst) keys.add(`whn:${womanFirst}:${husbandFirst}`);
+    
+    // Key 2: Woman's first name
+    if (womanFirst) keys.add(`fn:${womanFirst}`);
+
+    // Key 3: Husband's first name
+    if (husbandFirst) keys.add(`hn:${husbandFirst}`);
+
+    if (keys.size === 0) keys.add("blk:all");
 
     for (const k of keys) {
       if (!blocks.has(k)) blocks.set(k, []);

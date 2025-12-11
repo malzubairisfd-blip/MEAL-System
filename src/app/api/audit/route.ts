@@ -37,15 +37,24 @@ function digitsOnly(x: any) {
 
 function normalizeArabic(text: any) {
   if (!text) return "";
-  let s = safeString(text).trim().replace(/\s+/g, " ");
+  let s = safeString(text);
 
-  s = s
-    .replace(/[أإآٱ]/g, "ا")
-    .replace(/ة/g, "ه")
-    .replace(/ى/g, "ي")
-    .replace(/[ؤئ]/g, "ي")
-    .replace(/ـ/g, "")
-    .replace(/[^\u0600-\u06FF0-9 ]/g, "");
+  // Character replacements
+  s = s.replace(/ط/g, "د");
+  s = s.replace(/ق/g, "ف");
+  s = s.replace(/[جخ]/g, "ح");
+  s = s.replace(/ذ/g, "د");
+  s = s.replace(/[تثن]/g, "ب");
+  s = s.replace(/ش/g, "س");
+  s = s.replace(/ز/g, "ر");
+  s = s.replace(/[ضظ]/g, "ص");
+  s = s.replace(/غ/g, "ع");
+  
+  // Character deletions
+  s = s.replace(/[يىئوؤءاأإآةه]/g, "");
+
+  // Normalize whitespace
+  s = s.replace(/\s+/g, " ").trim();
 
   return s;
 }
