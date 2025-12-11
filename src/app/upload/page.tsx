@@ -420,15 +420,14 @@ function buildBlocks(rows, opts){
     const womanFirst = womanNameTokens[0] ? womanNameTokens[0].slice(0,3) : null;
     const husbandFirst = husbandNameTokens[0] ? husbandNameTokens[0].slice(0,3) : null;
 
-    // Key 1: Woman's first name + Husband's first name
-    if(womanFirst && husbandFirst) keys.add(\`whn:\${womanFirst}:\${husbandFirst}\`);
-    
-    // Key 2: Woman's first name
+    // Key 1: Woman's first name
     if(womanFirst) keys.add(\`fn:\${womanFirst}\`);
 
-    // Key 3: Husband's first name
+    // Key 2: Husband's first name
     if(husbandFirst) keys.add(\`hn:\${husbandFirst}\`);
 
+    // Key 3: Woman's first name + Husband's first name
+    if(womanFirst && husbandFirst) keys.add(\`whn:\${womanFirst}:\${husbandFirst}\`);
 
     if(keys.size === 0) keys.add("blk:all");
 
