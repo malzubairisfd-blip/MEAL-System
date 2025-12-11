@@ -212,9 +212,15 @@ function createEnrichedDataSheet(wb: ExcelJS.Workbook, data: EnrichedRecord[], o
         "Cluster_ID", "Cluster_Size", "Flag", "pairScore", "Max_PairScore", "nameScore", "husbandScore", "idScore", "phoneScore"
     ];
     
+    const normalizedHeaders = [
+        "womanName_normalized",
+        "husbandName_normalized",
+    ];
+
     const finalHeaders = [
         ...enrichmentHeaders,
-        ...originalHeaders
+        ...originalHeaders,
+        ...normalizedHeaders
     ];
 
     ws.columns = finalHeaders.map(h => ({

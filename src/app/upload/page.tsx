@@ -35,11 +35,12 @@ function normalizeArabic(text){
   s = s.replace(/ق/g, "ف");
   s = s.replace(/[جخ]/g, "ح");
   s = s.replace(/ذ/g, "د");
-  s = s.replace(/[تثن]/g, "ب");
+  s = s.replace(/[تث]/g, "ب");
   s = s.replace(/ش/g, "س");
   s = s.replace(/ز/g, "ر");
   s = s.replace(/[ضظ]/g, "ص");
   s = s.replace(/غ/g, "ع");
+  s = s.replace(/ن/g, "ب");
   
   // Character deletions
   s = s.replace(/[يىئوؤءاأإآةه]/g, "");
@@ -419,15 +420,15 @@ function buildBlocks(rows, opts){
     
     const womanFirst = womanNameTokens[0] ? womanNameTokens[0].slice(0,3) : null;
     const husbandFirst = husbandNameTokens[0] ? husbandNameTokens[0].slice(0,3) : null;
-
+    
     // Key 1: Woman's first name
     if(womanFirst) keys.add(\`fn:\${womanFirst}\`);
-
-    // Key 2: Husband's first name
-    if(husbandFirst) keys.add(\`hn:\${husbandFirst}\`);
-
-    // Key 3: Woman's first name + Husband's first name
+    
+    // Key 2: Woman's first name + Husband's first name
     if(womanFirst && husbandFirst) keys.add(\`whn:\${womanFirst}:\${husbandFirst}\`);
+
+    // Key 3: Husband's first name
+    if(husbandFirst) keys.add(\`hn:\${husbandFirst}\`);
 
     if(keys.size === 0) keys.add("blk:all");
 

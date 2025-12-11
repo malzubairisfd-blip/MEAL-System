@@ -19,14 +19,15 @@ function normalizeArabic(text:any){
   s = s.replace(/ق/g, "ف");
   s = s.replace(/[جخ]/g, "ح");
   s = s.replace(/ذ/g, "د");
-  s = s.replace(/[تثن]/g, "ب");
+  s = s.replace(/[تث]/g, "ب");
   s = s.replace(/ش/g, "س");
   s = s.replace(/ز/g, "ر");
   s = s.replace(/[ضظ]/g, "ص");
   s = s.replace(/غ/g, "ع");
+  s = s.replace(/ن/g, "ب");
 
   // Character deletions
-  s = s.replace(/[يىئؤوءاأإآةه]/g, "");
+  s = s.replace(/[يىئوؤءاأإآةه]/g, "");
 
   // Normalize whitespace
   s = s.replace(/\s+/g, " ").trim();
@@ -405,13 +406,12 @@ function buildBlocks(rows:any[], opts:any){
 
     // Key 1: Woman's first name
     if(womanFirst) keys.add(`fn:${womanFirst}`);
-
-    // Key 2: Husband's first name
-    if(husbandFirst) keys.add(`hn:${husbandFirst}`);
-
-    // Key 3: Woman's first name + Husband's first name
+    
+    // Key 2: Woman's first name + Husband's first name
     if(womanFirst && husbandFirst) keys.add(`whn:${womanFirst}:${husbandFirst}`);
 
+    // Key 3: Husband's first name
+    if(husbandFirst) keys.add(`hn:${husbandFirst}`);
 
     if(keys.size === 0) keys.add("blk:all");
 
@@ -606,7 +606,7 @@ let options:any = null;
 function mapIncomingRowsToInternal(rows:any[], mapping:any){
   return rows.map((r,i)=>{
     const mapped:any = { 
-        _internalId: `row_${i}`, 
+        _internalId: `r_${i}`, 
         womanName: "", husbandName: "", nationalId: "", phone: "", village: "", subdistrict: "", children: [],
         womanName_normalized: "", husbandName_normalized: "", village_normalized: "", subdistrict_normalized: "", children_normalized: [],
         cluster_id:"" 
