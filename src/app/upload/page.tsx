@@ -31,15 +31,15 @@ function normalizeArabic(text){
   let s = String(text);
 
   // Character replacements
-  s = s.replace(/[ط]/g, "د");
-  s = s.replace(/[ق]/g, "ف");
-  s = s.replace(/[جخ]/g, "ح");
-  s = s.replace(/[ذ]/g, "د");
   s = s.replace(/[تثن]/g, "ب");
-  s = s.replace(/[ش]/g, "س");
-  s = s.replace(/[ز]/g, "ر");
+  s = s.replace(/ط/g, "د");
+  s = s.replace(/ق/g, "ف");
+  s = s.replace(/[جخ]/g, "ح");
+  s = s.replace(/ذ/g, "د");
+  s = s.replace(/ش/g, "س");
+  s = s.replace(/ز/g, "ر");
   s = s.replace(/[ضظ]/g, "ص");
-  s = s.replace(/[غ]/g, "ع");
+  s = s.replace(/غ/g, "ع");
   
   // Character deletions
   s = s.replace(/[يىئوؤءاأإآةه]/g, "");
@@ -138,111 +138,50 @@ function splitParts(name) {
 }
 
 function applyAdditionalRules(a, b, jw, minPair) {
-  const wA = a.womanName_normalized || "";
-  const wB = b.womanName_normalized || "";
-  const hA = a.husbandName_normalized || "";
-  const hB = b.husbandName_normalized || "";
+  const wA_norm = a.womanName_normalized || "";
+  const wB_norm = b.womanName_normalized || "";
+  const hA_norm = a.husbandName_normalized || "";
+  const hB_norm = b.husbandName_normalized || "";
 
-  const WA = splitParts(wA);
-  const WB = splitParts(wB);
-  const HA = splitParts(hA);
-  const HB = splitParts(hB);
+  const WA = splitParts(wA_norm);
+  const WB = splitParts(wB_norm);
+  const HA = splitParts(hA_norm);
+  const HB = splitParts(hB_norm);
 
-  const lenWA = WA.length;
-  const lenWB = WB.length;
-  const lenHA = HA.length;
-  const lenHB = HB.length;
-
-  // Components
   const [F1, Fa1, G1, L1] = WA;
   const [F2, Fa2, G2, L2] = WB;
-
-  // Husband components
   const [HF1, HFa1, HG1, HL1] = HA;
   const [HF2, HFa2, HG2, HL2] = HB;
 
-  // Jaro-Winkler helpers
   const sc = (x, y) => jw(x || "", y || "");
+  const s90 = (x, y) => sc(x, y) >= 0.90;
   const s93 = (x, y) => sc(x, y) >= 0.93;
   const s95 = (x, y) => sc(x, y) >= 0.95;
 
-  const diffHusband = sc(hA, hB) < 0.60;
-  const diffHusbandFirstName = sc(HF1, HF2) < 0.90;
-
-
-  // RULE 1
-  if (
-    s93(F1, F2) &&
-    s93(Fa1, Fa2) &&
-    s93(G1, G2) &&
-    sc(L1, L2) < 0.80 &&
-    diffHusband
-  ) {
-    return minPair + 0.10;
+  // Rule 1
+  if (s93(F1, F2) && s93(Fa1, Fa2) && s93(G1, G2) && sc(HF1, HF2) < 0.60) {
+    return minPair + 0.1;
   }
 
-  // RULE 2
-  if (
-    s93(F1, F2) &&
-    s93(Fa1, Fa2) &&
-    s93(G1, G2) &&
-    s93(L1, L2) &&
-    diffHusband
-  ) {
+  // Rule 2
+  if (s93(F1, F2) && s93(HF1, HF2) && s93(HFa1, HFa2) && s93(HG1, HG2)) {
     return minPair + 0.12;
   }
 
-  // RULE 3
-  if (
-    ((lenWA === 4 && lenWB === 5) || (lenWA === 5 && lenWB === 4)) &&
-    s93(F1, F2) &&
-    s93(Fa1, Fa2) &&
-    s93(G1, G2) &&
-    s93(L1, L2) &&
-    diffHusband
-  ) {
+  // Rule 3
+  if (s93(F1, F2) && s93(Fa1, Fa2) && s93(G1, G2) && s90(L1, L2) && sc(HF1, HF2) < 0.60) {
     return minPair + 0.14;
   }
 
-  // RULE 4
-  if (
-    ((lenWA === 4 && lenWB === 5) || (lenWA === 5 && lenWB === 4)) &&
-    s95(F1, F2) &&
-    s93(Fa1, Fa2) &&
-    sc(G1, G2) < 0.93 &&
-    sc(L1, L2) < 0.93 &&
-    s95(HF1, HF2) &&
-    sc(HFa1, HFa2) < 0.93 &&
-    s93(HL1, HL2)
-  ) {
+  // Rule 4
+  if (s93(HF1, HF2) && s93(HFa1, HFa2) && s93(HG1, HG2) && sc(F1, F2) < 0.60) {
     return minPair + 0.15;
   }
-
-  // RULE 5
-  if (
-    ((lenWA === 4 && lenWB === 5) || (lenWA === 5 && lenWB === 4)) &&
-    s93(F1, F2) &&
-    s93(Fa1, Fa2) &&
-    s93(G1, G2) &&
-    sc(L1, L2) < 0.93 &&
-    ((lenHA === 4 && lenHB === 5) || (lenHA === 5 && lenHB === 4)) &&
-    s93(HF1, HF2) &&
-    s93(HFa1, HFa2) &&
-    s93(HG1, HG2)
-  ) {
-    return minPair + 0.12;
-  }
   
-  // RULE 6
-  if (
-    s93(F1, F2) &&
-    s93(Fa1, Fa2) &&
-    s93(G1, G2) &&
-    diffHusbandFirstName
-  ) {
-    return minPair + 0.08;
+  // Rule 5
+  if (s93(F1, F2) && s93(Fa1, Fa2) && s95(HF1, HF2) && s95(HFa1, HFa2) && s93(HL1, HL2)) {
+    return minPair + 0.16;
   }
-
 
   return null;
 }
