@@ -31,11 +31,11 @@ function normalizeArabic(text){
   let s = String(text);
 
   // Character replacements
-  s = s.replace(/[تثن]/g, "ب");
   s = s.replace(/ط/g, "د");
   s = s.replace(/ق/g, "ف");
   s = s.replace(/[جخ]/g, "ح");
   s = s.replace(/ذ/g, "د");
+  s = s.replace(/[تثن]/g, "ب");
   s = s.replace(/ش/g, "س");
   s = s.replace(/ز/g, "ر");
   s = s.replace(/[ضظ]/g, "ص");
@@ -354,29 +354,42 @@ function buildBlocks(rows, opts){
     const r = rows[i];
     const womanNameTokens = tokens(r.womanName_normalized || "");
     const husbandNameTokens = tokens(r.husbandName_normalized || "");
+    const childrenTokens = (r.children_normalized || []).map(tokens);
     const idDigits = digitsOnly(r.nationalId || "");
     const phoneDigits = digitsOnly(r.phone || "");
     const keys = new Set();
     
-    const womanFirst = womanNameTokens[0] ? womanNameTokens[0].slice(0,3) : null;
-    const husbandFirst = husbandNameTokens[0] ? husbandNameTokens[0].slice(0,3) : null;
+    const womanFirst3 = womanNameTokens[0] ? womanNameTokens[0].slice(0,3) : null;
+    const husbandFirst3 = husbandNameTokens[0] ? husbandNameTokens[0].slice(0,3) : null;
     const idLast4 = idDigits.length >= 4 ? idDigits.slice(-4) : null;
     const phoneLast4 = phoneDigits.length >= 4 ? phoneDigits.slice(-4) : null;
     
-    // Key 1: Woman's first name
-    if(womanFirst) keys.add(\`w:\${womanFirst}\`);
-    
-    // Key 2: Woman's first name + National ID (last 4)
-    if(womanFirst && idLast4) keys.add(\`wi2:\${womanFirst}:\${idLast4}\`);
+    // Key 1: Woman's first name (3) + Phone (4)
+    if(womanFirst3 && phoneLast4) keys.add(\`wp:\${womanFirst3}:\${phoneLast4}\`);
 
-    // Key 3: Woman's first name + Phone
-    if(womanFirst && phoneLast4) keys.add(\`wp:\${womanFirst}:\${phoneLast4}\`);
-
-    // Key 4: Husband's first name
-    if(husbandFirst) keys.add(\`h:\${husbandFirst}\`);
+    // Key 2: Woman's first name (3) + National ID (4)
+    if(womanFirst3 && idLast4) keys.add(\`wi:\${womanFirst3}:\${idLast4}\`);
     
-    // Key 5: Woman's first name + Husband's first name
-    if(womanFirst && husbandFirst) keys.add(\`wh:\${womanFirst}:\${husbandFirst}\`);
+    // Key 3: Woman's first name (3) + Child's first name (4)
+    if(womanFirst3 && childrenTokens.length > 0) {
+      childrenTokens.forEach(childNameTokens => {
+        if (childNameTokens[0]) {
+          const childFirst4 = childNameTokens[0].slice(0, 4);
+          if (childFirst4) {
+            keys.add(\`wc:\${womanFirst3}:\${childFirst4}\`);
+          }
+        }
+      });
+    }
+
+    // Key 4: Woman's first name (3)
+    if(womanFirst3) keys.add(\`w:\${womanFirst3}\`);
+
+    // Key 5: Husband's first name (3)
+    if(husbandFirst3) keys.add(\`h:\${husbandFirst3}\`);
+
+    // Key 6: Woman's first name (3) + Husband's first name (3)
+    if(womanFirst3 && husbandFirst3) keys.add(\`wh:\${womanFirst3}:\${husbandFirst3}\`);
 
     if(keys.size === 0) keys.add("blk:all");
 
