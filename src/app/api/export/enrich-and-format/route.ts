@@ -20,8 +20,35 @@ type EnrichedRecord = RecordRow & {
     husbandScore?: number;
     idScore?: number;
     phoneScore?: number;
+    womanName_normalized?: string;
+    husbandName_normalized?: string;
     [key: string]: any; // Allow any other properties from the original file
 };
+
+function normalizeArabic(s: string): string {
+  if (!s) return "";
+  s = String(s);
+
+  // Character replacements
+  s = s.replace(/ط/g, "د");
+  s = s.replace(/ق/g, "ف");
+  s = s.replace(/[جخ]/g, "ح");
+  s = s.replace(/ذ/g, "د");
+  s = s.replace(/[تثن]/g, "ب");
+  s = s.replace(/ش/g, "س");
+  s = s.replace(/ز/g, "ر");
+  s = s.replace(/[ضظ]/g, "ص");
+  s = s.replace(/غ/g, "ع");
+
+  // Character deletions
+  s = s.replace(/[يىئؤوءاأإآةه]/g, "");
+
+  // Normalize whitespace
+  s = s.replace(/\s+/g, " ").trim();
+
+  return s.toLowerCase();
+}
+
 
 async function getCachedData(cacheId: string) {
     const cacheDir = getTmpDir();
@@ -77,7 +104,11 @@ async function enrichData(cachedData: any): Promise<EnrichedRecord[]> {
 
     // Second pass: enrich each record
     allRecords.forEach((record: RecordRow) => {
-        let enriched: EnrichedRecord = { ...record };
+        let enriched: EnrichedRecord = { 
+            ...record,
+            womanName_normalized: normalizeArabic(record.womanName || ''),
+            husbandName_normalized: normalizeArabic(record.husbandName || ''),
+        };
         let recordClusterId: number | null = null;
         let recordPairData: any = {};
 
