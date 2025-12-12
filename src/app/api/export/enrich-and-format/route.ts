@@ -6,6 +6,7 @@ import os from 'os';
 import ExcelJS from "exceljs";
 import { fullPairwiseBreakdown, type RecordRow } from "@/lib/fuzzyCluster";
 import type { AuditFinding } from "@/lib/auditEngine";
+import { UserX, Fingerprint, Copy, Users, Sigma } from 'lucide-react'; // These are server components so we cannot use them
 
 const getTmpDir = () => path.join(os.tmpdir(), 'beneficiary-insights-cache');
 
@@ -22,7 +23,7 @@ type EnrichedRecord = RecordRow & {
     phoneScore?: number;
     womanName_normalized?: string;
     husbandName_normalized?: string;
-    [key: string]: any; // Allow any other properties from the original file
+    [key: string]: any;
 };
 
 function normalizeArabic(s: string): string {
@@ -49,16 +50,11 @@ async function getCachedData(cacheId: string) {
 
     try {
         const fileContent = await fs.readFile(filePath, 'utf-8');
-
-        // FIX: your JSON is NOT nested under "data"
         const parsed = JSON.parse(fileContent);
-
-        // Validate that the essential data exists. The cache structure is now flat.
         if (!parsed.rows || !parsed.clusters) {
             throw new Error("Cache corrupted: rows or clusters missing.");
         }
-
-        return parsed;  // return real cached object
+        return parsed;
     } catch (e: any) {
         if (e.code === 'ENOENT') {
              throw new Error(`Cache file not found for ID: ${cacheId}. Please re-upload your file.`);
@@ -78,7 +74,6 @@ async function enrichData(cachedData: any): Promise<EnrichedRecord[]> {
     const enrichedRecords: EnrichedRecord[] = [];
     const clusterInfoMap = new Map<number, { maxScore: number, maxBeneficiaryId: number, size: number }>();
 
-    // First pass: calculate max scores and sizes for each cluster
     clusters.forEach((cluster: RecordRow[], index: number) => {
         const clusterId = index + 1;
         const pairs = fullPairwiseBreakdown(cluster);
@@ -95,7 +90,6 @@ async function enrichData(cachedData: any): Promise<EnrichedRecord[]> {
         clusterInfoMap.set(clusterId, { maxScore, maxBeneficiaryId, size: cluster.length });
     });
 
-    // Second pass: enrich each record
     allRecords.forEach((record: RecordRow) => {
         let enriched: EnrichedRecord = { 
             ...record,
@@ -160,13 +154,13 @@ function sortData(data: EnrichedRecord[]): EnrichedRecord[] {
         const scoreA = a.Max_PairScore ?? -1;
         const scoreB = b.Max_PairScore ?? -1;
         if (scoreA !== scoreB) {
-            return scoreB - scoreA; // Sort by Max_PairScore descending
+            return scoreB - scoreA;
         }
 
         const clusterA = a.Cluster_ID ?? Number.MAX_SAFE_INTEGER;
         const clusterB = b.Cluster_ID ?? Number.MAX_SAFE_INTEGER;
         if (clusterA !== clusterB) {
-            return clusterA - clusterB; // Then by Cluster_ID ascending
+            return clusterA - clusterB;
         }
         
         return (String(a.beneficiaryId) || "").localeCompare(String(b.beneficiaryId) || "");
@@ -174,13 +168,14 @@ function sortData(data: EnrichedRecord[]): EnrichedRecord[] {
 }
 
 function createFormattedWorkbook(data: EnrichedRecord[], cachedData: any): ExcelJS.Workbook {
-    const { rows: allRecords, clusters, auditFindings, originalHeaders } = cachedData;
+    const { rows: allRecords, clusters, auditFindings, originalHeaders, aiSummaries } = cachedData;
     const wb = new ExcelJS.Workbook();
     wb.creator = "Beneficiary Insights";
     
     createEnrichedDataSheet(wb, data, originalHeaders);
     createSummarySheet(wb, allRecords, clusters);
-    createClustersSheet(wb, clusters);
+    createAuditSummarySheet(wb, auditFindings || []);
+    createClustersSheet(wb, clusters, aiSummaries);
     createAuditSheet(wb, auditFindings || [], clusters);
 
     return wb;
@@ -198,16 +193,12 @@ export async function POST(req: Request) {
         }
         const cachedData = await getCachedData(cacheId);
 
-        // 1. Enrich
         let enrichedData = await enrichData(cachedData);
         
-        // 2. Sort
         let sortedData = sortData(enrichedData);
         
-        // 3. Format and Generate Workbook
         const wb = createFormattedWorkbook(sortedData, cachedData);
 
-        // 4. Send back the file
         const buffer = await wb.xlsx.writeBuffer();
         return new NextResponse(buffer, {
             status: 200,
@@ -236,16 +227,9 @@ function createEnrichedDataSheet(wb: ExcelJS.Workbook, data: EnrichedRecord[], o
         "Cluster_ID", "Cluster_Size", "Flag", "pairScore", "Max_PairScore", "nameScore", "husbandScore", "idScore", "phoneScore"
     ];
     
-    const normalizedHeaders = [
-        "womanName_normalized",
-        "husbandName_normalized",
-    ];
+    const normalizedHeaders = [ "womanName_normalized", "husbandName_normalized" ];
 
-    const finalHeaders = [
-        ...enrichmentHeaders,
-        ...originalHeaders,
-        ...normalizedHeaders
-    ];
+    const finalHeaders = [ ...enrichmentHeaders, ...originalHeaders, ...normalizedHeaders ];
 
     ws.columns = finalHeaders.map(h => ({
       header: h,
@@ -269,10 +253,9 @@ function createEnrichedDataSheet(wb: ExcelJS.Workbook, data: EnrichedRecord[], o
         
         const score = Number(rowData.Max_PairScore);
         let fillColor: string | undefined;
-        let fontColor = 'FF000000';
 
-        if (score >= 0.9) { fillColor = 'FFFF0000'; fontColor = 'FFFFFFFF'; } 
-        else if (score >= 0.8) { fillColor = 'FFFFC7CE'; fontColor = 'FF9C0006'; } 
+        if (score >= 0.9) { fillColor = 'FFFF0000'; } 
+        else if (score >= 0.8) { fillColor = 'FFFFC7CE'; } 
         else if (score >= 0.7) { fillColor = 'FFFFC000'; } 
         else if (score > 0) { fillColor = 'FFFFFF00'; }
 
@@ -280,7 +263,7 @@ function createEnrichedDataSheet(wb: ExcelJS.Workbook, data: EnrichedRecord[], o
             row.eachCell({ includeEmpty: true }, (cell) => {
                   cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fillColor } };
                   if (score >= 0.9) {
-                      cell.font = { ...cell.font, bold: true, color: { argb: fontColor } };
+                      cell.font = { ...cell.font, bold: true, color: { argb: 'FFFFFFFF' } };
                   }
             });
         }
@@ -338,12 +321,12 @@ function createSummarySheet(wb: ExcelJS.Workbook, allRecords: RecordRow[], clust
     });
 }
 
-function createClustersSheet(wb: ExcelJS.Workbook, clusters: RecordRow[][]) {
+function createClustersSheet(wb: ExcelJS.Workbook, clusters: RecordRow[][], aiSummaries: { [key:string]: string }) {
     const ws = wb.addWorksheet("Cluster Details");
     ws.views = [{ rightToLeft: true }];
 
-    const headers = ["Cluster ID", "Beneficiary ID", "Score", "Woman Name", "Husband Name", "National ID", "Phone", "Children"];
-    ws.columns = headers.map(h => ({ header: h, key: h.replace(/\s/g, ''), width: 25 }));
+    const headers = ["Cluster ID", "AI Summary", "Beneficiary ID", "Score", "Woman Name", "Husband Name", "National ID", "Phone", "Children"];
+    ws.columns = headers.map(h => ({ header: h, key: h.replace(/\s/g, ''), width: h === 'AI Summary' ? 50 : 25 }));
     
     const headerRow = ws.getRow(1);
     headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
@@ -357,13 +340,15 @@ function createClustersSheet(wb: ExcelJS.Workbook, clusters: RecordRow[][]) {
         if (pairs.length === 0 && cluster.length < 2) return;
         
         const recordsForSheet = [...cluster].sort((a,b) => (String(a.beneficiaryId) || '').localeCompare(String(b.beneficiaryId) || ''));
-        
         if (recordsForSheet.length === 0) return;
 
         const startRow = currentRowIndex;
         const endRow = startRow + recordsForSheet.length - 1;
 
-        recordsForSheet.forEach((record, recordIndex) => {
+        const clusterKey = cluster.map(r => r._internalId).sort().join('-');
+        const summary = aiSummaries[clusterKey] || '';
+
+        recordsForSheet.forEach((record) => {
              const pair = pairs.find(p => p.a._internalId === record._internalId || p.b._internalId === record._internalId);
              const score = pair ? pair.score.toFixed(4) : '';
              const childrenText = Array.isArray(record.children) ? record.children.join(', ') : record.children || '';
@@ -382,27 +367,23 @@ function createClustersSheet(wb: ExcelJS.Workbook, clusters: RecordRow[][]) {
         const clusterIdCell = ws.getCell(`A${startRow}`);
         clusterIdCell.value = clusterId;
         clusterIdCell.alignment = { vertical: 'middle', horizontal: 'center' };
+
+        ws.mergeCells(`B${startRow}:B${endRow}`);
+        const summaryCell = ws.getCell(`B${startRow}`);
+        summaryCell.value = summary;
+        summaryCell.alignment = { vertical: 'top', horizontal: 'right', wrapText: true };
         
         for (let i = startRow; i <= endRow; i++) {
-            ws.getRow(i).getCell('B').value = recordsForSheet[i - startRow].beneficiaryId; // Re-set beneficiary ID
-            const border: Partial<ExcelJS.Borders> = {
-                top: { style: 'thin', color: {argb: 'FFD9D9D9'} },
-                left: { style: 'thin', color: {argb: 'FFD9D9D9'} },
-                bottom: { style: 'thin', color: {argb: 'FFD9D9D9'} },
-                right: { style: 'thin', color: {argb: 'FFD9D9D9'} },
-            };
+            ws.getRow(i).getCell('C').value = recordsForSheet[i - startRow].beneficiaryId;
             ws.getRow(i).eachCell({ includeEmpty: true }, (cell) => {
-                 cell.border = border;
+                const border: Partial<ExcelJS.Borders> = {};
+                if (i === startRow) border.top = { style: 'thick', color: {argb: 'FF4F81BD'} };
+                if (i === endRow) border.bottom = { style: 'thick', color: {argb: 'FF4F81BD'} };
+                if (cell.col === 1) border.left = { style: 'thick', color: {argb: 'FF4F81BD'} };
+                if (cell.col === headers.length) border.right = { style: 'thick', color: {argb: 'FF4F81BD'} };
+                cell.border = border;
             });
         }
-
-        // Add thick outer border
-        for (let i = startRow; i <= endRow; i++) {
-            ws.getRow(i).getCell(1).border.left = { style: 'thick', color: {argb: 'FF4F81BD'} };
-            ws.getRow(i).getCell(headers.length).border.right = { style: 'thick', color: {argb: 'FF4F81BD'} };
-        }
-        ws.getRow(startRow).eachCell({ includeEmpty: true }, c => c.border.top = { style: 'thick', color: {argb: 'FF4F81BD'} });
-        ws.getRow(endRow).eachCell({ includeEmpty: true }, c => c.border.bottom = { style: 'thick', color: {argb: 'FF4F81BD'} });
         
         currentRowIndex = endRow + 1;
     });
@@ -415,20 +396,20 @@ function createAuditSheet(wb: ExcelJS.Workbook, findings: AuditFinding[], cluste
     const recordToClusterIdMap = new Map<string, number>();
     clusters.forEach((cluster, index) => {
         cluster.forEach(record => {
-        recordToClusterIdMap.set(record._internalId!, index + 1);
+            recordToClusterIdMap.set(record._internalId!, index + 1);
         });
     });
 
     const headers = [
-      { header: "الخطورة", key: "severity", width: 12 },
-      { header: "نوع النتيجة", key: "type", width: 30 },
-      { header: "الوصف", key: "description", width: 50 },
-      { header: "معرف المجموعة", key: "clusterId", width: 15 },
-      { header: "معرف المستفيد", key: "beneficiaryId", width: 20 },
-      { header: "المرأة المتأثرة", key: "womanName", width: 25 },
-      { header: "الزوج المتأثر", key: "husbandName", width: 25 },
-      { header: "الرقم القومي", key: "nationalId", width: 20 },
-      { header: "الهاتف", key: "phone", width: 20 },
+      { header: "Severity", key: "severity", width: 12 },
+      { header: "Finding Type", key: "type", width: 30 },
+      { header: "Description", key: "description", width: 50 },
+      { header: "Cluster ID", key: "clusterId", width: 15 },
+      { header: "Beneficiary ID", key: "beneficiaryId", width: 20 },
+      { header: "Woman Name", key: "womanName", width: 25 },
+      { header: "Husband Name", key: "husbandName", width: 25 },
+      { header: "National ID", key: "nationalId", width: 20 },
+      { header: "Phone", key: "phone", width: 20 },
     ];
     ws.columns = headers;
     
@@ -444,28 +425,20 @@ function createAuditSheet(wb: ExcelJS.Workbook, findings: AuditFinding[], cluste
       return (severityOrder[a.severity] || 99) - (severityOrder[b.severity] || 99);
     });
 
-    const findingGroups = new Map<string, {finding: AuditFinding, records: RecordRow[]}>();
-
+    let lastFindingType = '';
     sortedFindings.forEach(finding => {
-        const key = `${finding.type}-${finding.description}`;
-        if (!findingGroups.has(key)) {
-            findingGroups.set(key, { finding, records: [] });
+        if (lastFindingType && lastFindingType !== finding.type) {
+            ws.addRow([]).eachCell(cell => {
+                cell.border = { top: { style: 'thin', color: { argb: 'FF808080' } } };
+            });
         }
-        finding.records.forEach(r => findingGroups.get(key)!.records.push(r));
-    });
+        lastFindingType = finding.type;
 
-    let currentRowIndex = 2;
-    findingGroups.forEach(({ finding, records }) => {
-        if (records.length === 0) return;
-
-        const startRow = currentRowIndex;
-        const endRow = startRow + records.length - 1;
-        
-        records.forEach(record => {
+        finding.records.forEach(record => {
             const clusterId = recordToClusterIdMap.get(record._internalId!) || 'N/A';
             const row = ws.addRow({
                 severity: finding.severity,
-                type: finding.type,
+                type: finding.type.replace(/_/g, ' '),
                 description: finding.description,
                 clusterId: clusterId,
                 beneficiaryId: record.beneficiaryId,
@@ -480,15 +453,55 @@ function createAuditSheet(wb: ExcelJS.Workbook, findings: AuditFinding[], cluste
                 cell.alignment = { horizontal: 'right' };
             });
         });
-        
-        // Add thick outer border
-        for (let i = startRow; i <= endRow; i++) {
-            ws.getRow(i).getCell(1).border = { ...ws.getRow(i).getCell(1).border, left: { style: 'thick', color: {argb: 'FFC00000'} } };
-            ws.getRow(i).getCell(headers.length).border = { ...ws.getRow(i).getCell(headers.length).border, right: { style: 'thick', color: {argb: 'FFC00000'} } };
+    });
+}
+
+function createAuditSummarySheet(wb: ExcelJS.Workbook, findings: AuditFinding[]) {
+    const ws = wb.addWorksheet("Audit Summary");
+    ws.views = [{ rightToLeft: true }];
+    
+    ws.columns = [ { width: 5 }, { width: 25 }, { width: 5 }, { width: 5 }, { width: 25 }, { width: 5 }];
+
+    ws.mergeCells('B2:E2');
+    const titleCell = ws.getCell('B2');
+    titleCell.value = "ملخص نتائج التدقيق";
+    titleCell.font = { size: 24, bold: true, name: 'Calibri' };
+    titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    ws.getRow(2).height = 40;
+
+    const findingCounts: Record<string, number> = {
+      WOMAN_MULTIPLE_HUSBANDS: 0,
+      MULTIPLE_NATIONAL_IDS: 0,
+      DUPLICATE_ID: 0,
+      DUPLICATE_COUPLE: 0,
+      HIGH_SIMILARITY: 0
+    };
+
+    findings.forEach(f => {
+        if (f.type in findingCounts) {
+            findingCounts[f.type] += 1;
         }
-        ws.getRow(startRow).eachCell({ includeEmpty: true }, c => c.border = {...c.border, top: { style: 'thick', color: {argb: 'FFC00000'} } });
-        ws.getRow(endRow).eachCell({ includeEmpty: true }, c => c.border = {...c.border, bottom: { style: 'thick', color: {argb: 'FFC00000'} } });
-        
-        currentRowIndex = endRow + 2; // Add a gap between groups
+    });
+
+    const summaryCards = [
+        [{ title: "Multiple Husbands", key: 'WOMAN_MULTIPLE_HUSBANDS', icon: '🙍‍♀️' }, { title: "Multiple IDs", key: 'MULTIPLE_NATIONAL_IDS', icon: '💳' }],
+        [{ title: "Duplicate ID", key: 'DUPLICATE_ID', icon: '🧾' }, { title: "Duplicate Couple", key: 'DUPLICATE_COUPLE', icon: '👨‍👩‍👧‍👦' }],
+        [{ title: "High Similarity", key: 'HIGH_SIMILARITY', icon: '✨' }, null]
+    ];
+    
+    let currentRow = 4;
+    summaryCards.forEach(rowItems => {
+        ws.getRow(currentRow).height = 45;
+        rowItems.forEach((stat, colIndex) => {
+            if (!stat) return;
+            const startColNum = colIndex === 0 ? 2 : 5;
+            ws.mergeCells(currentRow, startColNum, currentRow + 3, startColNum + 1);
+            const cardCell = ws.getCell(currentRow, startColNum);
+            cardCell.value = { richText: [ { text: `${stat.icon}\n`, font: { size: 36, name: 'Segoe UI Emoji' } }, { text: `${stat.title}\n`, font: { size: 14 } }, { text: `${findingCounts[stat.key]}\n`, font: { size: 24, bold: true } } ] };
+            cardCell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+            cardCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2F2F2' } };
+            cardCell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+        });
+        currentRow += 5;
     });
 }

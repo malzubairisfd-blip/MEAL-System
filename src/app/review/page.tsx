@@ -6,11 +6,12 @@ import type { RecordRow } from "@/lib/fuzzyCluster";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, Search, ChevronLeft, AlertTriangle, ChevronRight } from "lucide-react";
+import { Loader2, Search, ChevronLeft, AlertTriangle, ChevronRight, Wand2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
 import { ClusterCard } from "@/components/ClusterCard";
 import { PairwiseModal } from "@/components/PairwiseModal";
+import { Progress } from "@/components/ui/progress";
 
 type Cluster = RecordRow[];
 
@@ -22,11 +23,15 @@ export default function ReviewPage() {
   const [search, setSearch] = useState("");
   const { toast } = useToast();
 
+  const [aiSummaries, setAiSummaries] = useState<Record<string, string>>({});
+  const [generatingAllSummaries, setGeneratingAllSummaries] = useState(false);
+  const [summaryProgress, setSummaryProgress] = useState(0);
+
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(9);
 
   useEffect(() => {
-    async function loadClusters() {
+    async function loadData() {
       setLoading(true);
       try {
           const cacheId = sessionStorage.getItem('cacheId');
@@ -40,11 +45,13 @@ export default function ReviewPage() {
           if (!res.ok) throw new Error("Failed to load clusters from server cache.");
           
           const data = await res.json();
-          const clusters = data.clusters;
+          const clusters = data.clusters || [];
+          const summaries = data.aiSummaries || {};
           
           if (clusters) {
               setAllClusters(clusters);
               setFilteredClusters(clusters);
+              setAiSummaries(summaries);
 
               if (clusters.length === 0) {
                   toast({ title: "No Clusters Found", description: "The last run did not produce any clusters. Try adjusting settings.", variant: "default" });
@@ -60,7 +67,7 @@ export default function ReviewPage() {
         setLoading(false);
       }
     }
-    loadClusters();
+    loadData();
   }, [toast]);
 
   useEffect(() => {
@@ -83,10 +90,83 @@ export default function ReviewPage() {
     };
     applyFilter();
   }, [search, allClusters]);
+  
+  const generateAllSummaries = async () => {
+      setGeneratingAllSummaries(true);
+      setSummaryProgress(0);
+      const cacheId = sessionStorage.getItem('cacheId');
+
+      try {
+          const response = await fetch('/api/ai/describe-clusters-batch', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ clusters: allClusters }),
+          });
+
+          if (!response.body) throw new Error("No response body");
+          
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let newSummaries = { ...aiSummaries };
+          let done = false;
+          let processedCount = 0;
+
+          while (!done) {
+              const { value, done: readerDone } = await reader.read();
+              done = readerDone;
+              const chunk = decoder.decode(value, { stream: true });
+              const lines = chunk.split('\n\n').filter(line => line.trim());
+
+              for (const line of lines) {
+                  if (line.startsWith('data: ')) {
+                      try {
+                          const data = JSON.parse(line.substring(6));
+                          if (data.clusterKey && data.description) {
+                              newSummaries[data.clusterKey] = data.description;
+                              processedCount++;
+                              setSummaryProgress((processedCount / allClusters.length) * 100);
+                          }
+                      } catch (e) {
+                          console.error("Failed to parse stream data:", line, e);
+                      }
+                  }
+              }
+              setAiSummaries(newSummaries);
+          }
+          
+          if(cacheId) {
+            await fetch('/api/cluster-cache', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ cacheId, aiSummaries: newSummaries })
+            });
+          }
+
+          toast({ title: 'AI Summaries Generated', description: `Successfully generated ${processedCount} summaries.` });
+
+      } catch (error: any) {
+          toast({ title: 'AI Generation Failed', description: error.message, variant: 'destructive' });
+      } finally {
+          setGeneratingAllSummaries(false);
+          setSummaryProgress(100);
+      }
+  };
 
   const handleInspect = (cluster: Cluster) => {
     setSelectedCluster(cluster);
   }
+
+  const handleSummaryUpdate = async (clusterKey: string, summary: string) => {
+      setAiSummaries(prev => ({...prev, [clusterKey]: summary}));
+      const cacheId = sessionStorage.getItem('cacheId');
+      if (cacheId) {
+          await fetch('/api/cluster-cache', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ cacheId, aiSummaries: { ...aiSummaries, [clusterKey]: summary } })
+          });
+      }
+  };
 
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
@@ -138,7 +218,18 @@ export default function ReviewPage() {
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
+            <Button onClick={generateAllSummaries} disabled={generatingAllSummaries || allClusters.length === 0}>
+                {generatingAllSummaries ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Wand2 className="h-4 w-4 mr-2" />}
+                Generate All AI Summaries
+            </Button>
           </div>
+          
+          {generatingAllSummaries && (
+              <div className="mb-4">
+                  <Progress value={summaryProgress} className="w-full" />
+                  <p className="text-sm text-center text-muted-foreground mt-2">Generating summaries... {Math.round(summaryProgress)}% complete</p>
+              </div>
+          )}
                     
           {loading ? (
             <div className="text-center text-muted-foreground py-10">
@@ -152,10 +243,13 @@ export default function ReviewPage() {
                   const clusterKey = c.map(r => r._internalId).sort().join('-');
                   return (
                     <ClusterCard 
-                      key={clusterKey} 
+                      key={clusterKey}
+                      clusterKey={clusterKey}
                       cluster={c} 
                       clusterNumber={(currentPage - 1) * itemsPerPage + idx + 1}
                       onInspect={() => handleInspect(c)}
+                      aiSummary={aiSummaries[clusterKey]}
+                      onSummaryUpdate={handleSummaryUpdate}
                     />
                   )
                 })}
