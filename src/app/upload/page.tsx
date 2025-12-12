@@ -628,10 +628,12 @@ function mapIncomingRowsToInternal(rowsChunk, mapping) {
             ...originalRecord,
             _internalId: "row_" + (inbound.length + i),
             womanName: "", husbandName: "", nationalId: "", phone: "", village: "", subdistrict: "", children: [],
-            cluster_id: ""
         };
 
         for (const key in mapping) {
+            // Do not map cluster_id, it is system-generated and should not overwrite original data
+            if (key === 'cluster_id') continue;
+            
             const col = mapping[key];
             if (col && originalRecord[col] !== undefined) {
                 mapped[key] = originalRecord[col];
@@ -681,9 +683,9 @@ self.addEventListener('message', function (ev) {
 
 type Mapping = {
   womanName: string; husbandName: string; nationalId: string; phone: string;
-  village: string; subdistrict: string; children: string; cluster_id?: string; beneficiaryId?: string;
+  village: string; subdistrict: string; children: string; beneficiaryId?: string;
 };
-const MAPPING_FIELDS: (keyof Mapping)[] = ["womanName","husbandName","nationalId","phone","village","subdistrict","children","cluster_id","beneficiaryId"];
+const MAPPING_FIELDS: (keyof Mapping)[] = ["womanName","husbandName","nationalId","phone","village","subdistrict","children", "beneficiaryId"];
 const REQUIRED_MAPPING_FIELDS: (keyof Mapping)[] = ["womanName","husbandName","nationalId","phone","village","subdistrict","children"];
 const LOCAL_STORAGE_KEY_PREFIX = "beneficiary-mapping-";
 const SETTINGS_ENDPOINT = "/api/settings";
@@ -694,7 +696,7 @@ export default function UploadPage(){
   const [columns, setColumns] = useState<string[]>([]);
   const [file, setFile] = useState<File|null>(null);
   const [mapping, setMapping] = useState<Mapping>({
-    womanName: "", husbandName:"", nationalId:"", phone:"", village:"", subdistrict:"", children:"", cluster_id:"", beneficiaryId:""
+    womanName: "", husbandName:"", nationalId:"", phone:"", village:"", subdistrict:"", children:"", beneficiaryId:""
   });
   const [isMappingComplete, setIsMappingComplete] = useState(false);
   const [progressInfo, setProgressInfo] = useState<WorkerProgress>({ status:"idle", progress:0 });
@@ -806,7 +808,7 @@ export default function UploadPage(){
         if(saved) {
           try { setMapping(JSON.parse(saved)); } catch {}
         } else {
-          setMapping({ womanName:"", husbandName:"", nationalId:"", phone:"", village:"", subdistrict:"", children:"", cluster_id:"", beneficiaryId:"" });
+          setMapping({ womanName:"", husbandName:"", nationalId:"", phone:"", village:"", subdistrict:"", children:"", beneficiaryId:"" });
         }
         setFileReadProgress(100);
     };
