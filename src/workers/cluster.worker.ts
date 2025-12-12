@@ -309,15 +309,15 @@ function pairwiseScore(a:any,b:any, opts:any){
   }
   
   let score = 0;
-  score += FSW.firstNameScore * firstNameScore;
-  score += FSW.familyNameScore * familyNameScore;
-  score += FSW.advancedNameScore * advancedNameScore;
-  score += FSW.tokenReorderScore * tokenReorderScore;
-  score += FSW.husbandScore * husbandScore;
-  score += FSW.idScore * idScore;
-  score += FSW.phoneScore * phoneScoreVal;
-  score += FSW.childrenScore * childrenScore;
-  score += FSW.locationScore * locationScore;
+  score += (FSW.firstNameScore ?? 0) * firstNameScore;
+  score += (FSW.familyNameScore ?? 0) * familyNameScore;
+  score += (FSW.advancedNameScore ?? 0) * advancedNameScore;
+  score += (FSW.tokenReorderScore ?? 0) * tokenReorderScore;
+  score += (FSW.husbandScore ?? 0) * husbandScore;
+  score += (FSW.idScore ?? 0) * idScore;
+  score += (FSW.phoneScore ?? 0) * phoneScoreVal;
+  score += (FSW.childrenScore ?? 0) * childrenScore;
+  score += (FSW.locationScore ?? 0) * locationScore;
 
   if(o.rules.enableNameRootEngine) score += advancedNameScore * 0.12;
   if(o.rules.enableTribalLineage) score += tribalScore * 1.0;
@@ -348,13 +348,8 @@ function buildBlocks(rows:any[], opts:any){
     const idLast4 = idDigits.length >= 4 ? idDigits.slice(-4) : null;
     const phoneLast4 = phoneDigits.length >= 4 ? phoneDigits.slice(-4) : null;
     
-    // Key 1: Woman's first name (3) + Phone (4)
     if(womanFirst3 && phoneLast4) keys.add(`wp:${womanFirst3}:${phoneLast4}`);
-
-    // Key 2: Woman's first name (3) + National ID (4)
     if(womanFirst3 && idLast4) keys.add(`wi:${womanFirst3}:${idLast4}`);
-    
-    // Key 3: Woman's first name (3) + Child's first name (4)
     if(womanFirst3 && childrenTokens.length > 0) {
       childrenTokens.forEach(childNameTokens => {
         if (childNameTokens[0]) {
@@ -365,14 +360,8 @@ function buildBlocks(rows:any[], opts:any){
         }
       });
     }
-
-    // Key 4: Woman's first name (3)
     if(womanFirst3) keys.add(`w:${womanFirst3}`);
-
-    // Key 5: Husband's first name (3)
     if(husbandFirst3) keys.add(`h:${husbandFirst3}`);
-
-    // Key 6: Woman's first name (3) + Husband's first name (3)
     if(womanFirst3 && husbandFirst3) keys.add(`wh:${womanFirst3}:${husbandFirst3}`);
 
     if(keys.size === 0) keys.add("blk:all");
