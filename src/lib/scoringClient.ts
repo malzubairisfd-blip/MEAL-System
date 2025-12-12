@@ -2,329 +2,294 @@
 
 // src/lib/scoringClient.ts
 
-import type { RecordRow } from "./fuzzyCluster";
-
-type Settings = any;
-
-/**
- * Client-side mirror of the worker's pairwiseScore function.
- * Used for live testing in the settings UI.
- * It is CRITICAL that this logic stays in sync with the worker's logic.
- */
+// This file is a client-side mirror of the worker's scoring logic.
+// It's used for live testing in the settings UI. It must be kept in sync.
 
 /* -------------------------
-   Utilities & Normalizers
+   Helpers & Normalizers
    ------------------------- */
-function normalizeArabic(s: string): string {
+function normalizeArabicRaw(s) {
   if (!s) return "";
+  try { s = String(s); } catch { s = "";}
   s = s.normalize("NFKC");
-  s = s.replace(/يحيي/g, "يحي");
-  s = s.replace(/يحيى/g, "يحي");
-  s = s.replace(/عبد /g, "عبد");
-  s = s.replace(/[ًٌٍََُِّْـء]/g, "");
+  // basic Arabic normalization and common equivalences
+  s = s.replace(/[ًٌٍَُِْـ]/g, ""); // diacritics
   s = s.replace(/[أإآ]/g, "ا");
   s = s.replace(/ى/g, "ي");
   s = s.replace(/ؤ/g, "و");
   s = s.replace(/ئ/g, "ي");
   s = s.replace(/ة/g, "ه");
-  s = s.replace(/[^ء-ي0-9 ]/g, " ");
+  s = s.replace(/گ/g, "ك");
+  s = s.replace(/[^ء-ي0-9a-zA-Z\s]/g, " "); // keep Arabic letters, numbers, ascii, spaces
   s = s.replace(/\s+/g, " ").trim();
   return s.toLowerCase();
 }
-function tokens(s:any){ const n = normalizeArabic(s || ""); if(!n) return []; return n.split(" ").filter(Boolean); }
-function digitsOnly(s:any){ if(!s) return ""; return String(s).replace(/\D/g,""); }
-function normalizeChildrenField(val:any){
-  if(!val) return [];
-  if(Array.isArray(val)) return val.map(x=>String(x)).filter(Boolean);
-  return String(val).split(/[;,|،]/).map(x=>String(x)).filter(Boolean);
+
+function tokens(s) {
+  const n = normalizeArabicRaw(s || "");
+  if (!n) return [];
+  return n.split(/\s+/).filter(Boolean);
+}
+
+function digitsOnly(s) {
+  if (s === null || s === undefined) return "";
+  return String(s).replace(/\D/g, "");
+}
+
+function normalizeChildrenField(val) {
+  if (!val) return [];
+  if (Array.isArray(val)) return val.map(x => String(x)).filter(Boolean);
+  return String(val).split(/[;,|،]/).map(x => String(x).trim()).filter(Boolean);
 }
 
 /* -------------------------
    String similarity primitives
    ------------------------- */
-function jaroWinkler(s1:string, s2:string){
-  s1 = String(s1 || ""); s2 = String(s2 || "");
-  if(!s1 || !s2) return 0;
-  const len1=s1.length, len2=s2.length;
-  const matchDist = Math.floor(Math.max(len1,len2)/2)-1;
-  const s1m = Array(len1).fill(false), s2m = Array(len2).fill(false);
-  let matches=0;
-  for(let i=0;i<len1;i++){
-    const start=Math.max(0,i-matchDist), end=Math.min(i+matchDist+1,len2);
-    for(let j=start;j<end;j++){
-      if(s2m[j]) continue;
-      if(s1[i] !== s2[j]) continue;
-      s1m[i]=true; s2m[j]=true; matches++; break;
+function jaroWinkler(a, b) {
+  a = String(a || ""); b = String(b || "");
+  if (!a || !b) return 0;
+  const la = a.length, lb = b.length;
+  const matchDist = Math.floor(Math.max(la, lb) / 2) - 1;
+  const aM = Array(la).fill(false), bM = Array(lb).fill(false);
+  let matches = 0;
+  for (let i = 0; i < la; i++) {
+    const start = Math.max(0, i - matchDist), end = Math.min(i + matchDist + 1, lb);
+    for (let j = start; j < end; j++) {
+      if (bM[j]) continue;
+      if (a[i] !== b[j]) continue;
+      aM[i] = true; bM[j] = true; matches++; break;
     }
   }
-  if(matches===0) return 0;
-  let k=0, trans=0;
-  for(let i=0;i<len1;i++){
-    if(!s1m[i]) continue;
-    while(!s2m[k]) k++;
-    if(s1[i] !== s2[k]) trans++;
+  if (matches === 0) return 0;
+  let k = 0, trans = 0;
+  for (let i = 0; i < la; i++) {
+    if (!aM[i]) continue;
+    while (!bM[k]) k++;
+    if (a[i] !== b[k]) trans++;
     k++;
   }
-  trans = trans/2.0;
+  trans = trans / 2;
   const m = matches;
-  const jaro = (m/len1 + m/len2 + (m-trans)/m)/3.0;
-  let prefix=0, maxPrefix=4;
-  for(let i=0;i<Math.min(maxPrefix,len1,len2);i++){
-    if(s1[i]===s2[i]) prefix++; else break;
+  const jaro = (m / la + m / lb + (m - trans) / m) / 3;
+  let prefix = 0, maxPrefix = 4;
+  for (let i = 0; i < Math.min(maxPrefix, la, lb); i++) {
+    if (a[i] === b[i]) prefix++; else break;
   }
-  return jaro + prefix*0.1*(1-jaro);
-}
-function tokenJaccard(a:string[], b:string[]){
-  if(!a.length && !b.length) return 0;
-  const A = new Set(a), B = new Set(b);
-  let inter=0; for(const x of A) if(B.has(x)) inter++;
-  const uni = new Set([...A,...B]).size;
-  return uni === 0 ? 0 : inter/uni;
+  return jaro + prefix * 0.1 * (1 - jaro);
 }
 
-/* -------------------------
-   Name helpers
-   ------------------------- */
-function reduceNameRoot(full:string){
-  const parts = tokens(full);
-  return parts.map(p => p.slice(0,3)).join(" ");
+function tokenJaccard(aTokens, bTokens) {
+  if (!aTokens.length && !bTokens.length) return 0;
+  const A = new Set(aTokens), B = new Set(bTokens);
+  let inter = 0;
+  for (const x of A) if (B.has(x)) inter++;
+  const uni = new Set([...A, ...B]).size;
+  return uni === 0 ? 0 : inter / uni;
 }
-function extractPaternal(full:string){
-  const parts = tokens(full);
-  return { father: parts[1] || "", grandfather: parts[2] || "" };
-}
-function extractMaternal(full:string){
-  const parts = tokens(full);
-  const L = parts.length;
-  return { mother: parts[L-2]||"", grandmother: parts[L-3]||"" };
-}
-function extractTribal(full:string){
-  const parts = tokens(full);
-  for(let i=parts.length-1;i>=0;i--) if(parts[i].startsWith("ال")) return parts[i];
-  return "";
-}
-function nameOrderFreeScore(aName:string,bName:string){
+
+function nameOrderFreeScore(aName, bName) {
   const aT = tokens(aName), bT = tokens(bName);
-  if(!aT.length || !bT.length) return 0;
+  if (!aT.length || !bT.length) return 0;
   const A = new Set(aT), B = new Set(bT);
-  let inter=0; for(const x of A) if(B.has(x)) inter++;
-  const union = new Set([...A,...B]).size; const jacc = union===0?0:inter/union;
+  let inter = 0; for (const t of A) if (B.has(t)) inter++;
+  const union = new Set([...A, ...B]).size;
+  const jacc = union === 0 ? 0 : inter / union;
   const aSorted = aT.slice().sort().join(" "), bSorted = bT.slice().sort().join(" ");
-  const sj = jaroWinkler(aSorted,bSorted);
-  return 0.7*jacc + 0.3*sj;
+  const sj = jaroWinkler(aSorted, bSorted);
+  return 0.7 * jacc + 0.3 * sj;
 }
 
-function splitParts(name:string) {
+function splitParts(name) {
   if (!name) return [];
-  return name.trim().split(/\s+/).filter(Boolean);
+  return tokens(name);
 }
 
-function applyAdditionalRules(a:any, b:any, jw:any, minPair:any) {
+function applyAdditionalRules(a, b, opts) {
+  const minPair = opts?.thresholds?.minPair ?? 0.62;
+  const jw = jaroWinkler;
 
-  const A = splitParts(a.womanName_normalized);
-  const B = splitParts(b.womanName_normalized);
+  const A = splitParts(a.womanName_normalized || "");
+  const B = splitParts(b.womanName_normalized || "");
+  const HA = splitParts(a.husbandName_normalized || "");
+  const HB = splitParts(b.husbandName_normalized || "");
 
-  const HA = splitParts(a.husbandName_normalized);
-  const HB = splitParts(b.husbandName_normalized);
-
-  const sc = (x:string,y:string) => jw(x||"", y||"");
-  const s90 = (x:string,y:string) => sc(x,y) >= 0.90;
-  const s93 = (x:string,y:string) => sc(x,y) >= 0.93;
-  const s95 = (x:string,y:string) => sc(x,y) >= 0.95;
-
-  /* ----------------------------------------------------
-     RULE 0 — STRONG TOKEN MATCH (NEW, MAIN FIX)
-     If 80–100% tokens match between both names → DUPLICATE
-     ---------------------------------------------------- */
+  // RULE 0: strong token match (80%+ tokens overlap)
   {
     const setA = new Set(A);
     const setB = new Set(B);
-
     let inter = 0;
     for (const t of setA) if (setB.has(t)) inter++;
+    const uni = new Set([...setA, ...setB]).size;
+    const ratio = uni === 0 ? 0 : inter / uni;
+    if (ratio >= 0.80) return Math.min(1, minPair + 0.22);
+  }
 
-    const union = new Set([...setA, ...setB]).size;
-    const ratio = union === 0 ? 0 : inter / union;
+  // Helper thresholds
+  const s90 = (x, y) => jw(x || "", y || "") >= 0.90;
+  const s93 = (x, y) => jw(x || "", y || "") >= 0.93;
+  const s95 = (x, y) => jw(x || "", y || "") >= 0.95;
 
-    if (ratio >= 0.80) {  
-      return minPair + 0.20; // FORCE DUPLICATE
+  // Normalize accessors for first, father, grandfather, 4th/last
+  const getPart = (arr, idx) => (arr && arr.length > idx) ? arr[idx] : "";
+
+  const F1 = getPart(A, 0), Fa1 = getPart(A, 1), G1 = getPart(A, 2), L1 = getPart(A, 3);
+  const F2 = getPart(B, 0), Fa2 = getPart(B, 1), G2 = getPart(B, 2), L2 = getPart(B, 3);
+
+  const HF1 = getPart(HA, 0), HFa1 = getPart(HA, 1), HG1 = getPart(HA, 2);
+  const HF2 = getPart(HB, 0), HFa2 = getPart(HB, 1), HG2 = getPart(HB, 2);
+
+  // RULE 1:
+  if (s93(F1, F2) && s93(Fa1, Fa2) && s93(G1, G2) && jw(L1 || "", L2 || "") < 0.85) {
+    if (jw(HF1, HF2) < 0.7) return Math.min(1, minPair + 0.18);
+  }
+
+  // RULE 2:
+  if (s93(F1, F2) && s93(Fa1, Fa2) && s93(G1, G2) && jw(L1, L2) >= 0.85) {
+    if (jw(HF1, HF2) < 0.7) return Math.min(1, minPair + 0.18);
+  }
+
+  // RULE 3:
+  if ((A.length === 4 && B.length === 5) || (A.length === 5 && B.length === 4)) {
+    if (s93(F1, F2) && s93(Fa1, Fa2) && s93(G1, G2) && s93(L1 || "", L2 || "")) {
+      if (jw(HF1, HF2) < 0.7) return Math.min(1, minPair + 0.17);
     }
   }
 
-  /* ----------------------------------------------------
-     RULE 1 — EXACT 3-part match (first + father + grandfather)
-     ---------------------------------------------------- */
-  if (
-    A.length >= 3 && B.length >= 3 &&
-    s93(A[0], B[0]) &&
-    s93(A[1], B[1]) &&
-    s93(A[2], B[2])
-  ) {
-    return minPair + 0.18;
-  }
-
-  /* ----------------------------------------------------
-     RULE 2 — 4 vs 5 part names, extension ignored
-     Example: محمد العمراني ≈ محمد
-     ---------------------------------------------------- */
-  if (
-    (A.length === 4 && B.length === 5) ||
-    (A.length === 5 && B.length === 4)
-  ) {
-    const minLen = Math.min(A.length, B.length);
-
-    let strongMatches = 0;
-    for (let i = 0; i < minLen; i++) {
-      if (s93(A[i], B[i])) strongMatches++;
-    }
-
-    // 80%+ of parts match
-    if (strongMatches >= minLen - 1) {
-      return minPair + 0.17;
+  // RULE 4:
+  if ((A.length === 4 && B.length === 5) || (A.length === 5 && B.length === 4)) {
+    if (s95(F1, F2) && s93(L1 || "", L2 || "") && s95(HF1, HF2)) {
+      if (s93(Fa1, Fa2) && !s93(G1, G2)) {
+        return Math.min(1, minPair + 0.20);
+      }
     }
   }
 
-  /* ----------------------------------------------------
-     RULE 3 — Very high similarity in all four key parts
-     ---------------------------------------------------- */
-  if (
-    A.length >= 4 && B.length >= 4 &&
-    s93(A[0], B[0]) &&
-    s93(A[1], B[1]) &&
-    s93(A[2], B[2]) &&
-    s93(A[3], B[3])
-  ) {
-    return minPair + 0.16;
-  }
-
-  /* ----------------------------------------------------
-     RULE 4 — Husband names also match strongly
-     ---------------------------------------------------- */
-  if (
-    HA.length > 0 && HB.length > 0 &&
-    s93(HA[0], HB[0]) &&
-    (HA[1] && HB[1] ? s93(HA[1], HB[1]) : true)
-  ) {
-    // combine with woman-name similarity
-    const womanJacc = nameOrderFreeScore(a.womanName_normalized, b.womanName_normalized);
-    if (womanJacc >= 0.80) {
-      return minPair + 0.15;
+  // RULE 5:
+  if ((A.length === 4 && B.length === 5) || (A.length === 5 && B.length === 4)) {
+    if (s93(F1, F2) && s93(Fa1, Fa2) && s93(G1, G2)) {
+      if (jw(HF1, HF2) < 0.7) return Math.min(1, minPair + 0.16);
     }
-  }
-
-  /* ----------------------------------------------------
-     RULE 5 — fallback: first-name high similarity
-     ---------------------------------------------------- */
-  if (A.length > 0 && B.length > 0 && s93(A[0], B[0])) {
-    return minPair + 0.14;
   }
 
   return null;
 }
 
-export function computePairScore(aRaw:any,bRaw:any, opts:any){
+export function computePairScore(aRaw, bRaw, opts) {
   const optsDefaults = {
     finalScoreWeights: {
-        nameScore: 0.40,
-        husbandScore: 0.25,
-        idScore: 0.15,
-        phoneScore: 0.10,
-        locationScore: 0.05,
-        childrenScore: 0.05
-    },
-    rules: {
-      enableNameRootEngine: true,
-      enableTribalLineage: true,
-      enableMaternalLineage: true,
-      enablePolygamyRules: true
+      firstNameScore: 0.15,
+      familyNameScore: 0.25,
+      advancedNameScore: 0.12,
+      tokenReorderScore: 0.10,
+      husbandScore: 0.12,
+      idScore: 0.10,
+      phoneScore: 0.05,
+      childrenScore: 0.03,
+      locationScore: 0.08
     },
     thresholds: {
-      minPair: 0.62
+      minPair: 0.62,
+      minInternal: 0.50,
+      blockChunkSize: 3000
+    },
+    rules: {
+      enablePolygamyRules: true
     }
   };
-    const o = { ...optsDefaults, ...opts,
-    finalScoreWeights: {...optsDefaults.finalScoreWeights, ...(opts?.finalScoreWeights || {})},
-    rules: {...optsDefaults.rules, ...(opts?.rules || {})},
-    thresholds: {...optsDefaults.thresholds, ...(opts?.thresholds || {})},
-   };
-  const FSW = o.finalScoreWeights;
+  const o = Object.assign({}, optsDefaults, opts || {});
+  o.finalScoreWeights = Object.assign({}, optsDefaults.finalScoreWeights, (opts && opts.finalScoreWeights) || {});
+  o.thresholds = Object.assign({}, optsDefaults.thresholds, (opts && opts.thresholds) || {});
+  o.rules = Object.assign({}, optsDefaults.rules, (opts && opts.rules) || {});
 
   const a = {
-    womanName_normalized: normalizeArabic(aRaw.womanName||""),
-    husbandName_normalized: normalizeArabic(aRaw.husbandName||""),
-    nationalId: String(aRaw.nationalId||aRaw.id||""),
-    phone: digitsOnly(aRaw.phone||""),
-    village_normalized: normalizeArabic(aRaw.village||""),
-    subdistrict_normalized: normalizeArabic(aRaw.subdistrict||""),
-    children_normalized: normalizeChildrenField(aRaw.children||"").map(normalizeArabic)
+    womanName: aRaw.womanName || "",
+    husbandName: aRaw.husbandName || "",
+    nationalId: String(aRaw.nationalId || aRaw.id || ""),
+    phone: digitsOnly(aRaw.phone || ""),
+    village: aRaw.village || "",
+    subdistrict: aRaw.subdistrict || "",
+    children: aRaw.children || []
   };
   const b = {
-    womanName_normalized: normalizeArabic(bRaw.womanName||""),
-    husbandName_normalized: normalizeArabic(bRaw.husbandName||""),
-    nationalId: String(bRaw.nationalId||bRaw.id||""),
-    phone: digitsOnly(bRaw.phone||""),
-    village_normalized: normalizeArabic(bRaw.village||""),
-    subdistrict_normalized: normalizeArabic(bRaw.subdistrict||""),
-    children_normalized: normalizeChildrenField(bRaw.children||"").map(normalizeArabic)
+    womanName: bRaw.womanName || "",
+    husbandName: bRaw.husbandName || "",
+    nationalId: String(bRaw.nationalId || bRaw.id || ""),
+    phone: digitsOnly(bRaw.phone || ""),
+    village: bRaw.village || "",
+    subdistrict: bRaw.subdistrict || "",
+    children: bRaw.children || []
   };
-  
-  const wTokensA = tokens(a.womanName_normalized);
-  const wTokensB = tokens(b.womanName_normalized);
-  const firstNameA = wTokensA[0] || "";
-  const firstNameB = wTokensB[0] || "";
-  const familyNameA = wTokensA.slice(1).join(" ");
-  const familyNameB = wTokensB.slice(1).join(" ");
 
-  const firstNameScore = jaroWinkler(firstNameA, firstNameB);
-  const familyNameScore = jaroWinkler(familyNameA, familyNameB);
-  const tokenReorderScore = nameOrderFreeScore(a.womanName_normalized, b.womanName_normalized);
+  a.womanName_normalized = normalizeArabicRaw(a.womanName);
+  b.womanName_normalized = normalizeArabicRaw(b.womanName);
+  a.husbandName_normalized = normalizeArabicRaw(a.husbandName);
+  b.husbandName_normalized = normalizeArabicRaw(b.husbandName);
+  a.village_normalized = normalizeArabicRaw(a.village);
+  b.village_normalized = normalizeArabicRaw(b.village);
+  a.children_normalized = (Array.isArray(a.children) ? a.children : normalizeChildrenField(a.children)).map(normalizeArabicRaw);
+  b.children_normalized = (Array.isArray(b.children) ? b.children : normalizeChildrenField(b.children)).map(normalizeArabicRaw);
+
+  if (a.nationalId && b.nationalId && a.nationalId === b.nationalId) {
+    return { score: 0.99, breakdown: { reason: "EXACT_ID" } };
+  }
 
   const husbandJW = jaroWinkler(a.husbandName_normalized, b.husbandName_normalized);
-  const husbandPerm = nameOrderFreeScore(a.husbandName_normalized, b.husbandName_normalized);
-  const husbandScore = Math.max(husbandJW, husbandPerm);
-
-  const phoneScoreVal = (a.phone && b.phone) ? (a.phone===b.phone ? 1 : (a.phone.slice(-6)===b.phone.slice(-6) ? 0.85 : (a.phone.slice(-4)===b.phone.slice(-4) ? 0.6 : 0))) : 0;
-  const idScore = (a.nationalId && b.nationalId) ? (a.nationalId===b.nationalId ? 1 : (a.nationalId.slice(-5)===b.nationalId.slice(-5) ? 0.75 : 0)) : 0;
-
-  const childrenScore = tokenJaccard(a.children_normalized, b.children_normalized);
-
-  let locationScore = 0;
-  if(a.village_normalized && b.village_normalized && a.village_normalized===b.village_normalized) locationScore += 0.4;
-  if(a.subdistrict_normalized && b.subdistrict_normalized && a.subdistrict_normalized===b.subdistrict_normalized) locationScore += 0.25;
-  locationScore = Math.min(0.5, locationScore);
-  
-  const breakdown = {
-    firstNameScore,
-    familyNameScore,
-    tokenReorderScore,
-    husbandScore,
-    idScore,
-    phoneScore: phoneScoreVal,
-    childrenScore,
-    locationScore,
-    additionalRuleTriggered: false
-  };
-
-  const ruleScore = applyAdditionalRules(a, b, jaroWinkler, o.thresholds.minPair);
-  if (ruleScore !== null) {
-    breakdown.additionalRuleTriggered = true;
-    return {
-      score: ruleScore,
-      breakdown: breakdown
-    };
+  const aParts = splitParts(a.womanName_normalized), bParts = splitParts(b.womanName_normalized);
+  const aFather = aParts[1] || "", bFather = bParts[1] || "";
+  const aGrand = aParts[2] || "", bGrand = bParts[2] || "";
+  if (o.rules.enablePolygamyRules && husbandJW >= 0.95 && jaroWinkler(aFather, bFather) >= 0.93 && jaroWinkler(aGrand, bGrand) >= 0.90) {
+    return { score: 0.97, breakdown: { reason: "POLYGAMY_STRONG" } };
   }
-  
+
+  const ruleBoost = applyAdditionalRules(a, b, o);
+  if (ruleBoost !== null) {
+    return { score: Math.min(1, ruleBoost), breakdown: { reason: "ADDITIONAL_RULE", boostedTo: ruleBoost } };
+  }
+
+  const A = splitParts(a.womanName_normalized), B = splitParts(b.womanName_normalized);
+  const firstA = A[0] || "", firstB = B[0] || "";
+  const famA = A.slice(1).join(" "), famB = B.slice(1).join(" ");
+
+  const firstNameScore = jaroWinkler(firstA, firstB);
+  const familyNameScore = jaroWinkler(famA, famB);
+  const advancedNameScore = (() => {
+    const root = s => splitParts(s).map(t => t.slice(0, 3)).join(" ");
+    const rA = root(a.womanName_normalized), rB = root(b.womanName_normalized);
+    if (!rA || !rB) return 0;
+    const jwroot = jaroWinkler(rA, rB);
+    return Math.min(0.5, jwroot);
+  })();
+
+  const tokenReorderScore = nameOrderFreeScore(a.womanName_normalized, b.womanName_normalized);
+  const husbandScore = Math.max(jaroWinkler(a.husbandName_normalized, b.husbandName_normalized), nameOrderFreeScore(a.husbandName_normalized, b.husbandName_normalized));
+  const phoneScoreVal = (a.phone && b.phone) ? (a.phone === b.phone ? 1 : (a.phone.slice(-6) === b.phone.slice(-6) ? 0.85 : (a.phone.slice(-4) === b.phone.slice(-4) ? 0.6 : 0))) : 0;
+  const idScore = (a.nationalId && b.nationalId) ? (a.nationalId === b.nationalId ? 1 : (a.nationalId.slice(-5) === b.nationalId.slice(-5) ? 0.75 : 0)) : 0;
+  const childrenScore = tokenJaccard(a.children_normalized || [], b.children_normalized || []);
+  let locationScore = 0;
+  if (a.village_normalized && b.village_normalized && a.village_normalized === b.village_normalized) locationScore += 0.4;
+  if (a.subdistrict_normalized && b.subdistrict_normalized && a.subdistrict_normalized === b.subdistrict_normalized) locationScore += 0.25;
+  locationScore = Math.min(0.5, locationScore);
+
+  const W = o.finalScoreWeights;
   let score = 0;
-  score += (FSW.firstNameScore ?? 0) * firstNameScore;
-  score += (FSW.familyNameScore ?? 0) * familyNameScore;
-  score += (FSW.tokenReorderScore ?? 0) * tokenReorderScore;
-  score += (FSW.husbandScore ?? 0) * husbandScore;
-  score += (FSW.idScore ?? 0) * idScore;
-  score += (FSW.phoneScore ?? 0) * phoneScoreVal;
-  score += (FSW.childrenScore ?? 0) * childrenScore;
-  score += (FSW.locationScore ?? 0) * locationScore;
-  
+  score += (W.firstNameScore || 0) * firstNameScore;
+  score += (W.familyNameScore || 0) * familyNameScore;
+  score += (W.advancedNameScore || 0) * advancedNameScore;
+  score += (W.tokenReorderScore || 0) * tokenReorderScore;
+  score += (W.husbandScore || 0) * husbandScore;
+  score += (W.idScore || 0) * idScore;
+  score += (W.phoneScore || 0) * phoneScoreVal;
+  score += (W.childrenScore || 0) * childrenScore;
+  score += (W.locationScore || 0) * locationScore;
+
+  const strongParts = [firstNameScore, familyNameScore, tokenReorderScore].filter(v => v >= 0.85).length;
+  if (strongParts >= 2) score = Math.min(1, score + 0.04);
   score = Math.max(0, Math.min(1, score));
+
+  const breakdown = {
+    firstNameScore, familyNameScore, advancedNameScore, tokenReorderScore,
+    husbandScore, idScore, phoneScore: phoneScoreVal, childrenScore, locationScore
+  };
 
   return { score, breakdown };
 }
