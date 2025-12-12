@@ -42,14 +42,11 @@ function normalizeArabic(text){
   s = s.replace(/ج/g, "ح");
   s = s.replace(/خ/g, "ح");
   s = s.replace(/ذ/g, "د");
-  s = s.replace(/ت/g, "ب");
-  s = s.replace(/ث/g, "ب");
+  s = s.replace(/[تثن]/g, "ب");
   s = s.replace(/ش/g, "س");
   s = s.replace(/ز/g, "ر");
-  s = s.replace(/ض/g, "ص");
+  s = s.replace(/[ضظ]/g, "ص");
   s = s.replace(/غ/g, "ع");
-  s = s.replace(/ظ/g, "ص");
-  s = s.replace(/ن/g, "ب");
 
   // 3. Delete 'ه' at the end of a word
   s = s.replace(/ه\\b/g, "");
@@ -206,12 +203,15 @@ function applyAdditionalRules(a, b, jw, minPair) {
 function pairwiseScore(a,b, opts){
   const optsDefaults = {
     finalScoreWeights: {
-        nameScore: 0.40,
-        husbandScore: 0.25,
-        idScore: 0.15,
-        phoneScore: 0.10,
-        locationScore: 0.05,
-        childrenScore: 0.05
+        firstNameScore: 0.15,
+        familyNameScore: 0.25,
+        advancedNameScore: 0.12,
+        tokenReorderScore: 0.10,
+        husbandScore: 0.12,
+        idScore: 0.08,
+        phoneScore: 0.05,
+        childrenScore: 0.04,
+        locationScore: 0.04
     },
     rules: {
       enableNameRootEngine: true,
@@ -250,9 +250,16 @@ function pairwiseScore(a,b, opts){
   };
   
   // Calculate all individual field scores first
-  const nameJW = jaroWinkler(a_norm.womanName_normalized, b_norm.womanName_normalized);
-  const namePerm = nameOrderFreeScore(a_norm.womanName_normalized, b_norm.womanName_normalized);
-  const nameScore = Math.max(nameJW, namePerm);
+  const wTokensA = tokens(a_norm.womanName_normalized);
+  const wTokensB = tokens(b_norm.womanName_normalized);
+  const firstNameA = wTokensA[0] || "";
+  const firstNameB = wTokensB[0] || "";
+  const familyNameA = wTokensA.slice(1).join(" ");
+  const familyNameB = wTokensB.slice(1).join(" ");
+
+  const firstNameScore = jaroWinkler(firstNameA, firstNameB);
+  const familyNameScore = jaroWinkler(familyNameA, familyNameB);
+  const tokenReorderScore = nameOrderFreeScore(a_norm.womanName_normalized, b_norm.womanName_normalized);
 
   const husbandJW = jaroWinkler(a_norm.husbandName_normalized, b_norm.husbandName_normalized);
   const husbandPerm = nameOrderFreeScore(a_norm.husbandName_normalized, b_norm.husbandName_normalized);
@@ -269,7 +276,9 @@ function pairwiseScore(a,b, opts){
   locationScore = Math.min(0.5, locationScore);
 
   const breakdown = {
-    nameScore,
+    firstNameScore,
+    familyNameScore,
+    tokenReorderScore,
     husbandScore,
     idScore,
     phoneScore: phoneScoreVal,
@@ -289,7 +298,9 @@ function pairwiseScore(a,b, opts){
 
   // If no rule matched, calculate the final weighted score
   let score = 0;
-  score += (FSW.nameScore ?? 0) * nameScore;
+  score += (FSW.firstNameScore ?? 0) * firstNameScore;
+  score += (FSW.familyNameScore ?? 0) * familyNameScore;
+  score += (FSW.tokenReorderScore ?? 0) * tokenReorderScore;
   score += (FSW.husbandScore ?? 0) * husbandScore;
   score += (FSW.idScore ?? 0) * idScore;
   score += (FSW.phoneScore ?? 0) * phoneScoreVal;
@@ -320,22 +331,41 @@ function buildBlocks(rows, opts){
     const idLast4 = idDigits.length >= 4 ? idDigits.slice(-4) : null;
     const phoneLast4 = phoneDigits.length >= 4 ? phoneDigits.slice(-4) : null;
     
-    // New sequence of keys
+    // Rule 1: Composite key
+    if (womanFirst3 && husbandFirst3 && phoneLast4 && childrenTokens.length > 0) {
+        childrenTokens.forEach(childToken => {
+            const childFirst4 = childToken ? childToken.slice(0, 4) : null;
+            if (childFirst4) {
+                keys.add(\`whpc:\${womanFirst3}:\${husbandFirst3}:\${phoneLast4}:\${childFirst4}\`);
+            }
+        });
+    }
+
+    // Rule 2: Woman's name + phone
     if(womanFirst3 && phoneLast4) keys.add(\`wp:\${womanFirst3}:\${phoneLast4}\`);
+
+    // Rule 3: Woman's name + national ID
     if(womanFirst3 && idLast4) keys.add(\`wi:\${womanFirst3}:\${idLast4}\`);
+    
+    // Rule 4: Woman's name
+    if(womanFirst3) keys.add(\`w:\${womanFirst3}\`);
+
+    // Rule 5: Woman's name + child's name
     if(womanFirst3 && childrenTokens.length > 0) {
       childrenTokens.forEach(childToken => {
-        if (childToken) {
-          const childFirst4 = childToken.slice(0, 4);
-          if (childFirst4) {
-            keys.add(\`wc:\${womanFirst3}:\${childFirst4}\`);
-          }
+        const childFirst4 = childToken ? childToken.slice(0, 4) : null;
+        if (childFirst4) {
+          keys.add(\`wc:\${womanFirst3}:\${childFirst4}\`);
         }
       });
     }
-    if(womanFirst3) keys.add(\`w:\${womanFirst3}\`);
+
+    // Rule 6: Husband's name
     if(husbandFirst3) keys.add(\`h:\${husbandFirst3}\`);
+
+    // Rule 7: Woman's name + Husband's name
     if(womanFirst3 && husbandFirst3) keys.add(\`wh:\${womanFirst3}:\${husbandFirst3}\`);
+
 
     if(keys.size === 0) keys.add("blk:all");
 
