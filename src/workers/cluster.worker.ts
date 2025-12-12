@@ -390,8 +390,11 @@ function buildEdges(rows:any[], minScore=0.6, opts:any){
     } else {
       pushEdgesForList(block, rows, minScore, seen, edges, opts);
     }
-    if(bi % 200 === 0) postMessage({ type:'progress', status:'building-edges', progress: 10 + Math.round(40 * (bi/blocks.length)), completed: bi+1, total: blocks.length });
+     if(bi % 20 === 0) {
+      postMessage({ type:'progress', status:'building-edges', progress: 10 + Math.round(40 * (bi/blocks.length)), completed: bi+1, total: blocks.length });
+    }
   }
+  postMessage({ type:'progress', status:'building-edges', progress: 50, completed: blocks.length, total: blocks.length });
   edges.sort((x:any,y:any)=>y.score-x.score);
   return edges;
 }
