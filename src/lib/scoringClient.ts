@@ -126,6 +126,33 @@ function applyAdditionalRules(a, b, opts) {
     if (ratio >= 0.80) return Math.min(1, minPair + 0.22);
   }
 
+  /* ----------------------------------------------------
+     RULE 6 — STRONG HOUSEHOLD + CHILDREN MATCH (CRITICAL)
+     This rule overrides all weak lineage noise
+     المرأة نفسها مع اختلاف النسب — الزوج + الأطفال حاسمين
+  ---------------------------------------------------- */
+  {
+    const A = splitParts(a.womanName_normalized);
+    const B = splitParts(b.womanName_normalized);
+
+    const firstNameMatch =
+      A.length > 0 && B.length > 0 && jw(A[0], B[0]) >= 0.93;
+
+    const husbandStrong =
+      jw(a.husbandName_normalized, b.husbandName_normalized) >= 0.90 ||
+      nameOrderFreeScore(a.husbandName_normalized, b.husbandName_normalized) >= 0.90;
+
+    const childrenMatch =
+      tokenJaccard(
+        a.children_normalized || [],
+        b.children_normalized || []
+      ) >= 0.90;
+
+    if (firstNameMatch && husbandStrong && childrenMatch) {
+      return minPair + 0.25; // HARD FORCE DUPLICATE
+    }
+  }
+
   // Helper thresholds
   const s90 = (x, y) => jw(x || "", y || "") >= 0.90;
   const s93 = (x, y) => jw(x || "", y || "") >= 0.93;
@@ -184,10 +211,10 @@ export function computePairScore(aRaw, bRaw, opts) {
       advancedNameScore: 0.12,
       tokenReorderScore: 0.10,
       husbandScore: 0.12,
-      idScore: 0.10,
+      idScore: 0.08,
       phoneScore: 0.05,
-      childrenScore: 0.03,
-      locationScore: 0.08
+      childrenScore: 0.06,
+      locationScore: 0.04
     },
     thresholds: {
       minPair: 0.62,

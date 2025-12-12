@@ -36,7 +36,7 @@ function getDefaultSettings() {
         husbandScore: 0.12,
         idScore: 0.08,
         phoneScore: 0.05,
-        childrenScore: 0.04,
+        childrenScore: 0.06,
         locationScore: 0.04
       },
       rules: {
