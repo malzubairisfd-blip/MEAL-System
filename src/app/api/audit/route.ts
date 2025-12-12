@@ -35,41 +35,18 @@ function digitsOnly(x: any) {
   return safeString(x).replace(/\D/g, "");
 }
 
-function normalizeArabic(text: any) {
-  if (!text) return "";
-  let s = safeString(text);
-
-  // 1. Normalize space
+function normalizeArabic(s: string): string {
+  if (!s) return "";
+  s = s.normalize("NFKC");
+  s = s.replace(/[ًٌٍََُِّْـ]/g, "");
+  s = s.replace(/[أإآ]/g, "ا");
+  s = s.replace(/ى/g, "ي");
+  s = s.replace(/ؤ/g, "و");
+  s = s.replace(/ئ/g, "ي");
+  s = s.replace(/ة/g, "ه");
+  s = s.replace(/[^ء-ي0-9 ]/g, " ");
   s = s.replace(/\s+/g, " ").trim();
-  
-  // 4. Delete diacritics
-  s = s.replace(/[\u064B-\u0652]/g, ""); // Tashkeel
-  
-  // 5-17. Character replacements
-  s = s.replace(/ط/g, "د");
-  s = s.replace(/ق/g, "ف");
-  s = s.replace(/ج/g, "ح");
-  s = s.replace(/خ/g, "ح");
-  s = s.replace(/ذ/g, "د");
-  s = s.replace(/ت/g, "ب");
-  s = s.replace(/ث/g, "ب");
-  s = s.replace(/ش/g, "س");
-  s = s.replace(/ز/g, "ر");
-  s = s.replace(/ض/g, "ص");
-  s = s.replace(/غ/g, "ع");
-  s = s.replace(/ظ/g, "ص");
-  s = s.replace(/ن/g, "ب");
-
-  // 3. Delete 'ه' at the end of a word
-  s = s.replace(/ه\b/g, "");
-
-  // 2. Delete specific characters
-  s = s.replace(/[يىئؤوءاأإآة]/g, "");
-
-  // Re-trim whitespace that might appear after deletions
-  s = s.replace(/\s+/g, " ").trim();
-
-  return s;
+  return s.toLowerCase();
 }
 
 function tokens(s: string) {

@@ -15,43 +15,20 @@ type Settings = any;
 /* -------------------------
    Utilities & Normalizers
    ------------------------- */
-function normalizeArabic(text:any){
-  if(!text) return "";
-  let s = String(text);
-
-  // 1. Normalize space
+function normalizeArabic(s: string): string {
+  if (!s) return "";
+  s = s.normalize("NFKC");
+  s = s.replace(/[ًٌٍََُِّْـ]/g, "");
+  s = s.replace(/[أإآ]/g, "ا");
+  s = s.replace(/ى/g, "ي");
+  s = s.replace(/ؤ/g, "و");
+  s = s.replace(/ئ/g, "ي");
+  s = s.replace(/ة/g, "ه");
+  s = s.replace(/[^ء-ي0-9 ]/g, " ");
   s = s.replace(/\s+/g, " ").trim();
-  
-  // 4. Delete diacritics
-  s = s.replace(/[\u064B-\u0652]/g, ""); // Tashkeel
-
-  // 5-17. Character replacements
-  s = s.replace(/ط/g, "د");
-  s = s.replace(/ق/g, "ف");
-  s = s.replace(/ج/g, "ح");
-  s = s.replace(/خ/g, "ح");
-  s = s.replace(/ذ/g, "د");
-  s = s.replace(/ت/g, "ب");
-  s = s.replace(/ث/g, "ب");
-  s = s.replace(/ش/g, "س");
-  s = s.replace(/ز/g, "ر");
-  s = s.replace(/ض/g, "ص");
-  s = s.replace(/غ/g, "ع");
-  s = s.replace(/ظ/g, "ص");
-  s = s.replace(/ن/g, "ب");
-
-  // 3. Delete 'ه' at the end of a word
-  s = s.replace(/ه\b/g, "");
-
-  // 2. Delete specific characters
-  s = s.replace(/[يىئؤوءاأإآة]/g, "");
-  
-  // Re-trim whitespace that might appear after deletions
-  s = s.replace(/\s+/g, " ").trim();
-
-  return s;
+  return s.toLowerCase();
 }
-function tokens(s:any){ const n = s || ""; if(!n) return []; return n.split(" ").filter(Boolean); }
+function tokens(s:any){ const n = normalizeArabic(s || ""); if(!n) return []; return n.split(" ").filter(Boolean); }
 function digitsOnly(s:any){ if(!s) return ""; return String(s).replace(/\D/g,""); }
 function normalizeChildrenField(val:any){
   if(!val) return [];
@@ -235,9 +212,16 @@ export function computePairScore(aRaw:any,bRaw:any, opts:any){
     children_normalized: normalizeChildrenField(bRaw.children||"").map(normalizeArabic)
   };
   
-  const nameJW = jaroWinkler(a.womanName_normalized, b.womanName_normalized);
-  const namePerm = nameOrderFreeScore(a.womanName_normalized, b.womanName_normalized);
-  const nameScore = Math.max(nameJW, namePerm);
+  const wTokensA = tokens(a.womanName_normalized);
+  const wTokensB = tokens(b.womanName_normalized);
+  const firstNameA = wTokensA[0] || "";
+  const firstNameB = wTokensB[0] || "";
+  const familyNameA = wTokensA.slice(1).join(" ");
+  const familyNameB = wTokensB.slice(1).join(" ");
+
+  const firstNameScore = jaroWinkler(firstNameA, firstNameB);
+  const familyNameScore = jaroWinkler(familyNameA, familyNameB);
+  const tokenReorderScore = nameOrderFreeScore(a.womanName_normalized, b.womanName_normalized);
 
   const husbandJW = jaroWinkler(a.husbandName_normalized, b.husbandName_normalized);
   const husbandPerm = nameOrderFreeScore(a.husbandName_normalized, b.husbandName_normalized);
@@ -254,7 +238,9 @@ export function computePairScore(aRaw:any,bRaw:any, opts:any){
   locationScore = Math.min(0.5, locationScore);
   
   const breakdown = {
-    nameScore,
+    firstNameScore,
+    familyNameScore,
+    tokenReorderScore,
     husbandScore,
     idScore,
     phoneScore: phoneScoreVal,
@@ -273,7 +259,9 @@ export function computePairScore(aRaw:any,bRaw:any, opts:any){
   }
   
   let score = 0;
-  score += (FSW.nameScore ?? 0) * nameScore;
+  score += (FSW.firstNameScore ?? 0) * firstNameScore;
+  score += (FSW.familyNameScore ?? 0) * familyNameScore;
+  score += (FSW.tokenReorderScore ?? 0) * tokenReorderScore;
   score += (FSW.husbandScore ?? 0) * husbandScore;
   score += (FSW.idScore ?? 0) * idScore;
   score += (FSW.phoneScore ?? 0) * phoneScoreVal;

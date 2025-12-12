@@ -10,40 +10,20 @@ declare const postMessage: any;
 /* -------------------------
    Utilities & Normalizers
    ------------------------- */
-function normalizeArabic(text:any){
-  if(!text) return "";
-  let s = String(text);
-
-  // 1. Normalize space
+function normalizeArabic(s: string): string {
+  if (!s) return "";
+  s = s.normalize("NFKC");
+  s = s.replace(/[ًٌٍََُِّْـ]/g, "");
+  s = s.replace(/[أإآ]/g, "ا");
+  s = s.replace(/ى/g, "ي");
+  s = s.replace(/ؤ/g, "و");
+  s = s.replace(/ئ/g, "ي");
+  s = s.replace(/ة/g, "ه");
+  s = s.replace(/[^ء-ي0-9 ]/g, " ");
   s = s.replace(/\s+/g, " ").trim();
-  
-  // 4. Delete diacritics
-  s = s.replace(/[\u064B-\u0652]/g, ""); // Tashkeel
-
-  // 5-17. Character replacements
-  s = s.replace(/ط/g, "د");
-  s = s.replace(/ق/g, "ف");
-  s = s.replace(/ج/g, "ح");
-  s = s.replace(/خ/g, "ح");
-  s = s.replace(/ذ/g, "د");
-  s = s.replace(/[تثن]/g, "ب");
-  s = s.replace(/ش/g, "س");
-  s = s.replace(/ز/g, "ر");
-  s = s.replace(/[ضظ]/g, "ص");
-  s = s.replace(/غ/g, "ع");
-
-  // 3. Delete 'ه' at the end of a word
-  s = s.replace(/ه\b/g, "");
-
-  // 2. Delete specific characters
-  s = s.replace(/[يىئؤوءاأإآة]/g, "");
-  
-  // Re-trim whitespace that might appear after deletions
-  s = s.replace(/\s+/g, " ").trim();
-
-  return s;
+  return s.toLowerCase();
 }
-function tokens(s:any){ const n = s || ""; if(!n) return []; return n.split(" ").filter(Boolean); }
+function tokens(s:any){ const n = normalizeArabic(s || ""); if(!n) return []; return n.split(" ").filter(Boolean); }
 function digitsOnly(s:any){ if(!s) return ""; return String(s).replace(/\D/g,""); }
 function normalizeChildrenField(val:any){
   if(!val) return [];
@@ -314,7 +294,7 @@ function buildBlocks(rows:any[], opts:any){
     const idLast4 = idDigits.length >= 4 ? idDigits.slice(-4) : null;
     const phoneLast4 = phoneDigits.length >= 4 ? phoneDigits.slice(-4) : null;
     
-    // Rule 1: Composite key
+    // Composite Key
     if (womanFirst3 && husbandFirst3 && phoneLast4 && childrenTokens.length > 0) {
         childrenTokens.forEach((childToken:string) => {
             const childFirst4 = childToken ? childToken.slice(0, 4) : null;
@@ -324,16 +304,16 @@ function buildBlocks(rows:any[], opts:any){
         });
     }
 
-    // Rule 2: Woman's name + phone
+    // Woman's name + phone
     if(womanFirst3 && phoneLast4) keys.add(`wp:${womanFirst3}:${phoneLast4}`);
 
-    // Rule 3: Woman's name + national ID
+    // Woman's name + national ID
     if(womanFirst3 && idLast4) keys.add(`wi:${womanFirst3}:${idLast4}`);
     
-    // Rule 4: Woman's name
+    // Woman's name
     if(womanFirst3) keys.add(`w:${womanFirst3}`);
 
-    // Rule 5: Woman's name + child's name
+    // Woman's name + child's name
     if(womanFirst3 && childrenTokens.length > 0) {
       childrenTokens.forEach((childToken:string) => {
         const childFirst4 = childToken ? childToken.slice(0, 4) : null;
@@ -343,10 +323,10 @@ function buildBlocks(rows:any[], opts:any){
       });
     }
 
-    // Rule 6: Husband's name
+    // Husband's name
     if(husbandFirst3) keys.add(`h:${husbandFirst3}`);
 
-    // Rule 7: Woman's name + Husband's name
+    // Woman's name + Husband's name
     if(womanFirst3 && husbandFirst3) keys.add(`wh:${womanFirst3}:${husbandFirst3}`);
 
 
