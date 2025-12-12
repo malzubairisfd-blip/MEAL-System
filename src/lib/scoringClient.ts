@@ -18,7 +18,10 @@ type Settings = any;
 function normalizeArabic(s: string): string {
   if (!s) return "";
   s = s.normalize("NFKC");
-  s = s.replace(/[ًٌٍََُِّْـ]/g, "");
+  s = s.replace(/يحيي/g, "يحي");
+  s = s.replace(/يحيى/g, "يحي");
+  s = s.replace(/عبد /g, "عبد");
+  s = s.replace(/[ًٌٍََُِّْـء]/g, "");
   s = s.replace(/[أإآ]/g, "ا");
   s = s.replace(/ى/g, "ي");
   s = s.replace(/ؤ/g, "و");
@@ -117,51 +120,104 @@ function splitParts(name:string) {
 }
 
 function applyAdditionalRules(a:any, b:any, jw:any, minPair:any) {
-  const wA_norm = a.womanName_normalized || "";
-  const wB_norm = b.womanName_normalized || "";
-  const hA_norm = a.husbandName_normalized || "";
-  const hB_norm = b.husbandName_normalized || "";
 
-  const WA = splitParts(wA_norm);
-  const WB = splitParts(wB_norm);
-  const HA = splitParts(hA_norm);
-  const HB = splitParts(hB_norm);
+  const A = splitParts(a.womanName_normalized);
+  const B = splitParts(b.womanName_normalized);
 
-  const [F1, Fa1, G1, L1] = WA;
-  const [F2, Fa2, G2, L2] = WB;
-  const [HF1, HFa1, HG1, HL1] = HA;
-  const [HF2, HFa2, HG2, HL2] = HB;
+  const HA = splitParts(a.husbandName_normalized);
+  const HB = splitParts(b.husbandName_normalized);
 
-  const sc = (x:string, y:string) => jw(x || "", y || "");
-  const s90 = (x:string, y:string) => sc(x, y) >= 0.90;
-  const s93 = (x:string, y:string) => sc(x, y) >= 0.93;
-  const s95 = (x:string, y:string) => sc(x, y) >= 0.95;
+  const sc = (x:string,y:string) => jw(x||"", y||"");
+  const s90 = (x:string,y:string) => sc(x,y) >= 0.90;
+  const s93 = (x:string,y:string) => sc(x,y) >= 0.93;
+  const s95 = (x:string,y:string) => sc(x,y) >= 0.95;
 
-  // Rule 1
-  if (s93(F1, F2) && s93(Fa1, Fa2) && s93(G1, G2) && sc(HF1, HF2) < 0.60) {
-    return minPair + 0.1;
+  /* ----------------------------------------------------
+     RULE 0 — STRONG TOKEN MATCH (NEW, MAIN FIX)
+     If 80–100% tokens match between both names → DUPLICATE
+     ---------------------------------------------------- */
+  {
+    const setA = new Set(A);
+    const setB = new Set(B);
+
+    let inter = 0;
+    for (const t of setA) if (setB.has(t)) inter++;
+
+    const union = new Set([...setA, ...setB]).size;
+    const ratio = union === 0 ? 0 : inter / union;
+
+    if (ratio >= 0.80) {  
+      return minPair + 0.20; // FORCE DUPLICATE
+    }
   }
 
-  // Rule 2
-  if (s93(F1, F2) && s93(HF1, HF2) && s93(HFa1, HFa2)) {
-    return minPair + 0.12;
+  /* ----------------------------------------------------
+     RULE 1 — EXACT 3-part match (first + father + grandfather)
+     ---------------------------------------------------- */
+  if (
+    A.length >= 3 && B.length >= 3 &&
+    s93(A[0], B[0]) &&
+    s93(A[1], B[1]) &&
+    s93(A[2], B[2])
+  ) {
+    return minPair + 0.18;
   }
 
-  // Rule 3
-  if (s93(F1, F2) && s93(Fa1, Fa2) && s93(G1, G2) && s90(L1, L2) && sc(HF1, HF2) < 0.60) {
-    return minPair + 0.14;
+  /* ----------------------------------------------------
+     RULE 2 — 4 vs 5 part names, extension ignored
+     Example: محمد العمراني ≈ محمد
+     ---------------------------------------------------- */
+  if (
+    (A.length === 4 && B.length === 5) ||
+    (A.length === 5 && B.length === 4)
+  ) {
+    const minLen = Math.min(A.length, B.length);
+
+    let strongMatches = 0;
+    for (let i = 0; i < minLen; i++) {
+      if (s93(A[i], B[i])) strongMatches++;
+    }
+
+    // 80%+ of parts match
+    if (strongMatches >= minLen - 1) {
+      return minPair + 0.17;
+    }
   }
 
-  // Rule 4
-  if (s93(HF1, HF2) && s93(HFa1, HFa2) && s93(HG1, HG2) && sc(F1, F2) < 0.60) {
-    return minPair + 0.15;
-  }
-  
-  // Rule 5
-  if (s93(F1, F2) && s93(Fa1, Fa2) && s95(HF1, HF2) && s95(HFa1, HFa2) && s93(HL1, HL2)) {
+  /* ----------------------------------------------------
+     RULE 3 — Very high similarity in all four key parts
+     ---------------------------------------------------- */
+  if (
+    A.length >= 4 && B.length >= 4 &&
+    s93(A[0], B[0]) &&
+    s93(A[1], B[1]) &&
+    s93(A[2], B[2]) &&
+    s93(A[3], B[3])
+  ) {
     return minPair + 0.16;
   }
 
+  /* ----------------------------------------------------
+     RULE 4 — Husband names also match strongly
+     ---------------------------------------------------- */
+  if (
+    HA.length > 0 && HB.length > 0 &&
+    s93(HA[0], HB[0]) &&
+    (HA[1] && HB[1] ? s93(HA[1], HB[1]) : true)
+  ) {
+    // combine with woman-name similarity
+    const womanJacc = nameOrderFreeScore(a.womanName_normalized, b.womanName_normalized);
+    if (womanJacc >= 0.80) {
+      return minPair + 0.15;
+    }
+  }
+
+  /* ----------------------------------------------------
+     RULE 5 — fallback: first-name high similarity
+     ---------------------------------------------------- */
+  if (A.length > 0 && B.length > 0 && s93(A[0], B[0])) {
+    return minPair + 0.14;
+  }
 
   return null;
 }

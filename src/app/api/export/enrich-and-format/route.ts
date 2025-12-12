@@ -28,7 +28,10 @@ type EnrichedRecord = RecordRow & {
 function normalizeArabic(s: string): string {
   if (!s) return "";
   s = s.normalize("NFKC");
-  s = s.replace(/[ًٌٍََُِّْـ]/g, "");
+  s = s.replace(/يحيي/g, "يحي");
+  s = s.replace(/يحيى/g, "يحي");
+  s = s.replace(/عبد /g, "عبد");
+  s = s.replace(/[ًٌٍََُِّْـء]/g, "");
   s = s.replace(/[أإآ]/g, "ا");
   s = s.replace(/ى/g, "ي");
   s = s.replace(/ؤ/g, "و");
@@ -166,7 +169,7 @@ function sortData(data: EnrichedRecord[]): EnrichedRecord[] {
             return clusterA - clusterB; // Then by Cluster_ID ascending
         }
         
-        return (a.beneficiaryId || "").localeCompare(b.beneficiaryId || "");
+        return (String(a.beneficiaryId) || "").localeCompare(String(b.beneficiaryId) || "");
     });
 }
 
