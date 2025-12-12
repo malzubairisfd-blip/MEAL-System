@@ -351,27 +351,27 @@ function buildBlocks(rows, opts){
 
         // Key 1: Full Composite Key
         if (womanFirst3 && husbandFirst3 && phoneLast4 && idLast4) {
-            keys.add(\`full:\${womanFirst3}:\${husbandFirst3}:\${phoneLast4}:\${idLast4}\`);
+            keys.add('full:' + womanFirst3 + ':' + husbandFirst3 + ':' + phoneLast4 + ':' + idLast4);
         }
         
         // Key 2: Woman's Name + Husband's Name
         if (womanFirst3 && husbandFirst3) {
-            keys.add(\`wh:\${womanFirst3}:\${husbandFirst3}\`);
+            keys.add('wh:' + womanFirst3 + ':' + husbandFirst3);
         }
 
         // Key 3: Woman's Name + Phone
         if (womanFirst3 && phoneLast4) {
-            keys.add(\`wp:\${womanFirst3}:\${phoneLast4}\`);
+            keys.add('wp:' + womanFirst3 + ':' + phoneLast4);
         }
 
         // Key 4: Woman's Name + ID
         if (womanFirst3 && idLast4) {
-            keys.add(\`wi:\${womanFirst3}:\${idLast4}\`);
+            keys.add('wi:' + womanFirst3 + ':' + idLast4);
         }
         
         // Key 5: Fallback to just woman's name
         if (womanFirst3) {
-            keys.add(\`w:\${womanFirst3}\`);
+            keys.add('w:' + womanFirst3);
         }
 
         if (keys.size === 0) keys.add("blk:all");
