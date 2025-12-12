@@ -366,6 +366,7 @@ function createClustersSheet(wb: ExcelJS.Workbook, clusters: RecordRow[][]) {
         recordsForSheet.forEach((record, recordIndex) => {
              const pair = pairs.find(p => p.a._internalId === record._internalId || p.b._internalId === record._internalId);
              const score = pair ? pair.score.toFixed(4) : '';
+             const childrenText = Array.isArray(record.children) ? record.children.join(', ') : record.children || '';
              ws.addRow({
                 BeneficiaryID: record.beneficiaryId,
                 Score: score,
@@ -373,7 +374,7 @@ function createClustersSheet(wb: ExcelJS.Workbook, clusters: RecordRow[][]) {
                 HusbandName: record.husbandName,
                 NationalID: record.nationalId,
                 Phone: record.phone,
-                Children: (record.children || []).join(', ')
+                Children: childrenText
             });
         });
         

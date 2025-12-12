@@ -29,8 +29,10 @@ function normalizeArabicRaw(s) {
   if (!s) return "";
   try { s = String(s); } catch { s = "";}
   s = s.normalize("NFKC");
-  // basic Arabic normalization and common equivalences
-  s = s.replace(/[ًٌٍَُِْـ]/g, ""); // diacritics
+  s = s.replace(/يحيي/g, "يحي");
+  s = s.replace(/يحيى/g, "يحي");
+  s = s.replace(/عبد /g, "عبد");
+  s = s.replace(/[ًٌٍََُِّْـء]/g, "");
   s = s.replace(/[أإآ]/g, "ا");
   s = s.replace(/ى/g, "ي");
   s = s.replace(/ؤ/g, "و");
@@ -381,12 +383,12 @@ function buildBlocks(rows, opts) {
     const village = (r.village_normalized || "").slice(0, 6);
 
     const keys = new Set();
-    if (wFirst && hFirst && idLast4 && phoneLast4) keys.add('full:' + wFirst + ':' + hFirst + ':' + idLast4 + ':' + phoneLast4);
-    if (wFirst && phoneLast4) keys.add('wp:' + wFirst + ':' + phoneLast4);
-    if (wFirst && idLast4) keys.add('wi:' + wFirst + ':' + idLast4);
-    if (wFirst && hFirst) keys.add('wh:' + wFirst + ':' + hFirst);
-    if (wFirst) keys.add('w:' + wFirst);
-    if (village) keys.add('v:' + village);
+    if (wFirst && hFirst && idLast4 && phoneLast4) keys.add("full:" + wFirst + ":" + hFirst + ":" + idLast4 + ":" + phoneLast4);
+    if (wFirst && phoneLast4) keys.add("wp:" + wFirst + ":" + phoneLast4);
+    if (wFirst && idLast4) keys.add("wi:" + wFirst + ":" + idLast4);
+    if (wFirst && hFirst) keys.add("wh:" + wFirst + ":" + hFirst);
+    if (wFirst) keys.add("w:" + wFirst);
+    if (village) keys.add("v:" + village);
     if (keys.size === 0) keys.add("blk:all");
 
     for (const k of keys) {
@@ -428,10 +430,13 @@ function buildEdges(rows, minScore = 0.62, opts) {
     } else {
       pushEdgesForList(block, rows, minScore, seen, edges, opts);
     }
-    if (bi % 25 === 0 || bi === blocks.length - 1) {
+    if (bi % 20 === 0 || bi === blocks.length - 1) {
       const pct = Math.round(10 + 40 * (bi / Math.max(1, blocks.length)));
       postMessage({ type: "progress", status: "building-edges", progress: pct, completed: bi + 1, total: blocks.length });
     }
+  }
+  if (blocks.length > 0) {
+    postMessage({ type: "progress", status: "building-edges", progress: 50, completed: blocks.length, total: blocks.length });
   }
   edges.sort((x, y) => y.score - x.score);
   return edges;
@@ -591,30 +596,32 @@ let mapping = {};
 let options = {};
 
 function mapIncomingRowsToInternal(rowsChunk, mapping) {
-  return rowsChunk.map((orig, idx) => {
-    const mapped = Object.assign({}, orig);
-    // apply mapping keys if provided (mapping maps desired field -> column name)
-    for (const k in mapping) {
-      const col = mapping[k];
-      if (col && orig[col] !== undefined) mapped[k] = orig[col];
-    }
-    // ensure fields exist
-    mapped.womanName = mapped.womanName || mapped.woman || "";
-    mapped.husbandName = mapped.husbandName || mapped.husband || "";
-    mapped.nationalId = mapped.nationalId || mapped.id || "";
-    mapped.phone = mapped.phone || "";
-    mapped.village = mapped.village || "";
-    mapped.subdistrict = mapped.subdistrict || "";
-    mapped.children = mapped.children || [];
-    // normalized versions
-    mapped.womanName_normalized = normalizeArabicRaw(mapped.womanName);
-    mapped.husbandName_normalized = normalizeArabicRaw(mapped.husbandName);
-    mapped.village_normalized = normalizeArabicRaw(mapped.village);
-    mapped.subdistrict_normalized = normalizeArabicRaw(mapped.subdistrict);
-    mapped.children_normalized = (Array.isArray(mapped.children) ? mapped.children : normalizeChildrenField(mapped.children)).map(normalizeArabicRaw);
-    mapped._internalId = mapped._internalId || "row_" + (inbound.length + idx);
-    return mapped;
-  });
+  return rowsChunk.map((originalRecord, i) => {
+        const mapped = {
+            ...originalRecord,
+            _internalId: "row_" + (inbound.length + i),
+            womanName: "", husbandName: "", nationalId: "", phone: "", village: "", subdistrict: "", children: [],
+            cluster_id: ""
+        };
+
+        for (const key in mapping) {
+            const col = mapping[key];
+            if (col && originalRecord[col] !== undefined) {
+                mapped[key] = originalRecord[col];
+            }
+        }
+        
+        mapped.children = normalizeChildrenField(mapped.children);
+        
+        // Add normalized fields, which will be stored and used
+        mapped.womanName_normalized = normalizeArabicRaw(mapped.womanName);
+        mapped.husbandName_normalized = normalizeArabicRaw(mapped.husbandName);
+        mapped.village_normalized = normalizeArabicRaw(mapped.village);
+        mapped.subdistrict_normalized = normalizeArabicRaw(mapped.subdistrict);
+        mapped.children_normalized = mapped.children.map(normalizeArabicRaw);
+
+        return mapped;
+    });
 }
 
 self.addEventListener('message', function (ev) {

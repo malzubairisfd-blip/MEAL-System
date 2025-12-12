@@ -54,6 +54,13 @@ export function PairwiseModal({ cluster, isOpen, onClose }: PairwiseModalProps) 
       setLoading(false);
     }
   }
+  
+  const getChildrenText = (record: RecordRow) => {
+    if (Array.isArray(record.children)) {
+      return record.children.join(', ');
+    }
+    return record.children || '';
+  }
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -93,7 +100,7 @@ export function PairwiseModal({ cluster, isOpen, onClose }: PairwiseModalProps) 
                               <p className="text-sm"><strong>ID:</strong> {p.a.nationalId}</p>
                               <p className="text-sm"><strong>Phone:</strong> {p.a.phone}</p>
                               <p className="text-sm"><strong>Village:</strong> {p.a.village}</p>
-                              <p className="text-sm"><strong>Children:</strong> {(p.a.children || []).join(', ')}</p>
+                              <p className="text-sm"><strong>Children:</strong> {getChildrenText(p.a)}</p>
                           </div>
                           <div>
                               <h4 className="font-semibold mb-2">Record B</h4>
@@ -101,7 +108,7 @@ export function PairwiseModal({ cluster, isOpen, onClose }: PairwiseModalProps) 
                               <p className="text-sm"><strong>ID:</strong> {p.b.nationalId}</p>
                               <p className="text-sm"><strong>Phone:</strong> {p.b.phone}</p>
                               <p className="text-sm"><strong>Village:</strong> {p.b.village}</p>
-                              <p className="text-sm"><strong>Children:</strong> {(p.b.children || []).join(', ')}</p>
+                              <p className="text-sm"><strong>Children:</strong> {getChildrenText(p.b)}</p>
                           </div>
                       </div>
                     <h4 className="font-semibold mt-4 mb-2">Score Breakdown</h4>

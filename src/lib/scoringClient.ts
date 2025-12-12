@@ -12,8 +12,10 @@ function normalizeArabicRaw(s) {
   if (!s) return "";
   try { s = String(s); } catch { s = "";}
   s = s.normalize("NFKC");
-  // basic Arabic normalization and common equivalences
-  s = s.replace(/[ًٌٍَُِْـ]/g, ""); // diacritics
+  s = s.replace(/يحيي/g, "يحي");
+  s = s.replace(/يحيى/g, "يحي");
+  s = s.replace(/عبد /g, "عبد");
+  s = s.replace(/[ًٌٍََُِّْـء]/g, "");
   s = s.replace(/[أإآ]/g, "ا");
   s = s.replace(/ى/g, "ي");
   s = s.replace(/ؤ/g, "و");

@@ -171,18 +171,21 @@ function createClustersSheet(wb: ExcelJS.Workbook, clusters: RecordRow[][], aiSu
 
         if (pairs.length > 0) {
              pairs.forEach(pair => {
+                const childrenA = Array.isArray(pair.a.children) ? pair.a.children.join(', ') : (pair.a.children || '');
+                const childrenB = Array.isArray(pair.b.children) ? pair.b.children.join(', ') : (pair.b.children || '');
                 ws.addRow({
                     'الدرجة': pair.score.toFixed(4),
-                    'اسمالمرأة': pair.a.womanName, 'اسمالزوج': pair.a.husbandName, 'الرقمالقومي': pair.a.nationalId, 'الهاتف': pair.a.phone, 'الأطفال': (pair.a.children || []).join(', '),
+                    'اسمالمرأة': pair.a.womanName, 'اسمالزوج': pair.a.husbandName, 'الرقمالقومي': pair.a.nationalId, 'الهاتف': pair.a.phone, 'الأطفال': childrenA,
                 });
                  ws.addRow({
-                    'اسمالمرأة': pair.b.womanName, 'اسمالزوج': pair.b.husbandName, 'الرقمالقومي': pair.b.nationalId, 'الهاتف': pair.b.phone, 'الأطفال': (pair.b.children || []).join(', '),
+                    'اسمالمرأة': pair.b.womanName, 'اسمالزوج': pair.b.husbandName, 'الرقمالقومي': pair.b.nationalId, 'الهاتف': pair.b.phone, 'الأطفال': childrenB,
                 });
             });
         } else {
             cluster.forEach(record => {
+                 const childrenText = Array.isArray(record.children) ? record.children.join(', ') : (record.children || '');
                  ws.addRow({
-                    'اسمالمرأة': record.womanName, 'اسمالزوج': record.husbandName, 'الرقمالقومي': record.nationalId, 'الهاتف': record.phone, 'الأطفال': (record.children || []).join(', '),
+                    'اسمالمرأة': record.womanName, 'اسمالزوج': record.husbandName, 'الرقمالقومي': record.nationalId, 'الهاتف': record.phone, 'الأطفال': childrenText,
                 });
             });
         }

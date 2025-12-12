@@ -1,3 +1,4 @@
+
 // lib/fuzzyCluster.ts
 
 // This file is now deprecated for client-side clustering.
@@ -11,7 +12,7 @@ export type RecordRow = {
   phone?: string;
   womanName?: string;
   husbandName?: string;
-  children?: string[];
+  children?: string[] | string;
   village?: string;
   subdistrict?: string;
   womanName_normalized?: string;
@@ -29,8 +30,10 @@ function normalizeArabicRaw(s?: string): string {
   if (!s) return "";
   try { s = String(s); } catch { s = "";}
   s = s.normalize("NFKC");
-  // basic Arabic normalization and common equivalences
-  s = s.replace(/[ًٌٍَُِْـ]/g, ""); // diacritics
+  s = s.replace(/يحيي/g, "يحي");
+  s = s.replace(/يحيى/g, "يحي");
+  s = s.replace(/عبد /g, "عبد");
+  s = s.replace(/[ًٌٍََُِّْـء]/g, "");
   s = s.replace(/[أإآ]/g, "ا");
   s = s.replace(/ى/g, "ي");
   s = s.replace(/ؤ/g, "و");
