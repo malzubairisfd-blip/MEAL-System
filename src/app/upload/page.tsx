@@ -30,21 +30,34 @@ function normalizeArabic(text){
   if(!text) return "";
   let s = String(text);
 
-  // Character replacements
+  // 1. Normalize space
+  s = s.replace(/\\s+/g, " ").trim();
+  
+  // 4. Delete diacritics
+  s = s.replace(/[\\u064B-\\u0652]/g, ""); // Tashkeel
+
+  // 5-17. Character replacements
   s = s.replace(/ط/g, "د");
   s = s.replace(/ق/g, "ف");
-  s = s.replace(/[جخ]/g, "ح");
+  s = s.replace(/ج/g, "ح");
+  s = s.replace(/خ/g, "ح");
   s = s.replace(/ذ/g, "د");
-  s = s.replace(/[تثن]/g, "ب");
+  s = s.replace(/ت/g, "ب");
+  s = s.replace(/ث/g, "ب");
   s = s.replace(/ش/g, "س");
   s = s.replace(/ز/g, "ر");
-  s = s.replace(/[ضظ]/g, "ص");
+  s = s.replace(/ض/g, "ص");
   s = s.replace(/غ/g, "ع");
-  
-  // Character deletions
-  s = s.replace(/[يىئوؤءاأإآةه]/g, "");
+  s = s.replace(/ظ/g, "ص");
+  s = s.replace(/ن/g, "ب");
 
-  // Normalize whitespace
+  // 3. Delete 'ه' at the end of a word
+  s = s.replace(/ه\\b/g, "");
+
+  // 2. Delete specific characters
+  s = s.replace(/[يىئؤوءاأإآة]/g, "");
+  
+  // Re-trim whitespace that might appear after deletions
   s = s.replace(/\\s+/g, " ").trim();
 
   return s;
@@ -164,7 +177,7 @@ function applyAdditionalRules(a, b, jw, minPair) {
   }
 
   // Rule 2
-  if (s93(F1, F2) && s93(HF1, HF2) && s93(HFa1, HFa2) && s93(HG1, HG2)) {
+  if (s93(F1, F2) && s93(HF1, HF2) && s93(HFa1, HFa2)) {
     return minPair + 0.12;
   }
 
@@ -183,6 +196,7 @@ function applyAdditionalRules(a, b, jw, minPair) {
     return minPair + 0.16;
   }
 
+
   return null;
 }
 
@@ -192,15 +206,12 @@ function applyAdditionalRules(a, b, jw, minPair) {
 function pairwiseScore(a,b, opts){
   const optsDefaults = {
     finalScoreWeights: {
-      firstNameScore: 0.15,
-      familyNameScore: 0.25,
-      advancedNameScore: 0.12,
-      tokenReorderScore: 0.10,
-      husbandScore: 0.12,
-      idScore: 0.08,
-      phoneScore: 0.05,
-      childrenScore: 0.04,
-      locationScore: 0.04
+        nameScore: 0.40,
+        husbandScore: 0.25,
+        idScore: 0.15,
+        phoneScore: 0.10,
+        locationScore: 0.05,
+        childrenScore: 0.05
     },
     rules: {
       enableNameRootEngine: true,
@@ -239,24 +250,13 @@ function pairwiseScore(a,b, opts){
   };
   
   // Calculate all individual field scores first
-  const firstA = tokens(a_norm.womanName_normalized)[0]||"";
-  const firstB = tokens(b_norm.womanName_normalized)[0]||"";
-  const familyA = tokens(a_norm.womanName_normalized).slice(1).join(" ");
-  const familyB = tokens(b_norm.womanName_normalized).slice(1).join(" ");
-
-  const firstNameScore = jaroWinkler(firstA, firstB);
-  const familyNameScore = jaroWinkler(familyA, familyB);
-  const tokenReorderScore = nameOrderFreeScore(a_norm.womanName_normalized, b_norm.womanName_normalized);
-
-  const rootA = reduceNameRoot(a_norm.womanName_normalized), rootB = reduceNameRoot(b_norm.womanName_normalized);
-  let advancedNameScore = 0;
-  if(rootA && rootB && rootA === rootB) advancedNameScore += 0.35;
-  if(rootA && rootB && (rootA.startsWith(rootB) || rootB.startsWith(rootA))) advancedNameScore += 0.2;
-  advancedNameScore = Math.min(0.4, advancedNameScore);
+  const nameJW = jaroWinkler(a_norm.womanName_normalized, b_norm.womanName_normalized);
+  const namePerm = nameOrderFreeScore(a_norm.womanName_normalized, b_norm.womanName_normalized);
+  const nameScore = Math.max(nameJW, namePerm);
 
   const husbandJW = jaroWinkler(a_norm.husbandName_normalized, b_norm.husbandName_normalized);
-  const husbandToken = tokenJaccard(tokens(a_norm.husbandName_normalized), tokens(b_norm.husbandName_normalized));
-  const husbandScore = Math.max(husbandJW, husbandToken);
+  const husbandPerm = nameOrderFreeScore(a_norm.husbandName_normalized, b_norm.husbandName_normalized);
+  const husbandScore = Math.max(husbandJW, husbandPerm);
 
   const phoneScoreVal = (a_norm.phone && b_norm.phone) ? (a_norm.phone===b_norm.phone ? 1 : (a_norm.phone.slice(-6)===b_norm.phone.slice(-6) ? 0.85 : (a_norm.phone.slice(-4)===b_norm.phone.slice(-4) ? 0.6 : 0))) : 0;
   const idScore = (a_norm.nationalId && b_norm.nationalId) ? (a_norm.nationalId===b_norm.nationalId ? 1 : (a_norm.nationalId.slice(-5)===b_norm.nationalId.slice(-5) ? 0.75 : 0)) : 0;
@@ -268,49 +268,13 @@ function pairwiseScore(a,b, opts){
   if(a_norm.subdistrict_normalized && b_norm.subdistrict_normalized && a_norm.subdistrict_normalized===b_norm.subdistrict_normalized) locationScore += 0.25;
   locationScore = Math.min(0.5, locationScore);
 
-  const aPat = extractPaternal(a_norm.womanName_normalized), bPat = extractPaternal(b_norm.womanName_normalized);
-  let patronymScore = 0;
-  if(aPat.father && bPat.father && aPat.father===bPat.father) patronymScore += 0.35;
-  if(aPat.grandfather && bPat.grandfather && aPat.grandfather===bPat.grandfather) patronymScore += 0.25;
-  patronymScore = Math.min(0.5, patronymScore);
-
-  const aMat = extractMaternal(a_norm.womanName_normalized), bMat = extractMaternal(b_norm.womanName_normalized);
-  let maternalScore = 0;
-  if(aMat.mother && bMat.mother && aMat.mother===bMat.mother) maternalScore += 0.18;
-  if(aMat.grandmother && bMat.grandmother && aMat.grandmother===bMat.grandmother) maternalScore += 0.12;
-  maternalScore = Math.min(0.3, maternalScore);
-
-  const tribalScore = (extractTribal(a_norm.womanName_normalized) && extractTribal(b_norm.womanName_normalized) && extractTribal(a_norm.womanName_normalized)===extractTribal(b_norm.womanName_normalized)) ? 0.4 : 0;
-
-  let sharedHusbandPatronym = 0;
-  const husbandSimilar = jaroWinkler(a_norm.husbandName_normalized,b_norm.husbandName_normalized) >= 0.92;
-  if(husbandSimilar){
-    if(aPat.father && bPat.father && aPat.father===bPat.father) sharedHusbandPatronym += 0.25;
-    if(aPat.grandfather && bPat.grandfather && aPat.grandfather===bPat.grandfather) sharedHusbandPatronym += 0.2;
-    if(sharedHusbandPatronym >= 0.4) sharedHusbandPatronym = 0.55;
-  }
-
-  const womanExact = (a_norm.womanName_normalized && b_norm.womanName_normalized && a_norm.womanName_normalized===b_norm.womanName_normalized);
-  const womanFuzzy = (firstNameScore + familyNameScore + advancedNameScore + tokenReorderScore) / 4;
-  const strongNameMatch = (womanExact || womanFuzzy >= 0.85 || tokenReorderScore >= 0.85);
-  const multiRegistrationFlag = strongNameMatch && (idScore < 0.5 && phoneScoreVal < 0.5 && husbandScore < 0.5) ? 1 : 0;
-  
   const breakdown = {
-    firstNameScore,
-    familyNameScore,
-    advancedNameScore,
-    tokenReorderScore,
+    nameScore,
     husbandScore,
     idScore,
     phoneScore: phoneScoreVal,
     childrenScore,
     locationScore,
-    patronymScore,
-    sharedHusbandPatronym,
-    tribalScore,
-    maternalScore,
-    multiRegistrationFlag,
-    strongNameMatch,
     additionalRuleTriggered: false
   };
 
@@ -325,20 +289,12 @@ function pairwiseScore(a,b, opts){
 
   // If no rule matched, calculate the final weighted score
   let score = 0;
-  score += (FSW.firstNameScore ?? 0) * firstNameScore;
-  score += (FSW.familyNameScore ?? 0) * familyNameScore;
-  score += (FSW.advancedNameScore ?? 0) * advancedNameScore;
-  score += (FSW.tokenReorderScore ?? 0) * tokenReorderScore;
+  score += (FSW.nameScore ?? 0) * nameScore;
   score += (FSW.husbandScore ?? 0) * husbandScore;
   score += (FSW.idScore ?? 0) * idScore;
   score += (FSW.phoneScore ?? 0) * phoneScoreVal;
   score += (FSW.childrenScore ?? 0) * childrenScore;
   score += (FSW.locationScore ?? 0) * locationScore;
-
-  if(o.rules.enableNameRootEngine) score += advancedNameScore * 0.12;
-  if(o.rules.enableTribalLineage) score += tribalScore * 1.0;
-  if(o.rules.enableMaternalLineage) score += maternalScore * 0.7;
-  if(o.rules.enablePolygamyRules) score += sharedHusbandPatronym * 1.2;
 
   score = Math.max(0, Math.min(1, score));
 
@@ -354,7 +310,7 @@ function buildBlocks(rows, opts){
     const r = rows[i];
     const womanNameTokens = tokens(r.womanName_normalized || "");
     const husbandNameTokens = tokens(r.husbandName_normalized || "");
-    const childrenTokens = (r.children_normalized || []).map(tokens);
+    const childrenTokens = (r.children_normalized || []).flatMap(c => tokens(c));
     const idDigits = digitsOnly(r.nationalId || "");
     const phoneDigits = digitsOnly(r.phone || "");
     const keys = new Set();
@@ -364,12 +320,13 @@ function buildBlocks(rows, opts){
     const idLast4 = idDigits.length >= 4 ? idDigits.slice(-4) : null;
     const phoneLast4 = phoneDigits.length >= 4 ? phoneDigits.slice(-4) : null;
     
+    // New sequence of keys
     if(womanFirst3 && phoneLast4) keys.add(\`wp:\${womanFirst3}:\${phoneLast4}\`);
     if(womanFirst3 && idLast4) keys.add(\`wi:\${womanFirst3}:\${idLast4}\`);
     if(womanFirst3 && childrenTokens.length > 0) {
-      childrenTokens.forEach(childNameTokens => {
-        if (childNameTokens[0]) {
-          const childFirst4 = childNameTokens[0].slice(0, 4);
+      childrenTokens.forEach(childToken => {
+        if (childToken) {
+          const childFirst4 = childToken.slice(0, 4);
           if (childFirst4) {
             keys.add(\`wc:\${womanFirst3}:\${childFirst4}\`);
           }

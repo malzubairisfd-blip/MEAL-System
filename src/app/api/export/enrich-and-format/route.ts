@@ -25,28 +25,41 @@ type EnrichedRecord = RecordRow & {
     [key: string]: any; // Allow any other properties from the original file
 };
 
-function normalizeArabic(s: string): string {
+function normalizeArabic(s: any): string {
   if (!s) return "";
   s = String(s);
+  
+  // 1. Normalize space
+  s = s.replace(/\s+/g, " ").trim();
+  
+  // 4. Delete diacritics
+  s = s.replace(/[\u064B-\u0652]/g, ""); // Tashkeel
 
-  // Character replacements
+  // 5-17. Character replacements
   s = s.replace(/ط/g, "د");
   s = s.replace(/ق/g, "ف");
-  s = s.replace(/[جخ]/g, "ح");
+  s = s.replace(/ج/g, "ح");
+  s = s.replace(/خ/g, "ح");
   s = s.replace(/ذ/g, "د");
-  s = s.replace(/[تثن]/g, "ب");
+  s = s.replace(/ت/g, "ب");
+  s = s.replace(/ث/g, "ب");
   s = s.replace(/ش/g, "س");
   s = s.replace(/ز/g, "ر");
-  s = s.replace(/[ضظ]/g, "ص");
+  s = s.replace(/ض/g, "ص");
   s = s.replace(/غ/g, "ع");
+  s = s.replace(/ظ/g, "ص");
+  s = s.replace(/ن/g, "ب");
 
-  // Character deletions
-  s = s.replace(/[يىئؤوءاأإآةه]/g, "");
+  // 3. Delete 'ه' at the end of a word
+  s = s.replace(/ه\b/g, "");
 
-  // Normalize whitespace
+  // 2. Delete specific characters
+  s = s.replace(/[يىئؤوءاأإآة]/g, "");
+
+  // Re-trim whitespace that might appear after deletions
   s = s.replace(/\s+/g, " ").trim();
 
-  return s.toLowerCase();
+  return s;
 }
 
 
