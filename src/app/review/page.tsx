@@ -102,47 +102,21 @@ export default function ReviewPage() {
         const res = await fetch('/api/ai/describe-cluster', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ cluster, clusterId }),
+            body: JSON.stringify({ cluster }),
         });
 
-        if (!res.ok || !res.body) {
-            const text = await res.text();
-            throw new Error(`Server error: ${res.status} ${res.statusText} - ${text}`);
+        if (!res.ok) {
+            const errorData = await res.json();
+            throw new Error(errorData.error || `Server error: ${res.status}`);
         }
 
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
+        const result = await res.json();
+        
+        setAiSummaries(prev => ({
+            ...prev,
+            [clusterId]: { ...prev[clusterId], summary: result.description, isLoading: false }
+        }));
 
-        while (true) {
-            const { value, done } = await reader.read();
-            if (done) break;
-
-            buffer += decoder.decode(value, { stream: true });
-            
-            const events = buffer.split("\n\n");
-            buffer = events.pop() || ""; // Keep the last partial event in the buffer
-
-            for (const event of events) {
-                if (!event.startsWith("data: ")) continue;
-                try {
-                    const jsonPayload = event.replace("data: ", "");
-                    if (jsonPayload.trim()) {
-                      const payload = JSON.parse(jsonPayload);
-                      if (payload.error) {
-                          throw new Error(payload.error);
-                      }
-                      setAiSummaries(prev => ({
-                          ...prev,
-                          [payload.clusterId]: { ...prev[payload.clusterId], summary: payload.summary, isLoading: false }
-                      }));
-                    }
-                } catch (err) {
-                    console.error("Invalid SSE payload", event);
-                    throw new Error("Failed to parse AI summary chunk.");
-                }
-            }
-        }
       } catch (e: any) {
           setAiSummaries(prev => ({ ...prev, [clusterId]: { ...prev[clusterId], error: e.message || "An unknown error occurred.", isLoading: false } }));
           toast({ title: "AI Summary Failed", description: e.message, variant: "destructive" });
