@@ -472,6 +472,7 @@ function buildBlocks(rows, opts) {
     if (wFirst && phoneLast4) keys.add("wp:" + wFirst + ":" + phoneLast4);
     if (wFirst && idLast4) keys.add("wi:" + wFirst + ":" + idLast4);
     if (wFirst && hFirst) keys.add("wh:" + wFirst + ":" + hFirst);
+    if (hFirst) keys.add("h:" + hFirst);
     if (wFirst) keys.add("w:" + wFirst);
     if (village) keys.add("v:" + village);
     if (keys.size === 0) keys.add("blk:all");
@@ -1062,4 +1063,5 @@ export default function UploadPage(){
     </div>
   );
 }
+
 
