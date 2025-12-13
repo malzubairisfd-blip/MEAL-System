@@ -56,10 +56,10 @@ ${JSON.stringify(cluster, null, 2)}
     return {
       description: text || 'لم يتمكن الذكاء الاصطناعي من إنشاء ملخص.',
     };
-  } catch (e) {
-    console.error('AI summary error:', e);
+  } catch (e: any) {
+    console.error('AI ERROR FULL:', e);
     return {
-      description: 'حدث خطأ أثناء توليد ملخص الذكاء الاصطناعي.',
+      description: `خطأ تقني: ${e?.message || 'غير معروف'}`,
     };
   }
 }

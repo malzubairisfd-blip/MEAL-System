@@ -1,6 +1,7 @@
 import { generateClusterDescription } from '@/ai/flows/describe-cluster-flow';
 import type { RecordRow } from '@/lib/types';
 
+export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
@@ -15,7 +16,7 @@ export async function POST(req: Request) {
 
     return Response.json(result);
 
-  } catch (e: any) {
+  } catch (e: any) |
     console.error(e);
     return Response.json(
       { error: 'AI service failure' },
