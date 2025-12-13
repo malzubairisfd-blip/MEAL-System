@@ -5,7 +5,7 @@ import React, { useState } from "react";
 import type { RecordRow } from "@/lib/types";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from "@/components/ui/sheet";
 import { Microscope, Sparkles, Loader2 } from "lucide-react";
 
 type Cluster = RecordRow[];
@@ -20,14 +20,10 @@ export function ClusterCard({ cluster, clusterNumber, onInspect }: ClusterCardPr
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [loadingSummary, setLoadingSummary] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isPanelOpen, setIsPanelOpen] = useState(false);
 
-  const generateSummary = async (event: React.MouseEvent) => {
-    // Stop propagation to prevent the accordion from toggling when we are just fetching data.
-    if (!aiSummary) {
-      event.preventDefault();
-    }
-    
-    if (loadingSummary || aiSummary) return;
+  const generateSummary = async () => {
+    if (loadingSummary) return;
 
     setLoadingSummary(true);
     setError(null);
@@ -49,51 +45,74 @@ export function ClusterCard({ cluster, clusterNumber, onInspect }: ClusterCardPr
       setLoadingSummary(false);
     }
   };
+  
+  const handleOpenPanel = () => {
+      setIsPanelOpen(true);
+      if (!aiSummary) {
+          generateSummary();
+      }
+  }
 
   return (
-    <Card className="flex flex-col hover:shadow-md transition-shadow">
-      <CardHeader>
-        <CardTitle>Cluster {clusterNumber}</CardTitle>
-        <CardDescription>{cluster.length} records</CardDescription>
-      </CardHeader>
-      <CardContent className="flex-1 space-y-4">
-        <div className="space-y-2 text-sm">
-          {cluster.map((r, i) => (
-            <p key={i} className="truncate" title={r.womanName}>
-              {r.womanName}
-            </p>
-          ))}
-        </div>
-        
-        <Accordion type="single" collapsible className="w-full">
-            <AccordionItem value="ai-summary">
-                 <AccordionTrigger
-                    onClick={generateSummary}
-                    disabled={loadingSummary}
-                    className="p-0 hover:no-underline -mb-1"
-                 >
-                    <div className="inline-flex items-center justify-start gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2 w-full text-left">
-                        {loadingSummary ? (
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        ) : (
-                            <Sparkles className="mr-2 h-4 w-4 text-purple-500" />
-                        )}
-                        {aiSummary ? "AI Summary Generated" : (loadingSummary ? "Generating..." : "Generate AI Summary")}
-                    </div>
-                </AccordionTrigger>
-                <AccordionContent className="pt-2 text-sm text-muted-foreground border-t mt-2">
-                    {aiSummary && <p className="whitespace-pre-wrap">{aiSummary}</p>}
-                    {error && <p className="text-destructive">{error}</p>}
-                </AccordionContent>
-            </AccordionItem>
-        </Accordion>
-      </CardContent>
-      <CardFooter className="flex flex-col sm:flex-row gap-2">
-        <Button variant="outline" className="w-full" onClick={onInspect}>
-          <Microscope className="mr-2 h-4 w-4" />
-          Inspect
-        </Button>
-      </CardFooter>
-    </Card>
+    <>
+      <Card className="flex flex-col hover:shadow-md transition-shadow">
+        <CardHeader>
+          <CardTitle>Cluster {clusterNumber}</CardTitle>
+          <CardDescription>{cluster.length} records</CardDescription>
+        </CardHeader>
+        <CardContent className="flex-1 space-y-4">
+          <div className="space-y-2 text-sm">
+            {cluster.map((r, i) => (
+              <p key={i} className="truncate" title={r.womanName}>
+                {r.womanName}
+              </p>
+            ))}
+          </div>
+        </CardContent>
+        <CardFooter className="flex flex-col sm:flex-row gap-2">
+          <Button variant="outline" className="w-full" onClick={onInspect}>
+            <Microscope className="mr-2 h-4 w-4" />
+            Inspect
+          </Button>
+          <Button variant="default" className="w-full" onClick={handleOpenPanel}>
+            <Sparkles className="mr-2 h-4 w-4 text-purple-300" />
+            AI Summary
+          </Button>
+        </CardFooter>
+      </Card>
+      
+      <Sheet open={isPanelOpen} onOpenChange={setIsPanelOpen}>
+          <SheetContent>
+              <SheetHeader>
+                  <SheetTitle>AI-Powered Summary for Cluster {clusterNumber}</SheetTitle>
+                  <SheetDescription>
+                      This summary is generated by AI to highlight key similarities and potential reasons for grouping these records.
+                  </SheetDescription>
+              </SheetHeader>
+              <div className="py-4">
+                  {loadingSummary && (
+                      <div className="flex items-center justify-center h-40">
+                          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                      </div>
+                  )}
+                  {error && (
+                      <div className="text-destructive p-4 bg-destructive/10 rounded-md">
+                          <h4 className="font-semibold">Error</h4>
+                          <p>{error}</p>
+                      </div>
+                  )}
+                  {aiSummary && (
+                      <div className="p-4 bg-muted/50 rounded-md text-sm whitespace-pre-wrap">
+                          {aiSummary}
+                      </div>
+                  )}
+              </div>
+              <SheetFooter>
+                 <Button variant="outline" onClick={() => setIsPanelOpen(false)}>Close</Button>
+              </SheetFooter>
+          </SheetContent>
+      </Sheet>
+    </>
   );
 }
+
