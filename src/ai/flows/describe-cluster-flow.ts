@@ -9,7 +9,6 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
 import type { RecordRow } from '@/lib/types';
-import { jsonStringify } from 'genkit/util';
 
 // Define the input schema for a single record, to be used in an array
 const RecordSchema = z.object({
@@ -67,15 +66,13 @@ export default async function generateClusterDescription(
 أجب باللغة العربية فقط.
 
 Here are the records:
-{{{jsonStringify cluster}}}
+${JSON.stringify(validatedCluster, null, 2)}
 `;
 
   try {
     const { text } = await ai.generate({
         model: 'googleai/gemini-1.5-flash-latest',
         prompt: promptTemplate,
-        promptParams: { cluster: validatedCluster },
-        helpers: { jsonStringify },
     });
 
     if (!text) {
