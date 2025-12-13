@@ -249,6 +249,64 @@ function applyAdditionalRules(a, b, opts) {
     }
   }
 
+  /* ============================================================
+     RULE — DOMINANT LINEAGE MATCH (WOMAN + HUSBAND)
+     Designed for Arabic multi-part shifting names
+     ============================================================ */
+  {
+    const minPair = opts?.thresholds?.minPair ?? 0.62;
+    const jw = jaroWinkler;
+
+    const A = splitParts(a.womanName_normalized || "");
+    const B = splitParts(b.womanName_normalized || "");
+
+    const HA = splitParts(a.husbandName_normalized || "");
+    const HB = splitParts(b.husbandName_normalized || "");
+
+    if (A.length >= 3 && B.length >= 3 && HA.length >= 3 && HB.length >= 3) {
+
+      /* ---------- WOMAN LINEAGE ---------- */
+      const womanFatherOK =
+        jw(A[1], B[1]) >= 0.93;
+
+      const womanGrandOK =
+        jw(A[2], B[2]) >= 0.93;
+
+      const womanFamilyOK =
+        jw(A[A.length - 1], B[B.length - 1]) >= 0.90;
+
+      const womanLineageStrong =
+        womanFatherOK && womanGrandOK && womanFamilyOK;
+
+      /* ---------- HUSBAND LINEAGE ---------- */
+      const husbandFatherOK =
+        jw(HA[1], HB[1]) >= 0.93;
+
+      const husbandGrandOK =
+        jw(HA[2], HB[2]) >= 0.93;
+
+      const husbandFamilyOK =
+        jw(HA[HA.length - 1], HB[HB.length - 1]) >= 0.90;
+
+      const husbandLineageStrong =
+        husbandFatherOK && husbandGrandOK && husbandFamilyOK;
+
+      /* ---------- SOFT FIRST NAME SUPPORT ---------- */
+      const womanFirstSupport =
+        jw(A[0], B[0]) >= 0.55 ||           // allows هدى / اهداء
+        jw(A[0], B[0]) === 0;               // allow total mismatch
+
+      /* ---------- FINAL DECISION ---------- */
+      if (
+        womanLineageStrong &&
+        husbandLineageStrong &&
+        womanFirstSupport
+      ) {
+        return Math.min(1, minPair + 0.23);
+      }
+    }
+  }
+
   return null;
 }
 
