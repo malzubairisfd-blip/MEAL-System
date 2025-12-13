@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState } from "react";
@@ -8,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from "@/components/ui/sheet";
 import { Microscope, Sparkles, Loader2 } from "lucide-react";
 import { calculateClusterConfidence } from "@/lib/clusterConfidence";
+import { useToast } from "@/hooks/use-toast";
+
 
 type Cluster = RecordRow[];
 
@@ -16,21 +17,51 @@ interface ClusterCardProps {
   clusterId: string;
   clusterNumber: number;
   onInspect: () => void;
-  onGenerateSummary: () => void;
-  aiSummary: string | null | undefined;
-  isSummaryLoading: boolean | undefined;
-  summaryError: string | null | undefined;
 }
 
-export function ClusterCard({ cluster, clusterId, clusterNumber, onInspect, onGenerateSummary, aiSummary, isSummaryLoading, summaryError }: ClusterCardProps) {
+export function ClusterCard({ cluster, clusterId, clusterNumber, onInspect }: ClusterCardProps) {
   const [isPanelOpen, setIsPanelOpen] = useState(false);
+  const [aiSummary, setAiSummary] = useState<string | null>(null);
+  const [isSummaryLoading, setIsSummaryLoading] = useState(false);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
+
   const confidence = calculateClusterConfidence(cluster);
+  const { toast } = useToast();
+
+  const handleGenerateSummary = async () => {
+    if (isSummaryLoading) return;
+
+    setIsSummaryLoading(true);
+    setSummaryError(null);
+    setAiSummary(null);
+    
+    try {
+      const res = await fetch('/api/ai/describe-cluster', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cluster }),
+      });
+      
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Failed to generate summary.");
+      }
+
+      const data = await res.json();
+      setAiSummary(data.description);
+
+    } catch (e: any) {
+        setSummaryError(e.message || "An unknown error occurred.");
+        toast({ title: "AI Summary Failed", description: e.message, variant: "destructive" });
+    } finally {
+        setIsSummaryLoading(false);
+    }
+  };
 
   const handleOpenPanel = () => {
       setIsPanelOpen(true);
-      // Only generate if there's no summary and it's not already loading
       if (!aiSummary && !isSummaryLoading) {
-          onGenerateSummary();
+          handleGenerateSummary();
       }
   }
 
@@ -101,7 +132,11 @@ export function ClusterCard({ cluster, clusterId, clusterNumber, onInspect, onGe
                       </div>
                   )}
               </div>
-              <SheetFooter>
+               <SheetFooter>
+                 <Button variant="secondary" onClick={handleGenerateSummary} disabled={isSummaryLoading}>
+                     {isSummaryLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                     Regenerate
+                 </Button>
                  <Button variant="outline" onClick={() => setIsPanelOpen(false)}>Close</Button>
               </SheetFooter>
           </SheetContent>
