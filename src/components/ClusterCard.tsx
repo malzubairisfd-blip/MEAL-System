@@ -37,6 +37,7 @@ export function ClusterCard({ cluster, clusterId, clusterNumber, onInspect }: Cl
   };
 
   useEffect(() => {
+    // Cleanup on unmount
     return () => {
       cleanupEventSource();
     };
@@ -50,53 +51,50 @@ export function ClusterCard({ cluster, clusterId, clusterNumber, onInspect }: Cl
     setSummaryError(null);
     setAiSummary("");
     
-    try {
-        const es = new EventSource('/api/ai/describe-cluster', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ cluster }),
-        } as any);
+    const es = new EventSource('/api/ai/describe-cluster', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cluster }),
+    } as any);
 
-        eventSourceRef.current = es;
+    eventSourceRef.current = es;
 
-        es.onmessage = (event) => {
-            const data = JSON.parse(event.data);
-            
-            if (data.error) {
-              setSummaryError(data.error);
-              toast({ title: "AI Summary Error", description: data.error, variant: "destructive" });
-              setIsSummaryLoading(false);
-              cleanupEventSource();
-              return;
-            }
+    es.onmessage = (event) => {
+        const data = JSON.parse(event.data);
 
-            if (data.clusterKey === clusterId && data.description) {
-              setAiSummary(prev => (prev || "") + data.description);
-              setSummaryError(null);
-            }
-        };
+        if (data.status === 'connected') {
+            console.log("SSE connected successfully.");
+            return;
+        }
 
-        es.onerror = (err) => {
-            console.error("EventSource failed:", err);
-            setSummaryError("Failed to connect to the summary service. The connection was closed.");
+        if (data.done) {
             setIsSummaryLoading(false);
             cleanupEventSource();
-        };
+            return;
+        }
+        
+        if (data.error) {
+          setSummaryError(data.error);
+          toast({ title: "AI Summary Error", description: data.error, variant: "destructive" });
+          setIsSummaryLoading(false);
+          cleanupEventSource();
+          return;
+        }
 
-        es.addEventListener('close', () => {
-            setIsSummaryLoading(false);
-            cleanupEventSource();
-        });
+        if (data.clusterKey === clusterId && data.description) {
+          setAiSummary(prev => (prev ? prev + "\n\n" : "") + data.description);
+          setSummaryError(null);
+        }
+    };
 
-
-    } catch (e: any) {
-      setSummaryError(e.message || "An unknown error occurred while setting up the connection.");
-      toast({ title: "AI Connection Failed", description: e.message, variant: "destructive" });
-      setIsSummaryLoading(false);
-    }
+    es.onerror = (err) => {
+        console.error("EventSource failed:", err);
+        setSummaryError("Failed to connect to the summary service. The connection was closed unexpectedly.");
+        setIsSummaryLoading(false);
+        cleanupEventSource();
+    };
   };
   
-  // Custom close handler for the sheet
   const handlePanelClose = () => {
     setIsPanelOpen(false);
     cleanupEventSource(); // Ensure the connection is closed when the panel is manually closed
@@ -138,7 +136,7 @@ export function ClusterCard({ cluster, clusterId, clusterNumber, onInspect }: Cl
             <Microscope className="mr-2 h-4 w-4" />
             Inspect
           </Button>
-          <Button variant="default" className="w-full" onClick={handleOpenPanel} disabled={isSummaryLoading}>
+          <Button variant="default" className="w-full" onClick={handleOpenPanel}>
              {isSummaryLoading ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
              ) : (

@@ -1,4 +1,3 @@
-
 import { generateClusterDescription } from '@/ai/flows/describe-cluster-flow';
 import type { RecordRow } from '@/lib/types';
 
@@ -40,22 +39,33 @@ export async function POST(req: Request) {
   const send = (data: any) =>
     writer.write(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
 
+  // 🔥 CRITICAL: send heartbeat immediately
+  send({ status: 'connected' });
+
   (async () => {
     try {
       for (const cluster of clusters) {
-        const key = cluster.map(r => r._internalId || Math.random().toString(36)).sort().join('-');
+        const clusterKey = cluster.map(r => r._internalId || Math.random().toString(36)).sort().join('-');
 
         try {
-            const result = await generateClusterDescription({ cluster });
+            // ⏱ Timeout protection
+            const result = await Promise.race([
+                generateClusterDescription({ cluster }),
+                new Promise<{ description: string }>((_, reject) =>
+                    setTimeout(() => reject(new Error('AI timeout')), 20000)
+                ),
+            ]);
+
             send({
-              clusterKey: key,
+              clusterKey: clusterKey,
               description: result.description,
             });
         } catch (err: any) {
             console.error('AI error for cluster:', err);
-            send({ clusterKey: key, error: `AI summary failed for this cluster: ${err.message}` });
+            send({ clusterKey: clusterKey, error: `AI summary failed for this cluster: ${err.message}` });
         }
       }
+      send({ done: true });
     } catch (err: any) {
       console.error('Streaming error:', err);
       send({ error: 'A critical error occurred during the AI summary process.' });
