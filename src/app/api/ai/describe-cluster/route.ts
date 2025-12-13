@@ -1,4 +1,3 @@
-
 import { generateClusterDescription } from '@/ai/flows/describe-cluster-flow';
 import type { RecordRow } from '@/lib/types';
 
@@ -32,8 +31,10 @@ export async function POST(req: Request) {
       clusters = body.clusters;
     } else if (Array.isArray(body?.cluster)) {
       clusters = [body.cluster];
-    } else {
-      return new Response(JSON.stringify({ error: 'Invalid cluster data' }), {
+    }
+    
+    if (!clusters || clusters.length === 0) {
+      return new Response(JSON.stringify({ error: 'Invalid or empty cluster data provided' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' },
       });
@@ -62,7 +63,7 @@ export async function POST(req: Request) {
               status: 'success',
             });
           } catch (e: any) {
-            console.error('AI summary error:', e);
+            console.error('AI summary error for cluster:', e);
             const isTimeout = e.message.includes('timeout');
             send({
               clusterKey,
@@ -85,15 +86,15 @@ export async function POST(req: Request) {
 
     return new Response(stream, {
       headers: {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
+        'Content-Type': 'text/event-stream; charset=utf-8',
+        'Cache-Control': 'no-cache, no-transform',
         'Connection': 'keep-alive',
       },
     });
 
   } catch (e: any) {
-    console.error('Describe cluster API error:', e);
-    return new Response(JSON.stringify({ error: 'AI service failure' }), {
+    console.error('Describe cluster streaming API error:', e);
+    return new Response(JSON.stringify({ error: 'AI service failure or invalid request' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
     });

@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import type { RecordRow } from "@/lib/types";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,6 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFo
 import { Microscope, Sparkles, Loader2, RefreshCw } from "lucide-react";
 import { calculateClusterConfidence } from "@/lib/clusterConfidence";
 import { useToast } from "@/hooks/use-toast";
-
 
 type Cluster = RecordRow[];
 
@@ -25,7 +24,7 @@ export function ClusterCard({ cluster, clusterId, clusterNumber, onInspect }: Cl
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [isSummaryLoading, setIsSummaryLoading] = useState(false);
   const [summaryError, setSummaryError] = useState<string | null>(null);
-  const eventSourceRef = React.useRef<EventSource | null>(null);
+  const eventSourceRef = useRef<EventSource | null>(null);
 
   const confidence = calculateClusterConfidence(cluster);
   const { toast } = useToast();
@@ -52,35 +51,49 @@ export function ClusterCard({ cluster, clusterId, clusterNumber, onInspect }: Cl
     setAiSummary(null);
     
     try {
-      const eventSource = new EventSource('/api/ai/describe-cluster', {
+      const res = await fetch('/api/ai/describe-cluster', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ cluster }),
       });
-      eventSourceRef.current = eventSource;
-      
-      eventSource.onmessage = (event) => {
+
+      if (!res.body) {
+        throw new Error("Response body is missing");
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+
+      eventSourceRef.current = new EventSource('/api/ai/describe-cluster', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cluster }),
+      } as any);
+
+      eventSourceRef.current.onmessage = (event) => {
         const data = JSON.parse(event.data);
         
         if (data.done) {
           setIsSummaryLoading(false);
           cleanupEventSource();
           if (!aiSummary && !summaryError) {
-             setSummaryError("The AI did not return a summary. It may have timed out.");
+             setSummaryError("The AI did not return a summary. It may have timed out or failed silently.");
           }
           return;
         }
 
-        if (data.status === 'success' && data.description) {
-          setAiSummary(data.description);
-          setSummaryError(null);
-        } else if (data.status === 'error' || data.status === 'timeout') {
-          setSummaryError(data.error || 'An unknown error occurred.');
-          toast({ title: "AI Summary Error", description: data.error, variant: "destructive" });
+        if (data.clusterKey === clusterId) {
+            if (data.status === 'success' && data.description) {
+              setAiSummary(data.description);
+              setSummaryError(null);
+            } else if (data.status === 'error' || data.status === 'timeout') {
+              setSummaryError(data.error || 'An unknown error occurred.');
+              toast({ title: "AI Summary Error", description: data.error, variant: "destructive" });
+            }
         }
       };
 
-      eventSource.onerror = (err) => {
+      eventSourceRef.current.onerror = (err) => {
         console.error("EventSource failed:", err);
         setSummaryError("Failed to connect to the summary service.");
         setIsSummaryLoading(false);

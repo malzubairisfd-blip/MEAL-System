@@ -1,5 +1,3 @@
-'use server';
-
 import { ai } from '@/ai/genkit';
 import type { RecordRow } from '@/lib/types';
 
@@ -52,7 +50,7 @@ ${JSON.stringify(cluster, null, 2)}
       },
     });
 
-    const text = res.text();
+    const text = res.text;
     return {
       description: text || 'لم يتمكن الذكاء الاصطناعي من إنشاء ملخص.',
     };
