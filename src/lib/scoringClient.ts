@@ -229,18 +229,18 @@ function applyAdditionalRules(a, b, opts) {
       const womanLineageStrong =
         womanFatherOK && womanGrandOK && womanFamilyOK;
 
-      /* ---------- HUSBAND LINEAGE ---------- */
-      const husbandFatherOK =
-        jw(HA[1], HB[1]) >= 0.93;
-
-      const husbandGrandOK =
-        jw(HA[2], HB[2]) >= 0.93;
-
+      /* ---------- STRONG HUSBAND DUPLICATION ---------- */
+      const husbandFirstOK  = jw(HA[0], HB[0]) >= 0.93;
+      const husbandFatherOK = jw(HA[1], HB[1]) >= 0.93;
+      const husbandGrandOK  = jw(HA[2], HB[2]) >= 0.93;
       const husbandFamilyOK =
         jw(HA[HA.length - 1], HB[HB.length - 1]) >= 0.90;
 
-      const husbandLineageStrong =
-        husbandFatherOK && husbandGrandOK && husbandFamilyOK;
+      const husbandIsSamePerson =
+        husbandFirstOK &&
+        husbandFatherOK &&
+        husbandGrandOK &&
+        husbandFamilyOK;
 
       /* ---------- SOFT FIRST NAME SUPPORT ---------- */
       const womanFirstSupport =
@@ -250,7 +250,7 @@ function applyAdditionalRules(a, b, opts) {
       /* ---------- FINAL DECISION ---------- */
       if (
         womanLineageStrong &&
-        husbandLineageStrong &&
+        husbandIsSamePerson &&
         womanFirstSupport
       ) {
         return Math.min(1, minPair + 0.23);
