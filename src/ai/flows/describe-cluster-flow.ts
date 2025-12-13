@@ -1,88 +1,162 @@
-
 'use server';
 
 /**
- * @fileOverview An AI flow to describe why a cluster of records might be duplicates.
- * This has been refactored to a simple async function for stability.
+ * AI flow: Generates an Arabic explanation for why a cluster was grouped.
+ * Hardened for production: retry, timeout, cache, deterministic prompt.
  */
 
 import { ai } from '@/ai/genkit';
-import { z } from 'zod';
 import type { RecordRow } from '@/lib/types';
+import crypto from 'crypto';
 
-// Define the input schema for a single record, to be used in an array
-const RecordSchema = z.object({
-    _internalId: z.string().optional(),
-    womanName: z.string().optional(),
-    husbandName: z.string().optional(),
-    nationalId: z.string().optional(),
-    phone: z.string().optional(),
-    village: z.string().optional(),
-    children: z.array(z.string()).optional(),
-});
+/* -----------------------------
+   Configuration
+----------------------------- */
+const MODEL = 'googleai/gemini-1.5-flash-latest';
+const MAX_RETRIES = 2;
+const TIMEOUT_MS = 12_000;
 
-// Define the input schema for the flow, which is an array of records
-const DescribeClusterInputSchema = z.object({
-  cluster: z.array(RecordSchema),
-});
-type DescribeClusterInput = z.infer<typeof DescribeClusterInputSchema>;
+/* -----------------------------
+   Simple in-memory cache
+   (Replace with Redis / KV later if needed)
+----------------------------- */
+const summaryCache = new Map<string, string>();
 
-// Define the output schema for the flow
-const DescribeClusterOutputSchema = z.object({
-  description: z.string().describe("A concise summary in Arabic explaining why these records were likely grouped together. Focus on key similarities and differences, and conclude with a recommendation on whether to investigate further."),
-});
-type DescribeClusterOutput = z.infer<typeof DescribeClusterOutputSchema>;
+/* -----------------------------
+   Utilities
+----------------------------- */
 
+// Stable cluster hash (order-independent)
+function clusterHash(cluster: RecordRow[]): string {
+  const ids = cluster
+    .map(r => r._internalId || '')
+    .sort()
+    .join('|');
 
-/**
- * Analyzes a cluster of records and generates a summary in Arabic.
- * @param input An object containing the cluster of records.
- * @returns A promise that resolves to an object with the description.
- */
+  return crypto.createHash('sha1').update(ids).digest('hex');
+}
+
+// Timeout wrapper
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error('AI_TIMEOUT')), ms);
+    promise
+      .then(v => {
+        clearTimeout(t);
+        resolve(v);
+      })
+      .catch(err => {
+        clearTimeout(t);
+        reject(err);
+      });
+  });
+}
+
+// Retry wrapper
+async function retry<T>(fn: () => Promise<T>, retries: number): Promise<T> {
+  let lastError;
+  for (let i = 0; i <= retries; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      lastError = e;
+    }
+  }
+  throw lastError;
+}
+
+/* -----------------------------
+   Main Function
+----------------------------- */
 export default async function generateClusterDescription(
   input: { cluster: RecordRow[] }
 ): Promise<{ description: string }> {
 
   const { cluster } = input;
+  if (!cluster || cluster.length === 0) {
+    return { description: 'المجموعة فارغة ولا يمكن تحليلها.' };
+  }
 
-  // Sanitize input to ensure children is always an array
-  const validatedCluster = cluster.map(record => ({
-      ...record,
-      children: Array.isArray(record.children) ? record.children : (record.children ? String(record.children).split(/[;,|،]/) : [])
+  // Normalize children field
+  const normalizedCluster = cluster.map(r => ({
+    ...r,
+    children: Array.isArray(r.children)
+      ? r.children
+      : r.children
+        ? String(r.children).split(/[;,|،]/).map(s => s.trim())
+        : [],
   }));
-  
-  const promptTemplate = `
-حلل السجلات التالية وحدد سبب تجميعها كمجموعة واحدة.
-ركز على:
-- تشابه الأسماء
+
+  // Cache lookup
+  const key = clusterHash(normalizedCluster);
+  const cached = summaryCache.get(key);
+  if (cached) {
+    return { description: cached };
+  }
+
+  /* -----------------------------
+     Optimized Arabic Prompt
+  ----------------------------- */
+  const prompt = `
+أنت مدقق بيانات مختص باكتشاف السجلات المكررة.
+
+حلل السجلات التالية وحدد سبب تجميعها في مجموعة واحدة.
+
+يرجى الالتزام بالهيكل التالي في الإجابة:
+
+1️⃣ **سبب التجميع**
+- تشابه أسماء النساء
 - تشابه أسماء الأزواج
-- تشابه النسب---
-- تشابه أرقام الهواتف
-- تشابه بأرقام الهويه
-- أي اختلافات طفيفة في التهجئة
-- اهم النتائج والتي تتكون من تكرار او اشتباه تكرار او ليست 
-تكرار وهل الحاله تحتاج إلى تحقق ميداني ام لا
+- تشابه اسم الأب والجد
+- تشابه أرقام الهواتف أو الهوية
+- اختلافات بسيطة في التهجئة (إن وجدت)
 
-أجب باللغة العربية فقط.
+2️⃣ **تقييم الحالة**
+اختر أحد الخيارات فقط:
+- تكرار مؤكد
+- اشتباه تكرار
+- ليست تكرار
 
-Here are the records:
-${JSON.stringify(validatedCluster, null, 2)}
+3️⃣ **التوصية**
+- هل الحالة تحتاج إلى تحقق ميداني؟ (نعم / لا) مع سبب مختصر.
+
+⚠️ أجب باللغة العربية فقط.
+⚠️ كن مختصرًا ودقيقًا.
+
+السجلات:
+${JSON.stringify(normalizedCluster, null, 2)}
 `;
 
   try {
-    const { text } = await ai.generate({
-        model: 'googleai/gemini-1.5-flash-latest',
-        prompt: promptTemplate,
-    });
+    const result = await retry(
+      () =>
+        withTimeout(
+          ai.generate({
+            model: MODEL,
+            prompt,
+          }),
+          TIMEOUT_MS
+        ),
+      MAX_RETRIES
+    );
 
-    if (!text) {
-        return { description: "لم يتمكن الذكاء الاصطناعي من إنشاء ملخص لهذه المجموعة." };
-    }
-    
-    return { description: text };
+    const text = result?.text?.trim();
 
-  } catch(e: any) {
-    console.error("Error calling AI model:", e);
-    return { description: "حدث خطأ أثناء الاتصال بخدمة الذكاء الاصطناعي." };
+    const finalText =
+      text && text.length > 0
+        ? text
+        : 'لم يتمكن الذكاء الاصطناعي من توليد ملخص واضح لهذه المجموعة.';
+
+    // Cache result
+    summaryCache.set(key, finalText);
+
+    return { description: finalText };
+
+  } catch (error: any) {
+    console.error('AI summary failed:', error);
+    return {
+      description:
+        'تعذر إنشاء ملخص تلقائي لهذه المجموعة بسبب خطأ تقني. يوصى بالمراجعة اليدوية.',
+    };
   }
 }

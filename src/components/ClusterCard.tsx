@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from "@/components/ui/sheet";
 import { Microscope, Sparkles, Loader2 } from "lucide-react";
+import { calculateClusterConfidence } from "@/lib/clusterConfidence";
 
 type Cluster = RecordRow[];
 
@@ -23,6 +24,7 @@ interface ClusterCardProps {
 
 export function ClusterCard({ cluster, clusterId, clusterNumber, onInspect, onGenerateSummary, aiSummary, isSummaryLoading, summaryError }: ClusterCardProps) {
   const [isPanelOpen, setIsPanelOpen] = useState(false);
+  const confidence = calculateClusterConfidence(cluster);
 
   const handleOpenPanel = () => {
       setIsPanelOpen(true);
@@ -36,8 +38,16 @@ export function ClusterCard({ cluster, clusterId, clusterNumber, onInspect, onGe
     <>
       <Card className="flex flex-col hover:shadow-md transition-shadow">
         <CardHeader>
-          <CardTitle>Cluster {clusterNumber}</CardTitle>
-          <CardDescription>{cluster.length} records</CardDescription>
+          <div className="flex justify-between items-start">
+            <div>
+              <CardTitle>Cluster {clusterNumber}</CardTitle>
+              <CardDescription>{cluster.length} records</CardDescription>
+            </div>
+            <div className="text-right">
+                <p className="text-xs text-muted-foreground">Confidence</p>
+                <strong className="text-lg">{confidence}%</strong>
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="flex-1 space-y-4">
           <div className="space-y-2 text-sm">
