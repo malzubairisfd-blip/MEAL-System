@@ -15,6 +15,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
+import type { RecordRow } from "@/lib/types";
 
 function createWorkerScript() {
   return `
@@ -1063,5 +1064,4 @@ export default function UploadPage(){
     </div>
   );
 }
-
 

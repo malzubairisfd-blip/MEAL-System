@@ -1,21 +1,8 @@
 
 // src/lib/auditEngine.ts
+import { similarityScoreDetailed } from "./fuzzyCluster";
+import type { RecordRow } from "./types";
 
-import { similarityScoreDetailed, RecordRow as FuzzyRecordRow } from "./fuzzyCluster";
-
-/* -----------------------------------------
-   TYPES
------------------------------------------- */
-export interface RecordRow {
-  _internalId?: string;
-  womanName: string;
-  husbandName: string;
-  nationalId?: string | number;
-  phone?: string | number;
-  village?: string;
-  subdistrict?: string;
-  children?: string[] | string;
-}
 
 export interface AuditFinding {
   type: string;
@@ -168,7 +155,7 @@ export function runAudit(records: RecordRow[]): AuditFinding[] {
       const recordA_safe = { ...a, children: Array.isArray(a.children) ? a.children : (typeof a.children === 'string' ? a.children.split(/[;,،|]/) : []) };
       const recordB_safe = { ...b, children: Array.isArray(b.children) ? b.children : (typeof b.children === 'string' ? b.children.split(/[;,،|]/) : []) };
 
-      const sim = similarityScoreDetailed(recordA_safe as FuzzyRecordRow, recordB_safe as FuzzyRecordRow);
+      const sim = similarityScoreDetailed(recordA_safe as RecordRow, recordB_safe as RecordRow);
 
       if (sim.score > 0.85) {
         findings.push({
@@ -183,5 +170,3 @@ export function runAudit(records: RecordRow[]): AuditFinding[] {
 
   return findings;
 }
-
-    

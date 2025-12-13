@@ -1,8 +1,8 @@
 
 "use client";
-
+import React from "react";
 import { useState, useEffect, useMemo } from "react";
-import type { RecordRow } from "@/lib/auditEngine";
+import type { RecordRow } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";

@@ -1,27 +1,12 @@
 
+
 // lib/fuzzyCluster.ts
 
 // This file is now deprecated for client-side clustering.
 // The core logic has been moved into the self-contained worker script.
 // We keep type definitions and server-side utilities here.
+import type { RecordRow } from "./types";
 
-export type RecordRow = {
-  _internalId?: string;
-  beneficiaryId?: string;
-  nationalId?: string;
-  phone?: string;
-  womanName?: string;
-  husbandName?: string;
-  children?: string[] | string;
-  village?: string;
-  subdistrict?: string;
-  womanName_normalized?: string;
-  husbandName_normalized?: string;
-  village_normalized?: string;
-  subdistrict_normalized?: string;
-  children_normalized?: string[];
-  [k: string]: any;
-};
 
 /* -----------------------------------------
    ARABIC NORMALIZATION
@@ -98,14 +83,30 @@ function tokenJaccard(aTokens?: string[], bTokens?: string[]): number {
 
 // This function remains for server-side pairwise scoring (e.g. in modals)
 export function similarityScoreDetailed(a: RecordRow, b: RecordRow) {
+    const a_normalized = {
+        ...a,
+        womanName_normalized: normalizeArabicRaw(a.womanName),
+        husbandName_normalized: normalizeArabicRaw(a.husbandName),
+        village_normalized: normalizeArabicRaw(a.village),
+        children_normalized: Array.isArray(a.children) ? a.children.map(normalizeArabicRaw) : []
+    }
+
+    const b_normalized = {
+        ...b,
+        womanName_normalized: normalizeArabicRaw(b.womanName),
+        husbandName_normalized: normalizeArabicRaw(b.husbandName),
+        village_normalized: normalizeArabicRaw(b.village),
+        children_normalized: Array.isArray(b.children) ? b.children.map(normalizeArabicRaw) : []
+    }
+    
     // A simplified version of the worker's pairwise score for server use
     const breakdown = {
-        nameScore: jaroWinkler(a.womanName_normalized, b.womanName_normalized),
-        husbandScore: jaroWinkler(a.husbandName_normalized, b.husbandName_normalized),
+        nameScore: jaroWinkler(a_normalized.womanName_normalized, b_normalized.womanName_normalized),
+        husbandScore: jaroWinkler(a_normalized.husbandName_normalized, b_normalized.husbandName_normalized),
         idScore: (a.nationalId && b.nationalId && String(a.nationalId) === String(b.nationalId)) ? 1 : 0,
         phoneScore: (a.phone && b.phone && String(a.phone).slice(-6) === String(b.phone).slice(-6)) ? 1 : 0,
-        locationScore: jaroWinkler(a.village_normalized, b.village_normalized),
-        childrenScore: tokenJaccard(a.children_normalized, b.children_normalized),
+        locationScore: jaroWinkler(a_normalized.village_normalized, b_normalized.village_normalized),
+        childrenScore: tokenJaccard(a_normalized.children_normalized, b_normalized.children_normalized),
     };
     
     const score = 

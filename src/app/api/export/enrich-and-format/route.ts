@@ -4,9 +4,10 @@ import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
 import ExcelJS from "exceljs";
-import { fullPairwiseBreakdown, type RecordRow } from "@/lib/fuzzyCluster";
+import { fullPairwiseBreakdown } from "@/lib/fuzzyCluster";
 import type { AuditFinding } from "@/lib/auditEngine";
 import { UserX, Fingerprint, Copy, Users, Sigma } from 'lucide-react'; // These are server components so we cannot use them
+import type { RecordRow } from "@/lib/types";
 
 const getTmpDir = () => path.join(os.tmpdir(), 'beneficiary-insights-cache');
 
