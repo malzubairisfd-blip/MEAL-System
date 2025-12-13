@@ -9,6 +9,7 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
 import type { RecordRow } from '@/lib/types';
+import { jsonStringify } from 'genkit/util';
 
 // Define the input schema for a single record, to be used in an array
 const RecordSchema = z.object({
@@ -50,8 +51,8 @@ export default async function generateClusterDescription(
       ...record,
       children: Array.isArray(record.children) ? record.children : (record.children ? String(record.children).split(/[;,|،]/) : [])
   }));
-
-  const prompt = `
+  
+  const promptTemplate = `
 حلل السجلات التالية وحدد سبب تجميعها كمجموعة واحدة.
 ركز على:
 - تشابه الأسماء
@@ -66,13 +67,15 @@ export default async function generateClusterDescription(
 أجب باللغة العربية فقط.
 
 Here are the records:
-${JSON.stringify(validatedCluster, null, 2)}
+{{{jsonStringify cluster}}}
 `;
 
   try {
     const { text } = await ai.generate({
         model: 'googleai/gemini-1.5-flash-latest',
-        prompt: prompt,
+        prompt: promptTemplate,
+        promptParams: { cluster: validatedCluster },
+        helpers: { jsonStringify },
     });
 
     if (!text) {
