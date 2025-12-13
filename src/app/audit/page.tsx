@@ -260,7 +260,11 @@ export default function AuditPage() {
                                 <div className="flex items-center gap-4 text-left">
                                     <span className="font-semibold">{g.record.womanName}</span>
                                     <div className="flex gap-1">
-                                        {g.issues.map(issue => getSeverityBadge(issue.severity))}
+                                        {g.issues.map((issue, issueIdx) => (
+                                            <React.Fragment key={issueIdx}>
+                                                {getSeverityBadge(issue.severity)}
+                                            </React.Fragment>
+                                        ))}
                                     </div>
                                 </div>
                             </AccordionTrigger>
