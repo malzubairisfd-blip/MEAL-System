@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 import type { RecordRow } from "@/lib/types";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -21,7 +21,14 @@ export function ClusterCard({ cluster, clusterNumber, onInspect }: ClusterCardPr
   const [loadingSummary, setLoadingSummary] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const generateSummary = async () => {
+  const generateSummary = async (event: React.MouseEvent) => {
+    // Stop propagation to prevent the accordion from toggling when we are just fetching data.
+    if (!aiSummary) {
+      event.preventDefault();
+    }
+    
+    if (loadingSummary || aiSummary) return;
+
     setLoadingSummary(true);
     setError(null);
     try {
@@ -60,15 +67,19 @@ export function ClusterCard({ cluster, clusterNumber, onInspect }: ClusterCardPr
         
         <Accordion type="single" collapsible className="w-full">
             <AccordionItem value="ai-summary">
-                 <AccordionTrigger disabled={!!aiSummary || loadingSummary} onClick={!aiSummary ? generateSummary : undefined} className="p-0">
-                    <Button variant="ghost" size="sm" className="w-full justify-start" disabled={loadingSummary}>
+                 <AccordionTrigger
+                    onClick={generateSummary}
+                    disabled={loadingSummary}
+                    className="p-0 hover:no-underline -mb-1"
+                 >
+                    <div className="inline-flex items-center justify-start gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-9 px-4 py-2 w-full text-left">
                         {loadingSummary ? (
                             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                         ) : (
                             <Sparkles className="mr-2 h-4 w-4 text-purple-500" />
                         )}
-                        {aiSummary ? "AI Summary Generated" : "Generate AI Summary"}
-                    </Button>
+                        {aiSummary ? "AI Summary Generated" : (loadingSummary ? "Generating..." : "Generate AI Summary")}
+                    </div>
                 </AccordionTrigger>
                 <AccordionContent className="pt-2 text-sm text-muted-foreground border-t mt-2">
                     {aiSummary && <p className="whitespace-pre-wrap">{aiSummary}</p>}
