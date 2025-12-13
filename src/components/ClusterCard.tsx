@@ -24,80 +24,103 @@ export function ClusterCard({ cluster, clusterId, clusterNumber, onInspect }: Cl
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [isSummaryLoading, setIsSummaryLoading] = useState(false);
   const [summaryError, setSummaryError] = useState<string | null>(null);
-  const eventSourceRef = useRef<EventSource | null>(null);
+  const readerRef = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null);
 
   const confidence = calculateClusterConfidence(cluster);
   const { toast } = useToast();
-
-  const cleanupEventSource = () => {
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-      eventSourceRef.current = null;
+  
+  const cleanupReader = () => {
+    if (readerRef.current) {
+        readerRef.current.cancel().catch(() => {}); // Suppress cancel errors
+        readerRef.current = null;
     }
   };
 
   useEffect(() => {
     // Cleanup on unmount
     return () => {
-      cleanupEventSource();
+      cleanupReader();
     };
   }, []);
 
   const handleGenerateSummary = async () => {
     if (isSummaryLoading) return;
     
-    cleanupEventSource();
+    cleanupReader();
     setIsSummaryLoading(true);
     setSummaryError(null);
     setAiSummary("");
     
-    const es = new EventSource('/api/ai/describe-cluster', {
+    try {
+      const res = await fetch('/api/ai/describe-cluster', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cluster }),
-    } as any);
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ clusters: [cluster] }),
+      });
 
-    eventSourceRef.current = es;
+      if (!res.ok || !res.body) {
+        const errorData = await res.json().catch(() => ({ error: "An unknown error occurred on the server."}));
+        throw new Error(errorData.error || 'Failed to connect to the summary service.');
+      }
 
-    es.onmessage = (event) => {
-        const data = JSON.parse(event.data);
+      readerRef.current = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
 
-        if (data.status === 'connected') {
-            console.log("SSE connected successfully.");
-            return;
+      while (true) {
+        const { value, done } = await readerRef.current.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const events = buffer.split('\n\n');
+        buffer = events.pop() || '';
+
+        for (const event of events) {
+          if (!event.startsWith('data:')) continue;
+
+          try {
+            const payload = JSON.parse(event.replace(/^data: /, '').trim());
+
+            if (payload.status === 'connected') {
+              console.log('AI summary stream connected');
+              continue;
+            }
+
+            if (payload.done) {
+              setIsSummaryLoading(false);
+              cleanupReader();
+              return;
+            }
+
+            if (payload.error) {
+              setSummaryError(payload.error);
+              toast({ title: "AI Summary Error", description: payload.error, variant: "destructive" });
+              setIsSummaryLoading(false);
+              cleanupReader();
+              return;
+            }
+
+            if (payload.clusterKey === clusterId && payload.description) {
+              setAiSummary(prev => (prev ? prev + "\n\n" : "") + payload.description);
+            }
+          } catch (e) {
+             console.error("Failed to parse SSE event:", event);
+          }
         }
+      }
 
-        if (data.done) {
-            setIsSummaryLoading(false);
-            cleanupEventSource();
-            return;
-        }
-        
-        if (data.error) {
-          setSummaryError(data.error);
-          toast({ title: "AI Summary Error", description: data.error, variant: "destructive" });
-          setIsSummaryLoading(false);
-          cleanupEventSource();
-          return;
-        }
-
-        if (data.clusterKey === clusterId && data.description) {
-          setAiSummary(prev => (prev ? prev + "\n\n" : "") + data.description);
-          setSummaryError(null);
-        }
-    };
-
-    es.onerror = (err) => {
-        console.error("EventSource failed:", err);
-        setSummaryError("Failed to connect to the summary service. The connection was closed unexpectedly.");
+    } catch (error: any) {
+        setSummaryError(error.message);
         setIsSummaryLoading(false);
-        cleanupEventSource();
-    };
+        cleanupReader();
+    }
   };
   
   const handlePanelClose = () => {
     setIsPanelOpen(false);
-    cleanupEventSource(); // Ensure the connection is closed when the panel is manually closed
+    cleanupReader();
   }
 
   const handleOpenPanel = () => {
