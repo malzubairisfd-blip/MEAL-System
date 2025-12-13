@@ -3,6 +3,7 @@
 
 /**
  * @fileOverview An AI flow to describe why a cluster of records might be duplicates.
+ * This flow now streams the response back.
  */
 
 import { ai } from '@/ai/genkit';
@@ -11,6 +12,7 @@ import type { RecordRow } from '@/lib/types';
 
 // Define the input schema for a single record, to be used in an array
 const RecordSchema = z.object({
+    _internalId: z.string().optional(),
     womanName: z.string().optional(),
     husbandName: z.string().optional(),
     nationalId: z.string().optional(),
@@ -20,7 +22,10 @@ const RecordSchema = z.object({
 });
 
 // Define the input schema for the flow, which is an array of records
-export const DescribeClusterInputSchema = z.array(RecordSchema);
+export const DescribeClusterInputSchema = z.object({
+  cluster: z.array(RecordSchema),
+  clusterId: z.string(),
+});
 export type DescribeClusterInput = z.infer<typeof DescribeClusterInputSchema>;
 
 // Define the output schema for the flow
@@ -32,8 +37,8 @@ export type DescribeClusterOutput = z.infer<typeof DescribeClusterOutputSchema>;
 
 const prompt = ai.definePrompt({
   name: 'describeClusterPrompt',
-  input: {schema: DescribeClusterInputSchema},
-  output: {schema: DescribeClusterOutputSchema},
+  input: { schema: DescribeClusterInputSchema.shape.cluster },
+  output: { schema: DescribeClusterOutputSchema },
   prompt: `
 You are an expert data analyst specializing in identifying duplicate entries in beneficiary lists.
 You will be given a cluster of records as a JSON object.
@@ -49,28 +54,18 @@ Here are the records:
 });
 
 
-const describeClusterFlow = ai.defineFlow(
+export const describeClusterStream = ai.defineFlow(
   {
-    name: 'describeClusterFlow',
+    name: 'describeClusterStream',
     inputSchema: DescribeClusterInputSchema,
-    outputSchema: DescribeClusterOutputSchema,
+    outputSchema: z.object({ clusterId: z.string(), summary: z.string() }),
+    stream: true,
   },
   async (input) => {
-    const { output } = await prompt(input);
-
-    if (!output) {
-      throw new Error("The model did not return a valid summary.");
-    }
     
-    return output;
-  }
-);
-
-
-export async function describeCluster(cluster: RecordRow[]): Promise<DescribeClusterOutput> {
-    // Map the incoming cluster data to match the Zod schema exactly.
+     // Map the incoming cluster data to match the Zod schema exactly.
     // CRITICAL: This sanitizes the `children` field, which can sometimes be a string instead of an array.
-    const validatedInput = cluster.map(record => ({
+    const validatedInput = input.cluster.map(record => ({
         womanName: record.womanName,
         husbandName: record.husbandName,
         nationalId: String(record.nationalId || ''),
@@ -79,5 +74,27 @@ export async function describeCluster(cluster: RecordRow[]): Promise<DescribeClu
         children: Array.isArray(record.children) ? record.children : (record.children ? String(record.children).split(/[;,|،]/) : [])
     }));
 
-    return await describeClusterFlow(validatedInput);
-}
+    const { stream } = ai.generateStream({
+        prompt: prompt.prompt,
+        input: validatedInput,
+        model: 'googleai/gemini-1.5-flash-latest',
+        output: {
+          format: 'json',
+          schema: DescribeClusterOutputSchema,
+        },
+      });
+
+      let fullSummary = '';
+      for await (const chunk of stream) {
+        const text = chunk.text();
+        if (text) {
+          fullSummary += text;
+        }
+      }
+
+      return {
+        clusterId: input.clusterId,
+        summary: fullSummary,
+      };
+  }
+);

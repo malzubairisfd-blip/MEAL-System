@@ -14,6 +14,13 @@ import { PairwiseModal } from "@/components/PairwiseModal";
 
 type Cluster = RecordRow[];
 
+type AiSummary = {
+  clusterId: string;
+  summary: string;
+  isLoading: boolean;
+  error: string | null;
+};
+
 export default function ReviewPage() {
   const [allClusters, setAllClusters] = useState<Cluster[]>([]);
   const [filteredClusters, setFilteredClusters] = useState<Cluster[]>([]);
@@ -24,6 +31,8 @@ export default function ReviewPage() {
 
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(9);
+
+  const [aiSummaries, setAiSummaries] = useState<Record<string, AiSummary>>({});
 
   useEffect(() => {
     async function loadData() {
@@ -84,6 +93,62 @@ export default function ReviewPage() {
     applyFilter();
   }, [search, allClusters]);
   
+  const generateSummary = async (cluster: Cluster, clusterId: string) => {
+      if (aiSummaries[clusterId]?.isLoading) return;
+
+      setAiSummaries(prev => ({ ...prev, [clusterId]: { clusterId, summary: "", isLoading: true, error: null } }));
+
+      try {
+        const res = await fetch('/api/ai/describe-cluster', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cluster, clusterId }),
+        });
+
+        if (!res.ok || !res.body) {
+            const text = await res.text();
+            throw new Error(`Server error: ${res.status} ${res.statusText} - ${text}`);
+        }
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            
+            const events = buffer.split("\n\n");
+            buffer = events.pop() || ""; // Keep the last partial event in the buffer
+
+            for (const event of events) {
+                if (!event.startsWith("data: ")) continue;
+                try {
+                    const jsonPayload = event.replace("data: ", "");
+                    if (jsonPayload.trim()) {
+                      const payload = JSON.parse(jsonPayload);
+                      if (payload.error) {
+                          throw new Error(payload.error);
+                      }
+                      setAiSummaries(prev => ({
+                          ...prev,
+                          [payload.clusterId]: { ...prev[payload.clusterId], summary: payload.summary, isLoading: false }
+                      }));
+                    }
+                } catch (err) {
+                    console.error("Invalid SSE payload", event);
+                    throw new Error("Failed to parse AI summary chunk.");
+                }
+            }
+        }
+      } catch (e: any) {
+          setAiSummaries(prev => ({ ...prev, [clusterId]: { ...prev[clusterId], error: e.message || "An unknown error occurred.", isLoading: false } }));
+          toast({ title: "AI Summary Failed", description: e.message, variant: "destructive" });
+      }
+  };
+
 
   const handleInspect = (cluster: Cluster) => {
     setSelectedCluster(cluster);
@@ -150,13 +215,18 @@ export default function ReviewPage() {
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {currentClusters.map((c, idx) => {
-                  const clusterKey = c.map(r => r._internalId).sort().join('-');
+                  const clusterId = c.map(r => r._internalId).sort().join('-');
                   return (
                     <ClusterCard 
-                      key={clusterKey}
+                      key={clusterId}
                       cluster={c} 
+                      clusterId={clusterId}
                       clusterNumber={(currentPage - 1) * itemsPerPage + idx + 1}
                       onInspect={() => handleInspect(c)}
+                      onGenerateSummary={() => generateSummary(c, clusterId)}
+                      aiSummary={aiSummaries[clusterId]?.summary}
+                      isSummaryLoading={aiSummaries[clusterId]?.isLoading}
+                      summaryError={aiSummaries[clusterId]?.error}
                     />
                   )
                 })}

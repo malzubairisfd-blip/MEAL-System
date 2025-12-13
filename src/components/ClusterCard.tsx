@@ -12,44 +12,22 @@ type Cluster = RecordRow[];
 
 interface ClusterCardProps {
   cluster: Cluster;
+  clusterId: string;
   clusterNumber: number;
   onInspect: () => void;
+  onGenerateSummary: () => void;
+  aiSummary: string | null | undefined;
+  isSummaryLoading: boolean | undefined;
+  summaryError: string | null | undefined;
 }
 
-export function ClusterCard({ cluster, clusterNumber, onInspect }: ClusterCardProps) {
-  const [aiSummary, setAiSummary] = useState<string | null>(null);
-  const [loadingSummary, setLoadingSummary] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+export function ClusterCard({ cluster, clusterId, clusterNumber, onInspect, onGenerateSummary, aiSummary, isSummaryLoading, summaryError }: ClusterCardProps) {
   const [isPanelOpen, setIsPanelOpen] = useState(false);
 
-  const generateSummary = async () => {
-    if (loadingSummary) return;
-
-    setLoadingSummary(true);
-    setError(null);
-    try {
-      const res = await fetch('/api/ai/describe-cluster', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cluster }),
-      });
-      if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.error || "Failed to fetch summary from server.");
-      }
-      const data = await res.json();
-      setAiSummary(data.summary);
-    } catch (e: any) {
-      setError(e.message || "An unknown error occurred.");
-    } finally {
-      setLoadingSummary(false);
-    }
-  };
-  
   const handleOpenPanel = () => {
       setIsPanelOpen(true);
-      if (!aiSummary) {
-          generateSummary();
+      if (!aiSummary && !isSummaryLoading) {
+          onGenerateSummary();
       }
   }
 
@@ -74,8 +52,12 @@ export function ClusterCard({ cluster, clusterNumber, onInspect }: ClusterCardPr
             <Microscope className="mr-2 h-4 w-4" />
             Inspect
           </Button>
-          <Button variant="default" className="w-full" onClick={handleOpenPanel}>
-            <Sparkles className="mr-2 h-4 w-4 text-purple-300" />
+          <Button variant="default" className="w-full" onClick={handleOpenPanel} disabled={isSummaryLoading}>
+             {isSummaryLoading ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+             ) : (
+                <Sparkles className="mr-2 h-4 w-4 text-purple-300" />
+             )}
             AI Summary
           </Button>
         </CardFooter>
@@ -90,19 +72,19 @@ export function ClusterCard({ cluster, clusterNumber, onInspect }: ClusterCardPr
                   </SheetDescription>
               </SheetHeader>
               <div className="py-4">
-                  {loadingSummary && (
+                  {isSummaryLoading && (
                       <div className="flex items-center justify-center h-40">
                           <Loader2 className="h-8 w-8 animate-spin text-primary" />
                       </div>
                   )}
-                  {error && (
+                  {summaryError && (
                       <div className="text-destructive p-4 bg-destructive/10 rounded-md">
                           <h4 className="font-semibold">Error</h4>
-                          <p>{error}</p>
+                          <p>{summaryError}</p>
                       </div>
                   )}
                   {aiSummary && (
-                      <div className="p-4 bg-muted/50 rounded-md text-sm whitespace-pre-wrap">
+                      <div className="p-4 bg-muted/50 rounded-md text-sm whitespace-pre-wrap" dir="rtl">
                           {aiSummary}
                       </div>
                   )}
@@ -115,4 +97,3 @@ export function ClusterCard({ cluster, clusterNumber, onInspect }: ClusterCardPr
     </>
   );
 }
-
