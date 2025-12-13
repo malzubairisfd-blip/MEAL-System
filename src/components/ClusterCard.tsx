@@ -26,6 +26,7 @@ export function ClusterCard({ cluster, clusterId, clusterNumber, onInspect, onGe
 
   const handleOpenPanel = () => {
       setIsPanelOpen(true);
+      // Only generate if there's no summary and it's not already loading
       if (!aiSummary && !isSummaryLoading) {
           onGenerateSummary();
       }
@@ -64,7 +65,7 @@ export function ClusterCard({ cluster, clusterId, clusterNumber, onInspect, onGe
       </Card>
       
       <Sheet open={isPanelOpen} onOpenChange={setIsPanelOpen}>
-          <SheetContent>
+          <SheetContent className="sm:max-w-lg">
               <SheetHeader>
                   <SheetTitle>AI-Powered Summary for Cluster {clusterNumber}</SheetTitle>
                   <SheetDescription>
@@ -75,6 +76,7 @@ export function ClusterCard({ cluster, clusterId, clusterNumber, onInspect, onGe
                   {isSummaryLoading && (
                       <div className="flex items-center justify-center h-40">
                           <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                          <p className="ml-2">Generating summary...</p>
                       </div>
                   )}
                   {summaryError && (

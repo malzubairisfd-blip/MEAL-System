@@ -69,10 +69,20 @@ Here are the records:
 ${JSON.stringify(validatedCluster, null, 2)}
 `;
 
-  const { text } = await ai.generate({
-      model: 'googleai/gemini-1.5-flash-latest',
-      prompt: prompt,
-  });
+  try {
+    const { text } = await ai.generate({
+        model: 'googleai/gemini-1.5-flash-latest',
+        prompt: prompt,
+    });
 
-  return { description: text };
+    if (!text) {
+        return { description: "لم يتمكن الذكاء الاصطناعي من إنشاء ملخص لهذه المجموعة." };
+    }
+    
+    return { description: text };
+
+  } catch(e: any) {
+    console.error("Error calling AI model:", e);
+    return { description: "حدث خطأ أثناء الاتصال بخدمة الذكاء الاصطناعي." };
+  }
 }

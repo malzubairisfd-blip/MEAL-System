@@ -6,7 +6,7 @@ import type { RecordRow } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, Search, ChevronLeft, AlertTriangle, ChevronRight } from "lucide-react";
+import { Loader2, Search, ChevronLeft, AlertTriangle, ChevronRight, Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
 import { ClusterCard } from "@/components/ClusterCard";
@@ -15,7 +15,6 @@ import { PairwiseModal } from "@/components/PairwiseModal";
 type Cluster = RecordRow[];
 
 type AiSummary = {
-  clusterId: string;
   summary: string;
   isLoading: boolean;
   error: string | null;
@@ -31,7 +30,8 @@ export default function ReviewPage() {
 
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(9);
-
+  
+  const [isGeneratingAll, setIsGeneratingAll] = useState(false);
   const [aiSummaries, setAiSummaries] = useState<Record<string, AiSummary>>({});
 
   useEffect(() => {
@@ -96,27 +96,46 @@ export default function ReviewPage() {
   const generateSummary = async (cluster: Cluster, clusterId: string) => {
       if (aiSummaries[clusterId]?.isLoading) return;
 
-      setAiSummaries(prev => ({ ...prev, [clusterId]: { clusterId, summary: "", isLoading: true, error: null } }));
+      setAiSummaries(prev => ({ ...prev, [clusterId]: { summary: "", isLoading: true, error: null } }));
 
       try {
         const res = await fetch('/api/ai/describe-cluster', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ cluster }),
+            body: JSON.stringify({ clusters: [{ clusterId: clusterId, records: cluster }] }),
         });
 
-        if (!res.ok) {
-            const errorData = await res.json();
-            throw new Error(errorData.error || `Server error: ${res.status}`);
+        if (!res.ok || !res.body) {
+          const text = await res.text();
+          throw new Error("Server error: " + text);
         }
 
-        const result = await res.json();
-        
-        setAiSummaries(prev => ({
-            ...prev,
-            [clusterId]: { ...prev[clusterId], summary: result.description, isLoading: false }
-        }));
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
 
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const events = buffer.split("\n\n");
+          buffer = events.pop() || "";
+
+          for (const event of events) {
+              if (!event.startsWith("data: ")) continue;
+              try {
+                  const payload = JSON.parse(event.replace("data: ", ""));
+                  if (payload.error) {
+                    setAiSummaries(prev => ({ ...prev, [payload.clusterId]: { ...prev[payload.clusterId], error: payload.error, isLoading: false } }));
+                  } else {
+                    setAiSummaries(prev => ({ ...prev, [payload.clusterId]: { ...prev[payload.clusterId], summary: payload.description, isLoading: false } }));
+                  }
+              } catch (err) {
+                  console.error("Invalid SSE payload", event);
+              }
+          }
+        }
       } catch (e: any) {
           setAiSummaries(prev => ({ ...prev, [clusterId]: { ...prev[clusterId], error: e.message || "An unknown error occurred.", isLoading: false } }));
           toast({ title: "AI Summary Failed", description: e.message, variant: "destructive" });
