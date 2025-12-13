@@ -22,16 +22,16 @@ const RecordSchema = z.object({
 });
 
 // Define the input schema for the flow, which is an array of records
-export const DescribeClusterInputSchema = z.object({
+const DescribeClusterInputSchema = z.object({
   cluster: z.array(RecordSchema),
 });
-export type DescribeClusterInput = z.infer<typeof DescribeClusterInputSchema>;
+type DescribeClusterInput = z.infer<typeof DescribeClusterInputSchema>;
 
 // Define the output schema for the flow
-export const DescribeClusterOutputSchema = z.object({
+const DescribeClusterOutputSchema = z.object({
   description: z.string().describe("A concise summary in Arabic explaining why these records were likely grouped together. Focus on key similarities and differences, and conclude with a recommendation on whether to investigate further."),
 });
-export type DescribeClusterOutput = z.infer<typeof DescribeClusterOutputSchema>;
+type DescribeClusterOutput = z.infer<typeof DescribeClusterOutputSchema>;
 
 
 /**
@@ -39,7 +39,7 @@ export type DescribeClusterOutput = z.infer<typeof DescribeClusterOutputSchema>;
  * @param input An object containing the cluster of records.
  * @returns A promise that resolves to an object with the description.
  */
-export async function generateClusterDescription(
+export default async function generateClusterDescription(
   input: { cluster: RecordRow[] }
 ): Promise<{ description: string }> {
 

@@ -1,7 +1,7 @@
 
 // src/app/api/ai/describe-cluster/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { generateClusterDescription } from '@/ai/flows/describe-cluster-flow';
+import generateClusterDescription from '@/ai/flows/describe-cluster-flow';
 import type { RecordRow } from "@/lib/types";
 
 export const runtime = "nodejs";
