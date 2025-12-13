@@ -1,9 +1,6 @@
 import { ai } from '@/ai/genkit';
 import type { RecordRow } from '@/lib/types';
 
-/**
- * Generates an Arabic AI summary explaining why a cluster was grouped.
- */
 export async function generateClusterDescription(
   input: { cluster: RecordRow[] }
 ): Promise<{ description: string }> {
@@ -56,8 +53,7 @@ ${JSON.stringify(cluster, null, 2)}
     };
   } catch (e: any) {
     console.error('AI ERROR FULL:', e);
-    return {
-      description: `خطأ تقني: ${e?.message || 'غير معروف'}`,
-    };
+    // Re-throw the error so the API route can catch it and send an error event
+    throw new Error(`AI generation failed: ${e?.message || 'Unknown error'}`);
   }
 }

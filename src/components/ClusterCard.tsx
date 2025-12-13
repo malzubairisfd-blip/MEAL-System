@@ -48,63 +48,59 @@ export function ClusterCard({ cluster, clusterId, clusterNumber, onInspect }: Cl
     cleanupEventSource();
     setIsSummaryLoading(true);
     setSummaryError(null);
-    setAiSummary(null);
+    setAiSummary("");
     
     try {
-      const res = await fetch('/api/ai/describe-cluster', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cluster }),
-      });
+        const es = new EventSource('/api/ai/describe-cluster', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cluster }),
+        } as any);
 
-      if (!res.body) {
-        throw new Error("Response body is missing");
-      }
+        eventSourceRef.current = es;
 
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-
-      eventSourceRef.current = new EventSource('/api/ai/describe-cluster', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ cluster }),
-      } as any);
-
-      eventSourceRef.current.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        
-        if (data.done) {
-          setIsSummaryLoading(false);
-          cleanupEventSource();
-          if (!aiSummary && !summaryError) {
-             setSummaryError("The AI did not return a summary. It may have timed out or failed silently.");
-          }
-          return;
-        }
-
-        if (data.clusterKey === clusterId) {
-            if (data.status === 'success' && data.description) {
-              setAiSummary(data.description);
-              setSummaryError(null);
-            } else if (data.status === 'error' || data.status === 'timeout') {
-              setSummaryError(data.error || 'An unknown error occurred.');
+        es.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            
+            if (data.error) {
+              setSummaryError(data.error);
               toast({ title: "AI Summary Error", description: data.error, variant: "destructive" });
+              setIsSummaryLoading(false);
+              cleanupEventSource();
+              return;
             }
-        }
-      };
 
-      eventSourceRef.current.onerror = (err) => {
-        console.error("EventSource failed:", err);
-        setSummaryError("Failed to connect to the summary service.");
-        setIsSummaryLoading(false);
-        cleanupEventSource();
-      };
+            if (data.clusterKey === clusterId && data.description) {
+              setAiSummary(prev => (prev || "") + data.description);
+              setSummaryError(null);
+            }
+        };
+
+        es.onerror = (err) => {
+            console.error("EventSource failed:", err);
+            setSummaryError("Failed to connect to the summary service. The connection was closed.");
+            setIsSummaryLoading(false);
+            cleanupEventSource();
+        };
+
+        es.addEventListener('close', () => {
+            setIsSummaryLoading(false);
+            cleanupEventSource();
+        });
+
+
     } catch (e: any) {
-      setSummaryError(e.message || "An unknown error occurred.");
-      toast({ title: "AI Summary Failed", description: e.message, variant: "destructive" });
+      setSummaryError(e.message || "An unknown error occurred while setting up the connection.");
+      toast({ title: "AI Connection Failed", description: e.message, variant: "destructive" });
       setIsSummaryLoading(false);
     }
   };
+  
+  // Custom close handler for the sheet
+  const handlePanelClose = () => {
+    setIsPanelOpen(false);
+    cleanupEventSource(); // Ensure the connection is closed when the panel is manually closed
+  }
 
   const handleOpenPanel = () => {
       setIsPanelOpen(true);
@@ -153,7 +149,7 @@ export function ClusterCard({ cluster, clusterId, clusterNumber, onInspect }: Cl
         </CardFooter>
       </Card>
       
-      <Sheet open={isPanelOpen} onOpenChange={setIsPanelOpen}>
+      <Sheet open={isPanelOpen} onOpenChange={ (open) => { if (!open) handlePanelClose() }}>
           <SheetContent className="sm:max-w-lg">
               <SheetHeader>
                   <SheetTitle>AI-Powered Summary for Cluster {clusterNumber}</SheetTitle>
@@ -162,7 +158,7 @@ export function ClusterCard({ cluster, clusterId, clusterNumber, onInspect }: Cl
                   </SheetDescription>
               </SheetHeader>
               <div className="py-4">
-                  {isSummaryLoading && (
+                  {isSummaryLoading && !aiSummary && !summaryError && (
                       <div className="flex items-center justify-center h-40">
                           <Loader2 className="h-8 w-8 animate-spin text-primary" />
                           <p className="ml-2">Generating summary...</p>
@@ -185,7 +181,7 @@ export function ClusterCard({ cluster, clusterId, clusterNumber, onInspect }: Cl
                      {isSummaryLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
                      Regenerate
                  </Button>
-                 <Button variant="outline" onClick={() => setIsPanelOpen(false)}>Close</Button>
+                 <Button variant="outline" onClick={handlePanelClose}>Close</Button>
               </SheetFooter>
           </SheetContent>
       </Sheet>
