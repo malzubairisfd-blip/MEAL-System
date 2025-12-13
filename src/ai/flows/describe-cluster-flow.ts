@@ -56,19 +56,20 @@ const describeClusterFlow = ai.defineFlow(
     outputSchema: DescribeClusterOutputSchema,
   },
   async (input) => {
-    const llmResponse = await prompt(input);
+    const { output } = await prompt(input);
 
-    if (!llmResponse.output) {
+    if (!output) {
       throw new Error("The model did not return a valid summary.");
     }
     
-    return llmResponse.output;
+    return output;
   }
 );
 
 
 export async function describeCluster(cluster: RecordRow[]): Promise<DescribeClusterOutput> {
     // Map the incoming cluster data to match the Zod schema exactly.
+    // CRITICAL: This sanitizes the `children` field, which can sometimes be a string instead of an array.
     const validatedInput = cluster.map(record => ({
         womanName: record.womanName,
         husbandName: record.husbandName,
