@@ -5,7 +5,7 @@ import { fullPairwiseBreakdown, type RecordRow } from "../../../../lib/fuzzyClus
 
 export async function POST(req: Request) {
   try {
-    const { clusters = [], allRecords = [], aiSummaries = {} } = await req.json();
+    const { clusters = [], allRecords = [] } = await req.json();
 
     const wb = new ExcelJS.Workbook();
     wb.creator = "Beneficiary Insights";
@@ -19,7 +19,7 @@ export async function POST(req: Request) {
     createAllRecordsSheet(wb, allRecords, clusters);
 
     // --- Sheet 3: Clusters ---
-    createClustersSheet(wb, clusters, aiSummaries);
+    createClustersSheet(wb, clusters);
 
     const buffer = await wb.xlsx.writeBuffer();
 
@@ -144,14 +144,15 @@ function createAllRecordsSheet(wb: ExcelJS.Workbook, allRecords: RecordRow[], cl
 }
 
 
-function createClustersSheet(wb: ExcelJS.Workbook, clusters: RecordRow[][], aiSummaries: { [key: number]: string }) {
+function createClustersSheet(wb: ExcelJS.Workbook, clusters: RecordRow[][]) {
     const ws = wb.addWorksheet("تفاصيل المجموعات");
     ws.views = [{ rightToLeft: true }];
 
     const headers = [
-        "معرف المجموعة", "ملخص الذكاء الاصطناعي", "الدرجة", "اسم المرأة", "اسم الزوج", "الرقم القومي", "الهاتف", "الأطفال"
+        "معرف المجموعة", "الدرجة", "اسم المرأة", "اسم الزوج", "الرقم القومي", "الهاتف", "الأطفال"
     ];
-    ws.columns = headers.map(h => ({ header: h, key: h.replace(/\s/g, ''), width: h === 'ملخص الذكاء الاصطناعي' ? 60 : 25 }));
+    ws.columns = headers.map(h => ({ header: h, key: h.replace(/\s/g, ''), width: 25 }));
+    
     const headerRow = ws.getRow(1);
     headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
     headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4F81BD' } }; // Darker Blue
@@ -167,8 +168,6 @@ function createClustersSheet(wb: ExcelJS.Workbook, clusters: RecordRow[][], aiSu
         const startRow = currentRowIndex;
         const endRow = startRow + clusterRowCount - 1;
         
-        const aiSummary = aiSummaries[clusterId] || '';
-
         if (pairs.length > 0) {
              pairs.forEach(pair => {
                 const childrenA = Array.isArray(pair.a.children) ? pair.a.children.join(', ') : (pair.a.children || '');
@@ -190,17 +189,12 @@ function createClustersSheet(wb: ExcelJS.Workbook, clusters: RecordRow[][], aiSu
             });
         }
         
-        // Merge cells for Cluster ID and AI Summary
+        // Merge cells for Cluster ID
         if (clusterRowCount > 0) {
             ws.mergeCells(`A${startRow}:A${endRow}`);
             const clusterIdCell = ws.getCell(`A${startRow}`);
             clusterIdCell.value = clusterId;
             clusterIdCell.alignment = { vertical: 'middle', horizontal: 'center' };
-
-            ws.mergeCells(`B${startRow}:B${endRow}`);
-            const summaryCell = ws.getCell(`B${startRow}`);
-            summaryCell.value = aiSummary;
-            summaryCell.alignment = { vertical: 'top', horizontal: 'right', wrapText: true };
         }
 
         for (let i = startRow; i <= endRow; i++) {

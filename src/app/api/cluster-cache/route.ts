@@ -42,7 +42,6 @@ export async function POST(req: Request) {
           // Specifically handle array and object appends
           rows: [...(existingData.rows || []), ...(body.rows || [])],
           clusters: [...(existingData.clusters || []), ...(body.clusters || [])],
-          aiSummaries: {...(existingData.aiSummaries || {}), ...(body.aiSummaries || {})},
           auditFindings: body.auditFindings || existingData.auditFindings, // Overwrite audit findings
           originalHeaders: body.originalHeaders || existingData.originalHeaders // Overwrite headers
         };

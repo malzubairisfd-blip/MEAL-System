@@ -22,7 +22,6 @@ export async function POST(req: Request) {
             clusters,
             allRecords,
             auditFindings,
-            aiSummaries,
             originalHeaders,
         } = await req.json();
 
@@ -37,7 +36,7 @@ export async function POST(req: Request) {
         createEnrichedDataSheet(wb, enrichedData, originalHeaders);
         createSummarySheet(wb, allRecords, clusters);
         createAllRecordsSheet(wb, allRecords, clusters);
-        createClustersSheet(wb, clusters, aiSummaries);
+        createClustersSheet(wb, clusters);
         createAuditSheet(wb, auditFindings);
 
         const buffer = await wb.xlsx.writeBuffer();
@@ -186,12 +185,12 @@ function createAllRecordsSheet(wb: ExcelJS.Workbook, allRecords: RecordRow[], cl
 }
 
 
-function createClustersSheet(wb: ExcelJS.Workbook, clusters: RecordRow[][], aiSummaries: { [key: number]: string }) {
+function createClustersSheet(wb: ExcelJS.Workbook, clusters: RecordRow[][]) {
     const ws = wb.addWorksheet("Cluster Details");
     ws.views = [{ rightToLeft: true }];
 
-    const headers = ["Cluster ID", "AI Summary", "Score", "Woman Name", "Husband Name", "National ID", "Phone", "Children"];
-    ws.columns = headers.map(h => ({ header: h, key: h.replace(/\s/g, ''), width: h === 'AI Summary' ? 60 : 25 }));
+    const headers = ["Cluster ID", "Score", "Woman Name", "Husband Name", "National ID", "Phone", "Children"];
+    ws.columns = headers.map(h => ({ header: h, key: h.replace(/\s/g, ''), width: 25 }));
     
     const headerRow = ws.getRow(1);
     headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
@@ -223,11 +222,6 @@ function createClustersSheet(wb: ExcelJS.Workbook, clusters: RecordRow[][], aiSu
         const clusterIdCell = ws.getCell(`A${startRow}`);
         clusterIdCell.value = clusterId;
         clusterIdCell.alignment = { vertical: 'middle', horizontal: 'center' };
-
-        ws.mergeCells(`B${startRow}:B${endRow}`);
-        const summaryCell = ws.getCell(`B${startRow}`);
-        summaryCell.value = aiSummaries[clusterId] || '';
-        summaryCell.alignment = { vertical: 'top', horizontal: 'right', wrapText: true };
         
         for (let i = startRow; i <= endRow; i++) {
             const row = ws.getRow(i);

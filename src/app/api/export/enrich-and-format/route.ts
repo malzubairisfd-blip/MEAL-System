@@ -1,5 +1,4 @@
 
-
 import { NextResponse } from 'next/server';
 import fs from 'fs/promises';
 import path from 'path';
@@ -169,14 +168,14 @@ function sortData(data: EnrichedRecord[]): EnrichedRecord[] {
 }
 
 function createFormattedWorkbook(data: EnrichedRecord[], cachedData: any): ExcelJS.Workbook {
-    const { rows: allRecords, clusters, auditFindings, originalHeaders, aiSummaries } = cachedData;
+    const { rows: allRecords, clusters, auditFindings, originalHeaders } = cachedData;
     const wb = new ExcelJS.Workbook();
     wb.creator = "Beneficiary Insights";
     
     createEnrichedDataSheet(wb, data, originalHeaders);
     createSummarySheet(wb, allRecords, clusters);
     createAuditSummarySheet(wb, auditFindings || []);
-    createClustersSheet(wb, clusters, aiSummaries);
+    createClustersSheet(wb, clusters);
     createAuditSheet(wb, auditFindings || [], clusters);
 
     return wb;
@@ -322,12 +321,12 @@ function createSummarySheet(wb: ExcelJS.Workbook, allRecords: RecordRow[], clust
     });
 }
 
-function createClustersSheet(wb: ExcelJS.Workbook, clusters: RecordRow[][], aiSummaries: { [key:string]: string }) {
+function createClustersSheet(wb: ExcelJS.Workbook, clusters: RecordRow[][]) {
     const ws = wb.addWorksheet("Cluster Details");
     ws.views = [{ rightToLeft: true }];
 
-    const headers = ["Cluster ID", "AI Summary", "Beneficiary ID", "Score", "Woman Name", "Husband Name", "National ID", "Phone", "Children"];
-    ws.columns = headers.map(h => ({ header: h, key: h.replace(/\s/g, ''), width: h === 'AI Summary' ? 50 : 25 }));
+    const headers = ["Cluster ID", "Beneficiary ID", "Score", "Woman Name", "Husband Name", "National ID", "Phone", "Children"];
+    ws.columns = headers.map(h => ({ header: h, key: h.replace(/\s/g, ''), width: 25 }));
     
     const headerRow = ws.getRow(1);
     headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
@@ -345,9 +344,6 @@ function createClustersSheet(wb: ExcelJS.Workbook, clusters: RecordRow[][], aiSu
 
         const startRow = currentRowIndex;
         const endRow = startRow + recordsForSheet.length - 1;
-
-        const clusterKey = cluster.map(r => r._internalId).sort().join('-');
-        const summary = aiSummaries[clusterKey] || '';
 
         recordsForSheet.forEach((record) => {
              const pair = pairs.find(p => p.a._internalId === record._internalId || p.b._internalId === record._internalId);
@@ -368,14 +364,9 @@ function createClustersSheet(wb: ExcelJS.Workbook, clusters: RecordRow[][], aiSu
         const clusterIdCell = ws.getCell(`A${startRow}`);
         clusterIdCell.value = clusterId;
         clusterIdCell.alignment = { vertical: 'middle', horizontal: 'center' };
-
-        ws.mergeCells(`B${startRow}:B${endRow}`);
-        const summaryCell = ws.getCell(`B${startRow}`);
-        summaryCell.value = summary;
-        summaryCell.alignment = { vertical: 'top', horizontal: 'right', wrapText: true };
         
         for (let i = startRow; i <= endRow; i++) {
-            ws.getRow(i).getCell('C').value = recordsForSheet[i - startRow].beneficiaryId;
+            ws.getRow(i).getCell('B').value = recordsForSheet[i - startRow].beneficiaryId;
             ws.getRow(i).eachCell({ includeEmpty: true }, (cell) => {
                 const border: Partial<ExcelJS.Borders> = {};
                 if (i === startRow) border.top = { style: 'thick', color: {argb: 'FF4F81BD'} };
