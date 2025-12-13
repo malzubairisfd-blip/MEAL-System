@@ -1,3 +1,4 @@
+
 import { ai } from '@/ai/genkit';
 import type { RecordRow } from '@/lib/types';
 
@@ -39,7 +40,7 @@ ${JSON.stringify(cluster, null, 2)}
 
   try {
     const res = await ai.generate({
-      model: 'googleai/gemini-1.5-flash-latest',
+      model: 'googleai/gemini-1.5-flash',
       prompt,
       config: {
         temperature: 0.2,
