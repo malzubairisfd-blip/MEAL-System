@@ -3,58 +3,99 @@ import { generateClusterDescription } from '@/ai/flows/describe-cluster-flow';
 import type { RecordRow } from '@/lib/types';
 
 export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
+export const dynamic = 'force-dynamic'; // Prevent caching
+
+function withTimeout<T>(promise: Promise<T>, ms = 20000): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error('AI timeout'));
+    }, ms);
+
+    promise
+      .then(res => {
+        clearTimeout(timer);
+        resolve(res);
+      })
+      .catch(err => {
+        clearTimeout(timer);
+        reject(err);
+      });
+  });
+}
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
 
-    // دعم الحالتين:
-    // { cluster: [...] }
-    // { clusters: [ [...], [...] ] }
-
     let clusters: RecordRow[][] = [];
-
     if (Array.isArray(body?.clusters)) {
       clusters = body.clusters;
     } else if (Array.isArray(body?.cluster)) {
       clusters = [body.cluster];
     } else {
-      return Response.json(
-        { error: 'Invalid cluster data provided' },
-        { status: 400 }
-      );
+      return new Response(JSON.stringify({ error: 'Invalid cluster data' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
     }
 
-    const results: Record<string, string> = {};
+    const stream = new ReadableStream({
+      async start(controller) {
+        const send = (data: any) => {
+          controller.enqueue(`data: ${JSON.stringify(data)}\n\n`);
+        };
 
-    for (let i = 0; i < clusters.length; i++) {
-      const cluster = clusters[i];
-      const key =
-        cluster
-          .map(r => r._internalId || Math.random().toString(36))
-          .sort()
-          .join('-');
+        const processCluster = async (cluster: RecordRow[]) => {
+          const clusterKey = cluster
+            .map(r => r._internalId || Math.random().toString(36))
+            .sort()
+            .join('-');
+            
+          try {
+            const result = await withTimeout(
+              generateClusterDescription({ cluster }),
+              20000
+            );
+            send({
+              clusterKey,
+              description: result.description,
+              status: 'success',
+            });
+          } catch (e: any) {
+            console.error('AI summary error:', e);
+            const isTimeout = e.message.includes('timeout');
+            send({
+              clusterKey,
+              error: isTimeout
+                ? 'AI summary generation timed out'
+                : e.message || 'An unknown error occurred.',
+              status: isTimeout ? 'timeout' : 'error',
+            });
+          }
+        };
 
-      try {
-        const res = await generateClusterDescription({ cluster });
-        results[key] = res.description;
-      } catch (err) {
-        console.error('AI error for cluster:', err);
-        results[key] = 'تعذر توليد ملخص لهذه المجموعة.';
-      }
-    }
+        // Process all clusters in parallel
+        await Promise.all(clusters.map(processCluster));
+        
+        // Signal completion
+        send({ done: true });
+        controller.close();
+      },
+    });
 
-    return Response.json({
-      ok: true,
-      results
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+      },
     });
 
   } catch (e: any) {
     console.error('Describe cluster API error:', e);
-    return Response.json(
-      { error: 'AI service failure' },
-      { status: 500 }
-    );
+    return new Response(JSON.stringify({ error: 'AI service failure' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 }

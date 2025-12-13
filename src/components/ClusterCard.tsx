@@ -1,11 +1,12 @@
+
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import type { RecordRow } from "@/lib/types";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from "@/components/ui/sheet";
-import { Microscope, Sparkles, Loader2 } from "lucide-react";
+import { Microscope, Sparkles, Loader2, RefreshCw } from "lucide-react";
 import { calculateClusterConfidence } from "@/lib/clusterConfidence";
 import { useToast } from "@/hooks/use-toast";
 
@@ -24,43 +25,77 @@ export function ClusterCard({ cluster, clusterId, clusterNumber, onInspect }: Cl
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [isSummaryLoading, setIsSummaryLoading] = useState(false);
   const [summaryError, setSummaryError] = useState<string | null>(null);
+  const eventSourceRef = React.useRef<EventSource | null>(null);
 
   const confidence = calculateClusterConfidence(cluster);
   const { toast } = useToast();
 
+  const cleanupEventSource = () => {
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      cleanupEventSource();
+    };
+  }, []);
+
   const handleGenerateSummary = async () => {
     if (isSummaryLoading) return;
-
+    
+    cleanupEventSource();
     setIsSummaryLoading(true);
     setSummaryError(null);
     setAiSummary(null);
     
     try {
-      const res = await fetch('/api/ai/describe-cluster', {
+      const eventSource = new EventSource('/api/ai/describe-cluster', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ cluster }),
       });
+      eventSourceRef.current = eventSource;
       
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || "Failed to generate summary.");
-      }
+      eventSource.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        
+        if (data.done) {
+          setIsSummaryLoading(false);
+          cleanupEventSource();
+          if (!aiSummary && !summaryError) {
+             setSummaryError("The AI did not return a summary. It may have timed out.");
+          }
+          return;
+        }
 
-      const data = await res.json();
-      setAiSummary(data.description);
+        if (data.status === 'success' && data.description) {
+          setAiSummary(data.description);
+          setSummaryError(null);
+        } else if (data.status === 'error' || data.status === 'timeout') {
+          setSummaryError(data.error || 'An unknown error occurred.');
+          toast({ title: "AI Summary Error", description: data.error, variant: "destructive" });
+        }
+      };
 
-    } catch (e: any) {
-        setSummaryError(e.message || "An unknown error occurred.");
-        toast({ title: "AI Summary Failed", description: e.message, variant: "destructive" });
-    } finally {
+      eventSource.onerror = (err) => {
+        console.error("EventSource failed:", err);
+        setSummaryError("Failed to connect to the summary service.");
         setIsSummaryLoading(false);
+        cleanupEventSource();
+      };
+    } catch (e: any) {
+      setSummaryError(e.message || "An unknown error occurred.");
+      toast({ title: "AI Summary Failed", description: e.message, variant: "destructive" });
+      setIsSummaryLoading(false);
     }
   };
 
   const handleOpenPanel = () => {
       setIsPanelOpen(true);
-      if (!aiSummary && !isSummaryLoading) {
+      if (!aiSummary && !isSummaryLoading && !summaryError) {
           handleGenerateSummary();
       }
   }
@@ -134,7 +169,7 @@ export function ClusterCard({ cluster, clusterId, clusterNumber, onInspect }: Cl
               </div>
                <SheetFooter>
                  <Button variant="secondary" onClick={handleGenerateSummary} disabled={isSummaryLoading}>
-                     {isSummaryLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                     {isSummaryLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
                      Regenerate
                  </Button>
                  <Button variant="outline" onClick={() => setIsPanelOpen(false)}>Close</Button>
