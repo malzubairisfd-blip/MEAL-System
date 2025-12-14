@@ -85,6 +85,7 @@ export function generateArabicClusterSummary(
 تم تجميع <strong>${size}</strong> سجلات يُحتمل أنها تمثل نفس المستفيد أو نفس الأسرة.<br/><br/>
 
 <strong>تحليل درجات التشابه:</strong><br/>
+• مستوى الثقة: <strong style="${getScoreColor(cluster.confidence)}">${cluster.confidence}%</strong><br/>
 • متوسط تشابه اسم المرأة: <strong style="${getScoreColor(womanScorePct)}">${womanScorePct}%</strong><br/>
 • متوسط تشابه اسم الزوج: <strong style="${getScoreColor(husbandScorePct)}">${husbandScorePct}%</strong><br/>
 • الدرجة النهائية للتشابه: <strong style="${getScoreColor(finalScorePct)}">${finalScorePct}%</strong><br/><br/>
