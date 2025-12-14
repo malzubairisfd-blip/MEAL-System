@@ -255,7 +255,7 @@ export default function ReviewPage() {
 
 
 function ClusterCard({ cluster, clusterNumber, onInspect }: { cluster: Cluster, clusterNumber: number, onInspect: () => void }) {
-  const summary = generateArabicClusterSummary(cluster, cluster.records);
+  const { summaryHtml, confidenceScore, avgWoman, avgHusband } = generateArabicClusterSummary(cluster, cluster.records);
 
   const ConfidenceBadge = ({ score, label }: { score?: number, label: string }) => {
     if (score === undefined) return null;
@@ -266,9 +266,9 @@ function ClusterCard({ cluster, clusterNumber, onInspect }: { cluster: Cluster, 
     else if (scorePct >= 60) color = "bg-blue-200 text-blue-800";
     
     return (
-        <div className="text-xs">
-            <span className="font-semibold">{label}: </span>
-            <span className={`px-2 py-0.5 rounded-full font-bold ${color}`}>{scorePct}%</span>
+        <div className="text-xs text-center">
+            <span className="font-semibold">{label}</span>
+            <div className={`px-2 py-0.5 rounded-full font-bold ${color}`}>{scorePct}%</div>
         </div>
     );
   };
@@ -281,12 +281,10 @@ function ClusterCard({ cluster, clusterNumber, onInspect }: { cluster: Cluster, 
             <CardTitle>Cluster {clusterNumber}</CardTitle>
             <CardDescription>{cluster.records.length} records</CardDescription>
           </div>
-           {cluster.confidence !== undefined && (
-             <div className="text-right">
-                <p className="text-xs text-muted-foreground">Confidence</p>
-                <strong className="text-lg">{cluster.confidence}%</strong>
-            </div>
-           )}
+           <div className="text-right">
+              <p className="text-xs text-muted-foreground">Confidence</p>
+              <strong className="text-lg">{confidenceScore}%</strong>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="flex-1 space-y-4">
@@ -310,7 +308,7 @@ function ClusterCard({ cluster, clusterNumber, onInspect }: { cluster: Cluster, 
           <CardContent className="text-right p-4 pt-0">
              <div
               className="text-sm text-muted-foreground leading-relaxed"
-              dangerouslySetInnerHTML={{ __html: summary }}
+              dangerouslySetInnerHTML={{ __html: summaryHtml }}
             />
           </CardContent>
         </Card>
@@ -324,5 +322,3 @@ function ClusterCard({ cluster, clusterNumber, onInspect }: { cluster: Cluster, 
     </Card>
   );
 }
-
-    

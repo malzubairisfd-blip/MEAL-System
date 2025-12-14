@@ -1,3 +1,4 @@
+
 // src/lib/arabicClusterSummary.ts
 
 type SimilarityScores = {
@@ -45,55 +46,21 @@ export function generateArabicClusterSummary(
   /* --------------------------------------------------
      2️⃣ PAIRWISE SIMILARITY SCORE ANALYSIS
   -------------------------------------------------- */
-  const similarityScores: SimilarityScores[] = [];
+  const avgWoman = cluster.avgWomanNameScore || 0;
+  const avgHusband = cluster.avgHusbandNameScore || 0;
+  const avgOverall = cluster.avgFinalScore || 0;
 
-  if (Array.isArray(cluster.pairScores)) {
-    for (const s of cluster.pairScores) {
-      similarityScores.push({
-        womanName: s.womanNameScore,
-        husbandName: s.husbandNameScore,
-        overall: s.finalScore,
-      });
-    }
-  }
-
-  const avg = (arr: number[]) =>
-    arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
-
-  const avgWomanScore = avg(
-    similarityScores.map(s => s.womanName ?? 0)
-  );
-  const avgHusbandScore = avg(
-    similarityScores.map(s => s.husbandName ?? 0)
-  );
-  const avgOverallScore = avg(
-    similarityScores.map(s => s.overall ?? 0)
-  );
 
   /* --------------------------------------------------
      3️⃣ CONFIDENCE SCORE (0–100)
   -------------------------------------------------- */
-  let confidenceScore = Math.round(avgOverallScore * 100);
+  let confidenceScore = Math.round(avgOverall * 100);
 
   if (reasons.includes("DUPLICATED_HUSBAND_LINEAGE")) confidenceScore += 5;
   if (reasons.includes("WOMAN_LINEAGE_MATCH")) confidenceScore += 5;
   if (reasons.includes("TOKEN_REORDER")) confidenceScore += 3;
 
   confidenceScore = Math.min(confidenceScore, 100);
-
-  /* --------------------------------------------------
-     4️⃣ RECORD EXAMPLES (UNCHANGED + SAFE)
-  -------------------------------------------------- */
-  const examples: string[] = [];
-  for (let i = 0; i < Math.min(3, rows.length); i++) {
-    const r = rows[i];
-    const parts = [];
-    if (r.womanName) parts.push(`المرأة: ${r.womanName}`);
-    if (r.husbandName) parts.push(`الزوج: ${r.husbandName}`);
-    if (r.idNumber) parts.push(`الهوية: ${r.idNumber}`);
-    if (r.phone) parts.push(`الهاتف: ${r.phone}`);
-    examples.push(parts.join("، "));
-  }
 
   /* --------------------------------------------------
      5️⃣ EXPERT EVALUATION (HUMAN-LIKE DECISION)
@@ -118,7 +85,7 @@ export function generateArabicClusterSummary(
   /* --------------------------------------------------
      6️⃣ FINAL ARABIC SUMMARY (HTML SAFE)
   -------------------------------------------------- */
-  return `
+  const summaryHtml = `
 <strong>النتيجة العامة:</strong><br/>
 تم تجميع <strong>${size}</strong> سجلات يُحتمل أنها تمثل نفس المستفيد أو نفس الأسرة.<br/><br/>
 
@@ -126,18 +93,17 @@ export function generateArabicClusterSummary(
 ${explanations.length ? explanations.map(e => `• ${e}`).join("<br/>") : "• لا توجد أسباب مسجلة"}<br/><br/>
 
 <strong>تحليل درجات التشابه:</strong><br/>
-• متوسط تشابه اسم المرأة: <strong>${Math.round(avgWomanScore * 100)}%</strong><br/>
-• متوسط تشابه اسم الزوج: <strong>${Math.round(avgHusbandScore * 100)}%</strong><br/>
-• الدرجة النهائية للتشابه: <strong>${Math.round(avgOverallScore * 100)}%</strong><br/><br/>
+• متوسط تشابه اسم المرأة: <strong>${Math.round(avgWoman * 100)}%</strong><br/>
+• متوسط تشابه اسم الزوج: <strong>${Math.round(avgHusband * 100)}%</strong><br/>
+• الدرجة النهائية للتشابه: <strong>${Math.round(avgOverall * 100)}%</strong><br/><br/>
 
 <strong>مستوى الثقة:</strong> <strong>${confidenceScore}%</strong><br/><br/>
 
 <strong>تقييم خبير:</strong><br/>
 ${expertNote}<br/><br/>
 
-<strong>أمثلة على السجلات:</strong><br/>
-${examples.map(e => `• ${e}`).join("<br/>")}<br/><br/>
-
 <strong>القرار النهائي:</strong> ${decision}
 `;
+
+  return { summaryHtml, confidenceScore, avgWoman, avgHusband };
 }
