@@ -611,10 +611,12 @@ async function runClustering(rows, opts) {
     }
   }
 
-  const clustersWithRecords = finalClusters.map(c => ({
-      ...c,
-      records: c.records.map(r => rows.find(row => row._internalId === r._internalId))
-  }));
+  const clustersWithRecords = finalClusters
+    .map(c => ({
+        ...c,
+        records: c.records.map(r => rows.find(row => row._internalId === r._internalId))
+    }))
+    .filter(c => c.records.length > 1);
 
   postMessage({ type: "progress", status: "annotating", progress: 95 });
   return { clusters: clustersWithRecords, edgesUsed, rows };
@@ -1011,5 +1013,6 @@ export default function UploadPage(){
     </div>
   );
 }
+
 
 
