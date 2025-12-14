@@ -255,24 +255,17 @@ export default function ReviewPage() {
 
 
 function ClusterCard({ cluster, clusterNumber, onInspect }: { cluster: Cluster, clusterNumber: number, onInspect: () => void }) {
-  const { summaryHtml, confidenceScore, avgWoman, avgHusband } = generateArabicClusterSummary(cluster, cluster.records);
+  const summaryHtml = generateArabicClusterSummary(cluster, cluster.records);
+  const confidenceScore = cluster.confidence || calculateClusterConfidence(cluster.records);
 
-  const ConfidenceBadge = ({ score, label }: { score?: number, label: string }) => {
-    if (score === undefined) return null;
-    const scorePct = Math.round(score * 100);
-    let color = "bg-gray-200 text-gray-800";
-    if (scorePct >= 90) color = "bg-red-200 text-red-800";
-    else if (scorePct >= 75) color = "bg-yellow-200 text-yellow-800";
-    else if (scorePct >= 60) color = "bg-blue-200 text-blue-800";
-    
-    return (
-        <div className="text-xs text-center">
-            <span className="font-semibold">{label}</span>
-            <div className={`px-2 py-0.5 rounded-full font-bold ${color}`}>{scorePct}%</div>
-        </div>
-    );
+  const getScoreColor = (score?: number) => {
+    if (score === undefined) return "text-gray-500";
+    if (score >= 90) return "text-red-600 font-bold";
+    if (score >= 75) return "text-orange-500 font-semibold";
+    if (score >= 60) return "text-blue-600";
+    return "text-gray-600";
   };
-
+  
   return (
     <Card className="flex flex-col hover:shadow-md transition-shadow">
       <CardHeader>
@@ -283,7 +276,7 @@ function ClusterCard({ cluster, clusterNumber, onInspect }: { cluster: Cluster, 
           </div>
            <div className="text-right">
               <p className="text-xs text-muted-foreground">Confidence</p>
-              <strong className="text-lg">{confidenceScore}%</strong>
+              <strong className={`text-lg ${getScoreColor(confidenceScore)}`}>{confidenceScore}%</strong>
           </div>
         </div>
       </CardHeader>
@@ -299,10 +292,6 @@ function ClusterCard({ cluster, clusterNumber, onInspect }: { cluster: Cluster, 
           <CardHeader className="p-4">
             <CardTitle className="text-right text-base flex justify-between items-center">
              <span>ملخص ذكي</span>
-             <div className="flex gap-2">
-                <ConfidenceBadge score={cluster.avgWomanNameScore} label="Woman" />
-                <ConfidenceBadge score={cluster.avgHusbandNameScore} label="Husband" />
-             </div>
             </CardTitle>
           </CardHeader>
           <CardContent className="text-right p-4 pt-0">

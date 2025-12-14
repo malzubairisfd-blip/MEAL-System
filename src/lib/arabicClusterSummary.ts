@@ -1,10 +1,12 @@
 
 // src/lib/arabicClusterSummary.ts
 
-type SimilarityScores = {
-  womanName?: number;      // 0–1
-  husbandName?: number;    // 0–1
-  overall?: number;        // 0–1
+const getScoreColor = (score?: number) => {
+    if (score === undefined) return "color: #4B5563"; // gray-600
+    if (score >= 90) return "color: #DC2626"; // red-600
+    if (score >= 75) return "color: #F97316"; // orange-500
+    if (score >= 60) return "color: #2563EB"; // blue-600
+    return "color: #4B5563"; // gray-600
 };
 
 export function generateArabicClusterSummary(
@@ -17,7 +19,7 @@ export function generateArabicClusterSummary(
   const explanations: string[] = [];
 
   /* --------------------------------------------------
-     1️⃣ REASON ANALYSIS (UNCHANGED + CLEANED)
+     1️⃣ REASON ANALYSIS
   -------------------------------------------------- */
   if (reasons.includes("DUPLICATED_HUSBAND_LINEAGE")) {
     explanations.push(
@@ -48,56 +50,44 @@ export function generateArabicClusterSummary(
   -------------------------------------------------- */
   const avgWoman = cluster.avgWomanNameScore || 0;
   const avgHusband = cluster.avgHusbandNameScore || 0;
-  const avgOverall = cluster.avgFinalScore || 0;
+  const avgFinal = cluster.avgFinalScore || 0;
+
+  const womanScorePct = Math.round(avgWoman * 100);
+  const husbandScorePct = Math.round(avgHusband * 100);
+  const finalScorePct = Math.round(avgFinal * 100);
 
 
   /* --------------------------------------------------
-     3️⃣ CONFIDENCE SCORE (0–100)
-  -------------------------------------------------- */
-  let confidenceScore = Math.round(avgOverall * 100);
-
-  if (reasons.includes("DUPLICATED_HUSBAND_LINEAGE")) confidenceScore += 5;
-  if (reasons.includes("WOMAN_LINEAGE_MATCH")) confidenceScore += 5;
-  if (reasons.includes("TOKEN_REORDER")) confidenceScore += 3;
-
-  confidenceScore = Math.min(confidenceScore, 100);
-
-  /* --------------------------------------------------
-     5️⃣ EXPERT EVALUATION (HUMAN-LIKE DECISION)
+     3️⃣ EXPERT EVALUATION (HUMAN-LIKE DECISION)
   -------------------------------------------------- */
   let decision = "غير مكرر";
   let expertNote = "لا توجد مؤشرات كافية على التكرار.";
 
-  if (confidenceScore >= 90) {
+  if (finalScorePct >= 85) {
     decision = "تكرار مؤكد";
     expertNote =
       "تطابق قوي جدًا في الأسماء والنسب مع احتمالية عالية أن السجلات تعود لنفس المستفيد.";
-  } else if (confidenceScore >= 75) {
+  } else if (finalScorePct >= 70) {
     decision = "اشتباه تكرار قوي";
     expertNote =
       "تشابه مرتفع في الأسماء والنسب، ويوصى بالتحقق الميداني.";
-  } else if (confidenceScore >= 60) {
+  } else if (finalScorePct >= 60) {
     decision = "اشتباه تكرار";
     expertNote =
       "يوجد تشابه جزئي، وقد يكون ناتجًا عن تشابه أسماء شائع في المنطقة.";
   }
 
   /* --------------------------------------------------
-     6️⃣ FINAL ARABIC SUMMARY (HTML SAFE)
+     4️⃣ FINAL ARABIC SUMMARY (HTML SAFE)
   -------------------------------------------------- */
   const summaryHtml = `
 <strong>النتيجة العامة:</strong><br/>
 تم تجميع <strong>${size}</strong> سجلات يُحتمل أنها تمثل نفس المستفيد أو نفس الأسرة.<br/><br/>
 
-<strong>أسباب التجميع:</strong><br/>
-${explanations.length ? explanations.map(e => `• ${e}`).join("<br/>") : "• لا توجد أسباب مسجلة"}<br/><br/>
-
 <strong>تحليل درجات التشابه:</strong><br/>
-• متوسط تشابه اسم المرأة: <strong>${Math.round(avgWoman * 100)}%</strong><br/>
-• متوسط تشابه اسم الزوج: <strong>${Math.round(avgHusband * 100)}%</strong><br/>
-• الدرجة النهائية للتشابه: <strong>${Math.round(avgOverall * 100)}%</strong><br/><br/>
-
-<strong>مستوى الثقة:</strong> <strong>${confidenceScore}%</strong><br/><br/>
+• متوسط تشابه اسم المرأة: <strong style="${getScoreColor(womanScorePct)}">${womanScorePct}%</strong><br/>
+• متوسط تشابه اسم الزوج: <strong style="${getScoreColor(husbandScorePct)}">${husbandScorePct}%</strong><br/>
+• الدرجة النهائية للتشابه: <strong style="${getScoreColor(finalScorePct)}">${finalScorePct}%</strong><br/><br/>
 
 <strong>تقييم خبير:</strong><br/>
 ${expertNote}<br/><br/>
@@ -105,5 +95,5 @@ ${expertNote}<br/><br/>
 <strong>القرار النهائي:</strong> ${decision}
 `;
 
-  return { summaryHtml, confidenceScore, avgWoman, avgHusband };
+  return summaryHtml;
 }
