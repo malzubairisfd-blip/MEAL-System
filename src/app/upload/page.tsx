@@ -155,6 +155,7 @@ function applyAdditionalRules(a, b, opts) {
   const B = splitParts(b.womanName_normalized || "");
   const HA = splitParts(a.husbandName_normalized || "");
   const HB = splitParts(b.husbandName_normalized || "");
+  const reasons = [];
 
   // RULE 0: strong token match (80%+ tokens overlap)
   {
@@ -164,7 +165,10 @@ function applyAdditionalRules(a, b, opts) {
     for (const t of setA) if (setB.has(t)) inter++;
     const uni = new Set([...setA, ...setB]).size;
     const ratio = uni === 0 ? 0 : inter / uni;
-    if (ratio >= 0.80) return Math.min(1, minPair + 0.22);
+    if (ratio >= 0.80) {
+      reasons.push("TOKEN_REORDER");
+      return { score: Math.min(1, minPair + 0.22), reasons };
+    }
   }
 
   /* ----------------------------------------------------
@@ -173,11 +177,11 @@ function applyAdditionalRules(a, b, opts) {
      المرأة نفسها مع اختلاف النسب — الزوج + الأطفال حاسمين
   ---------------------------------------------------- */
   {
-    const A = splitParts(a.womanName_normalized);
-    const B = splitParts(b.womanName_normalized);
+    const A_parts = splitParts(a.womanName_normalized);
+    const B_parts = splitParts(b.womanName_normalized);
 
     const firstNameMatch =
-      A.length > 0 && B.length > 0 && jw(A[0], B[0]) >= 0.93;
+      A_parts.length > 0 && B_parts.length > 0 && jw(A_parts[0], B_parts[0]) >= 0.93;
 
     const husbandStrong =
       jw(a.husbandName_normalized, b.husbandName_normalized) >= 0.90 ||
@@ -190,12 +194,12 @@ function applyAdditionalRules(a, b, opts) {
       ) >= 0.90;
 
     if (firstNameMatch && husbandStrong && childrenMatch) {
-      return minPair + 0.25; // HARD FORCE DUPLICATE
+        reasons.push("DUPLICATED_HUSBAND_LINEAGE"); // This is close enough
+        return { score: minPair + 0.25, reasons }; // HARD FORCE DUPLICATE
     }
   }
 
   // Helper thresholds
-  const s90 = (x, y) => jw(x || "", y || "") >= 0.90;
   const s93 = (x, y) => jw(x || "", y || "") >= 0.93;
   const s95 = (x, y) => jw(x || "", y || "") >= 0.95;
 
@@ -205,105 +209,69 @@ function applyAdditionalRules(a, b, opts) {
   const F1 = getPart(A, 0), Fa1 = getPart(A, 1), G1 = getPart(A, 2), L1 = getPart(A, 3);
   const F2 = getPart(B, 0), Fa2 = getPart(B, 1), G2 = getPart(B, 2), L2 = getPart(B, 3);
 
-  const HF1 = getPart(HA, 0), HFa1 = getPart(HA, 1), HG1 = getPart(HA, 2);
-  const HF2 = getPart(HB, 0), HFa2 = getPart(HB, 1), HG2 = getPart(HB, 2);
-
-  // RULE 1:
-  // If first/father/grandfather >= 93% and 4th/last differs, and husbands different => boost
+  const HF1 = getPart(HA, 0);
+  const HF2 = getPart(HB, 0);
+  
   if (s93(F1, F2) && s93(Fa1, Fa2) && s93(G1, G2) && jw(L1 || "", L2 || "") < 0.85) {
-    // ensure husbands are not similar (different husbands)
-    if (jw(HF1, HF2) < 0.7) return Math.min(1, minPair + 0.18);
-  }
-
-  // RULE 2:
-  // first 93%+, father/grandfather 93%+, lastname high similar (few chars diff), husbands different
-  if (s93(F1, F2) && s93(Fa1, Fa2) && s93(G1, G2) && jw(L1, L2) >= 0.85) {
-    if (jw(HF1, HF2) < 0.7) return Math.min(1, minPair + 0.18);
-  }
-
-  // RULE 3:
-  // 4 vs 5 parts (length mismatch acceptable) with first 93+, same father & grandfather, lastname 93+ similar, different husbands
-  if ((A.length === 4 && B.length === 5) || (A.length === 5 && B.length === 4)) {
-    if (s93(F1, F2) && s93(Fa1, Fa2) && s93(G1, G2) && s93(L1 || "", L2 || "")) {
-      if (jw(HF1, HF2) < 0.7) return Math.min(1, minPair + 0.17);
+    if (jw(HF1, HF2) < 0.7) {
+        reasons.push("WOMAN_LINEAGE_MATCH");
+        return { score: Math.min(1, minPair + 0.18), reasons };
     }
   }
 
-  // RULE 4:
-  // 4 vs 5 parts, first >=95%, same father but different grandfather and lastname.
-  // Husband names 95%+ in first name, father different, grandfather differ, lastname 93+ same
+  if (s93(F1, F2) && s93(Fa1, Fa2) && s93(G1, G2) && jw(L1, L2) >= 0.85) {
+    if (jw(HF1, HF2) < 0.7) {
+        reasons.push("WOMAN_LINEAGE_MATCH");
+        return { score: Math.min(1, minPair + 0.18), reasons };
+    }
+  }
+
   if ((A.length === 4 && B.length === 5) || (A.length === 5 && B.length === 4)) {
-    if (s95(F1, F2) && s93(L1 || "", L2 || "") && s95(HF1, HF2)) {
-      // father same?
-      if (s93(Fa1, Fa2) && !s93(G1, G2)) {
-        return Math.min(1, minPair + 0.20);
+    if (s93(F1, F2) && s93(Fa1, Fa2) && s93(G1, G2) && s93(L1 || "", L2 || "")) {
+      if (jw(HF1, HF2) < 0.7) {
+          reasons.push("WOMAN_LINEAGE_MATCH");
+          return { score: Math.min(1, minPair + 0.17), reasons };
       }
     }
   }
 
-  // RULE 5:
-  // 4 vs 5 parts, first/father/grandfather 93+ similar, husbands different parts but first/father/grandfather 93+ => boost
+  if ((A.length === 4 && B.length === 5) || (A.length === 5 && B.length === 4)) {
+    if (s95(F1, F2) && s93(L1 || "", L2 || "") && s95(HF1, HF2)) {
+      if (s93(Fa1, Fa2) && !s93(G1, G2)) {
+          reasons.push("DUPLICATED_HUSBAND_LINEAGE");
+          return { score: Math.min(1, minPair + 0.20), reasons };
+      }
+    }
+  }
+
   if ((A.length === 4 && B.length === 5) || (A.length === 5 && B.length === 4)) {
     if (s93(F1, F2) && s93(Fa1, Fa2) && s93(G1, G2)) {
-      // if husbands differ in many parts (different husband tokens)
-      if (jw(HF1, HF2) < 0.7) return Math.min(1, minPair + 0.16);
+      if (jw(HF1, HF2) < 0.7) {
+          reasons.push("WOMAN_LINEAGE_MATCH");
+          return { score: Math.min(1, minPair + 0.16), reasons };
+      }
     }
   }
 
   /* ============================================================
      RULE — DOMINANT LINEAGE MATCH (WOMAN + HUSBAND)
-     Designed for Arabic multi-part shifting names
      ============================================================ */
   {
-    const minPair = opts?.thresholds?.minPair ?? 0.62;
-    const jw = jaroWinkler;
-
-    const A = splitParts(a.womanName_normalized || "");
-    const B = splitParts(b.womanName_normalized || "");
-
-    const HA = splitParts(a.husbandName_normalized || "");
-    const HB = splitParts(b.husbandName_normalized || "");
-
     if (A.length >= 3 && B.length >= 3 && HA.length >= 3 && HB.length >= 3) {
-
-      /* ---------- WOMAN LINEAGE ---------- */
-      const womanFatherOK =
-        jw(A[1], B[1]) >= 0.93;
-
-      const womanGrandOK =
-        jw(A[2], B[2]) >= 0.93;
-
-      const womanFamilyOK =
-        jw(A[A.length - 1], B[B.length - 1]) >= 0.90;
-
-      const womanLineageStrong =
-        womanFatherOK && womanGrandOK && womanFamilyOK;
-
-      /* ---------- STRONG HUSBAND DUPLICATION ---------- */
+      const womanFatherOK = jw(A[1], B[1]) >= 0.93;
+      const womanGrandOK = jw(A[2], B[2]) >= 0.93;
+      const womanFamilyOK = jw(A[A.length - 1], B[B.length - 1]) >= 0.90;
+      const womanLineageStrong = womanFatherOK && womanGrandOK && womanFamilyOK;
       const husbandFirstOK  = jw(HA[0], HB[0]) >= 0.93;
       const husbandFatherOK = jw(HA[1], HB[1]) >= 0.93;
       const husbandGrandOK  = jw(HA[2], HB[2]) >= 0.93;
-      const husbandFamilyOK =
-        jw(HA[HA.length - 1], HB[HB.length - 1]) >= 0.90;
+      const husbandFamilyOK = jw(HA[HA.length - 1], HB[HB.length - 1]) >= 0.90;
+      const husbandIsSamePerson = husbandFirstOK && husbandFatherOK && husbandGrandOK && husbandFamilyOK;
+      const womanFirstSupport = jw(A[0], B[0]) >= 0.55 || jw(A[0], B[0]) === 0;
 
-      const husbandIsSamePerson =
-        husbandFirstOK &&
-        husbandFatherOK &&
-        husbandGrandOK &&
-        husbandFamilyOK;
-
-      /* ---------- SOFT FIRST NAME SUPPORT ---------- */
-      const womanFirstSupport =
-        jw(A[0], B[0]) >= 0.55 ||           // allows هدى / اهداء
-        jw(A[0], B[0]) === 0;               // allow total mismatch
-
-      /* ---------- FINAL DECISION ---------- */
-      if (
-        womanLineageStrong &&
-        husbandIsSamePerson &&
-        womanFirstSupport
-      ) {
-        return Math.min(1, minPair + 0.23);
+      if (womanLineageStrong && husbandIsSamePerson && womanFirstSupport) {
+        reasons.push("DUPLICATED_HUSBAND_LINEAGE");
+        return { score: Math.min(1, minPair + 0.23), reasons };
       }
     }
   }
@@ -313,9 +281,6 @@ function applyAdditionalRules(a, b, opts) {
 
 /* -------------------------
    pairwiseScore: tiered approach
-   1) High confidence (exact id or strong polygamy)
-   2) Component-based weighted score
-   3) Fallback order-free / token rules
    ------------------------- */
 function pairwiseScore(aRaw, bRaw, opts) {
   const optsDefaults = {
@@ -344,27 +309,15 @@ function pairwiseScore(aRaw, bRaw, opts) {
   o.thresholds = Object.assign({}, optsDefaults.thresholds, (opts && opts.thresholds) || {});
   o.rules = Object.assign({}, optsDefaults.rules, (opts && opts.rules) || {});
 
-  // Map and normalize fields
   const a = {
-    womanName: aRaw.womanName || "",
-    husbandName: aRaw.husbandName || "",
-    nationalId: String(aRaw.nationalId || aRaw.id || ""),
-    phone: digitsOnly(aRaw.phone || ""),
-    village: aRaw.village || "",
-    subdistrict: aRaw.subdistrict || "",
-    children: aRaw.children || []
+    womanName: aRaw.womanName || "", husbandName: aRaw.husbandName || "", nationalId: String(aRaw.nationalId || aRaw.id || ""),
+    phone: digitsOnly(aRaw.phone || ""), village: aRaw.village || "", subdistrict: aRaw.subdistrict || "", children: aRaw.children || []
   };
   const b = {
-    womanName: bRaw.womanName || "",
-    husbandName: bRaw.husbandName || "",
-    nationalId: String(bRaw.nationalId || bRaw.id || ""),
-    phone: digitsOnly(bRaw.phone || ""),
-    village: bRaw.village || "",
-    subdistrict: bRaw.subdistrict || "",
-    children: bRaw.children || []
+    womanName: bRaw.womanName || "", husbandName: bRaw.husbandName || "", nationalId: String(bRaw.nationalId || bRaw.id || ""),
+    phone: digitsOnly(bRaw.phone || ""), village: bRaw.village || "", subdistrict: bRaw.subdistrict || "", children: bRaw.children || []
   };
 
-  // normalized helper fields
   a.womanName_normalized = normalizeArabicRaw(a.womanName);
   b.womanName_normalized = normalizeArabicRaw(b.womanName);
   a.husbandName_normalized = normalizeArabicRaw(a.husbandName);
@@ -374,50 +327,36 @@ function pairwiseScore(aRaw, bRaw, opts) {
   a.children_normalized = (Array.isArray(a.children) ? a.children : normalizeChildrenField(a.children)).map(normalizeArabicRaw);
   b.children_normalized = (Array.isArray(b.children) ? b.children : normalizeChildrenField(b.children)).map(normalizeArabicRaw);
 
-  // --------------- Tier 1: High confidence rules ---------------
-  // Exact national ID match => immediate high score
   if (a.nationalId && b.nationalId && a.nationalId === b.nationalId) {
-    return { score: 0.99, breakdown: { reason: "EXACT_ID" } };
+    return { score: 0.99, breakdown: { reason: "EXACT_ID" }, reasons: ["EXACT_ID"] };
   }
 
-  // Strong polygamy signal: same husband (very high) + shared paternal line => immediate high
   const husbandJW = jaroWinkler(a.husbandName_normalized, b.husbandName_normalized);
   const aParts = splitParts(a.womanName_normalized), bParts = splitParts(b.womanName_normalized);
   const aFather = aParts[1] || "", bFather = bParts[1] || "";
   const aGrand = aParts[2] || "", bGrand = bParts[2] || "";
   if (o.rules.enablePolygamyRules && husbandJW >= 0.95 && jaroWinkler(aFather, bFather) >= 0.93 && jaroWinkler(aGrand, bGrand) >= 0.90) {
-    return { score: 0.97, breakdown: { reason: "POLYGAMY_STRONG" } };
+    return { score: 0.97, breakdown: { reason: "POLYGAMY_STRONG" }, reasons: ["POLYGAMY_PATTERN"] };
   }
 
-  // --------------- Additional rules (0..5) ---------------
-  const ruleBoost = applyAdditionalRules(a, b, o);
-  if (ruleBoost !== null) {
-    return { score: Math.min(1, ruleBoost), breakdown: { reason: "ADDITIONAL_RULE", boostedTo: ruleBoost } };
+  const ruleResult = applyAdditionalRules(a, b, o);
+  if (ruleResult) {
+    return { score: Math.min(1, ruleResult.score), breakdown: { reason: "ADDITIONAL_RULE", boostedTo: ruleResult.score }, reasons: ruleResult.reasons };
   }
 
-  // --------------- Tier 2: Component-based score ---------------
-  // Compare first name, father, grandfather, rest
   const A = splitParts(a.womanName_normalized), B = splitParts(b.womanName_normalized);
   const firstA = A[0] || "", firstB = B[0] || "";
   const famA = A.slice(1).join(" "), famB = B.slice(1).join(" ");
-
   const firstNameScore = jaroWinkler(firstA, firstB);
   const familyNameScore = jaroWinkler(famA, famB);
   const advancedNameScore = (() => {
-    // root-like signature: first 3 chars of each token
     const root = s => splitParts(s).map(t => t.slice(0, 3)).join(" ");
     const rA = root(a.womanName_normalized), rB = root(b.womanName_normalized);
     if (!rA || !rB) return 0;
-    const jwroot = jaroWinkler(rA, rB);
-    return Math.min(0.5, jwroot); // cap
+    return Math.min(0.5, jaroWinkler(rA, rB));
   })();
-
   const tokenReorderScore = nameOrderFreeScore(a.womanName_normalized, b.womanName_normalized);
-
-  // husband similarity (score)
   const husbandScore = Math.max(jaroWinkler(a.husbandName_normalized, b.husbandName_normalized), nameOrderFreeScore(a.husbandName_normalized, b.husbandName_normalized));
-
-  // phone/id/children/location scores
   const phoneScoreVal = (a.phone && b.phone) ? (a.phone === b.phone ? 1 : (a.phone.slice(-6) === b.phone.slice(-6) ? 0.85 : (a.phone.slice(-4) === b.phone.slice(-4) ? 0.6 : 0))) : 0;
   const idScore = (a.nationalId && b.nationalId) ? (a.nationalId === b.nationalId ? 1 : (a.nationalId.slice(-5) === b.nationalId.slice(-5) ? 0.75 : 0)) : 0;
   const childrenScore = tokenJaccard(a.children_normalized || [], b.children_normalized || []);
@@ -426,30 +365,22 @@ function pairwiseScore(aRaw, bRaw, opts) {
   if (a.subdistrict_normalized && b.subdistrict_normalized && a.subdistrict_normalized === b.subdistrict_normalized) locationScore += 0.25;
   locationScore = Math.min(0.5, locationScore);
 
-  // Compose weighted score
   const W = o.finalScoreWeights;
-  let score = 0;
-  score += (W.firstNameScore || 0) * firstNameScore;
-  score += (W.familyNameScore || 0) * familyNameScore;
-  score += (W.advancedNameScore || 0) * advancedNameScore;
-  score += (W.tokenReorderScore || 0) * tokenReorderScore;
-  score += (W.husbandScore || 0) * husbandScore;
-  score += (W.idScore || 0) * idScore;
-  score += (W.phoneScore || 0) * phoneScoreVal;
-  score += (W.childrenScore || 0) * childrenScore;
-  score += (W.locationScore || 0) * locationScore;
+  let score = (W.firstNameScore || 0) * firstNameScore + (W.familyNameScore || 0) * familyNameScore +
+              (W.advancedNameScore || 0) * advancedNameScore + (W.tokenReorderScore || 0) * tokenReorderScore +
+              (W.husbandScore || 0) * husbandScore + (W.idScore || 0) * idScore + (W.phoneScore || 0) * phoneScoreVal +
+              (W.childrenScore || 0) * childrenScore + (W.locationScore || 0) * locationScore;
 
-  // Tier 3 fallback boosts: if many components are strong, boost slightly
   const strongParts = [firstNameScore, familyNameScore, tokenReorderScore].filter(v => v >= 0.85).length;
   if (strongParts >= 2) score = Math.min(1, score + 0.04);
   score = Math.max(0, Math.min(1, score));
 
-  const breakdown = {
-    firstNameScore, familyNameScore, advancedNameScore, tokenReorderScore,
-    husbandScore, idScore, phoneScore: phoneScoreVal, childrenScore, locationScore
-  };
+  const breakdown = { firstNameScore, familyNameScore, advancedNameScore, tokenReorderScore, husbandScore, idScore, phoneScore: phoneScoreVal, childrenScore, locationScore };
+  
+  const reasons = [];
+  if (tokenReorderScore > 0.85) reasons.push("TOKEN_REORDER");
 
-  return { score, breakdown };
+  return { score, breakdown, reasons };
 }
 
 /* -------------------------
@@ -496,8 +427,7 @@ function pushEdgesForList(list, rows, minScore, seen, edges, opts) {
       seen.add(key);
       const result = pairwiseScore(rows[a], rows[b], opts);
       const score = result.score ?? 0;
-      const breakdown = result.breakdown || {};
-      if (score >= minScore) edges.push({ a, b, score, breakdown });
+      if (score >= minScore) edges.push({ a, b, score, reasons: result.reasons || [] });
     }
   }
 }
@@ -559,12 +489,12 @@ class UF {
 
 /* Split cluster so each piece <= 4 */
 function splitCluster(rowsSubset, minInternal = 0.50, opts) {
-  if (rowsSubset.length <= 4) return [rowsSubset];
+  if (rowsSubset.length <= 4) return [{ records: rowsSubset, reasons: [] }];
   const localEdges = [];
   for (let i = 0; i < rowsSubset.length; i++) {
     for (let j = i + 1; j < rowsSubset.length; j++) {
       const r = pairwiseScore(rowsSubset[i], rowsSubset[j], opts);
-      if ((r.score || 0) >= minInternal) localEdges.push({ a: i, b: j, score: r.score });
+      if ((r.score || 0) >= minInternal) localEdges.push({ a: i, b: j, score: r.score, reasons: r.reasons || [] });
     }
   }
   localEdges.sort((x, y) => y.score - x.score);
@@ -584,8 +514,15 @@ function splitCluster(rowsSubset, minInternal = 0.50, opts) {
   const result = [];
   for (const idxs of groups.values()) {
     const subset = idxs.map(i => rowsSubset[i]);
-    if (subset.length <= 4) result.push(subset);
-    else result.push(...splitCluster(subset, Math.max(minInternal, 0.45), opts));
+    const subEdges = localEdges.filter(e => idxs.includes(e.a) && idxs.includes(e.b));
+    const reasons = Array.from(new Set(subEdges.flatMap(e => e.reasons)));
+    
+    if (subset.length <= 4) {
+      result.push({ records: subset, reasons });
+    } else {
+      const furtherSplit = splitCluster(subset, Math.max(minInternal, 0.45), opts);
+      result.push(...furtherSplit);
+    }
   }
   return result;
 }
@@ -607,44 +544,44 @@ async function runClustering(rows, opts) {
 
   const uf = new UF(rows.length);
   const finalized = new Set();
-  const finalClustersIdx = [];
+  const finalClusters = [];
   const edgesUsed = [];
+  const rootReasons = new Map();
 
   for (let ei = 0; ei < edges.length; ei++) {
     const e = edges[ei];
     if (finalized.has(e.a) || finalized.has(e.b)) continue;
     const ra = uf.find(e.a), rb = uf.find(e.b);
+    
+    const currentReasons = rootReasons.get(ra) || new Set();
+    (e.reasons || []).forEach(r => currentReasons.add(r));
+    rootReasons.set(ra, currentReasons);
+
     if (ra === rb) { edgesUsed.push(e); continue; }
-    const sizeA = uf.size[ra], sizeB = uf.size[rb];
-    if (sizeA + sizeB <= 4) {
-      uf.merge(ra, rb); edgesUsed.push(e); continue;
+
+    const otherReasons = rootReasons.get(rb) || new Set();
+    (e.reasons || []).forEach(r => otherReasons.add(r));
+    rootReasons.set(rb, otherReasons);
+
+    if (uf.size[ra] + uf.size[rb] <= 4) {
+      const mergedRoot = uf.merge(ra, rb);
+      const allReasons = new Set([...(rootReasons.get(ra) || []), ...(rootReasons.get(rb) || [])]);
+      rootReasons.set(mergedRoot, allReasons);
+      edgesUsed.push(e);
+      continue;
     }
+    
     // need to split combined component
     const combinedIdx = Array.from(new Set([...uf.rootMembers(ra), ...uf.rootMembers(rb)]));
-    if (combinedIdx.length > 500) {
-      for (let s = 0; s < combinedIdx.length; s += 500) {
-        const chunkIdx = combinedIdx.slice(s, s + 500);
-        const chunkRows = chunkIdx.map(i => rows[i]);
-        const parts = splitCluster(chunkRows, minInternal, opts);
-        for (const p of parts) {
-          const globalIdxs = p.map(r => chunkIdx.find(i => rows[i]._internalId === r._internalId)).filter(x => x !== undefined);
-          if (globalIdxs.length) { finalClustersIdx.push(globalIdxs); globalIdxs.forEach(i => finalized.add(i)); }
-        }
-      }
-    } else {
-      const combinedRows = combinedIdx.map(i => rows[i]);
-      const parts = splitCluster(combinedRows, minInternal, opts);
-      for (const p of parts) {
-        const globalIdxs = [];
-        for (const r of p) {
-          const idx = combinedIdx.find(i => rows[i]._internalId === r._internalId);
-          if (idx !== undefined) { globalIdxs.push(idx); finalized.add(idx); }
-          else {
-            const fallback = combinedIdx.find(i => rows[i].womanName_normalized === r.womanName_normalized || digitsOnly(rows[i].phone) === digitsOnly(r.phone));
-            if (fallback !== undefined) { globalIdxs.push(fallback); finalized.add(fallback); }
-          }
-        }
-        if (globalIdxs.length) finalClustersIdx.push(globalIdxs);
+    const combinedRows = combinedIdx.map(i => rows[i]);
+    const parts = splitCluster(combinedRows, minInternal, opts);
+
+    for (const p of parts) {
+      const globalIdxs = p.records.map(r => combinedIdx.find(i => rows[i]._internalId === r._internalId)).filter(x => x !== undefined);
+      if (globalIdxs.length > 0) {
+        const allPartReasons = new Set([...p.reasons, ...(rootReasons.get(ra) || []), ...(rootReasons.get(rb) || [])]);
+        finalClusters.push({ records: p.records, reasons: Array.from(allPartReasons) });
+        globalIdxs.forEach(i => finalized.add(i));
       }
     }
     edgesUsed.push(e);
@@ -658,21 +595,29 @@ async function runClustering(rows, opts) {
     const r = uf.find(i);
     const arr = leftovers.get(r) || []; arr.push(i); leftovers.set(r, arr);
   }
-  for (const arr of leftovers.values()) {
-    if (arr.length <= 4) finalClustersIdx.push(arr);
-    else {
-      const subRows = arr.map(i => rows[i]);
+  for (const [root, arr] of leftovers.entries()) {
+    const subRows = arr.map(i => rows[i]);
+    if (arr.length <= 4) {
+        const reasons = Array.from(rootReasons.get(root) || []);
+        if (subRows.length > 1) finalClusters.push({ records: subRows, reasons });
+    } else {
       const parts = splitCluster(subRows, minInternal, opts);
       for (const p of parts) {
-        const idxs = p.map(pr => arr.find(i => rows[i]._internalId === pr._internalId)).filter(x => x !== undefined);
-        if (idxs.length) finalClustersIdx.push(idxs);
+          if (p.records.length > 1) {
+            const allPartReasons = new Set([...p.reasons, ...(rootReasons.get(root) || [])]);
+            finalClusters.push({ records: p.records, reasons: Array.from(allPartReasons) });
+          }
       }
     }
   }
 
-  const clusters = finalClustersIdx.map(g => g.map(i => rows[i])).filter(c => c.length > 1);
+  const clustersWithRecords = finalClusters.map(c => ({
+      ...c,
+      records: c.records.map(r => rows.find(row => row._internalId === r._internalId))
+  }));
+
   postMessage({ type: "progress", status: "annotating", progress: 95 });
-  return { clusters, edgesUsed, rows };
+  return { clusters: clustersWithRecords, edgesUsed, rows };
 }
 
 /* -------------------------
@@ -798,9 +743,11 @@ export default function UploadPage(){
             
             const allRows = resultPayload.rows || [];
             
+            // The payload from the worker is now { records: [], reasons: [] }
+            // The cache needs to store the clusters in the format { records: RecordRow[], reasons: string[] }[]
             const dataToCache = {
                 rows: allRows,
-                clusters: resultClusters,
+                clusters: resultClusters, // This is already in the correct format
                 originalHeaders: columns,
             };
 
@@ -1052,10 +999,10 @@ export default function UploadPage(){
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-4">
                 <SummaryCard icon={<Users className="h-4 w-4 text-muted-foreground" />} title="Total Records" value={rawRowsRef.current.length} />
-                <SummaryCard icon={<Group className="h-4 w-4 text-muted-foreground" />} title="Clustered Records" value={clusters.flat().length} />
-                <SummaryCard icon={<Unlink className="h-4 w-4 text-muted-foreground" />} title="Unclustered Records" value={rawRowsRef.current.length - clusters.flat().length} />
+                <SummaryCard icon={<Group className="h-4 w-4 text-muted-foreground" />} title="Clustered Records" value={clusters.flatMap(c => c.records).length} />
+                <SummaryCard icon={<Unlink className="h-4 w-4 text-muted-foreground" />} title="Unclustered Records" value={rawRowsRef.current.length - clusters.flatMap(c => c.records).length} />
                 <SummaryCard icon={<BoxSelect className="h-4 w-4 text-muted-foreground" />} title="Cluster Count" value={clusters.length} />
-                <SummaryCard icon={<Sigma className="h-4 w-4 text-muted-foreground" />} title="Avg. Cluster Size" value={clusters.length > 0 ? (clusters.flat().length / clusters.length).toFixed(2) : 0} />
+                <SummaryCard icon={<Sigma className="h-4 w-4 text-muted-foreground" />} title="Avg. Cluster Size" value={clusters.length > 0 ? (clusters.flatMap(c => c.records).length / clusters.length).toFixed(2) : 0} />
             </div>
             <Button onClick={()=> router.push('/review') } disabled={clusters.length === 0}>Go to Review Page <ChevronRight className="ml-2 h-4 w-4" /></Button>
           </CardContent>
@@ -1064,4 +1011,5 @@ export default function UploadPage(){
     </div>
   );
 }
+
 

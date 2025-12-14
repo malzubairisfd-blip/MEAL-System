@@ -1,22 +1,26 @@
+
 "use client";
 
 import { useState, useEffect } from "react";
 import type { RecordRow } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, Search, ChevronLeft, AlertTriangle, ChevronRight, Sparkles } from "lucide-react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { Loader2, Search, ChevronLeft, AlertTriangle, ChevronRight, Sparkles, Microscope } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
-import { ClusterCard } from "@/components/ClusterCard";
 import { PairwiseModal } from "@/components/PairwiseModal";
+import { generateArabicClusterSummary } from "@/lib/arabicClusterSummary";
 
-type Cluster = RecordRow[];
+type Cluster = {
+  records: RecordRow[];
+  reasons: string[];
+};
 
 export default function ReviewPage() {
   const [allClusters, setAllClusters] = useState<Cluster[]>([]);
   const [filteredClusters, setFilteredClusters] = useState<Cluster[]>([]);
-  const [selectedCluster, setSelectedCluster] = useState<Cluster | null>(null);
+  const [selectedCluster, setSelectedCluster] = useState<RecordRow[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const { toast } = useToast();
@@ -70,7 +74,7 @@ export default function ReviewPage() {
       }
       const s = search.toLowerCase();
       const filtered = allClusters.filter((cluster) =>
-        cluster.some(
+        cluster.records.some(
           (r) =>
             r.womanName?.toLowerCase().includes(s) ||
             r.husbandName?.toLowerCase().includes(s) ||
@@ -83,8 +87,8 @@ export default function ReviewPage() {
     applyFilter();
   }, [search, allClusters]);
 
-  const handleInspect = (cluster: Cluster) => {
-    setSelectedCluster(cluster);
+  const handleInspect = (clusterRecords: RecordRow[]) => {
+    setSelectedCluster(clusterRecords);
   }
 
   const indexOfLastItem = currentPage * itemsPerPage;
@@ -148,14 +152,13 @@ export default function ReviewPage() {
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {currentClusters.map((c, idx) => {
-                  const clusterId = c.map(r => r._internalId).sort().join('-');
+                  const clusterId = c.records.map(r => r._internalId).sort().join('-');
                   return (
                     <ClusterCard 
                       key={clusterId}
                       cluster={c} 
-                      clusterId={clusterId}
                       clusterNumber={(currentPage - 1) * itemsPerPage + idx + 1}
-                      onInspect={() => handleInspect(c)}
+                      onInspect={() => handleInspect(c.records)}
                     />
                   )
                 })}
@@ -192,5 +195,49 @@ export default function ReviewPage() {
         />
       )}
     </div>
+  );
+}
+
+
+function ClusterCard({ cluster, clusterNumber, onInspect }: { cluster: Cluster, clusterNumber: number, onInspect: () => void }) {
+  const summary = generateArabicClusterSummary(cluster, cluster.records);
+
+  return (
+    <Card className="flex flex-col hover:shadow-md transition-shadow">
+      <CardHeader>
+        <div className="flex justify-between items-start">
+          <div>
+            <CardTitle>Cluster {clusterNumber}</CardTitle>
+            <CardDescription>{cluster.records.length} records</CardDescription>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="flex-1 space-y-4">
+        <div className="space-y-2 text-sm">
+          {cluster.records.slice(0, 3).map((r, i) => (
+            <p key={i} className="truncate" title={r.womanName}>
+              {r.womanName}
+            </p>
+          ))}
+        </div>
+         <Card className="bg-slate-50 border">
+          <CardHeader className="p-4">
+            <CardTitle className="text-right text-base">ملخص ذكي</CardTitle>
+          </CardHeader>
+          <CardContent className="text-right p-4 pt-0">
+             <div
+              className="text-sm text-muted-foreground leading-relaxed"
+              dangerouslySetInnerHTML={{ __html: summary }}
+            />
+          </CardContent>
+        </Card>
+      </CardContent>
+      <CardFooter className="flex flex-col sm:flex-row gap-2">
+        <Button variant="outline" className="w-full" onClick={onInspect}>
+          <Microscope className="mr-2 h-4 w-4" />
+          Inspect
+        </Button>
+      </CardFooter>
+    </Card>
   );
 }
