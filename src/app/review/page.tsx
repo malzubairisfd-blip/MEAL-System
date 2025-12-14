@@ -6,15 +6,20 @@ import type { RecordRow } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { Loader2, Search, ChevronLeft, AlertTriangle, ChevronRight, Sparkles, Microscope } from "lucide-react";
+import { Loader2, Search, ChevronLeft, AlertTriangle, ChevronRight, Sparkles, Microscope, Calculator } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
 import { PairwiseModal } from "@/components/PairwiseModal";
 import { generateArabicClusterSummary } from "@/lib/arabicClusterSummary";
+import { calculateClusterConfidence } from "@/lib/clusterConfidence";
 
 type Cluster = {
   records: RecordRow[];
   reasons: string[];
+  avgWomanNameScore?: number;
+  avgHusbandNameScore?: number;
+  avgFinalScore?: number;
+  confidence?: number;
 };
 
 export default function ReviewPage() {
@@ -22,6 +27,7 @@ export default function ReviewPage() {
   const [filteredClusters, setFilteredClusters] = useState<Cluster[]>([]);
   const [selectedCluster, setSelectedCluster] = useState<RecordRow[] | null>(null);
   const [loading, setLoading] = useState(true);
+  const [calculating, setCalculating] = useState(false);
   const [search, setSearch] = useState("");
   const { toast } = useToast();
 
@@ -87,6 +93,51 @@ export default function ReviewPage() {
     applyFilter();
   }, [search, allClusters]);
 
+  const handleCalculateScores = async () => {
+    setCalculating(true);
+    toast({ title: "Calculating Scores", description: `Fetching and averaging scores for ${allClusters.length} clusters...` });
+
+    const updatedClusters = await Promise.all(allClusters.map(async (cluster) => {
+        try {
+            const res = await fetch("/api/pairwise", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ cluster: cluster.records }),
+            });
+            if (!res.ok) return cluster;
+            const data = await res.json();
+            const pairs = data.pairs || [];
+
+            if (pairs.length === 0) {
+                return { ...cluster, avgWomanNameScore: 0, avgHusbandNameScore: 0, avgFinalScore: 0, confidence: calculateClusterConfidence(cluster.records) };
+            }
+
+            const womanNameScores = pairs.map((p: any) => p.breakdown.nameScore || 0);
+            const husbandNameScores = pairs.map((p: any) => p.breakdown.husbandScore || 0);
+            const finalScores = pairs.map((p: any) => p.score || 0);
+
+            const avgWomanNameScore = womanNameScores.reduce((a: number, b: number) => a + b, 0) / womanNameScores.length;
+            const avgHusbandNameScore = husbandNameScores.reduce((a: number, b: number) => a + b, 0) / husbandNameScores.length;
+            const avgFinalScore = finalScores.reduce((a: number, b: number) => a + b, 0) / finalScores.length;
+
+            return {
+                ...cluster,
+                avgWomanNameScore,
+                avgHusbandNameScore,
+                avgFinalScore,
+                confidence: calculateClusterConfidence(cluster.records),
+            };
+        } catch (error) {
+            return cluster; // Return original cluster on error
+        }
+    }));
+
+    setAllClusters(updatedClusters);
+    setFilteredClusters(updatedClusters); // Make sure filtered view is also updated
+    setCalculating(false);
+    toast({ title: "Calculations Complete", description: "Average scores and confidence have been updated for all clusters." });
+  };
+
   const handleInspect = (clusterRecords: RecordRow[]) => {
     setSelectedCluster(clusterRecords);
   }
@@ -120,6 +171,10 @@ export default function ReviewPage() {
                         Back to Upload
                     </Link>
                 </Button>
+                 <Button onClick={handleCalculateScores} disabled={calculating}>
+                    {calculating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Calculator className="mr-2 h-4 w-4" />}
+                    Calculate Scores
+                 </Button>
                 <Button asChild>
                     <Link href="/audit">
                         Go to Audit
@@ -202,6 +257,22 @@ export default function ReviewPage() {
 function ClusterCard({ cluster, clusterNumber, onInspect }: { cluster: Cluster, clusterNumber: number, onInspect: () => void }) {
   const summary = generateArabicClusterSummary(cluster, cluster.records);
 
+  const ConfidenceBadge = ({ score, label }: { score?: number, label: string }) => {
+    if (score === undefined) return null;
+    const scorePct = Math.round(score * 100);
+    let color = "bg-gray-200 text-gray-800";
+    if (scorePct >= 90) color = "bg-red-200 text-red-800";
+    else if (scorePct >= 75) color = "bg-yellow-200 text-yellow-800";
+    else if (scorePct >= 60) color = "bg-blue-200 text-blue-800";
+    
+    return (
+        <div className="text-xs">
+            <span className="font-semibold">{label}: </span>
+            <span className={`px-2 py-0.5 rounded-full font-bold ${color}`}>{scorePct}%</span>
+        </div>
+    );
+  };
+
   return (
     <Card className="flex flex-col hover:shadow-md transition-shadow">
       <CardHeader>
@@ -210,6 +281,12 @@ function ClusterCard({ cluster, clusterNumber, onInspect }: { cluster: Cluster, 
             <CardTitle>Cluster {clusterNumber}</CardTitle>
             <CardDescription>{cluster.records.length} records</CardDescription>
           </div>
+           {cluster.confidence !== undefined && (
+             <div className="text-right">
+                <p className="text-xs text-muted-foreground">Confidence</p>
+                <strong className="text-lg">{cluster.confidence}%</strong>
+            </div>
+           )}
         </div>
       </CardHeader>
       <CardContent className="flex-1 space-y-4">
@@ -222,7 +299,13 @@ function ClusterCard({ cluster, clusterNumber, onInspect }: { cluster: Cluster, 
         </div>
          <Card className="bg-slate-50 border">
           <CardHeader className="p-4">
-            <CardTitle className="text-right text-base">ملخص ذكي</CardTitle>
+            <CardTitle className="text-right text-base flex justify-between items-center">
+             <span>ملخص ذكي</span>
+             <div className="flex gap-2">
+                <ConfidenceBadge score={cluster.avgWomanNameScore} label="Woman" />
+                <ConfidenceBadge score={cluster.avgHusbandNameScore} label="Husband" />
+             </div>
+            </CardTitle>
           </CardHeader>
           <CardContent className="text-right p-4 pt-0">
              <div
@@ -241,3 +324,5 @@ function ClusterCard({ cluster, clusterNumber, onInspect }: { cluster: Cluster, 
     </Card>
   );
 }
+
+    
