@@ -86,3 +86,27 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
+.badge {
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-weight: bold;
+  font-size: 13px;
+}
+
+.badge-green { background: #d1fae5; color: #065f46; }
+.badge-yellow { background: #fef3c7; color: #92400e; }
+.badge-red { background: #fee2e2; color: #991b1b; }
+
+.btn {
+  margin: 4px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.btn-green { background: #16a34a; color: white; }
+.btn-yellow { background: #f59e0b; color: white; }
+.btn-red { background: #dc2626; color: white; }

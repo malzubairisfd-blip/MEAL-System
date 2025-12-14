@@ -489,43 +489,60 @@ class UF {
 
 /* Split cluster so each piece <= 4 */
 function splitCluster(rowsSubset, minInternal = 0.50, opts) {
-  if (rowsSubset.length <= 4) return [{ records: rowsSubset, reasons: [] }];
-  const localEdges = [];
-  for (let i = 0; i < rowsSubset.length; i++) {
-    for (let j = i + 1; j < rowsSubset.length; j++) {
-      const r = pairwiseScore(rowsSubset[i], rowsSubset[j], opts);
-      if ((r.score || 0) >= minInternal) localEdges.push({ a: i, b: j, score: r.score, reasons: r.reasons || [] });
+    if (rowsSubset.length <= 1) return []; // Return empty if not a potential cluster
+    if (rowsSubset.length <= 4) {
+        const localEdges = [];
+        for (let i = 0; i < rowsSubset.length; i++) {
+            for (let j = i + 1; j < rowsSubset.length; j++) {
+                const r = pairwiseScore(rowsSubset[i], rowsSubset[j], opts);
+                if ((r.score || 0) >= minInternal) localEdges.push({ score: r.score, reasons: r.reasons || [], breakdown: r.breakdown });
+            }
+        }
+        const reasons = Array.from(new Set(localEdges.flatMap(e => e.reasons)));
+        const pairScores = localEdges.map(e => ({ finalScore: e.score, womanNameScore: e.breakdown.firstNameScore, husbandNameScore: e.breakdown.husbandScore }));
+        return [{ records: rowsSubset, reasons, pairScores }];
     }
-  }
-  localEdges.sort((x, y) => y.score - x.score);
-  const uf = new UF(rowsSubset.length);
-  for (const e of localEdges) {
-    const ra = uf.find(e.a), rb = uf.find(e.b);
-    if (ra === rb) continue;
-    if (uf.size[ra] + uf.size[rb] <= 4) uf.merge(ra, rb);
-  }
-  const groups = new Map();
-  for (let i = 0; i < rowsSubset.length; i++) {
-    const r = uf.find(i);
-    const arr = groups.get(r) || [];
-    arr.push(i);
-    groups.set(r, arr);
-  }
-  const result = [];
-  for (const idxs of groups.values()) {
-    const subset = idxs.map(i => rowsSubset[i]);
-    const subEdges = localEdges.filter(e => idxs.includes(e.a) && idxs.includes(e.b));
-    const reasons = Array.from(new Set(subEdges.flatMap(e => e.reasons)));
-    
-    if (subset.length <= 4) {
-      result.push({ records: subset, reasons });
-    } else {
-      const furtherSplit = splitCluster(subset, Math.max(minInternal, 0.45), opts);
-      result.push(...furtherSplit);
+
+    const localEdges = [];
+    for (let i = 0; i < rowsSubset.length; i++) {
+        for (let j = i + 1; j < rowsSubset.length; j++) {
+            const r = pairwiseScore(rowsSubset[i], rowsSubset[j], opts);
+            if ((r.score || 0) >= minInternal) localEdges.push({ a: i, b: j, score: r.score, reasons: r.reasons || [], breakdown: r.breakdown });
+        }
     }
-  }
-  return result;
+    localEdges.sort((x, y) => y.score - x.score);
+
+    const uf = new UF(rowsSubset.length);
+    for (const e of localEdges) {
+        const ra = uf.find(e.a), rb = uf.find(e.b);
+        if (ra === rb) continue;
+        if (uf.size[ra] + uf.size[rb] <= 4) uf.merge(ra, rb);
+    }
+
+    const groups = new Map();
+    for (let i = 0; i < rowsSubset.length; i++) {
+        const r = uf.find(i);
+        if (!groups.has(r)) groups.set(r, []);
+        groups.get(r).push(i);
+    }
+
+    const result = [];
+    for (const idxs of groups.values()) {
+        if (idxs.length <= 1) continue; // Ignore single-record groups
+        const subset = idxs.map(i => rowsSubset[i]);
+        const subEdges = localEdges.filter(e => idxs.includes(e.a) && idxs.includes(e.b));
+        const reasons = Array.from(new Set(subEdges.flatMap(e => e.reasons)));
+        const pairScores = subEdges.map(e => ({ finalScore: e.score, womanNameScore: e.breakdown.firstNameScore, husbandNameScore: e.breakdown.husbandScore }));
+
+        if (subset.length <= 4) {
+            result.push({ records: subset, reasons, pairScores });
+        } else {
+            result.push(...splitCluster(subset, Math.max(minInternal, 0.45), opts));
+        }
+    }
+    return result;
 }
+
 
 /* Main clustering pipeline */
 async function runClustering(rows, opts) {
@@ -577,12 +594,12 @@ async function runClustering(rows, opts) {
     const parts = splitCluster(combinedRows, minInternal, opts);
 
     for (const p of parts) {
-      const globalIdxs = p.records.map(r => combinedIdx.find(i => rows[i]._internalId === r._internalId)).filter(x => x !== undefined);
-      if (globalIdxs.length > 0) {
-        const allPartReasons = new Set([...p.reasons, ...(rootReasons.get(ra) || []), ...(rootReasons.get(rb) || [])]);
-        finalClusters.push({ records: p.records, reasons: Array.from(allPartReasons) });
-        globalIdxs.forEach(i => finalized.add(i));
-      }
+       if (p.records.length <= 1) continue;
+       finalClusters.push(p);
+       p.records.forEach(r => {
+           const originalIndex = rows.findIndex(row => row._internalId === r._internalId);
+           if (originalIndex !== -1) finalized.add(originalIndex);
+       });
     }
     edgesUsed.push(e);
     if (ei % 200 === 0) postMessage({ type: "progress", status: "merging-edges", progress: 60 + Math.round(20 * (ei / edges.length)), completed: ei + 1, total: edges.length });
@@ -596,18 +613,15 @@ async function runClustering(rows, opts) {
     const arr = leftovers.get(r) || []; arr.push(i); leftovers.set(r, arr);
   }
   for (const [root, arr] of leftovers.entries()) {
+    if (arr.length <= 1) continue;
     const subRows = arr.map(i => rows[i]);
-    if (arr.length <= 4) {
-        const reasons = Array.from(rootReasons.get(root) || []);
-        if (subRows.length > 1) finalClusters.push({ records: subRows, reasons });
-    } else {
-      const parts = splitCluster(subRows, minInternal, opts);
-      for (const p of parts) {
-          if (p.records.length > 1) {
+    const parts = splitCluster(subRows, minInternal, opts);
+     for (const p of parts) {
+        if (p.records.length > 1) {
             const allPartReasons = new Set([...p.reasons, ...(rootReasons.get(root) || [])]);
-            finalClusters.push({ records: p.records, reasons: Array.from(allPartReasons) });
-          }
-      }
+            p.reasons = Array.from(allPartReasons);
+            finalClusters.push(p);
+        }
     }
   }
 
@@ -1013,6 +1027,7 @@ export default function UploadPage(){
     </div>
   );
 }
+
 
 
 
