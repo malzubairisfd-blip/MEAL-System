@@ -7,7 +7,7 @@ import React, { useEffect, useState, useRef } from "react";
 import * as XLSX from "xlsx";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Upload, Settings, CheckCircle, XCircle, Loader2, ChevronRight, Users, Group, Unlink, BoxSelect, Sigma } from "lucide-react";
+import { Upload, Settings, CheckCircle, XCircle, Loader2, ChevronRight, Users, Group, Unlink, BoxSelect, Sigma, ChevronsUpDown } from "lucide-react";
 import { Card, CardHeader, CardContent, CardTitle, CardDescription } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import type { RecordRow } from "@/lib/types";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 function createWorkerScript() {
   return `
@@ -724,6 +725,7 @@ export default function UploadPage(){
   const [workerStatus, setWorkerStatus] = useState<string>("idle");
   const [clusters, setClusters] = useState<any[][]>([]);
   const [fileReadProgress, setFileReadProgress] = useState(0);
+  const [isMappingOpen, setIsMappingOpen] = useState(true);
   const rawRowsRef = useRef<any[]>([]);
   const workerRef = useRef<Worker|null>(null);
   const { toast } = useToast();
@@ -811,6 +813,7 @@ export default function UploadPage(){
     setFile(f);
     setWorkerStatus('idle'); setProgressInfo({ status:'idle', progress:0 }); setClusters([]);
     setFileReadProgress(0);
+    setIsMappingOpen(true);
 
     const reader = new FileReader();
     reader.onprogress = (event) => {
@@ -847,6 +850,7 @@ export default function UploadPage(){
     if(!rawRowsRef.current.length){ toast({ title: "Upload data first" }); return; }
     if(!isMappingComplete){ toast({ title: "Mapping incomplete", variant:"destructive"}); return; }
 
+    setIsMappingOpen(false);
     setWorkerStatus('processing'); setProgressInfo({ status:'processing', progress:1 });
 
     // load settings from server (if any): includes finalScoreWeights and thresholds
@@ -893,6 +897,25 @@ export default function UploadPage(){
       </CardContent>
     </Card>
   );
+
+  const getButtonText = () => {
+    switch (workerStatus) {
+      case 'processing':
+      case 'blocking':
+      case 'building-edges':
+      case 'merging-edges':
+      case 'annotating':
+        return 'Processing...';
+      case 'caching':
+        return 'Caching Results...';
+      case 'done':
+        return 'Clustering Done!';
+      case 'error':
+        return 'Error! Retry?';
+      default:
+        return 'Start Clustering';
+    }
+  };
 
 
   return (
@@ -953,33 +976,50 @@ export default function UploadPage(){
       </Card>
 
       {columns.length > 0 && (
-        <Card>
-          <CardHeader><CardTitle>2. Map Columns</CardTitle><CardDescription>Map your sheet columns to the required fields for analysis.</CardDescription></CardHeader>
-          <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {MAPPING_FIELDS.map(field => (
-              <Card key={field}>
-                <CardHeader className="p-4 flex flex-row items-center justify-between">
-                    <div className="flex items-center gap-2">
-                         {mapping[field] ? <CheckCircle className="h-5 w-5 text-green-500" /> : <XCircle className="h-5 w-5 text-red-500" />}
-                        <Label htmlFor={field} className="capitalize font-semibold text-base">{field.replace(/_/g,' ')}{REQUIRED_MAPPING_FIELDS.includes(field) && <span className="text-destructive">*</span>}</Label>
-                    </div>
-                </CardHeader>
-                <CardContent className="p-0">
-                  <ScrollArea className="h-48 border-t">
-                    <RadioGroup value={mapping[field]} onValueChange={(v)=> handleMappingChange(field as keyof Mapping, v)} className="p-4 grid grid-cols-2 gap-2">
-                      {columns.map(col => (
-                        <div key={col} className="flex items-center space-x-2">
-                          <RadioGroupItem value={col} id={`${field}-${col}`} />
-                          <Label htmlFor={`${field}-${col}`} className="truncate font-normal" title={col}>{col}</Label>
+        <Collapsible open={isMappingOpen} onOpenChange={setIsMappingOpen} asChild>
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>2. Map Columns</CardTitle>
+                  <CardDescription>Map your sheet columns to the required fields for analysis.</CardDescription>
+                </div>
+                <CollapsibleTrigger asChild>
+                  <Button variant="ghost" size="sm">
+                    <ChevronsUpDown className="h-4 w-4" />
+                    <span className="sr-only">Toggle</span>
+                  </Button>
+                </CollapsibleTrigger>
+              </div>
+            </CardHeader>
+            <CollapsibleContent>
+              <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {MAPPING_FIELDS.map(field => (
+                  <Card key={field}>
+                    <CardHeader className="p-4 flex flex-row items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            {mapping[field] ? <CheckCircle className="h-5 w-5 text-green-500" /> : <XCircle className="h-5 w-5 text-red-500" />}
+                            <Label htmlFor={field} className="capitalize font-semibold text-base">{field.replace(/_/g,' ')}{REQUIRED_MAPPING_FIELDS.includes(field) && <span className="text-destructive">*</span>}</Label>
                         </div>
-                      ))}
-                    </RadioGroup>
-                  </ScrollArea>
-                </CardContent>
-              </Card>
-            ))}
-          </CardContent>
-        </Card>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                      <ScrollArea className="h-48 border-t">
+                        <RadioGroup value={mapping[field]} onValueChange={(v)=> handleMappingChange(field as keyof Mapping, v)} className="p-4 grid grid-cols-2 gap-2">
+                          {columns.map(col => (
+                            <div key={col} className="flex items-center space-x-2">
+                              <RadioGroupItem value={col} id={`${field}-${col}`} />
+                              <Label htmlFor={`${field}-${col}`} className="truncate font-normal" title={col}>{col}</Label>
+                            </div>
+                          ))}
+                        </RadioGroup>
+                      </ScrollArea>
+                    </CardContent>
+                  </Card>
+                ))}
+              </CardContent>
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
       )}
 
       {file && isMappingComplete && (
@@ -990,18 +1030,22 @@ export default function UploadPage(){
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              <Button onClick={startClustering} disabled={workerStatus === 'processing' || workerStatus === 'caching'}>
-                {workerStatus === 'processing' || workerStatus === 'caching' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Start Clustering
+              <Button onClick={startClustering} disabled={workerStatus !== 'idle' && workerStatus !== 'done' && workerStatus !== 'error'}>
+                {(workerStatus === 'processing' || workerStatus === 'caching' || workerStatus === 'building-edges' || workerStatus === 'merging-edges') ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                {getButtonText()}
               </Button>
 
               {(workerStatus !== 'idle' && workerStatus !== 'done' && workerStatus !== 'error') && (
                 <div className="space-y-2 mt-4">
                   <div className="flex justify-between items-center text-sm font-medium text-muted-foreground">
                     <span>{formattedStatus()}</span>
-                    <span>{Math.round(progressInfo.progress)}%</span>
                   </div>
-                  <Progress value={progressInfo.progress} />
+                  <div className="relative h-4 w-full overflow-hidden rounded-full bg-secondary">
+                    <Progress value={progressInfo.progress} className="absolute h-full w-full" />
+                    <div className="absolute inset-0 flex items-center justify-center">
+                        <span className="text-xs font-medium text-primary-foreground mix-blend-difference">{Math.round(progressInfo.progress)}%</span>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -1027,7 +1071,4 @@ export default function UploadPage(){
     </div>
   );
 }
-
-
-
 
