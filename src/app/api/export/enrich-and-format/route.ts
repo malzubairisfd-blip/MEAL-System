@@ -452,7 +452,7 @@ function createAuditSheet(wb: ExcelJS.Workbook, findings: AuditFinding[], cluste
 
     const headers = [
       { header: "الخطورة", key: "severity", width: 12 },
-      { header: "نوع النتيجة", key: "type", width: 30 },
+      { header: "نوع النتيجة", key: "type", width: 40 },
       { header: "الوصف", key: "description", width: 50 },
       { header: "معرف المجموعة", key: "clusterId", width: 15 },
       { header: "معرف المستفيد", key: "beneficiaryId", width: 20 },
@@ -471,23 +471,8 @@ function createAuditSheet(wb: ExcelJS.Workbook, findings: AuditFinding[], cluste
     });
 
     const severityOrder = { high: 1, medium: 2, low: 3 };
-    const sortedFindings = [...findings].sort((a, b) => {
-        const clusterIdA = recordToClusterIdMap.get(a.records[0]?._internalId ?? '') ?? Infinity;
-        const clusterIdB = recordToClusterIdMap.get(b.records[0]?._internalId ?? '') ?? Infinity;
-        if (clusterIdA !== clusterIdB) return clusterIdA - clusterIdB;
-
-        const severityDiff = (severityOrder[a.severity] || 99) - (severityOrder[b.severity] || 99);
-        if (severityDiff !== 0) return severityDiff;
-        
-        return a.type.localeCompare(b.type);
-    });
-
-    const severityTranslations: Record<string, string> = {
-        high: 'عالية',
-        medium: 'متوسطة',
-        low: 'منخفضة'
-    };
-     const typeTranslations: Record<string, string> = {
+    const severityTranslations: Record<string, string> = { high: 'عالية', medium: 'متوسطة', low: 'منخفضة' };
+    const typeTranslations: Record<string, string> = {
         "DUPLICATE_ID": "تكرار الرقم القومي",
         "DUPLICATE_COUPLE": "ازدواجية الزوجين",
         "WOMAN_MULTIPLE_HUSBANDS": "زوجة لديها عدة أزواج",
@@ -496,45 +481,86 @@ function createAuditSheet(wb: ExcelJS.Workbook, findings: AuditFinding[], cluste
         "HIGH_SIMILARITY": "تشابه عالي بين السجلات"
     };
 
-    const descriptionTranslations: Record<string, (f: AuditFinding) => string> = {
+    const descriptionTranslations: Record<string, (f: AuditFinding, r: RecordRow) => string> = {
       "DUPLICATE_ID": () => `الرقم القومي مكرر داخل المجموعة.`,
       "DUPLICATE_COUPLE": () => `تطابق تام لاسم الزوجة والزوج.`,
-      "WOMAN_MULTIPLE_HUSBANDS": (f) => `الزوجة مسجلة مع عدة أزواج: ${[...new Set(f.records.map(r => r.husbandName))].join(', ')}`,
-      "HUSBAND_TOO_MANY_WIVES": (f) => `الزوج مسجل مع ${new Set(f.records.map(r => r.womanName)).size} زوجات، وهو ما يتجاوز الحد المسموح به.`,
-      "MULTIPLE_NATIONAL_IDS": (f) => `الزوجة مرتبطة بعدة أرقام قومية: ${[...new Set(f.records.map(r => r.nationalId))].join(', ')}`,
-      "HIGH_SIMILARITY": (f) => `يوجد تشابه عالي في البيانات بين السجلات داخل هذه المجموعة.`,
+      "WOMAN_MULTIPLE_HUSBANDS": (f) => `الزوجة مسجلة مع عدة أزواج: ${[...new Set(f.records.map(rec => rec.husbandName))].join(', ')}`,
+      "HUSBAND_TOO_MANY_WIVES": (f) => `الزوج مسجل مع ${new Set(f.records.map(rec => rec.womanName)).size} زوجات، وهو ما يتجاوز الحد المسموح به.`,
+      "MULTIPLE_NATIONAL_IDS": (f, r) => `الزوجة مرتبطة بعدة أرقام قومية: ${[...new Set(f.records.filter(rec => rec.womanName === r.womanName).map(rec=>rec.nationalId))].join(', ')}`,
+      "HIGH_SIMILARITY": () => `يوجد تشابه عالي في البيانات بين السجلات داخل هذه المجموعة.`,
     };
 
-    sortedFindings.forEach(finding => {
-        const descriptionTranslator = descriptionTranslations[finding.type] || ((f) => f.description);
+    // --- Consolidation Logic ---
+    const consolidatedFindings = new Map<string, any>();
 
+    findings.forEach(finding => {
         finding.records.forEach(record => {
-            const clusterId = recordToClusterIdMap.get(record._internalId!) || 'N/A';
-            const row = ws.addRow({
-                severity: severityTranslations[finding.severity] || finding.severity,
-                type: typeTranslations[finding.type] || finding.type.replace(/_/g, ' '),
-                description: descriptionTranslator(finding),
-                clusterId: clusterId,
-                beneficiaryId: record.beneficiaryId,
-                womanName: record.womanName,
-                husbandName: record.husbandName,
-                nationalId: record.nationalId,
-                phone: record.phone
-            });
-            const severityColor = finding.severity === 'high' ? 'FFFFC7CE' : finding.severity === 'medium' ? 'FFFFEB9C' : 'FFC6EFCE';
-            row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
-                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: severityColor } };
-                const key = headers[colNumber - 1].key;
-                if (['severity', 'type', 'clusterId', 'beneficiaryId', 'nationalId', 'phone'].includes(key)) {
-                    cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
-                } else if (['description', 'womanName', 'husbandName'].includes(key)) {
-                    cell.alignment = { vertical: 'middle', horizontal: 'right', wrapText: true };
+            const beneficiaryId = record.beneficiaryId;
+            if (!beneficiaryId) return;
+
+            const existing = consolidatedFindings.get(beneficiaryId);
+            const translatedSeverity = severityTranslations[finding.severity] || finding.severity;
+            const translatedType = typeTranslations[finding.type] || finding.type.replace(/_/g, ' ');
+            const translatedDesc = (descriptionTranslations[finding.type] || ((f, r) => f.description))(finding, record);
+
+            if (existing) {
+                // Higher severity wins
+                if (severityOrder[finding.severity] < severityOrder[existing.severityValue]) {
+                    existing.severity = translatedSeverity;
+                    existing.severityValue = finding.severity;
                 }
-            });
+                
+                // Concatenate types and descriptions if they are not already included
+                if (!existing.type.includes(translatedType)) {
+                    existing.type += ` + ${translatedType}`;
+                }
+                if (!existing.description.includes(translatedDesc)) {
+                    existing.description += ` + ${translatedDesc}`;
+                }
+
+            } else {
+                consolidatedFindings.set(beneficiaryId, {
+                    ...record,
+                    severity: translatedSeverity,
+                    severityValue: finding.severity,
+                    type: translatedType,
+                    description: translatedDesc,
+                    clusterId: recordToClusterIdMap.get(record._internalId!) || 'N/A'
+                });
+            }
+        });
+    });
+
+    const finalData = Array.from(consolidatedFindings.values());
+
+    // --- Sorting Logic ---
+    finalData.sort((a, b) => {
+        if (a.clusterId !== b.clusterId) {
+            return (a.clusterId > b.clusterId) ? 1 : -1;
+        }
+        if (a.severityValue !== b.severityValue) {
+            return severityOrder[a.severityValue] - severityOrder[b.severityValue];
+        }
+        return a.type.localeCompare(b.type);
+    });
+
+    // --- Add Rows to Sheet ---
+    let lastFindingType: string | null = null;
+    finalData.forEach(data => {
+        const row = ws.addRow(data);
+
+        const severityColor = data.severityValue === 'high' ? 'FFFFC7CE' : data.severityValue === 'medium' ? 'FFFFEB9C' : 'FFC6EFCE';
+        row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: severityColor } };
+            const key = headers[colNumber - 1].key;
+            if (['severity', 'type', 'clusterId', 'beneficiaryId', 'nationalId', 'phone'].includes(key)) {
+                cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+            } else if (['description', 'womanName', 'husbandName'].includes(key)) {
+                cell.alignment = { vertical: 'middle', horizontal: 'right', wrapText: true };
+            }
         });
     });
 }
-
 
 function createAuditSummarySheet(wb: ExcelJS.Workbook, findings: AuditFinding[]) {
     const ws = wb.addWorksheet("ملخص التدقيق");
@@ -564,14 +590,10 @@ function createAuditSummarySheet(wb: ExcelJS.Workbook, findings: AuditFinding[])
         if (!uniqueFindingGroups.has(findingKey)) {
              if (f.type in findingCounts) {
                 // Count records for these types, not groups
-                if (['DUPLICATE_COUPLE', 'HIGH_SIMILARITY'].includes(f.type)) {
-                   findingCounts[f.type] += f.records.length;
-                } else {
-                   findingCounts[f.type] += 1;
-                }
+                 findingCounts[f.type] += f.records.length;
             }
             uniqueFindingGroups.add(findingKey);
-        } else if (['DUPLICATE_COUPLE', 'HIGH_SIMILARITY'].includes(f.type)) {
+        } else if (['DUPLICATE_COUPLE', 'HIGH_SIMILARITY', 'DUPLICATE_ID', 'MULTIPLE_NATIONAL_IDS', 'WOMAN_MULTIPLE_HUSBANDS'].includes(f.type)) {
             // For record-based counts, keep adding even if the group is not unique
             findingCounts[f.type] += f.records.length;
         }
@@ -585,7 +607,7 @@ function createAuditSummarySheet(wb: ExcelJS.Workbook, findings: AuditFinding[])
     ];
     
     let currentRow = 4;
-    summaryCards.forEach((rowItems, rowIndex) => {
+    summaryCards.forEach((rowItems) => {
         ws.getRow(currentRow).height = 45;
         rowItems.forEach((stat, colIndex) => {
             if (!stat) return;
@@ -595,7 +617,7 @@ function createAuditSummarySheet(wb: ExcelJS.Workbook, findings: AuditFinding[])
             
             const count = findingCounts[stat.key];
 
-            cardCell.value = { richText: [ { text: `${stat.icon}`, font: { size: 36, name: 'Segoe UI Emoji' } }, { text: `\n${stat.title}`, font: { size: 14 } }, { text: `\n${count}`, font: { size: 24, bold: true } } ] };
+            cardCell.value = { richText: [ { text: `${stat.icon}`, font: { size: 36, name: 'Segoe UI Emoji' } }, { text: `\n${stat.title}\n`, font: { size: 14 } }, { text: `${count}`, font: { size: 24, bold: true } } ] };
             cardCell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
             cardCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2F2F2' } };
             cardCell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
