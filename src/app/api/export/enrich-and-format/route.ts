@@ -472,9 +472,14 @@ function createAuditSheet(wb: ExcelJS.Workbook, findings: AuditFinding[], cluste
 
     const severityOrder = { high: 1, medium: 2, low: 3 };
     const sortedFindings = [...findings].sort((a, b) => {
-      const severityDiff = (severityOrder[a.severity] || 99) - (severityOrder[b.severity] || 99);
-      if (severityDiff !== 0) return severityDiff;
-      return a.type.localeCompare(b.type);
+        const clusterIdA = recordToClusterIdMap.get(a.records[0]?._internalId ?? '') ?? Infinity;
+        const clusterIdB = recordToClusterIdMap.get(b.records[0]?._internalId ?? '') ?? Infinity;
+        if (clusterIdA !== clusterIdB) return clusterIdA - clusterIdB;
+
+        const severityDiff = (severityOrder[a.severity] || 99) - (severityOrder[b.severity] || 99);
+        if (severityDiff !== 0) return severityDiff;
+        
+        return a.type.localeCompare(b.type);
     });
 
     const severityTranslations: Record<string, string> = {
@@ -492,24 +497,15 @@ function createAuditSheet(wb: ExcelJS.Workbook, findings: AuditFinding[], cluste
     };
 
     const descriptionTranslations: Record<string, (f: AuditFinding) => string> = {
-      "DUPLICATE_ID": (f) => `الرقم القومي مكرر داخل المجموعة.`,
-      "DUPLICATE_COUPLE": (f) => `تطابق تام لاسم الزوجة والزوج.`,
-      "WOMAN_MULTIPLE_HUSBANDS": (f) => f.description, // Already contains names
-      "HUSBAND_TOO_MANY_WIVES": (f) => f.description, // Already contains names/count
-      "MULTIPLE_NATIONAL_IDS": (f) => f.description, // Already contains names/IDs
-      "HIGH_SIMILARITY": (f) => f.description, // Already contains pair count
+      "DUPLICATE_ID": () => `الرقم القومي مكرر داخل المجموعة.`,
+      "DUPLICATE_COUPLE": () => `تطابق تام لاسم الزوجة والزوج.`,
+      "WOMAN_MULTIPLE_HUSBANDS": (f) => `الزوجة مسجلة مع عدة أزواج: ${[...new Set(f.records.map(r => r.husbandName))].join(', ')}`,
+      "HUSBAND_TOO_MANY_WIVES": (f) => `الزوج مسجل مع ${new Set(f.records.map(r => r.womanName)).size} زوجات، وهو ما يتجاوز الحد المسموح به.`,
+      "MULTIPLE_NATIONAL_IDS": (f) => `الزوجة مرتبطة بعدة أرقام قومية: ${[...new Set(f.records.map(r => r.nationalId))].join(', ')}`,
+      "HIGH_SIMILARITY": (f) => `يوجد تشابه عالي في البيانات بين السجلات داخل هذه المجموعة.`,
     };
 
-    let lastFindingType = '';
     sortedFindings.forEach(finding => {
-        if (lastFindingType && lastFindingType !== finding.type) {
-            const rowNumber = ws.rowCount + 1;
-            ws.getRow(rowNumber).eachCell({ includeEmpty: true }, (cell) => {
-                cell.border = { ...cell.border, top: { style: 'thick', color: {argb: 'FF808080'} } };
-            });
-        }
-        lastFindingType = finding.type;
-
         const descriptionTranslator = descriptionTranslations[finding.type] || ((f) => f.description);
 
         finding.records.forEach(record => {
@@ -554,6 +550,7 @@ function createAuditSummarySheet(wb: ExcelJS.Workbook, findings: AuditFinding[])
     ws.getRow(2).height = 40;
 
     const findingCounts: Record<string, number> = {
+      TOTAL_UNIQUE_RECORDS: new Set(findings.flatMap(f => f.records.map(r => r._internalId))).size,
       WOMAN_MULTIPLE_HUSBANDS: 0,
       MULTIPLE_NATIONAL_IDS: 0,
       DUPLICATE_ID: 0,
@@ -561,39 +558,48 @@ function createAuditSummarySheet(wb: ExcelJS.Workbook, findings: AuditFinding[])
       HIGH_SIMILARITY: 0
     };
 
-    const uniqueFindings = new Set<string>();
+    const uniqueFindingGroups = new Set<string>();
     findings.forEach(f => {
-        const findingKey = `${f.type}-${f.description}`;
-        if (!uniqueFindings.has(findingKey)) {
-            if (f.type in findingCounts) {
-                findingCounts[f.type] += 1;
+        const findingKey = `${f.type}-${f.description}`; // A key to identify a unique finding group
+        if (!uniqueFindingGroups.has(findingKey)) {
+             if (f.type in findingCounts) {
+                // Count records for these types, not groups
+                if (['DUPLICATE_COUPLE', 'HIGH_SIMILARITY'].includes(f.type)) {
+                   findingCounts[f.type] += f.records.length;
+                } else {
+                   findingCounts[f.type] += 1;
+                }
             }
-            uniqueFindings.add(findingKey);
+            uniqueFindingGroups.add(findingKey);
+        } else if (['DUPLICATE_COUPLE', 'HIGH_SIMILARITY'].includes(f.type)) {
+            // For record-based counts, keep adding even if the group is not unique
+            findingCounts[f.type] += f.records.length;
         }
     });
 
+
     const summaryCards = [
-        [{ title: "تعدد الأزواج", key: 'WOMAN_MULTIPLE_HUSBANDS', icon: '🙍‍♀️' }, { title: "تعدد أرقام الهوية", key: 'MULTIPLE_NATIONAL_IDS', icon: '💳' }],
-        [{ title: "ازدواجية الرقم القومي", key: 'DUPLICATE_ID', icon: '🧾' }, { title: "ازدواجية الزوجين", key: 'DUPLICATE_COUPLE', icon: '👨‍👩‍👧‍👦' }],
-        [{ title: "تشابه عالي", key: 'HIGH_SIMILARITY', icon: '✨' }, null]
+        [{ title: "إجمالي السجلات المدققة", key: 'TOTAL_UNIQUE_RECORDS', icon: '🛡️' }, { title: "تعدد الأزواج", key: 'WOMAN_MULTIPLE_HUSBANDS', icon: '🙍‍♀️' }],
+        [{ title: "تعدد أرقام الهوية", key: 'MULTIPLE_NATIONAL_IDS', icon: '💳' }, { title: "ازدواجية الرقم القومي", key: 'DUPLICATE_ID', icon: '🧾' }],
+        [{ title: "ازدواجية الزوجين", key: 'DUPLICATE_COUPLE', icon: '👨‍👩‍👧‍👦' }, { title: "تشابه عالي", key: 'HIGH_SIMILARITY', icon: '✨' }]
     ];
     
     let currentRow = 4;
-    summaryCards.forEach((rowItems) => {
+    summaryCards.forEach((rowItems, rowIndex) => {
         ws.getRow(currentRow).height = 45;
         rowItems.forEach((stat, colIndex) => {
             if (!stat) return;
             const startColNum = colIndex === 0 ? 2 : 5;
             ws.mergeCells(currentRow, startColNum, currentRow + 3, startColNum + 1);
             const cardCell = ws.getCell(currentRow, startColNum);
-            cardCell.value = { richText: [ { text: `${stat.icon}`, font: { size: 36, name: 'Segoe UI Emoji' } }, { text: `\n${stat.title}\n`, font: { size: 14 } }, { text: `${findingCounts[stat.key]}`, font: { size: 24, bold: true } } ] };
+            
+            const count = findingCounts[stat.key];
+
+            cardCell.value = { richText: [ { text: `${stat.icon}`, font: { size: 36, name: 'Segoe UI Emoji' } }, { text: `\n${stat.title}`, font: { size: 14 } }, { text: `\n${count}`, font: { size: 24, bold: true } } ] };
             cardCell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
             cardCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2F2F2' } };
             cardCell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
         });
         currentRow += 5;
     });
-
-    ws.getRow(9).height = 45;
-    ws.getRow(14).height = 45;
 }
