@@ -369,15 +369,15 @@ function createClustersSheet(wb: ExcelJS.Workbook, clusters: {records: RecordRow
         };
 
         const summaryResult = generateArabicClusterSummary(clusterObjectForSummary, clusterRecords);
-        // Strip HTML for Excel
-        const summaryText = summaryResult.replace(/<[^>]*>?/gm, '');
+        // Strip HTML for Excel, but keep line breaks
+        const summaryText = summaryResult.replace(/<br\s*\/?>/gi, '\r\n').replace(/<[^>]*>?/gm, '');
 
         const startRow = currentRowIndex;
         const endRow = startRow + recordsForSheet.length - 1;
 
         let rowHeight = 40; // Default
         const clusterSize = recordsForSheet.length;
-        if (clusterSize === 2) rowHeight = 140;
+        if (clusterSize === 2) rowHeight = 142;
         if (clusterSize === 3) rowHeight = 95;
         if (clusterSize === 4) rowHeight = 90;
 
@@ -523,6 +523,7 @@ function createAuditSummarySheet(wb: ExcelJS.Workbook, findings: AuditFinding[])
 
     findings.forEach(f => {
         if (f.type in findingCounts) {
+            // This counts findings which can have multiple records, so we count unique findings
             findingCounts[f.type] += 1;
         }
     });
@@ -541,7 +542,7 @@ function createAuditSummarySheet(wb: ExcelJS.Workbook, findings: AuditFinding[])
             const startColNum = colIndex === 0 ? 2 : 5;
             ws.mergeCells(currentRow, startColNum, currentRow + 3, startColNum + 1);
             const cardCell = ws.getCell(currentRow, startColNum);
-            cardCell.value = { richText: [ { text: `${stat.icon}\n`, font: { size: 36, name: 'Segoe UI Emoji' } }, { text: `${stat.title}\n`, font: { size: 14 } }, { text: `${findingCounts[stat.key]}`, font: { size: 24, bold: true } } ] };
+            cardCell.value = { richText: [ { text: `${stat.icon}\n`, font: { size: 36, name: 'Segoe UI Emoji' } }, { text: `${stat.title}`, font: { size: 14 } }, {text: '\n', font: {size: 4}}, { text: `${findingCounts[stat.key]}`, font: { size: 24, bold: true } } ] };
             cardCell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
             cardCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2F2F2' } };
             cardCell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
@@ -549,5 +550,3 @@ function createAuditSummarySheet(wb: ExcelJS.Workbook, findings: AuditFinding[])
         currentRow += 5;
     });
 }
-
-    
