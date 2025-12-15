@@ -1,4 +1,5 @@
 
+
 import { NextResponse } from 'next/server';
 import fs from 'fs/promises';
 import path from 'path';
@@ -483,11 +484,20 @@ function createAuditSheet(wb: ExcelJS.Workbook, findings: AuditFinding[], cluste
     };
      const typeTranslations: Record<string, string> = {
         "DUPLICATE_ID": "تكرار الرقم القومي",
-        "DUPLICATE_COUPLE": "تكرار الزوجين",
+        "DUPLICATE_COUPLE": "ازدواجية الزوجين",
         "WOMAN_MULTIPLE_HUSBANDS": "زوجة لديها عدة أزواج",
         "HUSBAND_TOO_MANY_WIVES": "زوج لديه أكثر من 4 زوجات",
         "MULTIPLE_NATIONAL_IDS": "زوجة لديها عدة أرقام قومية",
         "HIGH_SIMILARITY": "تشابه عالي بين السجلات"
+    };
+
+    const descriptionTranslations: Record<string, (f: AuditFinding) => string> = {
+      "DUPLICATE_ID": (f) => `الرقم القومي مكرر داخل المجموعة.`,
+      "DUPLICATE_COUPLE": (f) => `تطابق تام لاسم الزوجة والزوج.`,
+      "WOMAN_MULTIPLE_HUSBANDS": (f) => f.description, // Already contains names
+      "HUSBAND_TOO_MANY_WIVES": (f) => f.description, // Already contains names/count
+      "MULTIPLE_NATIONAL_IDS": (f) => f.description, // Already contains names/IDs
+      "HIGH_SIMILARITY": (f) => f.description, // Already contains pair count
     };
 
     let lastFindingType = '';
@@ -500,12 +510,14 @@ function createAuditSheet(wb: ExcelJS.Workbook, findings: AuditFinding[], cluste
         }
         lastFindingType = finding.type;
 
+        const descriptionTranslator = descriptionTranslations[finding.type] || ((f) => f.description);
+
         finding.records.forEach(record => {
             const clusterId = recordToClusterIdMap.get(record._internalId!) || 'N/A';
             const row = ws.addRow({
                 severity: severityTranslations[finding.severity] || finding.severity,
                 type: typeTranslations[finding.type] || finding.type.replace(/_/g, ' '),
-                description: finding.description,
+                description: descriptionTranslator(finding),
                 clusterId: clusterId,
                 beneficiaryId: record.beneficiaryId,
                 womanName: record.womanName,
@@ -562,7 +574,7 @@ function createAuditSummarySheet(wb: ExcelJS.Workbook, findings: AuditFinding[])
 
     const summaryCards = [
         [{ title: "تعدد الأزواج", key: 'WOMAN_MULTIPLE_HUSBANDS', icon: '🙍‍♀️' }, { title: "تعدد أرقام الهوية", key: 'MULTIPLE_NATIONAL_IDS', icon: '💳' }],
-        [{ title: "ازدواجية الرقم القومي", key: 'DUPLICATE_ID', icon: '🧾' }, { title: "ازدواجية الزوجين", key: 'DUPLICATE_COUPLE', icon: '👨‍👩‍👧‍👦' }],
+        [{ title: "ازدواجية الزوجين", key: 'DUPLICATE_COUPLE', icon: '👨‍👩‍👧‍👦' }, { title: "ازدواجية الرقم القومي", key: 'DUPLICATE_ID', icon: '🧾' }],
         [{ title: "تشابه عالي", key: 'HIGH_SIMILARITY', icon: '✨' }, null]
     ];
     
@@ -582,3 +594,5 @@ function createAuditSummarySheet(wb: ExcelJS.Workbook, findings: AuditFinding[])
         currentRow += 5;
     });
 }
+
+    
