@@ -6,7 +6,6 @@ import os from 'os';
 import ExcelJS from "exceljs";
 import { fullPairwiseBreakdown } from "@/lib/fuzzyCluster";
 import type { AuditFinding } from "@/lib/auditEngine";
-import { UserX, Fingerprint, Copy, Users, Sigma } from 'lucide-react'; // These are server components so we cannot use them
 import type { RecordRow } from "@/lib/types";
 import { generateArabicClusterSummary } from '@/lib/arabicClusterSummary';
 import { calculateClusterConfidence } from '@/lib/clusterConfidence';
@@ -78,20 +77,21 @@ async function enrichData(cachedData: any): Promise<EnrichedRecord[]> {
     const enrichedRecords: EnrichedRecord[] = [];
     const clusterInfoMap = new Map<number, { maxScore: number, maxBeneficiaryId: number, size: number }>();
 
-    clusters.forEach((cluster: RecordRow[], index: number) => {
+    clusters.forEach((clusterObj: { records: RecordRow[] }, index: number) => {
         const clusterId = index + 1;
-        const pairs = fullPairwiseBreakdown(cluster);
+        const clusterRecords = clusterObj.records;
+        const pairs = fullPairwiseBreakdown(clusterRecords);
         const maxScore = pairs.reduce((max, p) => Math.max(max, p.score), 0);
         
         let maxBeneficiaryId = 0;
-        cluster.forEach(r => {
+        clusterRecords.forEach(r => {
              const beneficiaryId = Number(r.beneficiaryId);
              if (!isNaN(beneficiaryId) && beneficiaryId > maxBeneficiaryId) {
                 maxBeneficiaryId = beneficiaryId;
              }
         });
 
-        clusterInfoMap.set(clusterId, { maxScore, maxBeneficiaryId, size: cluster.length });
+        clusterInfoMap.set(clusterId, { maxScore, maxBeneficiaryId, size: clusterRecords.length });
     });
 
     allRecords.forEach((record: RecordRow) => {
@@ -104,7 +104,7 @@ async function enrichData(cachedData: any): Promise<EnrichedRecord[]> {
         let recordPairData: any = {};
 
         for (let i = 0; i < clusters.length; i++) {
-            const cluster = clusters[i];
+            const cluster = clusters[i].records;
             if (cluster.some((r: RecordRow) => r._internalId === record._internalId)) {
                 recordClusterId = i + 1;
                 const pairs = fullPairwiseBreakdown(cluster);
@@ -286,7 +286,7 @@ function createEnrichedDataSheet(wb: ExcelJS.Workbook, data: EnrichedRecord[], o
     }
 }
 
-function createSummarySheet(wb: ExcelJS.Workbook, allRecords: RecordRow[], clusters: RecordRow[][]) {
+function createSummarySheet(wb: ExcelJS.Workbook, allRecords: RecordRow[], clusters: {records: RecordRow[]}[]) {
     const ws = wb.addWorksheet("Review Summary");
     ws.views = [{ rightToLeft: true }];
     
@@ -300,7 +300,7 @@ function createSummarySheet(wb: ExcelJS.Workbook, allRecords: RecordRow[], clust
     ws.getRow(2).height = 40;
 
     const totalRecords = allRecords.length;
-    const clusteredRecordsCount = clusters.flat().length;
+    const clusteredRecordsCount = clusters.reduce((acc, c) => acc + c.records.length, 0);
     const numClusters = clusters.length;
     const statsData = [
         [{ title: "إجمالي السجلات المعالجة", value: totalRecords, icon: "👥" }, { title: "عدد المجموعات", value: numClusters, icon: "📂" }],
@@ -325,7 +325,7 @@ function createSummarySheet(wb: ExcelJS.Workbook, allRecords: RecordRow[], clust
     });
 }
 
-function createClustersSheet(wb: ExcelJS.Workbook, clusters: RecordRow[][]) {
+function createClustersSheet(wb: ExcelJS.Workbook, clusters: {records: RecordRow[], reasons: string[]}[]) {
     const ws = wb.addWorksheet("Cluster Details");
     ws.views = [{ rightToLeft: true }];
 
@@ -342,7 +342,8 @@ function createClustersSheet(wb: ExcelJS.Workbook, clusters: RecordRow[][]) {
     headerRow.alignment = { horizontal: 'center' };
 
     let currentRowIndex = 2;
-    clusters.forEach((clusterRecords, index) => {
+    clusters.forEach((clusterObj, index) => {
+        const clusterRecords = clusterObj.records;
         const clusterId = index + 1;
         const pairs = fullPairwiseBreakdown(clusterRecords);
         if (pairs.length === 0 && clusterRecords.length < 2) return;
@@ -360,7 +361,7 @@ function createClustersSheet(wb: ExcelJS.Workbook, clusters: RecordRow[][]) {
         
         const clusterObjectForSummary = {
             records: clusterRecords,
-            reasons: pairs.flatMap(p => p.reasons || []),
+            reasons: clusterObj.reasons || [],
             avgWomanNameScore,
             avgHusbandNameScore,
             avgFinalScore,
@@ -424,13 +425,13 @@ function createClustersSheet(wb: ExcelJS.Workbook, clusters: RecordRow[][]) {
 }
 
 
-function createAuditSheet(wb: ExcelJS.Workbook, findings: AuditFinding[], clusters: RecordRow[][]) {
+function createAuditSheet(wb: ExcelJS.Workbook, findings: AuditFinding[], clusters: {records: RecordRow[]}[]) {
     const ws = wb.addWorksheet("Audit Findings");
     ws.views = [{ rightToLeft: true }];
     
     const recordToClusterIdMap = new Map<string, number>();
-    clusters.forEach((cluster, index) => {
-        cluster.forEach(record => {
+    clusters.forEach((clusterObj, index) => {
+        clusterObj.records.forEach(record => {
             recordToClusterIdMap.set(record._internalId!, index + 1);
         });
     });
