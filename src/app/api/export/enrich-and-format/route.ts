@@ -535,24 +535,39 @@ function createAuditSheet(wb: ExcelJS.Workbook, findings: AuditFinding[], cluste
 
     // --- Sorting Logic ---
     finalData.sort((a, b) => {
+        // Primary sort: Severity
+        const severityComparison = severityOrder[a.severityValue] - severityOrder[b.severityValue];
+        if (severityComparison !== 0) {
+            return severityComparison;
+        }
+        
+        // Secondary sort: Cluster ID
         if (a.clusterId !== b.clusterId) {
             return (a.clusterId > b.clusterId) ? 1 : -1;
         }
-        if (a.severityValue !== b.severityValue) {
-            return severityOrder[a.severityValue] - severityOrder[b.severityValue];
-        }
+
+        // Tertiary sort: Fallback to type
         return a.type.localeCompare(b.type);
     });
 
     // --- Add Rows to Sheet ---
-    let lastFindingType: string | null = null;
-    finalData.forEach(data => {
+    let lastClusterId: string | number | null = null;
+    finalData.forEach((data, index) => {
         const row = ws.addRow(data);
+
+        // Add thick border for new cluster groups
+        if (index > 0 && data.clusterId !== lastClusterId) {
+           row.eachCell({ includeEmpty: true }, cell => {
+                cell.border = { ...cell.border, top: { style: 'thick', color: { argb: 'FF4F81BD' } } };
+           });
+        }
+        lastClusterId = data.clusterId;
 
         const severityColor = data.severityValue === 'high' ? 'FFFFC7CE' : data.severityValue === 'medium' ? 'FFFFEB9C' : 'FFC6EFCE';
         row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
             cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: severityColor } };
             const key = headers[colNumber - 1].key;
+
             if (['severity', 'type', 'clusterId', 'beneficiaryId', 'nationalId', 'phone'].includes(key)) {
                 cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
             } else if (['description', 'womanName', 'husbandName'].includes(key)) {
@@ -584,21 +599,12 @@ function createAuditSummarySheet(wb: ExcelJS.Workbook, findings: AuditFinding[])
       HIGH_SIMILARITY: 0
     };
 
-    const uniqueFindingGroups = new Set<string>();
     findings.forEach(f => {
-        const findingKey = `${f.type}-${f.description}`; // A key to identify a unique finding group
-        if (!uniqueFindingGroups.has(findingKey)) {
-             if (f.type in findingCounts) {
-                // Count records for these types, not groups
-                 findingCounts[f.type] += f.records.length;
-            }
-            uniqueFindingGroups.add(findingKey);
-        } else if (['DUPLICATE_COUPLE', 'HIGH_SIMILARITY', 'DUPLICATE_ID', 'MULTIPLE_NATIONAL_IDS', 'WOMAN_MULTIPLE_HUSBANDS'].includes(f.type)) {
-            // For record-based counts, keep adding even if the group is not unique
+        if (f.type in findingCounts) {
+            // This logic correctly counts records for each finding type, fixing the discrepancy.
             findingCounts[f.type] += f.records.length;
         }
     });
-
 
     const summaryCards = [
         [{ title: "إجمالي السجلات المدققة", key: 'TOTAL_UNIQUE_RECORDS', icon: '🛡️' }, { title: "تعدد الأزواج", key: 'WOMAN_MULTIPLE_HUSBANDS', icon: '🙍‍♀️' }],
