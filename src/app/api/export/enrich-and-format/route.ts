@@ -490,70 +490,106 @@ function createAuditSheet(wb: ExcelJS.Workbook, findings: AuditFinding[], cluste
       "HIGH_SIMILARITY": () => `يوجد تشابه عالي في البيانات بين السجلات داخل هذه المجموعة.`,
     };
 
-    // --- Consolidation Logic ---
-    const consolidatedFindings = new Map<string, any>();
-
+    // --- Beneficiary ID Consolidation Logic ---
+    const beneficiaryFindings = new Map<string, any>();
     findings.forEach(finding => {
         finding.records.forEach(record => {
             const beneficiaryId = record.beneficiaryId;
             if (!beneficiaryId) return;
 
-            const existing = consolidatedFindings.get(beneficiaryId);
-            const translatedSeverity = severityTranslations[finding.severity] || finding.severity;
-            const translatedType = typeTranslations[finding.type] || finding.type.replace(/_/g, ' ');
-            const translatedDesc = (descriptionTranslations[finding.type] || ((f, r) => f.description))(finding, record);
-
+            const existing = beneficiaryFindings.get(beneficiaryId);
             if (existing) {
-                // Higher severity wins
                 if (severityOrder[finding.severity] < severityOrder[existing.severityValue]) {
-                    existing.severity = translatedSeverity;
+                    existing.severity = finding.severity;
                     existing.severityValue = finding.severity;
                 }
-                
-                // Concatenate types and descriptions if they are not already included
-                if (!existing.type.includes(translatedType)) {
-                    existing.type += ` + ${translatedType}`;
-                }
-                if (!existing.description.includes(translatedDesc)) {
-                    existing.description += ` + ${translatedDesc}`;
-                }
-
+                existing.types.add(finding.type);
+                existing.descriptions.add(finding.description);
             } else {
-                consolidatedFindings.set(beneficiaryId, {
+                beneficiaryFindings.set(beneficiaryId, {
                     ...record,
-                    severity: translatedSeverity,
+                    severity: finding.severity,
                     severityValue: finding.severity,
-                    type: translatedType,
-                    description: translatedDesc,
+                    types: new Set([finding.type]),
+                    descriptions: new Set([finding.description]),
                     clusterId: recordToClusterIdMap.get(record._internalId!) || 'N/A'
                 });
             }
         });
     });
 
-    const finalData = Array.from(consolidatedFindings.values());
+    let consolidatedData = Array.from(beneficiaryFindings.values()).map(f => ({
+        ...f,
+        type: Array.from(f.types).join(' + '),
+        description: Array.from(f.descriptions).join(' + ')
+    }));
 
+    // --- Cluster-level Consolidation ---
+    const clusterGroups = new Map<string, any[]>();
+    consolidatedData.forEach(record => {
+        const clusterId = record.clusterId;
+        if (!clusterGroups.has(clusterId)) {
+            clusterGroups.set(clusterId, []);
+        }
+        clusterGroups.get(clusterId)!.push(record);
+    });
+
+    const finalData: any[] = [];
+    clusterGroups.forEach((records, clusterId) => {
+        if (records.length === 0) return;
+
+        let highestSeverityValue: 'high' | 'medium' | 'low' = 'low';
+        const combinedTypes = new Set<string>();
+        const combinedDescriptions = new Set<string>();
+
+        records.forEach(record => {
+            if (severityOrder[record.severityValue] < severityOrder[highestSeverityValue]) {
+                highestSeverityValue = record.severityValue;
+            }
+            record.type.split(' + ').forEach((t: string) => combinedTypes.add(t));
+            record.description.split(' + ').forEach((d: string) => combinedDescriptions.add(d));
+        });
+
+        const unifiedType = Array.from(combinedTypes).map(t => typeTranslations[t] || t.replace(/_/g, ' ')).join(' + ');
+        const unifiedDescription = Array.from(combinedDescriptions).join(' + ');
+        const unifiedSeverity = severityTranslations[highestSeverityValue] || highestSeverityValue;
+        
+        const unifiedRecords = records.map(record => ({
+            ...record,
+            severity: unifiedSeverity,
+            severityValue: highestSeverityValue,
+            type: unifiedType,
+            description: unifiedDescription,
+        }));
+        finalData.push(...unifiedRecords);
+    });
+    
     // --- Sorting Logic ---
     finalData.sort((a, b) => {
-        // Primary sort: Severity
         const severityComparison = severityOrder[a.severityValue] - severityOrder[b.severityValue];
-        if (severityComparison !== 0) {
-            return severityComparison;
-        }
+        if (severityComparison !== 0) return severityComparison;
         
-        // Secondary sort: Cluster ID
-        if (a.clusterId !== b.clusterId) {
-            return (a.clusterId > b.clusterId) ? 1 : -1;
-        }
+        const clusterIdA = a.clusterId === 'N/A' ? Infinity : a.clusterId;
+        const clusterIdB = b.clusterId === 'N/A' ? Infinity : b.clusterId;
+        if (clusterIdA !== clusterIdB) return clusterIdA - clusterIdB;
 
-        // Tertiary sort: Fallback to type
-        return a.type.localeCompare(b.type);
+        return a.beneficiaryId.localeCompare(b.beneficiaryId);
     });
 
     // --- Add Rows to Sheet ---
     let lastClusterId: string | number | null = null;
     finalData.forEach((data, index) => {
-        const row = ws.addRow(data);
+        const row = ws.addRow({
+            severity: data.severity,
+            type: data.type,
+            description: data.description,
+            clusterId: data.clusterId,
+            beneficiaryId: data.beneficiaryId,
+            womanName: data.womanName,
+            husbandName: data.husbandName,
+            nationalId: data.nationalId,
+            phone: data.phone,
+        });
 
         // Add thick border for new cluster groups
         if (index > 0 && data.clusterId !== lastClusterId) {
@@ -568,9 +604,9 @@ function createAuditSheet(wb: ExcelJS.Workbook, findings: AuditFinding[], cluste
             cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: severityColor } };
             const key = headers[colNumber - 1].key;
 
-            if (['severity', 'type', 'clusterId', 'beneficiaryId', 'nationalId', 'phone'].includes(key)) {
+            if (['severity', 'clusterId', 'beneficiaryId', 'nationalId', 'phone'].includes(key)) {
                 cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
-            } else if (['description', 'womanName', 'husbandName'].includes(key)) {
+            } else if (['type', 'description', 'womanName', 'husbandName'].includes(key)) {
                 cell.alignment = { vertical: 'middle', horizontal: 'right', wrapText: true };
             }
         });
@@ -601,13 +637,12 @@ function createAuditSummarySheet(wb: ExcelJS.Workbook, findings: AuditFinding[])
 
     findings.forEach(f => {
         if (f.type in findingCounts) {
-            // This logic correctly counts records for each finding type, fixing the discrepancy.
-            findingCounts[f.type] += f.records.length;
+            findingCounts[f.type] += new Set(f.records.map(r => r._internalId)).size;
         }
     });
 
     const summaryCards = [
-        [{ title: "إجمالي السجلات المدققة", key: 'TOTAL_UNIQUE_RECORDS', icon: '🛡️' }, { title: "تعدد الأزواج", key: 'WOMAN_MULTIPLE_HUSBANDS', icon: '🙍‍♀️' }],
+        [{ title: "السجلات المدققة الفريدة", key: 'TOTAL_UNIQUE_RECORDS', icon: '🛡️' }, { title: "تعدد الأزواج", key: 'WOMAN_MULTIPLE_HUSBANDS', icon: '🙍‍♀️' }],
         [{ title: "تعدد أرقام الهوية", key: 'MULTIPLE_NATIONAL_IDS', icon: '💳' }, { title: "ازدواجية الرقم القومي", key: 'DUPLICATE_ID', icon: '🧾' }],
         [{ title: "ازدواجية الزوجين", key: 'DUPLICATE_COUPLE', icon: '👨‍👩‍👧‍👦' }, { title: "تشابه عالي", key: 'HIGH_SIMILARITY', icon: '✨' }]
     ];
