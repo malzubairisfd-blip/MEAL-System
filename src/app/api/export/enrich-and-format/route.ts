@@ -8,6 +8,9 @@ import { fullPairwiseBreakdown } from "@/lib/fuzzyCluster";
 import type { AuditFinding } from "@/lib/auditEngine";
 import { UserX, Fingerprint, Copy, Users, Sigma } from 'lucide-react'; // These are server components so we cannot use them
 import type { RecordRow } from "@/lib/types";
+import { generateArabicClusterSummary } from '@/lib/arabicClusterSummary';
+import { calculateClusterConfidence } from '@/lib/clusterConfidence';
+
 
 const getTmpDir = () => path.join(os.tmpdir(), 'beneficiary-insights-cache');
 
@@ -326,8 +329,12 @@ function createClustersSheet(wb: ExcelJS.Workbook, clusters: RecordRow[][]) {
     const ws = wb.addWorksheet("Cluster Details");
     ws.views = [{ rightToLeft: true }];
 
-    const headers = ["Cluster ID", "Beneficiary ID", "Score", "Woman Name", "Husband Name", "National ID", "Phone", "Children"];
-    ws.columns = headers.map(h => ({ header: h, key: h.replace(/\s/g, ''), width: 25 }));
+    const headers = ["Cluster ID", "AI Summary", "Beneficiary ID", "Score", "Woman Name", "Husband Name", "National ID", "Phone", "Children"];
+    ws.columns = headers.map(h => ({ 
+        header: h, 
+        key: h.replace(/\s/g, ''), 
+        width: h === 'AI Summary' ? 50 : 25 
+    }));
     
     const headerRow = ws.getRow(1);
     headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
@@ -335,22 +342,44 @@ function createClustersSheet(wb: ExcelJS.Workbook, clusters: RecordRow[][]) {
     headerRow.alignment = { horizontal: 'center' };
 
     let currentRowIndex = 2;
-    clusters.forEach((cluster, index) => {
+    clusters.forEach((clusterRecords, index) => {
         const clusterId = index + 1;
-        const pairs = fullPairwiseBreakdown(cluster);
-        if (pairs.length === 0 && cluster.length < 2) return;
-        
-        const recordsForSheet = [...cluster].sort((a,b) => (String(a.beneficiaryId) || '').localeCompare(String(b.beneficiaryId) || ''));
+        const pairs = fullPairwiseBreakdown(clusterRecords);
+        if (pairs.length === 0 && clusterRecords.length < 2) return;
+
+        const recordsForSheet = [...clusterRecords].sort((a,b) => (String(a.beneficiaryId) || '').localeCompare(String(b.beneficiaryId) || ''));
         if (recordsForSheet.length === 0) return;
+
+        // Calculate averages for summary
+        const womanNameScores = pairs.map((p: any) => p.breakdown.nameScore || 0);
+        const husbandNameScores = pairs.map((p: any) => p.breakdown.husbandScore || 0);
+        const avgWomanNameScore = womanNameScores.length > 0 ? womanNameScores.reduce((a: number, b: number) => a + b, 0) / womanNameScores.length : 0;
+        const avgHusbandNameScore = husbandNameScores.length > 0 ? husbandNameScores.reduce((a: number, b: number) => a + b, 0) / husbandNameScores.length : 0;
+        const avgFinalScore = (avgWomanNameScore + avgHusbandNameScore) / 2;
+        const confidence = calculateClusterConfidence(avgWomanNameScore, avgHusbandNameScore);
+        
+        const clusterObjectForSummary = {
+            records: clusterRecords,
+            reasons: pairs.flatMap(p => p.reasons || []),
+            avgWomanNameScore,
+            avgHusbandNameScore,
+            avgFinalScore,
+            confidence,
+        };
+
+        const summaryResult = generateArabicClusterSummary(clusterObjectForSummary, clusterRecords);
+        // Strip HTML for Excel
+        const summaryText = summaryResult.html.replace(/<[^>]*>?/gm, '');
 
         const startRow = currentRowIndex;
         const endRow = startRow + recordsForSheet.length - 1;
 
-        recordsForSheet.forEach((record) => {
+        recordsForSheet.forEach((record, recordIndex) => {
              const pair = pairs.find(p => p.a._internalId === record._internalId || p.b._internalId === record._internalId);
              const score = pair ? pair.score.toFixed(4) : '';
              const childrenText = Array.isArray(record.children) ? record.children.join(', ') : record.children || '';
-             ws.addRow({
+             
+             let rowData: any = {
                 BeneficiaryID: record.beneficiaryId,
                 Score: score,
                 WomanName: record.womanName,
@@ -358,29 +387,42 @@ function createClustersSheet(wb: ExcelJS.Workbook, clusters: RecordRow[][]) {
                 NationalID: record.nationalId,
                 Phone: record.phone,
                 Children: childrenText
-            });
+            };
+            
+            // Add summary only to the first row of the cluster
+            if (recordIndex === 0) {
+                rowData['AISummary'] = summaryText;
+            }
+
+            ws.addRow(rowData);
         });
         
+        // Merge Cluster ID and AI Summary cells
         ws.mergeCells(`A${startRow}:A${endRow}`);
         const clusterIdCell = ws.getCell(`A${startRow}`);
         clusterIdCell.value = clusterId;
-        clusterIdCell.alignment = { vertical: 'middle', horizontal: 'center' };
+        clusterIdCell.alignment = { vertical: 'top', horizontal: 'center' };
         
+        ws.mergeCells(`B${startRow}:B${endRow}`);
+        const summaryCell = ws.getCell(`B${startRow}`);
+        summaryCell.alignment = { vertical: 'top', horizontal: 'right', wrapText: true };
+
+
         for (let i = startRow; i <= endRow; i++) {
-            ws.getRow(i).getCell('B').value = recordsForSheet[i - startRow].beneficiaryId;
+            ws.getRow(i).getCell('C').value = recordsForSheet[i - startRow].beneficiaryId;
             ws.getRow(i).eachCell({ includeEmpty: true }, (cell) => {
                 const border: Partial<ExcelJS.Borders> = {};
                 if (i === startRow) border.top = { style: 'thick', color: {argb: 'FF4F81BD'} };
                 if (i === endRow) border.bottom = { style: 'thick', color: {argb: 'FF4F81BD'} };
-                if (cell.col === 1) border.left = { style: 'thick', color: {argb: 'FF4F81BD'} };
-                if (cell.col === headers.length) border.right = { style: 'thick', color: {argb: 'FF4F81BD'} };
-                cell.border = border;
+                
+                cell.border = { ...cell.border, ...border };
             });
         }
         
         currentRowIndex = endRow + 1;
     });
 }
+
 
 function createAuditSheet(wb: ExcelJS.Workbook, findings: AuditFinding[], clusters: RecordRow[][]) {
     const ws = wb.addWorksheet("Audit Findings");
