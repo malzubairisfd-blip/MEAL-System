@@ -471,7 +471,9 @@ function createAuditSheet(wb: ExcelJS.Workbook, findings: AuditFinding[], cluste
 
     const severityOrder = { high: 1, medium: 2, low: 3 };
     const sortedFindings = [...findings].sort((a, b) => {
-      return (severityOrder[a.severity] || 99) - (severityOrder[b.severity] || 99);
+      const severityDiff = (severityOrder[a.severity] || 99) - (severityOrder[b.severity] || 99);
+      if (severityDiff !== 0) return severityDiff;
+      return a.type.localeCompare(b.type);
     });
 
     const severityTranslations: Record<string, string> = {
@@ -479,13 +481,30 @@ function createAuditSheet(wb: ExcelJS.Workbook, findings: AuditFinding[], cluste
         medium: 'متوسطة',
         low: 'منخفضة'
     };
+     const typeTranslations: Record<string, string> = {
+        "DUPLICATE_ID": "تكرار الرقم القومي",
+        "DUPLICATE_COUPLE": "تكرار الزوجين",
+        "WOMAN_MULTIPLE_HUSBANDS": "زوجة لديها عدة أزواج",
+        "HUSBAND_TOO_MANY_WIVES": "زوج لديه أكثر من 4 زوجات",
+        "MULTIPLE_NATIONAL_IDS": "زوجة لديها عدة أرقام قومية",
+        "HIGH_SIMILARITY": "تشابه عالي بين السجلات"
+    };
 
+    let lastFindingType = '';
     sortedFindings.forEach(finding => {
+        if (lastFindingType && lastFindingType !== finding.type) {
+            const rowNumber = ws.rowCount + 1;
+            ws.getRow(rowNumber).eachCell({ includeEmpty: true }, (cell) => {
+                cell.border = { ...cell.border, top: { style: 'thick', color: {argb: 'FF808080'} } };
+            });
+        }
+        lastFindingType = finding.type;
+
         finding.records.forEach(record => {
             const clusterId = recordToClusterIdMap.get(record._internalId!) || 'N/A';
             const row = ws.addRow({
                 severity: severityTranslations[finding.severity] || finding.severity,
-                type: finding.type.replace(/_/g, ' '),
+                type: typeTranslations[finding.type] || finding.type.replace(/_/g, ' '),
                 description: finding.description,
                 clusterId: clusterId,
                 beneficiaryId: record.beneficiaryId,
