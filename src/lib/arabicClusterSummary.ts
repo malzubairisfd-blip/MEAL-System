@@ -82,25 +82,7 @@ export function generateArabicClusterSummary(
   /* --------------------------------------------------
      4️⃣ FINAL ARABIC SUMMARY (HTML SAFE)
   -------------------------------------------------- */
-  const summaryHtml = `
-النتيجة العامة:
-تم تجميع <strong>${size}</strong> سجلات يُحتمل أنها تمثل نفس المستفيد أو نفس الأسرة.
-
-مستوى الثقة: <strong style="${getScoreColor(confidenceScore)}">${confidenceScore}%</strong>
-
-تحليل درجات التشابه:
-• متوسط تشابه اسم المرأة: <strong style="${getScoreColor(womanScorePct)}">${womanScorePct}%</strong>
-• متوسط تشابه اسم الزوج: <strong style="${getScoreColor(husbandScorePct)}">${husbandScorePct}%</strong>
-• الدرجة النهائية للتشابه: <strong style="${getScoreColor(finalScorePct)}">${finalScorePct}%</strong>
-
-أسباب التجميع:
-${explanations.map(e => `• ${e}`).join("\n") || "• تحليل التشابه العام"}
-
-تقييم خبير:
-${expertNote}
-
-القرار النهائي: ${decision}
-`;
+  const summaryHtml = `النتيجة العامة:<br>تم تجميع <strong>${size}</strong> سجلات يُحتمل أنها تمثل نفس المستفيد أو نفس الأسرة.<br><br>مستوى الثقة: <strong style="${getScoreColor(confidenceScore)}">${confidenceScore}%</strong><br><br>تحليل درجات التشابه:<br>• متوسط تشابه اسم المرأة: <strong style="${getScoreColor(womanScorePct)}">${womanScorePct}%</strong><br>• متوسط تشابه اسم الزوج: <strong style="${getScoreColor(husbandScorePct)}">${husbandScorePct}%</strong><br>• الدرجة النهائية للتشابه: <strong style="${getScoreColor(finalScorePct)}">${finalScorePct}%</strong><br><br>أسباب التجميع:<br>${explanations.map(e => `• ${e}`).join("<br>") || "• تحليل التشابه العام"}<br><br>تقييم خبير:<br>${expertNote}<br><br>القرار النهائي: ${decision}`;
 
   return summaryHtml;
 }
