@@ -19,7 +19,7 @@ export function generateArabicClusterSummary(
   const explanations: string[] = [];
 
   /* --------------------------------------------------
-     1️⃣ REASON ANALYSIS
+     1️⃣ REASON ANALYSIS (UNCHANGED + CLEANED)
   -------------------------------------------------- */
   if (reasons.includes("DUPLICATED_HUSBAND_LINEAGE")) {
     explanations.push(
@@ -83,24 +83,23 @@ export function generateArabicClusterSummary(
      4️⃣ FINAL ARABIC SUMMARY (HTML SAFE)
   -------------------------------------------------- */
   const summaryHtml = `
-<strong>النتيجة العامة:</strong><br/>
-تم تجميع <strong>${size}</strong> سجلات يُحتمل أنها تمثل نفس المستفيد أو نفس الأسرة.<br/><br/>
+النتيجة العامة:
+تم تجميع <strong>${size}</strong> سجلات يُحتمل أنها تمثل نفس المستفيد أو نفس الأسرة.
 
-<strong>مستوى الثقة:</strong> <strong style="${getScoreColor(confidenceScore)}">${confidenceScore}%</strong><br/>
+مستوى الثقة: <strong style="${getScoreColor(confidenceScore)}">${confidenceScore}%</strong>
 
-<strong>تحليل درجات التشابه:</strong><br/>
-• متوسط تشابه اسم المرأة: <strong style="${getScoreColor(womanScorePct)}">${womanScorePct}%</strong><br/>
-• متوسط تشابه اسم الزوج: <strong style="${getScoreColor(husbandScorePct)}">${husbandScorePct}%</strong><br/>
-• الدرجة النهائية للتشابه: <strong style="${getScoreColor(finalScorePct)}">${finalScorePct}%</strong><br/><br/>
+تحليل درجات التشابه:
+• متوسط تشابه اسم المرأة: <strong style="${getScoreColor(womanScorePct)}">${womanScorePct}%</strong>
+• متوسط تشابه اسم الزوج: <strong style="${getScoreColor(husbandScorePct)}">${husbandScorePct}%</strong>
+• الدرجة النهائية للتشابه: <strong style="${getScoreColor(finalScorePct)}">${finalScorePct}%</strong>
 
-<strong>أسباب التجميع:</strong><br/>
-${explanations.map(e => `• ${e}`).join("<br/>") || "• تحليل التشابه العام"}<br/><br/>
+أسباب التجميع:
+${explanations.map(e => `• ${e}`).join("\n") || "• تحليل التشابه العام"}
 
+تقييم خبير:
+${expertNote}
 
-<strong>تقييم خبير:</strong><br/>
-${expertNote}<br/><br/>
-
-<strong>القرار النهائي:</strong> ${decision}
+القرار النهائي: ${decision}
 `;
 
   return summaryHtml;

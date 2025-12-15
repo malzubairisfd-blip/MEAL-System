@@ -369,8 +369,8 @@ function createClustersSheet(wb: ExcelJS.Workbook, clusters: {records: RecordRow
         };
 
         const summaryResult = generateArabicClusterSummary(clusterObjectForSummary, clusterRecords);
-        // Strip HTML for Excel, but keep line breaks
-        const summaryText = summaryResult.replace(/<br\s*\/?>/gi, '\r\n').replace(/<[^>]*>?/gm, '');
+        // Strip HTML for Excel, but keep line breaks by replacing <br> with \r\n, then remove other tags.
+        const summaryText = summaryResult.replace(/<br\s*\/?>/gi, '\r\n').replace(/<[^>]*>?/gm, '').trim();
 
         const startRow = currentRowIndex;
         const endRow = startRow + recordsForSheet.length - 1;
