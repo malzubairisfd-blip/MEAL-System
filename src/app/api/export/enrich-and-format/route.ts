@@ -439,7 +439,7 @@ function createClustersSheet(wb: ExcelJS.Workbook, clusters: {records: RecordRow
 
 
 function createAuditSheet(wb: ExcelJS.Workbook, findings: AuditFinding[], clusters: {records: RecordRow[]}[]) {
-    const ws = wb.addWorksheet("Audit Findings");
+    const ws = wb.addWorksheet("نتائج التدقيق");
     ws.views = [{ rightToLeft: true }];
     
     const recordToClusterIdMap = new Map<string, number>();
@@ -450,15 +450,15 @@ function createAuditSheet(wb: ExcelJS.Workbook, findings: AuditFinding[], cluste
     });
 
     const headers = [
-      { header: "Severity", key: "severity", width: 12 },
-      { header: "Finding Type", key: "type", width: 30 },
-      { header: "Description", key: "description", width: 50 },
-      { header: "Cluster ID", key: "clusterId", width: 15 },
-      { header: "Beneficiary ID", key: "beneficiaryId", width: 20 },
-      { header: "Woman Name", key: "womanName", width: 25 },
-      { header: "Husband Name", key: "husbandName", width: 25 },
-      { header: "National ID", key: "nationalId", width: 20 },
-      { header: "Phone", key: "phone", width: 20 },
+      { header: "الخطورة", key: "severity", width: 12 },
+      { header: "نوع النتيجة", key: "type", width: 30 },
+      { header: "الوصف", key: "description", width: 50 },
+      { header: "معرف المجموعة", key: "clusterId", width: 15 },
+      { header: "معرف المستفيد", key: "beneficiaryId", width: 20 },
+      { header: "اسم الزوجة", key: "womanName", width: 25 },
+      { header: "اسم الزوج", key: "husbandName", width: 25 },
+      { header: "الرقم القومي", key: "nationalId", width: 20 },
+      { header: "الهاتف", key: "phone", width: 20 },
     ];
     ws.columns = headers;
     
@@ -474,19 +474,17 @@ function createAuditSheet(wb: ExcelJS.Workbook, findings: AuditFinding[], cluste
       return (severityOrder[a.severity] || 99) - (severityOrder[b.severity] || 99);
     });
 
-    let lastFindingType = '';
-    sortedFindings.forEach(finding => {
-        if (lastFindingType && lastFindingType !== finding.type) {
-            ws.addRow([]).eachCell(cell => {
-                cell.border = { top: { style: 'thin', color: { argb: 'FF808080' } } };
-            });
-        }
-        lastFindingType = finding.type;
+    const severityTranslations: Record<string, string> = {
+        high: 'عالية',
+        medium: 'متوسطة',
+        low: 'منخفضة'
+    };
 
+    sortedFindings.forEach(finding => {
         finding.records.forEach(record => {
             const clusterId = recordToClusterIdMap.get(record._internalId!) || 'N/A';
             const row = ws.addRow({
-                severity: finding.severity,
+                severity: severityTranslations[finding.severity] || finding.severity,
                 type: finding.type.replace(/_/g, ' '),
                 description: finding.description,
                 clusterId: clusterId,
@@ -497,16 +495,22 @@ function createAuditSheet(wb: ExcelJS.Workbook, findings: AuditFinding[], cluste
                 phone: record.phone
             });
             const severityColor = finding.severity === 'high' ? 'FFFFC7CE' : finding.severity === 'medium' ? 'FFFFEB9C' : 'FFC6EFCE';
-            row.eachCell({ includeEmpty: true }, (cell) => {
+            row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
                 cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: severityColor } };
-                cell.alignment = { horizontal: 'right' };
+                const key = headers[colNumber - 1].key;
+                if (['severity', 'type', 'clusterId', 'beneficiaryId', 'nationalId', 'phone'].includes(key)) {
+                    cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+                } else if (['description', 'womanName', 'husbandName'].includes(key)) {
+                    cell.alignment = { vertical: 'middle', horizontal: 'right', wrapText: true };
+                }
             });
         });
     });
 }
 
+
 function createAuditSummarySheet(wb: ExcelJS.Workbook, findings: AuditFinding[]) {
-    const ws = wb.addWorksheet("Audit Summary");
+    const ws = wb.addWorksheet("ملخص التدقيق");
     ws.views = [{ rightToLeft: true }];
     
     ws.columns = [ { width: 5 }, { width: 25 }, { width: 5 }, { width: 5 }, { width: 25 }, { width: 5 }];
@@ -528,7 +532,6 @@ function createAuditSummarySheet(wb: ExcelJS.Workbook, findings: AuditFinding[])
 
     const uniqueFindings = new Set<string>();
     findings.forEach(f => {
-        // Create a unique key for each finding to avoid double counting records within the same finding
         const findingKey = `${f.type}-${f.description}`;
         if (!uniqueFindings.has(findingKey)) {
             if (f.type in findingCounts) {
@@ -546,6 +549,7 @@ function createAuditSummarySheet(wb: ExcelJS.Workbook, findings: AuditFinding[])
     
     let currentRow = 4;
     summaryCards.forEach((rowItems) => {
+        ws.getRow(currentRow).height = 45;
         rowItems.forEach((stat, colIndex) => {
             if (!stat) return;
             const startColNum = colIndex === 0 ? 2 : 5;
@@ -556,11 +560,6 @@ function createAuditSummarySheet(wb: ExcelJS.Workbook, findings: AuditFinding[])
             cardCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2F2F2' } };
             cardCell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
         });
-        if(currentRow === 4 || currentRow === 9 || currentRow === 14) {
-            ws.getRow(currentRow).height = 45;
-        }
         currentRow += 5;
     });
 }
-
-    
