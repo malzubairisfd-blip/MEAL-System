@@ -109,23 +109,23 @@ export default function ReviewPage() {
             const pairs = data.pairs || [];
 
             if (pairs.length === 0) {
-                return { ...cluster, avgWomanNameScore: 0, avgHusbandNameScore: 0, avgFinalScore: 0, confidence: calculateClusterConfidence(cluster.records) };
+                const confidence = calculateClusterConfidence(0, 0);
+                return { ...cluster, avgWomanNameScore: 0, avgHusbandNameScore: 0, avgFinalScore: 0, confidence };
             }
 
             const womanNameScores = pairs.map((p: any) => p.breakdown.nameScore || 0);
             const husbandNameScores = pairs.map((p: any) => p.breakdown.husbandScore || 0);
-            const finalScores = pairs.map((p: any) => p.score || 0);
 
             const avgWomanNameScore = womanNameScores.reduce((a: number, b: number) => a + b, 0) / womanNameScores.length;
             const avgHusbandNameScore = husbandNameScores.reduce((a: number, b: number) => a + b, 0) / husbandNameScores.length;
-            const avgFinalScore = finalScores.reduce((a: number, b: number) => a + b, 0) / finalScores.length;
+            const avgFinalScore = (avgWomanNameScore + avgHusbandNameScore) / 2;
 
             return {
                 ...cluster,
                 avgWomanNameScore,
                 avgHusbandNameScore,
                 avgFinalScore,
-                confidence: calculateClusterConfidence(cluster.records),
+                confidence: calculateClusterConfidence(avgWomanNameScore, avgHusbandNameScore),
             };
         } catch (error) {
             return cluster; // Return original cluster on error
@@ -256,7 +256,7 @@ export default function ReviewPage() {
 
 function ClusterCard({ cluster, clusterNumber, onInspect }: { cluster: Cluster, clusterNumber: number, onInspect: () => void }) {
   const summaryHtml = generateArabicClusterSummary(cluster, cluster.records);
-  const confidenceScore = cluster.confidence || calculateClusterConfidence(cluster.records);
+  const confidenceScore = cluster.confidence !== undefined ? cluster.confidence : calculateClusterConfidence(cluster.avgWomanNameScore, cluster.avgHusbandNameScore);
 
   const getScoreColor = (score?: number) => {
     if (score === undefined) return "text-gray-500";
@@ -311,3 +311,4 @@ function ClusterCard({ cluster, clusterNumber, onInspect }: { cluster: Cluster, 
     </Card>
   );
 }
+
