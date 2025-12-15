@@ -229,7 +229,9 @@ export async function POST(req: Request) {
        LOOP THROUGH CLUSTERS
     --------------------------------------------------------- */
     for (let ci = 0; ci < clusters.length; ci++) {
-      const members = clusters[ci]; // The cluster itself is the array of members
+      const clusterObject = clusters[ci];
+      // FIX: The audit logic was expecting an array of records, but the cache stores an object with a 'records' property.
+      const members = clusterObject.records;
       if (!Array.isArray(members) || members.length < 2) continue;
 
       /* --------------------------
