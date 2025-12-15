@@ -481,13 +481,13 @@ function createAuditSheet(wb: ExcelJS.Workbook, findings: AuditFinding[], cluste
         "HIGH_SIMILARITY": "تشابه عالي بين السجلات"
     };
 
-    const descriptionTranslations: Record<string, (f: AuditFinding, r: RecordRow) => string> = {
-      "DUPLICATE_ID": () => `الرقم القومي مكرر داخل المجموعة.`,
-      "DUPLICATE_COUPLE": () => `تطابق تام لاسم الزوجة والزوج.`,
-      "WOMAN_MULTIPLE_HUSBANDS": (f) => `الزوجة مسجلة مع عدة أزواج: ${[...new Set(f.records.map(rec => rec.husbandName))].join(', ')}`,
-      "HUSBAND_TOO_MANY_WIVES": (f) => `الزوج مسجل مع ${new Set(f.records.map(rec => rec.womanName)).size} زوجات، وهو ما يتجاوز الحد المسموح به.`,
-      "MULTIPLE_NATIONAL_IDS": (f, r) => `الزوجة مرتبطة بعدة أرقام قومية: ${[...new Set(f.records.filter(rec => rec.womanName === r.womanName).map(rec=>rec.nationalId))].join(', ')}`,
-      "HIGH_SIMILARITY": () => `يوجد تشابه عالي في البيانات بين السجلات داخل هذه المجموعة.`,
+    const descriptionTranslations: Record<string, (finding: AuditFinding, record: RecordRow) => string> = {
+        "DUPLICATE_ID": () => `الرقم القومي مكرر داخل المجموعة.`,
+        "DUPLICATE_COUPLE": () => `تطابق تام لاسم الزوجة والزوج.`,
+        "WOMAN_MULTIPLE_HUSBANDS": (f) => `الزوجة مسجلة مع عدة أزواج: ${[...new Set(f.records.map(rec => rec.husbandName))].join(', ')}`,
+        "HUSBAND_TOO_MANY_WIVES": (f) => `الزوج مسجل مع ${new Set(f.records.map(rec => rec.womanName)).size} زوجات، وهو ما يتجاوز الحد المسموح به.`,
+        "MULTIPLE_NATIONAL_IDS": (f, r) => `الزوجة '${r.womanName}' مرتبطة بعدة أرقام قومية: ${[...new Set(f.records.filter(rec => rec.womanName === r.womanName).map(rec=>rec.nationalId))].join(', ')}`,
+        "HIGH_SIMILARITY": (f) => `يوجد تشابه عالي في البيانات بين السجلات داخل هذه المجموعة.`,
     };
 
     // --- Beneficiary ID Consolidation Logic ---
@@ -498,20 +498,22 @@ function createAuditSheet(wb: ExcelJS.Workbook, findings: AuditFinding[], cluste
             if (!beneficiaryId) return;
 
             const existing = beneficiaryFindings.get(beneficiaryId);
+            const translatedDescription = descriptionTranslations[finding.type] ? descriptionTranslations[finding.type](finding, record) : finding.description;
+
             if (existing) {
                 if (severityOrder[finding.severity] < severityOrder[existing.severityValue]) {
                     existing.severity = finding.severity;
                     existing.severityValue = finding.severity;
                 }
                 existing.types.add(finding.type);
-                existing.descriptions.add(finding.description);
+                existing.descriptions.add(translatedDescription);
             } else {
                 beneficiaryFindings.set(beneficiaryId, {
                     ...record,
                     severity: finding.severity,
                     severityValue: finding.severity,
                     types: new Set([finding.type]),
-                    descriptions: new Set([finding.description]),
+                    descriptions: new Set([translatedDescription]),
                     clusterId: recordToClusterIdMap.get(record._internalId!) || 'N/A'
                 });
             }
@@ -534,7 +536,7 @@ function createAuditSheet(wb: ExcelJS.Workbook, findings: AuditFinding[], cluste
         clusterGroups.get(clusterId)!.push(record);
     });
 
-    const finalData: any[] = [];
+    let finalData: any[] = [];
     clusterGroups.forEach((records, clusterId) => {
         if (records.length === 0) return;
 
@@ -636,8 +638,9 @@ function createAuditSummarySheet(wb: ExcelJS.Workbook, findings: AuditFinding[])
     };
 
     findings.forEach(f => {
+        const uniqueRecordsInFinding = new Set(f.records.map(r => r._internalId));
         if (f.type in findingCounts) {
-            findingCounts[f.type] += new Set(f.records.map(r => r._internalId)).size;
+            findingCounts[f.type] += uniqueRecordsInFinding.size;
         }
     });
 
