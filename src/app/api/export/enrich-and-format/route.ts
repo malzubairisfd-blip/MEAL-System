@@ -574,7 +574,7 @@ function createAuditSummarySheet(wb: ExcelJS.Workbook, findings: AuditFinding[])
 
     const summaryCards = [
         [{ title: "تعدد الأزواج", key: 'WOMAN_MULTIPLE_HUSBANDS', icon: '🙍‍♀️' }, { title: "تعدد أرقام الهوية", key: 'MULTIPLE_NATIONAL_IDS', icon: '💳' }],
-        [{ title: "ازدواجية الزوجين", key: 'DUPLICATE_COUPLE', icon: '👨‍👩‍👧‍👦' }, { title: "ازدواجية الرقم القومي", key: 'DUPLICATE_ID', icon: '🧾' }],
+        [{ title: "ازدواجية الرقم القومي", key: 'DUPLICATE_ID', icon: '🧾' }, { title: "ازدواجية الزوجين", key: 'DUPLICATE_COUPLE', icon: '👨‍👩‍👧‍👦' }],
         [{ title: "تشابه عالي", key: 'HIGH_SIMILARITY', icon: '✨' }, null]
     ];
     
@@ -593,6 +593,7 @@ function createAuditSummarySheet(wb: ExcelJS.Workbook, findings: AuditFinding[])
         });
         currentRow += 5;
     });
-}
 
-    
+    ws.getRow(9).height = 45;
+    ws.getRow(14).height = 45;
+}
