@@ -573,7 +573,7 @@ function createAuditSheet(wb: ExcelJS.Workbook, findings: AuditFinding[], cluste
         const clusterIdB = b.clusterId === 'N/A' ? Infinity : b.clusterId;
         if (clusterIdA !== clusterIdB) return clusterIdA - clusterIdB;
 
-        return a.beneficiaryId.localeCompare(b.beneficiaryId);
+        return String(a.beneficiaryId || '').localeCompare(String(b.beneficiaryId || ''));
     });
 
     // --- Add Rows to Sheet ---
@@ -642,9 +642,9 @@ function createAuditSummarySheet(wb: ExcelJS.Workbook, findings: AuditFinding[])
     });
 
     const summaryCards = [
-        [{ title: "السجلات المدققة الفريدة", key: 'TOTAL_UNIQUE_RECORDS', icon: '🛡️' }, { title: "تعدد الأزواج", key: 'WOMAN_MULTIPLE_HUSBANDS', icon: '🙍‍♀️' }],
-        [{ title: "تعدد أرقام الهوية", key: 'MULTIPLE_NATIONAL_IDS', icon: '💳' }, { title: "ازدواجية الرقم القومي", key: 'DUPLICATE_ID', icon: '🧾' }],
-        [{ title: "ازدواجية الزوجين", key: 'DUPLICATE_COUPLE', icon: '👨‍👩‍👧‍👦' }, { title: "تشابه عالي", key: 'HIGH_SIMILARITY', icon: '✨' }]
+        [{ title: "السجلات المدققة الفريدة", key: 'TOTAL_UNIQUE_RECORDS', icon: '🛡️' }, { title: "ازدواجية الزوجين", key: 'DUPLICATE_COUPLE', icon: '👨‍👩‍👧‍👦' }],
+        [{ title: "تعدد الأزواج", key: 'WOMAN_MULTIPLE_HUSBANDS', icon: '🙍‍♀️' }, { title: "تعدد أرقام الهوية", key: 'MULTIPLE_NATIONAL_IDS', icon: '💳' }],
+        [{ title: "ازدواجية الرقم القومي", key: 'DUPLICATE_ID', icon: '🧾' }, { title: "تشابه عالي", key: 'HIGH_SIMILARITY', icon: '✨' }]
     ];
     
     let currentRow = 4;
