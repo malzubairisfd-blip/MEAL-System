@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import type { RecordRow } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,70 +34,14 @@ export default function ReviewPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(9);
 
-  useEffect(() => {
-    async function loadData() {
-      setLoading(true);
-      try {
-          const cacheId = sessionStorage.getItem('cacheId');
-          if (!cacheId) {
-            toast({ title: "No Data", description: "No clusters found from the last run. Please upload data first.", variant: "destructive" });
-            setLoading(false);
-            return;
-          }
-
-          const res = await fetch(`/api/cluster-cache?id=${cacheId}`);
-          if (!res.ok) throw new Error("Failed to load clusters from server cache.");
-          
-          const data = await res.json();
-          const clusters = data.clusters || [];
-          
-          if (clusters) {
-              setAllClusters(clusters);
-              setFilteredClusters(clusters);
-
-              if (clusters.length === 0) {
-                  toast({ title: "No Clusters Found", description: "The last run did not produce any clusters. Try adjusting settings.", variant: "default" });
-              } else {
-                  toast({ title: "Clusters Loaded", description: `Loaded ${clusters.length} clusters for review.`, variant: "default" });
-              }
-          } else {
-               toast({ title: "Error", description: "Failed to load cluster data from server cache.", variant: "destructive" });
-          }
-      } catch (error: any) {
-        toast({ title: "Error", description: error.message, variant: "destructive" });
-      } finally {
-        setLoading(false);
-      }
+  const handleCalculateScores = useCallback(async (clustersToScore: Cluster[]) => {
+    if (clustersToScore.length === 0 || clustersToScore.every(c => c.confidence !== undefined)) {
+        return; // Don't run if no clusters or if already scored
     }
-    loadData();
-  }, [toast]);
-
-  useEffect(() => {
-    const applyFilter = () => {
-      if (!search.trim()) {
-        setFilteredClusters(allClusters);
-        return;
-      }
-      const s = search.toLowerCase();
-      const filtered = allClusters.filter((cluster) =>
-        cluster.records.some(
-          (r) =>
-            r.womanName?.toLowerCase().includes(s) ||
-            r.husbandName?.toLowerCase().includes(s) ||
-            String(r.phone ?? '').toLowerCase().includes(s)
-        )
-      );
-      setFilteredClusters(filtered);
-      setCurrentPage(1); // Reset to first page on new search
-    };
-    applyFilter();
-  }, [search, allClusters]);
-
-  const handleCalculateScores = async () => {
     setCalculating(true);
-    toast({ title: "Calculating Scores", description: `Fetching and averaging scores for ${allClusters.length} clusters...` });
+    toast({ title: "Calculating Scores", description: `Fetching and averaging scores for ${clustersToScore.length} clusters...` });
 
-    const updatedClusters = await Promise.all(allClusters.map(async (cluster) => {
+    const updatedClusters = await Promise.all(clustersToScore.map(async (cluster) => {
         try {
             const res = await fetch("/api/pairwise", {
                 method: "POST",
@@ -133,10 +77,75 @@ export default function ReviewPage() {
     }));
 
     setAllClusters(updatedClusters);
-    setFilteredClusters(updatedClusters); // Make sure filtered view is also updated
     setCalculating(false);
     toast({ title: "Calculations Complete", description: "Average scores and confidence have been updated for all clusters." });
-  };
+  }, [toast]);
+
+
+  useEffect(() => {
+    async function loadData() {
+      setLoading(true);
+      try {
+          const cacheId = sessionStorage.getItem('cacheId');
+          if (!cacheId) {
+            toast({ title: "No Data", description: "No clusters found from the last run. Please upload data first.", variant: "destructive" });
+            setLoading(false);
+            return;
+          }
+
+          const res = await fetch(`/api/cluster-cache?id=${cacheId}`);
+          if (!res.ok) throw new Error("Failed to load clusters from server cache.");
+          
+          const data = await res.json();
+          const clusters = data.clusters || [];
+          
+          if (clusters) {
+              setAllClusters(clusters);
+
+              if (clusters.length === 0) {
+                  toast({ title: "No Clusters Found", description: "The last run did not produce any clusters. Try adjusting settings.", variant: "default" });
+              } else {
+                  toast({ title: "Clusters Loaded", description: `Loaded ${clusters.length} clusters for review.`, variant: "default" });
+              }
+          } else {
+               toast({ title: "Error", description: "Failed to load cluster data from server cache.", variant: "destructive" });
+          }
+      } catch (error: any) {
+        toast({ title: "Error", description: error.message, variant: "destructive" });
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadData();
+  }, [toast]);
+  
+    useEffect(() => {
+        if (allClusters.length > 0 && !loading) {
+            handleCalculateScores(allClusters);
+        }
+    }, [allClusters, loading, handleCalculateScores]);
+
+
+  useEffect(() => {
+    const applyFilter = () => {
+      if (!search.trim()) {
+        setFilteredClusters(allClusters);
+        return;
+      }
+      const s = search.toLowerCase();
+      const filtered = allClusters.filter((cluster) =>
+        cluster.records.some(
+          (r) =>
+            r.womanName?.toLowerCase().includes(s) ||
+            r.husbandName?.toLowerCase().includes(s) ||
+            String(r.phone ?? '').toLowerCase().includes(s)
+        )
+      );
+      setFilteredClusters(filtered);
+      setCurrentPage(1); // Reset to first page on new search
+    };
+    applyFilter();
+  }, [search, allClusters]);
 
   const handleInspect = (clusterRecords: RecordRow[]) => {
     setSelectedCluster(clusterRecords);
@@ -171,9 +180,9 @@ export default function ReviewPage() {
                         Back to Upload
                     </Link>
                 </Button>
-                 <Button onClick={handleCalculateScores} disabled={calculating}>
+                 <Button onClick={() => handleCalculateScores(allClusters)} disabled={calculating}>
                     {calculating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Calculator className="mr-2 h-4 w-4" />}
-                    Calculate Scores
+                    Recalculate Scores
                  </Button>
                 <Button asChild>
                     <Link href="/audit">
@@ -276,7 +285,7 @@ function ClusterCard({ cluster, clusterNumber, onInspect }: { cluster: Cluster, 
           </div>
            <div className="text-right">
               <p className="text-xs text-muted-foreground">Confidence</p>
-              <strong className={`text-lg ${getScoreColor(confidenceScore)}`}>{confidenceScore}%</strong>
+              <strong className={`text-lg ${getScoreColor(confidenceScore)}`}>{cluster.confidence === undefined ? <Loader2 className="h-4 w-4 animate-spin" /> : `${confidenceScore}%`}</strong>
           </div>
         </div>
       </CardHeader>
