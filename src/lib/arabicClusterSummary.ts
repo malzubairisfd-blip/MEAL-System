@@ -56,6 +56,8 @@ export function generateArabicClusterSummary(
   const husbandScorePct = Math.round(avgHusband * 100);
   const finalScorePct = Math.round(avgFinal * 100);
 
+  const confidenceScore = cluster.confidence || 0;
+
 
   /* --------------------------------------------------
      3️⃣ EXPERT EVALUATION (HUMAN-LIKE DECISION)
@@ -84,11 +86,16 @@ export function generateArabicClusterSummary(
 <strong>النتيجة العامة:</strong><br/>
 تم تجميع <strong>${size}</strong> سجلات يُحتمل أنها تمثل نفس المستفيد أو نفس الأسرة.<br/><br/>
 
+<strong>مستوى الثقة:</strong> <strong style="${getScoreColor(confidenceScore)}">${confidenceScore}%</strong><br/>
+
 <strong>تحليل درجات التشابه:</strong><br/>
-• مستوى الثقة: <strong style="${getScoreColor(cluster.confidence)}">${cluster.confidence}%</strong><br/>
 • متوسط تشابه اسم المرأة: <strong style="${getScoreColor(womanScorePct)}">${womanScorePct}%</strong><br/>
 • متوسط تشابه اسم الزوج: <strong style="${getScoreColor(husbandScorePct)}">${husbandScorePct}%</strong><br/>
 • الدرجة النهائية للتشابه: <strong style="${getScoreColor(finalScorePct)}">${finalScorePct}%</strong><br/><br/>
+
+<strong>أسباب التجميع:</strong><br/>
+${explanations.map(e => `• ${e}`).join("<br/>") || "• تحليل التشابه العام"}<br/><br/>
+
 
 <strong>تقييم خبير:</strong><br/>
 ${expertNote}<br/><br/>
