@@ -368,7 +368,7 @@ function createClustersSheet(wb: ExcelJS.Workbook, clusters: {records: RecordRow
         };
 
         const summaryResult = generateArabicClusterSummary(clusterObjectForSummary, clusterRecords);
-        const summaryText = summaryResult.replace(/<br\s*\/?>/gi, '\r\n').replace(/<[^>]*>?/gm, '').trim();
+        const summaryText = summaryResult.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]*>?/gm, '').trim();
 
         const startRow = currentRowIndex;
         const endRow = startRow + recordsForSheet.length - 1;
@@ -537,9 +537,9 @@ function createAuditSummarySheet(wb: ExcelJS.Workbook, findings: AuditFinding[])
     });
 
     const summaryCards = [
-        [{ title: "Multiple Husbands", key: 'WOMAN_MULTIPLE_HUSBANDS', icon: '🙍‍♀️' }, { title: "Multiple IDs", key: 'MULTIPLE_NATIONAL_IDS', icon: '💳' }],
-        [{ title: "Duplicate ID", key: 'DUPLICATE_ID', icon: '🧾' }, { title: "Duplicate Couple", key: 'DUPLICATE_COUPLE', icon: '👨‍👩‍👧‍👦' }],
-        [{ title: "High Similarity", key: 'HIGH_SIMILARITY', icon: '✨' }, null]
+        [{ title: "تعدد الأزواج", key: 'WOMAN_MULTIPLE_HUSBANDS', icon: '🙍‍♀️' }, { title: "تعدد أرقام الهوية", key: 'MULTIPLE_NATIONAL_IDS', icon: '💳' }],
+        [{ title: "ازدواجية الرقم القومي", key: 'DUPLICATE_ID', icon: '🧾' }, { title: "ازدواجية الزوجين", key: 'DUPLICATE_COUPLE', icon: '👨‍👩‍👧‍👦' }],
+        [{ title: "تشابه عالي", key: 'HIGH_SIMILARITY', icon: '✨' }, null]
     ];
     
     let currentRow = 4;
@@ -550,11 +550,14 @@ function createAuditSummarySheet(wb: ExcelJS.Workbook, findings: AuditFinding[])
             const startColNum = colIndex === 0 ? 2 : 5;
             ws.mergeCells(currentRow, startColNum, currentRow + 3, startColNum + 1);
             const cardCell = ws.getCell(currentRow, startColNum);
-            cardCell.value = { richText: [ { text: `${stat.icon}\n`, font: { size: 36, name: 'Segoe UI Emoji' } }, { text: `${stat.title}`, font: { size: 14 } }, { text: `${findingCounts[stat.key]}`, font: { size: 24, bold: true } } ] };
+            cardCell.value = { richText: [ { text: `${stat.icon}\n`, font: { size: 36, name: 'Segoe UI Emoji' } }, { text: `${stat.title}\n`, font: { size: 14 } }, { text: `${findingCounts[stat.key]}`, font: { size: 24, bold: true } } ] };
             cardCell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
             cardCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2F2F2' } };
             cardCell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
         });
+        if(currentRow === 4 || currentRow === 9 || currentRow === 14) {
+            ws.getRow(currentRow).height = 45;
+        }
         currentRow += 5;
     });
 }
