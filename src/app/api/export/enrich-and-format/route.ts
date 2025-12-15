@@ -370,7 +370,7 @@ function createClustersSheet(wb: ExcelJS.Workbook, clusters: {records: RecordRow
 
         const summaryResult = generateArabicClusterSummary(clusterObjectForSummary, clusterRecords);
         // Strip HTML for Excel
-        const summaryText = summaryResult.html.replace(/<[^>]*>?/gm, '');
+        const summaryText = summaryResult.replace(/<[^>]*>?/gm, '');
 
         const startRow = currentRowIndex;
         const endRow = startRow + recordsForSheet.length - 1;
@@ -526,7 +526,7 @@ function createAuditSummarySheet(wb: ExcelJS.Workbook, findings: AuditFinding[])
     ];
     
     let currentRow = 4;
-    summaryCards.forEach(rowItems => {
+    summaryCards.forEach((rowItems, rowIndex) => {
         ws.getRow(currentRow).height = 45;
         rowItems.forEach((stat, colIndex) => {
             if (!stat) return;

@@ -52,11 +52,11 @@ export default function AuditPage() {
           
           if (auditFindings) {
             setFindings(auditFindings);
-            const clusteredRecords = clusters?.flat() || [];
+            const clusteredRecords = clusters?.map((c: any) => c.records).flat() || [];
             setRows(clusteredRecords);
             toast({ title: "Loaded from Cache", description: `Loaded ${auditFindings.length} existing audit findings.` });
           } else if (clusters) {
-              const clusteredRecords = clusters.flat();
+              const clusteredRecords = clusters.map((c: any) => c.records).flat();
               setRows(clusteredRecords);
               if (clusteredRecords.length > 0) {
                 toast({ title: "Data Ready", description: `${clusteredRecords.length} records are ready for audit.` });
@@ -242,7 +242,7 @@ export default function AuditPage() {
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                         <div>
                             <CardTitle>Audit Findings</CardTitle>
-                            <CardDescription>{groupedFindings.length} unique records with issues identified.</CardDescription>
+                            <CardDescription>{findings.length} total issues found across {groupedFindings.length} unique records.</CardDescription>
                         </div>
                         <div className="flex gap-2">
                             <Button onClick={goToExport}>
