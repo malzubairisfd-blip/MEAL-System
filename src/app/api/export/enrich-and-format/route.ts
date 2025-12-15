@@ -316,7 +316,7 @@ function createSummarySheet(wb: ExcelJS.Workbook, allRecords: RecordRow[], clust
             const startColNum = colIndex === 0 ? 2 : 5;
             ws.mergeCells(currentRow, startColNum, currentRow + 3, startColNum + 1);
             const cardCell = ws.getCell(currentRow, startColNum);
-            cardCell.value = { richText: [ { text: `${stat.icon}\n`, font: { size: 36, name: 'Segoe UI Emoji' } }, { text: `${stat.title}\n`, font: { size: 14 } }, { text: `${stat.value}`, font: { size: 24, bold: true } } ] };
+            cardCell.value = { richText: [ { text: `${stat.icon}`, font: { size: 36, name: 'Segoe UI Emoji' } }, { text: `\n${stat.title}\n`, font: { size: 14 } }, { text: `${stat.value}`, font: { size: 24, bold: true } } ] };
             cardCell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
             cardCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE6F2FF' } };
             cardCell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
@@ -367,8 +367,10 @@ function createClustersSheet(wb: ExcelJS.Workbook, clusters: {records: RecordRow
             confidence,
         };
 
-        const summaryResult = generateArabicClusterSummary(clusterObjectForSummary, clusterRecords);
-        const summaryText = summaryResult.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]*>?/gm, '').trim();
+        const summaryText = generateArabicClusterSummary(clusterObjectForSummary, clusterRecords)
+          .replace(/<br\s*\/?>/gi, '\n')
+          .replace(/<[^>]*>?/gm, '')
+          .trim();
 
         const startRow = currentRowIndex;
         const endRow = startRow + recordsForSheet.length - 1;
@@ -422,7 +424,7 @@ function createClustersSheet(wb: ExcelJS.Workbook, clusters: {records: RecordRow
                 
                 cell.border = { ...cell.border, ...border };
 
-                const key = (ws.columns[colNumber - 1].key || '').replace(/\s/g, '');
+                const key = ((ws.columns[colNumber - 1].key || '').replace(/\s/g, ''));
                 if (['ClusterID', 'BeneficiaryID', 'Score', 'NationalID', 'Phone', 'Children'].includes(key)) {
                     cell.alignment = { ...cell.alignment, vertical: 'middle', horizontal: 'center' };
                 } else if (['WomanName', 'HusbandName'].includes(key)) {
@@ -544,13 +546,12 @@ function createAuditSummarySheet(wb: ExcelJS.Workbook, findings: AuditFinding[])
     
     let currentRow = 4;
     summaryCards.forEach((rowItems) => {
-        ws.getRow(currentRow).height = 45;
         rowItems.forEach((stat, colIndex) => {
             if (!stat) return;
             const startColNum = colIndex === 0 ? 2 : 5;
             ws.mergeCells(currentRow, startColNum, currentRow + 3, startColNum + 1);
             const cardCell = ws.getCell(currentRow, startColNum);
-            cardCell.value = { richText: [ { text: `${stat.icon}\n`, font: { size: 36, name: 'Segoe UI Emoji' } }, { text: `${stat.title}\n`, font: { size: 14 } }, { text: `${findingCounts[stat.key]}`, font: { size: 24, bold: true } } ] };
+            cardCell.value = { richText: [ { text: `${stat.icon}`, font: { size: 36, name: 'Segoe UI Emoji' } }, { text: `\n${stat.title}\n`, font: { size: 14 } }, { text: `${findingCounts[stat.key]}`, font: { size: 24, bold: true } } ] };
             cardCell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
             cardCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2F2F2' } };
             cardCell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
@@ -561,3 +562,5 @@ function createAuditSummarySheet(wb: ExcelJS.Workbook, findings: AuditFinding[])
         currentRow += 5;
     });
 }
+
+    
