@@ -375,6 +375,12 @@ function createClustersSheet(wb: ExcelJS.Workbook, clusters: {records: RecordRow
         const startRow = currentRowIndex;
         const endRow = startRow + recordsForSheet.length - 1;
 
+        let rowHeight = 40; // Default
+        const clusterSize = recordsForSheet.length;
+        if (clusterSize === 2) rowHeight = 140;
+        if (clusterSize === 3) rowHeight = 95;
+        if (clusterSize === 4) rowHeight = 90;
+
         recordsForSheet.forEach((record, recordIndex) => {
              const pair = pairs.find(p => p.a._internalId === record._internalId || p.b._internalId === record._internalId);
              const score = pair ? pair.score.toFixed(4) : '';
@@ -410,8 +416,10 @@ function createClustersSheet(wb: ExcelJS.Workbook, clusters: {records: RecordRow
 
 
         for (let i = startRow; i <= endRow; i++) {
-            ws.getRow(i).getCell('C').value = recordsForSheet[i - startRow].beneficiaryId;
-            ws.getRow(i).eachCell({ includeEmpty: true }, (cell) => {
+            const row = ws.getRow(i);
+            row.height = rowHeight;
+            row.getCell('C').value = recordsForSheet[i - startRow].beneficiaryId;
+            row.eachCell({ includeEmpty: true }, (cell) => {
                 const border: Partial<ExcelJS.Borders> = {};
                 if (i === startRow) border.top = { style: 'thick', color: {argb: 'FF4F81BD'} };
                 if (i === endRow) border.bottom = { style: 'thick', color: {argb: 'FF4F81BD'} };
@@ -533,7 +541,7 @@ function createAuditSummarySheet(wb: ExcelJS.Workbook, findings: AuditFinding[])
             const startColNum = colIndex === 0 ? 2 : 5;
             ws.mergeCells(currentRow, startColNum, currentRow + 3, startColNum + 1);
             const cardCell = ws.getCell(currentRow, startColNum);
-            cardCell.value = { richText: [ { text: `${stat.icon}\n`, font: { size: 36, name: 'Segoe UI Emoji' } }, { text: `${stat.title}\n`, font: { size: 14 } }, { text: `${findingCounts[stat.key]}\n`, font: { size: 24, bold: true } } ] };
+            cardCell.value = { richText: [ { text: `${stat.icon}\n`, font: { size: 36, name: 'Segoe UI Emoji' } }, { text: `${stat.title}\n`, font: { size: 14 } }, { text: `${findingCounts[stat.key]}`, font: { size: 24, bold: true } } ] };
             cardCell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
             cardCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2F2F2' } };
             cardCell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
@@ -541,3 +549,5 @@ function createAuditSummarySheet(wb: ExcelJS.Workbook, findings: AuditFinding[])
         currentRow += 5;
     });
 }
+
+    
