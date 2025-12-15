@@ -333,7 +333,7 @@ function createClustersSheet(wb: ExcelJS.Workbook, clusters: {records: RecordRow
     ws.columns = headers.map(h => ({ 
         header: h, 
         key: h.replace(/\s/g, ''), 
-        width: h === 'AI Summary' ? 50 : 25 
+        width: h === 'AI Summary' ? 50 : (h === 'Woman Name' || h === 'Husband Name' ? 25 : 15)
     }));
     
     const headerRow = ws.getRow(1);
@@ -351,7 +351,6 @@ function createClustersSheet(wb: ExcelJS.Workbook, clusters: {records: RecordRow
         const recordsForSheet = [...clusterRecords].sort((a,b) => (String(a.beneficiaryId) || '').localeCompare(String(b.beneficiaryId) || ''));
         if (recordsForSheet.length === 0) return;
 
-        // Calculate averages for summary
         const womanNameScores = pairs.map((p: any) => p.breakdown.nameScore || 0);
         const husbandNameScores = pairs.map((p: any) => p.breakdown.husbandScore || 0);
         const avgWomanNameScore = womanNameScores.length > 0 ? womanNameScores.reduce((a: number, b: number) => a + b, 0) / womanNameScores.length : 0;
@@ -369,7 +368,6 @@ function createClustersSheet(wb: ExcelJS.Workbook, clusters: {records: RecordRow
         };
 
         const summaryResult = generateArabicClusterSummary(clusterObjectForSummary, clusterRecords);
-        // Strip HTML for Excel, but keep line breaks by replacing <br> with \r\n, then remove other tags.
         const summaryText = summaryResult.replace(/<br\s*\/?>/gi, '\r\n').replace(/<[^>]*>?/gm, '').trim();
 
         const startRow = currentRowIndex;
@@ -379,7 +377,7 @@ function createClustersSheet(wb: ExcelJS.Workbook, clusters: {records: RecordRow
         const clusterSize = recordsForSheet.length;
         if (clusterSize === 2) rowHeight = 142;
         if (clusterSize === 3) rowHeight = 95;
-        if (clusterSize === 4) rowHeight = 90;
+        if (clusterSize === 4) rowHeight = 76;
 
         recordsForSheet.forEach((record, recordIndex) => {
              const pair = pairs.find(p => p.a._internalId === record._internalId || p.b._internalId === record._internalId);
@@ -396,7 +394,6 @@ function createClustersSheet(wb: ExcelJS.Workbook, clusters: {records: RecordRow
                 Children: childrenText
             };
             
-            // Add summary only to the first row of the cluster
             if (recordIndex === 0) {
                 rowData['AISummary'] = summaryText;
             }
@@ -404,7 +401,6 @@ function createClustersSheet(wb: ExcelJS.Workbook, clusters: {records: RecordRow
             ws.addRow(rowData);
         });
         
-        // Merge Cluster ID and AI Summary cells
         ws.mergeCells(`A${startRow}:A${endRow}`);
         const clusterIdCell = ws.getCell(`A${startRow}`);
         clusterIdCell.value = clusterId;
@@ -419,12 +415,19 @@ function createClustersSheet(wb: ExcelJS.Workbook, clusters: {records: RecordRow
             const row = ws.getRow(i);
             row.height = rowHeight;
             row.getCell('C').value = recordsForSheet[i - startRow].beneficiaryId;
-            row.eachCell({ includeEmpty: true }, (cell) => {
+            row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
                 const border: Partial<ExcelJS.Borders> = {};
                 if (i === startRow) border.top = { style: 'thick', color: {argb: 'FF4F81BD'} };
                 if (i === endRow) border.bottom = { style: 'thick', color: {argb: 'FF4F81BD'} };
                 
                 cell.border = { ...cell.border, ...border };
+
+                const key = (ws.columns[colNumber - 1].key || '').replace(/\s/g, '');
+                if (['ClusterID', 'BeneficiaryID', 'Score', 'NationalID', 'Phone', 'Children'].includes(key)) {
+                    cell.alignment = { ...cell.alignment, vertical: 'middle', horizontal: 'center' };
+                } else if (['WomanName', 'HusbandName'].includes(key)) {
+                    cell.alignment = { ...cell.alignment, vertical: 'middle', horizontal: 'right' };
+                }
             });
         }
         
@@ -521,10 +524,15 @@ function createAuditSummarySheet(wb: ExcelJS.Workbook, findings: AuditFinding[])
       HIGH_SIMILARITY: 0
     };
 
+    const uniqueFindings = new Set<string>();
     findings.forEach(f => {
-        if (f.type in findingCounts) {
-            // This counts findings which can have multiple records, so we count unique findings
-            findingCounts[f.type] += 1;
+        // Create a unique key for each finding to avoid double counting records within the same finding
+        const findingKey = `${f.type}-${f.description}`;
+        if (!uniqueFindings.has(findingKey)) {
+            if (f.type in findingCounts) {
+                findingCounts[f.type] += 1;
+            }
+            uniqueFindings.add(findingKey);
         }
     });
 
@@ -535,14 +543,14 @@ function createAuditSummarySheet(wb: ExcelJS.Workbook, findings: AuditFinding[])
     ];
     
     let currentRow = 4;
-    summaryCards.forEach((rowItems, rowIndex) => {
+    summaryCards.forEach((rowItems) => {
         ws.getRow(currentRow).height = 45;
         rowItems.forEach((stat, colIndex) => {
             if (!stat) return;
             const startColNum = colIndex === 0 ? 2 : 5;
             ws.mergeCells(currentRow, startColNum, currentRow + 3, startColNum + 1);
             const cardCell = ws.getCell(currentRow, startColNum);
-            cardCell.value = { richText: [ { text: `${stat.icon}\n`, font: { size: 36, name: 'Segoe UI Emoji' } }, { text: `${stat.title}`, font: { size: 14 } }, {text: '\n', font: {size: 4}}, { text: `${findingCounts[stat.key]}`, font: { size: 24, bold: true } } ] };
+            cardCell.value = { richText: [ { text: `${stat.icon}\n`, font: { size: 36, name: 'Segoe UI Emoji' } }, { text: `${stat.title}`, font: { size: 14 } }, { text: `${findingCounts[stat.key]}`, font: { size: 24, bold: true } } ] };
             cardCell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
             cardCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2F2F2' } };
             cardCell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
