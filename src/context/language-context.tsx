@@ -23,6 +23,10 @@ export const LanguageProvider = ({ children }: { children: React.ReactNode }) =>
       setDirection(storedLang === 'ar' ? 'rtl' : 'ltr');
       document.documentElement.lang = storedLang;
       document.documentElement.dir = storedLang === 'ar' ? 'rtl' : 'ltr';
+    } else {
+      // Ensure default is set if nothing is in storage
+      document.documentElement.lang = 'en';
+      document.documentElement.dir = 'ltr';
     }
   }, []);
 

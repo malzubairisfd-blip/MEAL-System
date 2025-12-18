@@ -1,6 +1,6 @@
 {
   "sidebar": {
-    "dashboard": "لوحة المعلومات",
+    "dashboard": "لوحة التحكم",
     "upload": "رفع البيانات",
     "review": "مراجعة المجموعات",
     "audit": "إجراء التدقيق",
@@ -8,7 +8,7 @@
     "settings": "الإعدادات"
   },
   "header": {
-    "dashboard": "لوحة المعلومات",
+    "dashboard": "لوحة التحكم",
     "upload": "رفع البيانات",
     "review": "مراجعة المجموعات",
     "audit": "إجراء التدقيق",
@@ -112,7 +112,7 @@
     "toasts": {
       "clusteringComplete": {
         "title": "اكتمل التجميع",
-        "description": "تم العثور على"
+        "description": "تم العثور على {count} مجموعات."
       },
       "cacheError": {
         "title": "فشل في تخزين النتائج مؤقتا"
@@ -130,7 +130,7 @@
   },
   "review": {
     "title": "مراجعة المجموعات",
-    "description": "افحص وحلل مجموعات التكرار المحتملة من آخر عملية معالجة. تم العثور على {filteredCount} من {totalCount} مجموعات.",
+    "description": "افحص وحلل مجموعات التكرار المحتملة من آخر عملية معالجة. تم العثور على {filteredClusters.length} من {allClusters.length} مجموعات.",
     "buttons": {
       "backToUpload": "العودة إلى الرفع",
       "recalculate": "إعادة حساب الدرجات",
@@ -139,7 +139,7 @@
     "searchPlaceholder": "ابحث بالاسم، الزوج، أو الهاتف...",
     "loading": "جاري تحميل المجموعات...",
     "noClusters": "لم يتم العثور على مجموعات",
-    "noClustersForQuery": "لبحثك",
+    "noClustersForQuery": " لبحثك",
     "pagination": "صفحة {currentPage} من {totalPages}",
     "previous": "السابق",
     "next": "التالي",
@@ -165,7 +165,7 @@
     "toasts": {
       "calculatingScores": {
         "title": "جاري حساب الدرجات",
-        "description": "جاري جلب وحساب متوسط الدرجات لـ {count} مجموعات..."
+        "description": "جاري جلب وحساب متوسط الدرجات لـ {clustersToScore.length} مجموعات..."
       },
       "calculationComplete": {
         "title": "اكتمل الحساب",
@@ -182,7 +182,7 @@
       },
       "clustersLoaded": {
         "title": "تم تحميل المجموعات",
-        "description": "تم تحميل {count} مجموعات للمراجعة."
+        "description": "تم تحميل {clusters.length} مجموعات للمراجعة."
       },
       "loadErrorFromServer": {
         "title": "خطأ",
@@ -193,7 +193,7 @@
   "audit": {
     "title": "تدقيق سلامة البيانات",
     "description": "قم بتشغيل مجموعة من القواعد على سجلاتك المجمعة لتحديد المشكلات المحتملة مثل التكرارات والعلاقات غير الصالحة.",
-    "readyMessage": "جاهز لتدقيق {count} سجلات.",
+    "readyMessage": "جاهز لتدقيق {rows.length} سجلات.",
     "buttons": {
       "backToReview": "العودة إلى المراجعة",
       "runAudit": "إجراء التدقيق",
@@ -208,7 +208,7 @@
     },
     "findings": {
       "title": "نتائج التدقيق",
-      "description": "{totalIssues} مشكلة إجمالية تم العثور عليها عبر {uniqueRecords} سجلات فريدة."
+      "description": "{findings.length} مشكلة إجمالية تم العثور عليها عبر {groupedFindings.length} سجلات فريدة."
     },
     "findingTypes": {
       "WOMAN_MULTIPLE_HUSBANDS": "زوجة لديها عدة أزواج",
@@ -226,15 +226,18 @@
     "identifiedIssues": "المشكلات المحددة:",
     "readyToAudit": {
       "title": "جاهز للتدقيق",
-      "description": "انقر على \"إجراء التدقيق\" للتحقق من {count} سجلات مجمعة بحثًا عن مشكلات."
+      "description": "انقر على \"إجراء التدقيق\" للتحقق من {rows.length} سجلات مجمعة بحثًا عن مشكلات."
     },
     "toasts": {
       "noData": "لم يتم العثور على معرف ذاكرة التخزين المؤقت. يرجى إعادة رفع البيانات.",
       "auditComplete": "اكتمل التدقيق",
-      "issuesFound": "مشكلات محتملة تم العثور عليها.",
+      "issuesFound": "{newFindings.length} مشكلات محتملة تم العثور عليها.",
       "auditError": "خطأ في التدقيق",
       "noClusteredData": "لم يتم العثور على سجلات في المجموعات لتدقيقها.",
-      "loadedFromCache": "تم تحميل {count} نتائج تدقيق موجودة من ذاكرة التخزين المؤقت."
+      "loadedFromCache": {
+        "title": "تم التحميل من ذاكرة التخزين المؤقت",
+        "description": "تم تحميل {auditFindings.length} نتائج تدقيق موجودة."
+      }
     }
   },
   "export": {
@@ -243,8 +246,8 @@
     "initialLoading": "جاري تحميل البيانات من ذاكرة التخزين المؤقت...",
     "generateAndDownload": {
       "title": "إنشاء وتنزيل التقرير",
-      "recordsLoaded": "{count} سجلات تم تحميلها",
-      "clustersFound": "{count} مجموعات تم العثور عليها",
+      "recordsLoaded": "{recordCount} سجلات تم تحميلها",
+      "clustersFound": "{clusterCount} مجموعات تم العثور عليها",
       "description": "سيؤدي هذا إلى إنشاء ملف إكسل واحد يحتوي على أوراق متعددة: البيانات المثرية، ملخص المراجعة، تفاصيل المجموعة، ونتائج التدقيق.",
       "button": "إنشاء وتنزيل التقرير",
       "buttonGenerating": "جاري الإنشاء...",
@@ -275,7 +278,7 @@
       "fetchError": "فشل جلب البيانات المخزنة مؤقتًا. يرجى محاولة عملية الرفع مرة أخرى.",
       "noRecords": "البيانات المخزنة مؤقتًا فارغة. يرجى إعادة رفع ملفك.",
       "generationFailed": "فشل الإنشاء",
-      "reportReady": "{fileName} تمت إضافته إلى لوحة التنزيل.",
+      "reportReady": "{newVersion.fileName} تمت إضافته إلى لوحة التنزيل.",
       "downloadStarted": "جاري تنزيل {fileName}"
     }
   },

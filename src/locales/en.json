@@ -112,7 +112,7 @@
     "toasts": {
       "clusteringComplete": {
         "title": "Clustering complete",
-        "description": "Found"
+        "description": "Found {count} clusters."
       },
       "cacheError": {
         "title": "Failed to cache results"
@@ -130,7 +130,7 @@
   },
   "review": {
     "title": "Cluster Review",
-    "description": "Inspect and analyze potential duplicate clusters from the last processing run. Found {filteredCount} of {totalCount} clusters.",
+    "description": "Inspect and analyze potential duplicate clusters from the last processing run. Found {filteredClusters.length} of {allClusters.length} clusters.",
     "buttons": {
       "backToUpload": "Back to Upload",
       "recalculate": "Recalculate Scores",
@@ -139,7 +139,7 @@
     "searchPlaceholder": "Search by name, husband, or phone...",
     "loading": "Loading clusters...",
     "noClusters": "No clusters found",
-    "noClustersForQuery": "for your search query",
+    "noClustersForQuery": " for your search query",
     "pagination": "Page {currentPage} of {totalPages}",
     "previous": "Previous",
     "next": "Next",
@@ -165,7 +165,7 @@
     "toasts": {
       "calculatingScores": {
         "title": "Calculating Scores",
-        "description": "Fetching and averaging scores for {count} clusters..."
+        "description": "Fetching and averaging scores for {clustersToScore.length} clusters..."
       },
       "calculationComplete": {
         "title": "Calculations Complete",
@@ -182,7 +182,7 @@
       },
       "clustersLoaded": {
         "title": "Clusters Loaded",
-        "description": "Loaded {count} clusters for review."
+        "description": "Loaded {clusters.length} clusters for review."
       },
       "loadErrorFromServer": {
         "title": "Error",
@@ -193,7 +193,7 @@
   "audit": {
     "title": "Data Integrity Audit",
     "description": "Run a set of rules against your clustered records to identify potential issues like duplicates and invalid relationships.",
-    "readyMessage": "Ready to audit {count} records.",
+    "readyMessage": "Ready to audit {rows.length} records.",
     "buttons": {
       "backToReview": "Back to Review",
       "runAudit": "Run Audit",
@@ -208,7 +208,7 @@
     },
     "findings": {
       "title": "Audit Findings",
-      "description": "{totalIssues} total issues found across {uniqueRecords} unique records."
+      "description": "{findings.length} total issues found across {groupedFindings.length} unique records."
     },
     "findingTypes": {
       "WOMAN_MULTIPLE_HUSBANDS": "Multiple Husbands",
@@ -226,15 +226,18 @@
     "identifiedIssues": "Identified Issues:",
     "readyToAudit": {
       "title": "Ready to Audit",
-      "description": "Click \"Run Audit\" to check the {count} clustered records for issues."
+      "description": "Click \"Run Audit\" to check the {rows.length} clustered records for issues."
     },
     "toasts": {
       "noData": "Cache ID not found. Please re-upload data.",
       "auditComplete": "Audit Complete",
-      "issuesFound": "potential issues found.",
+      "issuesFound": "{newFindings.length} potential issues found.",
       "auditError": "Audit Error",
       "noClusteredData": "No records were found in clusters to audit.",
-      "loadedFromCache": "Loaded {count} existing audit findings."
+      "loadedFromCache": {
+        "title": "Loaded from Cache",
+        "description": "Loaded {auditFindings.length} existing audit findings."
+       }
     }
   },
   "export": {
@@ -243,8 +246,8 @@
     "initialLoading": "Loading data from cache...",
     "generateAndDownload": {
       "title": "Generate and Download Report",
-      "recordsLoaded": "{count} Records Loaded",
-      "clustersFound": "{count} Clusters Found",
+      "recordsLoaded": "{recordCount} Records Loaded",
+      "clustersFound": "{clusterCount} Clusters Found",
       "description": "This will generate a single Excel file with multiple sheets: Enriched Data, Review Summary, Cluster Details, and Audit Findings.",
       "button": "Generate and Download Report",
       "buttonGenerating": "Generating...",
@@ -275,7 +278,7 @@
       "fetchError": "Failed to fetch cached data. Please try the upload process again.",
       "noRecords": "The cached data is empty. Please re-upload your file.",
       "generationFailed": "Generation Failed",
-      "reportReady": "{fileName} has been added to the download panel.",
+      "reportReady": "{newVersion.fileName} has been added to the download panel.",
       "downloadStarted": "Downloading {fileName}"
     }
   },

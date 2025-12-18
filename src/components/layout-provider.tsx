@@ -40,7 +40,7 @@ export function LayoutProvider({ children }: { children: React.ReactNode }) {
     { href: "/settings", icon: <Settings />, label: t("sidebar.settings") },
   ];
 
-  const pageTitle = sidebarLinks.find(l => l.href === pathname)?.label || t('header.dashboard');
+  const pageTitle = sidebarLinks.find(l => l.href === pathname)?.label || t(`header.${pathname.split('/').pop() || 'dashboard'}`);
 
   return (
     <SidebarProvider>

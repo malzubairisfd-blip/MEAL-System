@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
@@ -12,6 +11,7 @@ import Link from "next/link";
 import { PairwiseModal } from "@/components/PairwiseModal";
 import { generateArabicClusterSummary } from "@/lib/arabicClusterSummary";
 import { calculateClusterConfidence } from "@/lib/clusterConfidence";
+import { useTranslation } from "@/hooks/use-translation";
 
 type Cluster = {
   records: RecordRow[];
@@ -23,6 +23,7 @@ type Cluster = {
 };
 
 export default function ReviewPage() {
+  const { t } = useTranslation();
   const [allClusters, setAllClusters] = useState<Cluster[]>([]);
   const [filteredClusters, setFilteredClusters] = useState<Cluster[]>([]);
   const [selectedCluster, setSelectedCluster] = useState<RecordRow[] | null>(null);
@@ -39,7 +40,7 @@ export default function ReviewPage() {
         return; // Don't run if no clusters or if already scored
     }
     setCalculating(true);
-    toast({ title: "Calculating Scores", description: `Fetching and averaging scores for ${clustersToScore.length} clusters...` });
+    toast({ title: t('review.toasts.calculatingScores.title'), description: t('review.toasts.calculatingScores.description', {'clustersToScore.length': clustersToScore.length}) });
 
     const updatedClusters = await Promise.all(clustersToScore.map(async (cluster) => {
         try {
@@ -78,8 +79,8 @@ export default function ReviewPage() {
 
     setAllClusters(updatedClusters);
     setCalculating(false);
-    toast({ title: "Calculations Complete", description: "Average scores and confidence have been updated for all clusters." });
-  }, [toast]);
+    toast({ title: t('review.toasts.calculationComplete.title'), description: t('review.toasts.calculationComplete.description') });
+  }, [toast, t]);
 
 
   useEffect(() => {
@@ -88,13 +89,13 @@ export default function ReviewPage() {
       try {
           const cacheId = sessionStorage.getItem('cacheId');
           if (!cacheId) {
-            toast({ title: "No Data", description: "No clusters found from the last run. Please upload data first.", variant: "destructive" });
+            toast({ title: t('review.toasts.noData.title'), description: t('review.toasts.noData.description'), variant: "destructive" });
             setLoading(false);
             return;
           }
 
           const res = await fetch(`/api/cluster-cache?id=${cacheId}`);
-          if (!res.ok) throw new Error("Failed to load clusters from server cache.");
+          if (!res.ok) throw new Error(t('review.toasts.loadError'));
           
           const data = await res.json();
           const clusters = data.clusters || [];
@@ -103,12 +104,12 @@ export default function ReviewPage() {
               setAllClusters(clusters);
 
               if (clusters.length === 0) {
-                  toast({ title: "No Clusters Found", description: "The last run did not produce any clusters. Try adjusting settings.", variant: "default" });
+                  toast({ title: t('review.toasts.noClustersFound.title'), description: t('review.toasts.noClustersFound.description'), variant: "default" });
               } else {
-                  toast({ title: "Clusters Loaded", description: `Loaded ${clusters.length} clusters for review.`, variant: "default" });
+                  toast({ title: t('review.toasts.clustersLoaded.title'), description: t('review.toasts.clustersLoaded.description', {'clusters.length': clusters.length}), variant: "default" });
               }
           } else {
-               toast({ title: "Error", description: "Failed to load cluster data from server cache.", variant: "destructive" });
+               toast({ title: t('review.toasts.loadErrorFromServer.title'), description: t('review.toasts.loadErrorFromServer.description'), variant: "destructive" });
           }
       } catch (error: any) {
         toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -117,7 +118,7 @@ export default function ReviewPage() {
       }
     }
     loadData();
-  }, [toast]);
+  }, [toast, t]);
   
     useEffect(() => {
         if (allClusters.length > 0 && !loading) {
@@ -168,25 +169,25 @@ export default function ReviewPage() {
         <CardHeader>
           <div className="flex justify-between items-start">
             <div>
-              <CardTitle>Cluster Review</CardTitle>
+              <CardTitle>{t('review.title')}</CardTitle>
               <CardDescription>
-                Inspect and analyze potential duplicate clusters from the last processing run. Found {filteredClusters.length} of {allClusters.length} clusters.
+                {t('review.description', {filteredClusters.length: filteredClusters.length, allClusters.length: allClusters.length})}
               </CardDescription>
             </div>
              <div className="flex flex-col sm:flex-row gap-2">
                 <Button variant="outline" asChild>
                     <Link href="/upload">
                         <ChevronLeft className="mr-2 h-4 w-4" />
-                        Back to Upload
+                        {t('review.buttons.backToUpload')}
                     </Link>
                 </Button>
                  <Button onClick={() => handleCalculateScores(allClusters)} disabled={calculating}>
                     {calculating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Calculator className="mr-2 h-4 w-4" />}
-                    Recalculate Scores
+                    {t('review.buttons.recalculate')}
                  </Button>
                 <Button asChild>
                     <Link href="/audit">
-                        Go to Audit
+                        {t('review.buttons.goToAudit')}
                         <AlertTriangle className="ml-2 h-4 w-4" />
                     </Link>
                 </Button>
@@ -199,7 +200,7 @@ export default function ReviewPage() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 type="text"
-                placeholder="Search by name, husband, or phone..."
+                placeholder={t('review.searchPlaceholder')}
                 className="pl-10"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -210,7 +211,7 @@ export default function ReviewPage() {
           {loading ? (
             <div className="text-center text-muted-foreground py-10">
                 <Loader2 className="mx-auto h-8 w-8 animate-spin" />
-                <p className="mt-2">Loading clusters...</p>
+                <p className="mt-2">{t('review.loading')}</p>
             </div>
           ) : currentClusters.length > 0 ? (
             <>
@@ -231,13 +232,13 @@ export default function ReviewPage() {
                 <div className="flex justify-center items-center gap-4 mt-6">
                   <Button variant="outline" onClick={() => paginate(currentPage - 1)} disabled={currentPage === 1}>
                     <ChevronLeft className="h-4 w-4 mr-2" />
-                    Previous
+                    {t('review.previous')}
                   </Button>
                   <span className="text-sm text-muted-foreground">
-                    Page {currentPage} of {totalPages}
+                    {t('review.pagination', {currentPage: currentPage, totalPages: totalPages})}
                   </span>
                   <Button variant="outline" onClick={() => paginate(currentPage + 1)} disabled={currentPage === totalPages}>
-                    Next
+                    {t('review.next')}
                     <ChevronRight className="h-4 w-4 ml-2" />
                   </Button>
                 </div>
@@ -245,7 +246,7 @@ export default function ReviewPage() {
             </>
           ) : (
              <div className="text-center text-muted-foreground py-10">
-                <p>No clusters found{search ? ' for your search query' : ''}.</p>
+                <p>{t('review.noClusters')}{search ? t('review.noClustersForQuery') : ''}.</p>
             </div>
           )}
         </CardContent>
@@ -264,6 +265,7 @@ export default function ReviewPage() {
 
 
 function ClusterCard({ cluster, clusterNumber, onInspect }: { cluster: Cluster, clusterNumber: number, onInspect: () => void }) {
+  const { t } = useTranslation();
   const summaryHtml = generateArabicClusterSummary(cluster, cluster.records);
   const confidenceScore = cluster.confidence !== undefined ? cluster.confidence : calculateClusterConfidence(cluster.avgWomanNameScore, cluster.avgHusbandNameScore);
 
@@ -281,10 +283,10 @@ function ClusterCard({ cluster, clusterNumber, onInspect }: { cluster: Cluster, 
         <div className="flex justify-between items-start">
           <div>
             <CardTitle>Cluster {clusterNumber}</CardTitle>
-            <CardDescription>{cluster.records.length} records</CardDescription>
+            <CardDescription>{cluster.records.length} {t('review.clusterCard.records')}</CardDescription>
           </div>
            <div className="text-right">
-              <p className="text-xs text-muted-foreground">Confidence</p>
+              <p className="text-xs text-muted-foreground">{t('review.clusterCard.confidence')}</p>
               <strong className={`text-lg ${getScoreColor(confidenceScore)}`}>{cluster.confidence === undefined ? <Loader2 className="h-4 w-4 animate-spin" /> : `${confidenceScore}%`}</strong>
           </div>
         </div>
@@ -300,7 +302,7 @@ function ClusterCard({ cluster, clusterNumber, onInspect }: { cluster: Cluster, 
          <Card className="bg-slate-50 border">
           <CardHeader className="p-4">
             <CardTitle className="text-right text-base flex justify-between items-center">
-             <span>ملخص ذكي</span>
+             <span>{t('review.clusterCard.aiSummary')}</span>
             </CardTitle>
           </CardHeader>
           <CardContent className="text-right p-4 pt-0">
@@ -314,7 +316,7 @@ function ClusterCard({ cluster, clusterNumber, onInspect }: { cluster: Cluster, 
       <CardFooter className="flex flex-col sm:flex-row gap-2">
         <Button variant="outline" className="w-full" onClick={onInspect}>
           <Microscope className="mr-2 h-4 w-4" />
-          Inspect
+          {t('review.clusterCard.inspect')}
         </Button>
       </CardFooter>
     </Card>

@@ -418,7 +418,7 @@ function buildBlocks(rows, opts) {
   return Array.from(blocks.values());
 }
 
-function pushEdgesForList(list, rows, minScore, seen, edges, opts) {
+async function pushEdgesForList(list, rows, minScore, seen, edges, opts) {
   for (let i = 0; i < list.length; i++) {
     for (let j = i + 1; j < list.length; j++) {
       const a = list[i], b = list[j];
@@ -432,26 +432,34 @@ function pushEdgesForList(list, rows, minScore, seen, edges, opts) {
   }
 }
 
-function buildEdges(rows, minScore = 0.62, opts) {
-  const blocks = buildBlocks(rows, opts);
+async function buildEdges(rows, minScore = 0.62, opts) {
+  const blocks = buildBlocks(rows, opts).sort((a,b) => a[0] - b[0]); // Deterministic sort
   const seen = new Set();
   const edges = [];
   const chunk = opts?.thresholds?.blockChunkSize ?? 3000;
+  let comparisonsDone = 0;
+
   for (let bi = 0; bi < blocks.length; bi++) {
     const block = blocks[bi];
     if (block.length > chunk) {
       for (let s = 0; s < block.length; s += chunk) {
         const part = block.slice(s, s + chunk);
-        pushEdgesForList(part, rows, minScore, seen, edges, opts);
+        await pushEdgesForList(part, rows, minScore, seen, edges, opts);
       }
     } else {
-      pushEdgesForList(block, rows, minScore, seen, edges, opts);
+      await pushEdgesForList(block, rows, minScore, seen, edges, opts);
     }
-    if (bi % 20 === 0 || bi === blocks.length - 1) {
+    
+    comparisonsDone += (block.length * (block.length - 1)) / 2;
+
+    if (comparisonsDone > 2000) {
       const pct = Math.round(10 + 40 * (bi / Math.max(1, blocks.length)));
       postMessage({ type: "progress", status: "building-edges", progress: pct, completed: bi + 1, total: blocks.length });
+      await new Promise(resolve => setTimeout(resolve, 0)); // yield
+      comparisonsDone = 0;
     }
   }
+
   if (blocks.length > 0) {
     postMessage({ type: "progress", status: "building-edges", progress: 50, completed: blocks.length, total: blocks.length });
   }
@@ -555,7 +563,7 @@ async function runClustering(rows, opts) {
 
   postMessage({ type: "progress", status: "blocking", progress: 5, completed: 0, total: rows.length });
 
-  const edges = buildEdges(rows, minPair, Object.assign({}, opts, { thresholds: { ...((opts && opts.thresholds) || {}), blockChunkSize } }));
+  const edges = await buildEdges(rows, minPair, Object.assign({}, opts, { thresholds: { ...((opts && opts.thresholds) || {}), blockChunkSize } }));
 
   postMessage({ type: "progress", status: "edges-built", progress: 60, completed: edges.length, total: Math.max(1, rows.length) });
 
@@ -602,7 +610,10 @@ async function runClustering(rows, opts) {
        });
     }
     edgesUsed.push(e);
-    if (ei % 200 === 0) postMessage({ type: "progress", status: "merging-edges", progress: 60 + Math.round(20 * (ei / edges.length)), completed: ei + 1, total: edges.length });
+    if (ei % 200 === 0) {
+        postMessage({ type: "progress", status: "merging-edges", progress: 60 + Math.round(20 * (ei / edges.length)), completed: ei + 1, total: edges.length });
+        await new Promise(resolve => setTimeout(resolve, 0));
+    }
   }
 
   // leftovers
@@ -761,11 +772,9 @@ export default function UploadPage(){
             
             const allRows = resultPayload.rows || [];
             
-            // The payload from the worker is now { records: [], reasons: [] }
-            // The cache needs to store the clusters in the format { records: RecordRow[], reasons: string[] }[]
             const dataToCache = {
                 rows: allRows,
-                clusters: resultClusters, // This is already in the correct format
+                clusters: resultClusters,
                 originalHeaders: columns,
             };
 
@@ -778,7 +787,7 @@ export default function UploadPage(){
             sessionStorage.setItem('cacheTimestamp', Date.now().toString());
             setWorkerStatus('done');
             setProgressInfo({ status: 'done', progress: 100 });
-            toast({ title: t('upload.toasts.clusteringComplete.title'), description: `${t('upload.toasts.clusteringComplete.description')} ${resultClusters.length}` });
+            toast({ title: t('upload.toasts.clusteringComplete.title'), description: t('upload.toasts.clusteringComplete.description', {count: resultClusters.length}) });
           } catch(err:any){
             setWorkerStatus('error');
             toast({ title: t('upload.toasts.cacheError.title'), description: String(err), variant:"destructive" });
@@ -796,7 +805,7 @@ export default function UploadPage(){
       if(workerRef.current){ workerRef.current.terminate(); workerRef.current = null; }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [columns, t]); // Re-create worker if columns change, just in case.
+  }, [columns, t]);
 
   useEffect(()=>{
     const allRequiredMapped = REQUIRED_MAPPING_FIELDS.every(f => !!mapping[f]);
@@ -898,7 +907,22 @@ export default function UploadPage(){
   );
 
   const getButtonText = () => {
-    return t(`upload.buttons.${workerStatus}`);
+     switch (workerStatus) {
+      case 'processing':
+      case 'blocking':
+      case 'building-edges':
+      case 'merging-edges':
+      case 'annotating':
+        return t('upload.buttons.processing');
+      case 'caching':
+        return t('upload.buttons.caching');
+      case 'done':
+        return t('upload.buttons.done');
+      case 'error':
+        return t('upload.buttons.error');
+      default:
+        return t('upload.buttons.idle');
+    }
   };
 
 

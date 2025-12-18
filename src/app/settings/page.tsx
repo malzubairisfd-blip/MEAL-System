@@ -1,4 +1,3 @@
-
 // src/app/settings/page.tsx
 "use client";
 
@@ -15,6 +14,7 @@ import { Save, RotateCcw, Upload, Download, Loader2, Plus, Minus, ArrowLeft } fr
 import Link from "next/link";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Info } from "lucide-react";
+import { useTranslation } from "@/hooks/use-translation";
 
 
 type Settings = any;
@@ -43,6 +43,7 @@ const descriptions: Record<string, any> = {
 }
 
 export default function SettingsPage() {
+  const { t } = useTranslation();
   const [settings, setSettings] = useState<Settings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -95,15 +96,15 @@ export default function SettingsPage() {
         } else {
           // If missing, load defaults
           setSettings(getDefaultSettings());
-          toast({ title: "Settings not found", description: "Loading default settings. Save to create a settings file.", variant: "default" });
+          toast({ title: t('settings.toasts.defaultsLoaded.title'), description: t('settings.toasts.defaultsLoaded.description'), variant: "default" });
         }
       })
       .catch(() => {
         setSettings(getDefaultSettings());
-        toast({ title: "Error loading settings", description: "Could not fetch settings from server. Using defaults.", variant: "destructive" });
+        toast({ title: t('settings.toasts.loadError.title'), description: t('settings.toasts.loadError.description'), variant: "destructive" });
       })
       .finally(() => setLoading(false));
-  }, [toast]);
+  }, [toast, t]);
 
 
   function update(path: string, value: any) {
@@ -145,19 +146,19 @@ export default function SettingsPage() {
         body: JSON.stringify(settings)
       });
       const j = await res.json();
-      if (!j.ok) throw new Error(j.error || "Save failed");
-      toast({ title: "Settings Saved", description: "Your changes have been saved successfully." });
+      if (!j.ok) throw new Error(j.error || t('settings.toasts.saveFailed'));
+      toast({ title: t('settings.toasts.saveSuccess.title'), description: t('settings.toasts.saveSuccess.description') });
     } catch (err: any) {
-      toast({ title: "Save Failed", description: err.message, variant: "destructive" });
+      toast({ title: t('settings.toasts.saveFailed'), description: err.message, variant: "destructive" });
     } finally {
       setSaving(false);
     }
   }
 
   function resetDefaults() {
-    if (confirm("Are you sure you want to reset all settings to their defaults?")) {
+    if (confirm(t('settings.toasts.resetConfirm'))) {
       setSettings(getDefaultSettings());
-      toast({ title: "Settings Reset", description: "Settings have been reset. Click Save to persist." });
+      toast({ title: t('settings.toasts.resetSuccess.title'), description: t('settings.toasts.resetSuccess.description') });
     }
   }
 
@@ -181,12 +182,12 @@ export default function SettingsPage() {
         // Simple validation
         if (parsed.thresholds && parsed.rules && parsed.finalScoreWeights) {
           setSettings(parsed);
-          toast({ title: "Settings Imported", description: "Imported settings previewed. Click Save to persist them." });
+          toast({ title: t('settings.toasts.importSuccess.title'), description: t('settings.toasts.importSuccess.description') });
         } else {
           throw new Error("Invalid settings file structure.");
         }
       } catch (err: any) {
-        toast({ title: "Import Failed", description: err.message, variant: "destructive" });
+        toast({ title: t('settings.toasts.importFailed'), description: err.message, variant: "destructive" });
       }
     };
     r.readAsText(file);
@@ -208,28 +209,28 @@ export default function SettingsPage() {
           <CardHeader>
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
-                  <CardTitle className="text-2xl">Clustering — Admin Settings (v5)</CardTitle>
-                  <CardDescription>Fine-tune the v5 clustering engine, weights, and rules.</CardDescription>
+                  <CardTitle className="text-2xl">{t('settings.title')}</CardTitle>
+                  <CardDescription>{t('settings.description')}</CardDescription>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
                    <Button variant="outline" asChild>
                     <Link href="/upload">
                         <ArrowLeft className="mr-2" />
-                        Go to Upload
+                        {t('settings.buttons.goToUpload')}
                     </Link>
                   </Button>
-                  <Button onClick={exportJSON} variant="outline"><Download className="mr-2" />Export</Button>
+                  <Button onClick={exportJSON} variant="outline"><Download className="mr-2" />{t('settings.buttons.export')}</Button>
                   <Button asChild variant="outline">
                     <Label>
                       <Upload className="mr-2" />
-                      Import
+                      {t('settings.buttons.import')}
                       <input type="file" accept="application/json" className="hidden" onChange={(e) => importJSON(e.target.files?.[0] ?? null)} />
                     </Label>
                   </Button>
-                  <Button onClick={resetDefaults} variant="destructive"><RotateCcw className="mr-2" />Reset</Button>
+                  <Button onClick={resetDefaults} variant="destructive"><RotateCcw className="mr-2" />{t('settings.buttons.reset')}</Button>
                   <Button onClick={save} disabled={saving}>
                     {saving ? <Loader2 className="mr-2 animate-spin" /> : <Save className="mr-2" />}
-                    Save
+                    {saving ? t('settings.buttons.saving') : t('settings.buttons.save')}
                   </Button>
                 </div>
               </div>
@@ -240,12 +241,12 @@ export default function SettingsPage() {
         <section className="lg:col-span-2 space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Thresholds & Performance</CardTitle>
+              <CardTitle>{t('settings.thresholds.title')}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
               <div>
                 <div className="grid grid-cols-12 items-center gap-4">
-                  <Label htmlFor="minPair" className="col-span-12 sm:col-span-3 flex items-center">Min Pair Score: <b className="mx-1">{settings.thresholds.minPair}</b></Label>
+                  <Label htmlFor="minPair" className="col-span-12 sm:col-span-3 flex items-center">{t('settings.thresholds.minPair')}: <b className="mx-1">{settings.thresholds.minPair}</b></Label>
                   <Slider id="minPair" min={0} max={1} step={0.01} value={[settings.thresholds.minPair]} onValueChange={(v)=>update("thresholds.minPair", v[0])} className="col-span-12 sm:col-span-6" />
                   <div className="col-span-12 sm:col-span-3 flex items-center gap-1 justify-end">
                       <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleNumericChange('thresholds.minPair', -0.01)}><Minus className="h-4 w-4" /></Button>
@@ -256,7 +257,7 @@ export default function SettingsPage() {
               </div>
               <div>
                 <div className="grid grid-cols-12 items-center gap-4">
-                  <Label htmlFor="minInternal" className="col-span-12 sm:col-span-3 flex items-center">Min Internal Score: <b className="mx-1">{settings.thresholds.minInternal}</b></Label>
+                  <Label htmlFor="minInternal" className="col-span-12 sm:col-span-3 flex items-center">{t('settings.thresholds.minInternal')}: <b className="mx-1">{settings.thresholds.minInternal}</b></Label>
                   <Slider id="minInternal" min={0} max={1} step={0.01} value={[settings.thresholds.minInternal]} onValueChange={(v)=>update("thresholds.minInternal", v[0])} className="col-span-12 sm:col-span-6" />
                   <div className="col-span-12 sm:col-span-3 flex items-center gap-1 justify-end">
                       <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleNumericChange('thresholds.minInternal', -0.01)}><Minus className="h-4 w-4" /></Button>
@@ -266,7 +267,7 @@ export default function SettingsPage() {
                  <p className="text-xs text-muted-foreground mt-1 pl-1">{descriptions.minInternal}</p>
               </div>
               <div>
-                <Label htmlFor="blockChunkSize">Block Chunk Size</Label>
+                <Label htmlFor="blockChunkSize">{t('settings.thresholds.blockChunkSize')}</Label>
                 <Input id="blockChunkSize" type="number" value={settings.thresholds.blockChunkSize} onChange={(e)=>update("thresholds.blockChunkSize", parseInt(e.target.value||"0"))}/>
                 <p className="text-xs text-muted-foreground mt-1">{descriptions.blockChunkSize}</p>
               </div>
@@ -274,7 +275,7 @@ export default function SettingsPage() {
           </Card>
 
           <Card>
-            <CardHeader><CardTitle>Final Score Composition</CardTitle></CardHeader>
+            <CardHeader><CardTitle>{t('settings.weights.title')}</CardTitle></CardHeader>
             <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {Object.entries(settings.finalScoreWeights).map(([k, v]: [string, any]) => (
                 <div key={k} className="flex flex-col gap-2 p-3 border rounded-md">
@@ -294,7 +295,7 @@ export default function SettingsPage() {
           </Card>
 
           <Card>
-            <CardHeader><CardTitle>Rules</CardTitle></CardHeader>
+            <CardHeader><CardTitle>{t('settings.rules.title')}</CardTitle></CardHeader>
             <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {Object.entries(settings.rules).map(([k, v]: [string, any]) => (
                 <div key={k} className="flex items-start justify-between p-3 rounded-lg border">
@@ -311,43 +312,43 @@ export default function SettingsPage() {
 
         <aside className="space-y-6">
           <Card>
-            <CardHeader><CardTitle>Test Scoring</CardTitle></CardHeader>
+            <CardHeader><CardTitle>{t('settings.testScoring.title')}</CardTitle></CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2 p-3 border rounded-md">
-                <h4 className="font-medium">Record A</h4>
-                <Label>Woman Name</Label>
+                <h4 className="font-medium">{t('settings.testScoring.recordA')}</h4>
+                <Label>{t('settings.fieldNames.womanName')}</Label>
                 <Input value={testA.womanName} onChange={e=>setTestA({...testA, womanName: e.target.value})}/>
-                <Label>Husband Name</Label>
+                <Label>{t('settings.fieldNames.husbandName')}</Label>
                 <Input value={testA.husbandName} onChange={e=>setTestA({...testA, husbandName: e.target.value})}/>
-                <Label>National ID</Label>
+                <Label>{t('settings.fieldNames.nationalId')}</Label>
                 <Input value={testA.nationalId} onChange={e=>setTestA({...testA, nationalId: e.target.value})}/>
-                <Label>Phone</Label>
+                <Label>{t('settings.fieldNames.phone')}</Label>
                 <Input value={testA.phone} onChange={e=>setTestA({...testA, phone: e.target.value})}/>
               </div>
 
               <div className="space-y-2 p-3 border rounded-md">
-                <h4 className="font-medium">Record B</h4>
-                <Label>Woman Name</Label>
+                <h4 className="font-medium">{t('settings.testScoring.recordB')}</h4>
+                <Label>{t('settings.fieldNames.womanName')}</Label>
                 <Input value={testB.womanName} onChange={e=>setTestB({...testB, womanName: e.target.value})}/>
-                <Label>Husband Name</Label>
+                <Label>{t('settings.fieldNames.husbandName')}</Label>
                 <Input value={testB.husbandName} onChange={e=>setTestB({...testB, husbandName: e.target.value})}/>
-                <Label>National ID</Label>
+                <Label>{t('settings.fieldNames.nationalId')}</Label>
                 <Input value={testB.nationalId} onChange={e=>setTestB({...testB, nationalId: e.target.value})}/>
-                <Label>Phone</Label>
+                <Label>{t('settings.fieldNames.phone')}</Label>
                 <Input value={testB.phone} onChange={e=>setTestB({...testB, phone: e.target.value})}/>
               </div>
 
               <div className="flex gap-2">
-                <Button onClick={runTestScoring}>Run Test</Button>
-                <Button onClick={() => { setTestA({womanName:"",husbandName:"",nationalId:"",phone:""}); setTestB({womanName:"",husbandName:"",nationalId:"",phone:""}); setLastResult(null); }} variant="outline">Clear</Button>
+                <Button onClick={runTestScoring}>{t('settings.testScoring.runTest')}</Button>
+                <Button onClick={() => { setTestA({womanName:"",husbandName:"",nationalId:"",phone:""}); setTestB({womanName:"",husbandName:"",nationalId:"",phone:""}); setLastResult(null); }} variant="outline">{t('settings.testScoring.clear')}</Button>
               </div>
 
               {lastResult && (
                 <div className="mt-3 bg-muted p-3 rounded-lg">
-                  <div className="font-bold text-lg">Score: {lastResult.score.toFixed(4)}</div>
-                  <div className="text-sm mt-2">Compare to minPair: <b>{settings.thresholds.minPair}</b></div>
+                  <div className="font-bold text-lg">{t('settings.testScoring.score')}: {lastResult.score.toFixed(4)}</div>
+                  <div className="text-sm mt-2">{t('settings.testScoring.compareToMinPair')}: <b>{settings.thresholds.minPair}</b></div>
                   <details className="mt-2 text-sm">
-                      <summary className="cursor-pointer font-medium">View Breakdown</summary>
+                      <summary className="cursor-pointer font-medium">{t('settings.testScoring.viewBreakdown')}</summary>
                       <pre className="text-xs mt-2 bg-background p-2 rounded">{JSON.stringify(lastResult.breakdown, null, 2)}</pre>
                   </details>
                 </div>
