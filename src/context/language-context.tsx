@@ -17,17 +17,9 @@ export const LanguageProvider = ({ children }: { children: React.ReactNode }) =>
   const [direction, setDirection] = useState<'ltr' | 'rtl'>('ltr');
 
   useEffect(() => {
-    const storedLang = localStorage.getItem('language') as Language;
-    if (storedLang) {
-      setLanguageState(storedLang);
-      setDirection(storedLang === 'ar' ? 'rtl' : 'ltr');
-      document.documentElement.lang = storedLang;
-      document.documentElement.dir = storedLang === 'ar' ? 'rtl' : 'ltr';
-    } else {
-      // Ensure default is set if nothing is in storage
-      document.documentElement.lang = 'en';
-      document.documentElement.dir = 'ltr';
-    }
+    // Set default on initial load
+    document.documentElement.lang = 'en';
+    document.documentElement.dir = 'ltr';
   }, []);
 
   const setLanguage = (lang: Language) => {
