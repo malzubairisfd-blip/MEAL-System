@@ -14,11 +14,33 @@ import {
   SidebarTrigger,
   SidebarInset,
 } from "@/components/ui/sidebar";
-import { FileBarChart2, Upload, Microscope, ClipboardList, Home, Settings, FileDown } from "lucide-react";
+import { FileBarChart2, Upload, Microscope, ClipboardList, Home, Settings, FileDown, Globe } from "lucide-react";
+import { useTranslation } from "@/hooks/use-translation";
+import { useLanguage } from "@/context/language-context";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Button } from "./ui/button";
 
 export function LayoutProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isActive = (path: string) => pathname === path;
+  const { t, language } = useTranslation();
+  const { setLanguage } = useLanguage();
+
+  const sidebarLinks = [
+    { href: "/", icon: <Home />, label: t("sidebar.dashboard") },
+    { href: "/upload", icon: <Upload />, label: t("sidebar.upload") },
+    { href: "/review", icon: <Microscope />, label: t("sidebar.review") },
+    { href: "/audit", icon: <ClipboardList />, label: t("sidebar.audit") },
+    { href: "/export", icon: <FileDown />, label: t("sidebar.export") },
+    { href: "/settings", icon: <Settings />, label: t("sidebar.settings") },
+  ];
+
+  const pageTitle = sidebarLinks.find(l => l.href === pathname)?.label || t('header.dashboard');
 
   return (
     <SidebarProvider>
@@ -31,54 +53,16 @@ export function LayoutProvider({ children }: { children: React.ReactNode }) {
         </SidebarHeader>
         <SidebarContent>
           <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton asChild isActive={isActive("/")}>
-                <Link href="/">
-                  <Home />
-                  <span>Dashboard</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton asChild isActive={isActive("/upload")}>
-                <Link href="/upload">
-                  <Upload />
-                  <span>Upload Data</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton asChild isActive={isActive("/review")}>
-                <Link href="/review">
-                  <Microscope />
-                  <span>Review Clusters</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton asChild isActive={isActive("/audit")}>
-                <Link href="/audit">
-                  <ClipboardList />
-                  <span>Run Audit</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-             <SidebarMenuItem>
-              <SidebarMenuButton asChild isActive={isActive("/export")}>
-                <Link href="/export">
-                  <FileDown />
-                  <span>Export Report</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-             <SidebarMenuItem>
-              <SidebarMenuButton asChild isActive={isActive("/settings")}>
-                <Link href="/settings">
-                  <Settings />
-                  <span>Settings</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
+            {sidebarLinks.map(link => (
+              <SidebarMenuItem key={link.href}>
+                <SidebarMenuButton asChild isActive={isActive(link.href)}>
+                  <Link href={link.href}>
+                    {link.icon}
+                    <span>{link.label}</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            ))}
           </SidebarMenu>
         </SidebarContent>
         <SidebarFooter>
@@ -91,8 +75,24 @@ export function LayoutProvider({ children }: { children: React.ReactNode }) {
         <header className="flex h-14 items-center gap-4 border-b bg-card px-6">
             <SidebarTrigger className="md:hidden" />
             <div className="flex-1">
-                <h1 className="text-lg font-semibold capitalize">{pathname.split('/').pop()?.replace('-', ' ') || 'Dashboard'}</h1>
+                <h1 className="text-lg font-semibold capitalize">{pageTitle}</h1>
             </div>
+             <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="icon">
+                  <Globe className="h-[1.2rem] w-[1.2rem]" />
+                  <span className="sr-only">Toggle language</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => setLanguage('en')} disabled={language === 'en'}>
+                  English
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setLanguage('ar')} disabled={language === 'ar'}>
+                  العربية
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
         </header>
         <main className="flex-1 overflow-auto p-4 md:p-6">
             {children}

@@ -1,0 +1,347 @@
+{
+  "sidebar": {
+    "dashboard": "Dashboard",
+    "upload": "Upload Data",
+    "review": "Review Clusters",
+    "audit": "Run Audit",
+    "export": "Export Report",
+    "settings": "Settings"
+  },
+  "header": {
+    "dashboard": "Dashboard",
+    "upload": "Upload Data",
+    "review": "Review Clusters",
+    "audit": "Run Audit",
+    "export": "Export Report",
+    "settings": "Settings"
+  },
+  "dashboard": {
+    "title": "Beneficiary Insights",
+    "description": "An intelligent tool to help you identify duplicates and anomalies in beneficiary data using advanced fuzzy matching and AI.",
+    "getStarted": "Get Started",
+    "howItWorks": "How It Works",
+    "features": {
+      "upload": {
+        "title": "Upload & Cluster",
+        "description": "Start by uploading your beneficiary data. The system will automatically process the file and run an AI-powered clustering algorithm to find potential duplicates.",
+        "button": "Go to Upload"
+      },
+      "review": {
+        "title": "Review Clusters",
+        "description": "Inspect the generated clusters. Use AI summaries and detailed pairwise comparisons to understand why certain records were grouped together.",
+        "button": "Go to Review"
+      },
+      "audit": {
+        "title": "Audit & Export",
+        "description": "Run a comprehensive data integrity audit to find issues like invalid relationships or duplicate IDs, then export the enriched data to an Excel report.",
+        "button": "Go to Audit"
+      }
+    }
+  },
+  "upload": {
+    "steps": {
+      "1": {
+        "title": "1. Upload File",
+        "description": "Select a file from your device to begin the analysis."
+      },
+      "2": {
+        "title": "2. Map Columns",
+        "description": "Map your sheet columns to the required fields for analysis."
+      },
+      "3": {
+        "title": "3. Run Clustering",
+        "description": "Start the AI-powered analysis to find potential duplicates."
+      },
+      "4": {
+        "title": "4. Results",
+        "description": "Summary of the clustering process."
+      }
+    },
+    "buttons": {
+      "settings": "Settings",
+      "reset": "Reset",
+      "idle": "Start Clustering",
+      "processing": "Processing...",
+      "caching": "Caching Results...",
+      "building-edges": "Processing...",
+      "merging-edges": "Processing...",
+      "annotating": "Processing...",
+      "done": "Clustering Done!",
+      "error": "Error! Retry?",
+      "goToReview": "Go to Review Page"
+    },
+    "file": {
+      "clickToUpload": "Click to upload",
+      "orDragAndDrop": "or drag and drop",
+      "fileTypes": "XLSX, XLS, CSV, etc.",
+      "rowsDetected": "rows detected",
+      "reading": "Reading file..."
+    },
+    "mappingFields": {
+      "womanName": "Woman Name",
+      "husbandName": "Husband Name",
+      "nationalId": "National ID",
+      "phone": "Phone",
+      "village": "Village",
+      "subdistrict": "Subdistrict",
+      "children": "Children",
+      "beneficiaryId": "Beneficiary ID"
+    },
+    "status": {
+      "label": "Status",
+      "idle": "Idle",
+      "worker-ready": "Ready",
+      "receiving": "Receiving data",
+      "mapping-rows": "Mapping rows",
+      "blocking": "Creating blocks",
+      "building-edges": "Building edges",
+      "merging-edges": "Merging edges",
+      "annotating": "Finalizing",
+      "caching": "Caching results",
+      "done": "Done",
+      "error": "Error"
+    },
+    "results": {
+      "totalRecords": "Total Records",
+      "clusteredRecords": "Clustered Records",
+      "unclusteredRecords": "Unclustered Records",
+      "clusterCount": "Cluster Count",
+      "avgClusterSize": "Avg. Cluster Size",
+      "outOf": "out of"
+    },
+    "toasts": {
+      "clusteringComplete": {
+        "title": "Clustering complete",
+        "description": "Found"
+      },
+      "cacheError": {
+        "title": "Failed to cache results"
+      },
+      "workerError": {
+        "title": "Worker error"
+      },
+      "workerStartError": {
+        "title": "Unable to start worker"
+      },
+      "workerNotReady": "Worker not ready",
+      "noData": "Upload data first",
+      "mappingIncomplete": "Mapping incomplete"
+    }
+  },
+  "review": {
+    "title": "Cluster Review",
+    "description": "Inspect and analyze potential duplicate clusters from the last processing run. Found {filteredCount} of {totalCount} clusters.",
+    "buttons": {
+      "backToUpload": "Back to Upload",
+      "recalculate": "Recalculate Scores",
+      "goToAudit": "Go to Audit"
+    },
+    "searchPlaceholder": "Search by name, husband, or phone...",
+    "loading": "Loading clusters...",
+    "noClusters": "No clusters found",
+    "noClustersForQuery": "for your search query",
+    "pagination": "Page {currentPage} of {totalPages}",
+    "previous": "Previous",
+    "next": "Next",
+    "clusterCard": {
+      "records": "records",
+      "confidence": "Confidence",
+      "inspect": "Inspect",
+      "aiSummary": "Smart Summary"
+    },
+    "pairwiseModal": {
+      "title": "Cluster Details",
+      "description": "Review pairwise similarity scores between records in this cluster.",
+      "loadButton": "Load Pairwise Similarities",
+      "scoresLoaded": "Scores Loaded",
+      "calculating": "Calculating scores...",
+      "recordA": "Record A",
+      "recordB": "Record B",
+      "scoreBreakdown": "Score Breakdown",
+      "component": "Component",
+      "score": "Score",
+      "close": "Close"
+    },
+    "toasts": {
+      "calculatingScores": {
+        "title": "Calculating Scores",
+        "description": "Fetching and averaging scores for {count} clusters..."
+      },
+      "calculationComplete": {
+        "title": "Calculations Complete",
+        "description": "Average scores and confidence have been updated for all clusters."
+      },
+      "noData": {
+        "title": "No Data",
+        "description": "No clusters found from the last run. Please upload data first."
+      },
+      "loadError": "Failed to load clusters from server cache.",
+      "noClustersFound": {
+        "title": "No Clusters Found",
+        "description": "The last run did not produce any clusters. Try adjusting settings."
+      },
+      "clustersLoaded": {
+        "title": "Clusters Loaded",
+        "description": "Loaded {count} clusters for review."
+      },
+      "loadErrorFromServer": {
+        "title": "Error",
+        "description": "Failed to load cluster data from server cache."
+      }
+    }
+  },
+  "audit": {
+    "title": "Data Integrity Audit",
+    "description": "Run a set of rules against your clustered records to identify potential issues like duplicates and invalid relationships.",
+    "readyMessage": "Ready to audit {count} records.",
+    "buttons": {
+      "backToReview": "Back to Review",
+      "runAudit": "Run Audit",
+      "rerunAudit": "Re-run Audit",
+      "goToExport": "Go to Export Page"
+    },
+    "loading": "Loading latest data...",
+    "auditing": "Auditing...",
+    "summary": {
+      "title": "Audit Summary",
+      "description": "A summary of the types of issues found across all records."
+    },
+    "findings": {
+      "title": "Audit Findings",
+      "description": "{totalIssues} total issues found across {uniqueRecords} unique records."
+    },
+    "findingTypes": {
+      "WOMAN_MULTIPLE_HUSBANDS": "Multiple Husbands",
+      "MULTIPLE_NATIONAL_IDS": "Multiple IDs",
+      "DUPLICATE_ID": "Duplicate ID",
+      "DUPLICATE_COUPLE": "Duplicate Couple",
+      "HIGH_SIMILARITY": "High Similarity"
+    },
+    "severity": {
+      "high": "High",
+      "medium": "Medium",
+      "low": "Low"
+    },
+    "recordDetails": "Record Details:",
+    "identifiedIssues": "Identified Issues:",
+    "readyToAudit": {
+      "title": "Ready to Audit",
+      "description": "Click \"Run Audit\" to check the {count} clustered records for issues."
+    },
+    "toasts": {
+      "noData": "Cache ID not found. Please re-upload data.",
+      "auditComplete": "Audit Complete",
+      "issuesFound": "potential issues found.",
+      "auditError": "Audit Error",
+      "noClusteredData": "No records were found in clusters to audit.",
+      "loadedFromCache": "Loaded {count} existing audit findings."
+    }
+  },
+  "export": {
+    "title": "Advanced Export Workflow",
+    "description": "Generate and download your comprehensive beneficiary analysis report in a single step.",
+    "initialLoading": "Loading data from cache...",
+    "generateAndDownload": {
+      "title": "Generate and Download Report",
+      "recordsLoaded": "{count} Records Loaded",
+      "clustersFound": "{count} Clusters Found",
+      "description": "This will generate a single Excel file with multiple sheets: Enriched Data, Review Summary, Cluster Details, and Audit Findings.",
+      "button": "Generate and Download Report",
+      "buttonGenerating": "Generating...",
+      "enableMessage": "Please complete the upload and clustering steps first to enable report generation."
+    },
+    "status": {
+      "title": "Generation Status",
+      "enriching": "Enriching data with cluster info...",
+      "sorting": "Sorting records for the report...",
+      "sheets": "Creating main data sheet...",
+      "audit": "Creating audit findings sheet...",
+      "summary": "Creating summary and cluster sheets...",
+      "done": "Done",
+      "idle": "Real-time generation status will appear here once you start the process."
+    },
+    "downloadPanel": {
+      "title": "Download Panel",
+      "empty": "Generated reports will appear here.",
+      "fileName": "File Name",
+      "version": "Version",
+      "created": "Created",
+      "actions": "Actions",
+      "download": "Download",
+      "delete": "Delete"
+    },
+    "toasts": {
+      "noData": "No Data Found. Please start from the upload page to generate data for export.",
+      "fetchError": "Failed to fetch cached data. Please try the upload process again.",
+      "noRecords": "The cached data is empty. Please re-upload your file.",
+      "generationFailed": "Generation Failed",
+      "reportReady": "{fileName} has been added to the download panel.",
+      "downloadStarted": "Downloading {fileName}"
+    }
+  },
+  "settings": {
+    "title": "Clustering — Admin Settings (v5)",
+    "description": "Fine-tune the v5 clustering engine, weights, and rules.",
+    "buttons": {
+      "goToUpload": "Go to Upload",
+      "export": "Export",
+      "import": "Import",
+      "reset": "Reset",
+      "save": "Save",
+      "saving": "Saving..."
+    },
+    "thresholds": {
+      "title": "Thresholds & Performance",
+      "minPair": "Min Pair Score",
+      "minInternal": "Min Internal Score",
+      "blockChunkSize": "Block Chunk Size"
+    },
+    "weights": {
+      "title": "Final Score Composition"
+    },
+    "rules": {
+      "title": "Rules"
+    },
+    "testScoring": {
+      "title": "Test Scoring",
+      "recordA": "Record A",
+      "recordB": "Record B",
+      "runTest": "Run Test",
+      "clear": "Clear",
+      "score": "Score",
+      "compareToMinPair": "Compare to minPair",
+      "viewBreakdown": "View Breakdown"
+    },
+    "fieldNames": {
+      "womanName": "Woman Name",
+      "husbandName": "Husband Name",
+      "nationalId": "National ID",
+      "phone": "Phone"
+    },
+    "toasts": {
+      "defaultsLoaded": {
+        "title": "Settings not found",
+        "description": "Loading default settings. Save to create a settings file."
+      },
+      "loadError": {
+        "title": "Error loading settings",
+        "description": "Could not fetch settings from server. Using defaults."
+      },
+      "saveSuccess": {
+        "title": "Settings Saved",
+        "description": "Your changes have been saved successfully."
+      },
+      "saveFailed": "Save Failed",
+      "resetConfirm": "Are you sure you want to reset all settings to their defaults?",
+      "resetSuccess": {
+        "title": "Settings Reset",
+        "description": "Settings have been reset. Click Save to persist."
+      },
+      "importSuccess": {
+        "title": "Settings Imported",
+        "description": "Imported settings previewed. Click Save to persist them."
+      },
+      "importFailed": "Import Failed"
+    }
+  }
+}

@@ -1,5 +1,3 @@
-
-
 // app/(app)/upload/page.tsx
 "use client";
 
@@ -17,6 +15,7 @@ import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import type { RecordRow } from "@/lib/types";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { useTranslation } from "@/hooks/use-translation";
 
 function createWorkerScript() {
   return `
@@ -715,6 +714,7 @@ const SETTINGS_ENDPOINT = "/api/settings";
 type WorkerProgress = { status:string; progress:number; completed?:number; total?:number; }
 
 export default function UploadPage(){
+  const { t } = useTranslation();
   const [columns, setColumns] = useState<string[]>([]);
   const [file, setFile] = useState<File|null>(null);
   const [mapping, setMapping] = useState<Mapping>({
@@ -778,25 +778,25 @@ export default function UploadPage(){
             sessionStorage.setItem('cacheTimestamp', Date.now().toString());
             setWorkerStatus('done');
             setProgressInfo({ status: 'done', progress: 100 });
-            toast({ title: "Clustering complete", description: `Found ` + resultClusters.length + ` clusters.` });
+            toast({ title: t('upload.toasts.clusteringComplete.title'), description: `${t('upload.toasts.clusteringComplete.description')} ${resultClusters.length}` });
           } catch(err:any){
             setWorkerStatus('error');
-            toast({ title: "Failed to cache results", description: String(err), variant:"destructive" });
+            toast({ title: t('upload.toasts.cacheError.title'), description: String(err), variant:"destructive" });
           }
         } else if(msg.type === 'error'){
           setWorkerStatus('error');
-          toast({ title: "Worker error", description: msg.error || 'Unknown', variant:"destructive" });
+          toast({ title: t('upload.toasts.workerError.title'), description: msg.error || 'Unknown', variant:"destructive" });
         }
       };
     } catch(err:any){
       console.error('Worker spawn failed', err);
-      toast({ title: "Unable to start worker", description: String(err), variant:"destructive" });
+      toast({ title: t('upload.toasts.workerStartError.title'), description: String(err), variant:"destructive" });
     }
     return () => {
       if(workerRef.current){ workerRef.current.terminate(); workerRef.current = null; }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [columns]); // Re-create worker if columns change, just in case.
+  }, [columns, t]); // Re-create worker if columns change, just in case.
 
   useEffect(()=>{
     const allRequiredMapped = REQUIRED_MAPPING_FIELDS.every(f => !!mapping[f]);
@@ -846,9 +846,9 @@ export default function UploadPage(){
   }
 
   async function startClustering(){
-    if(!workerRef.current) { toast({ title: "Worker not ready" }); return; }
-    if(!rawRowsRef.current.length){ toast({ title: "Upload data first" }); return; }
-    if(!isMappingComplete){ toast({ title: "Mapping incomplete", variant:"destructive"}); return; }
+    if(!workerRef.current) { toast({ title: t('upload.toasts.workerNotReady') }); return; }
+    if(!rawRowsRef.current.length){ toast({ title: t('upload.toasts.noData') }); return; }
+    if(!isMappingComplete){ toast({ title: t('upload.toasts.mappingIncomplete'), variant:"destructive"}); return; }
 
     setIsMappingOpen(false);
     setWorkerStatus('processing'); setProgressInfo({ status:'processing', progress:1 });
@@ -876,13 +876,12 @@ export default function UploadPage(){
 
   const formattedStatus = () => {
     const s = progressInfo.status || 'idle';
-    let statusText = s.replace(/-/g, ' '); // a bit nicer looking
-    statusText = statusText.charAt(0).toUpperCase() + statusText.slice(1);
+    let statusText = t(`upload.status.${s}`);
     
     if (progressInfo.completed !== undefined && progressInfo.total) {
-      return `Status: ${statusText} (${progressInfo.completed}/${progressInfo.total})`;
+      return `${t('upload.status.label')}: ${statusText} (${progressInfo.completed}/${progressInfo.total})`;
     }
-    return `Status: ${statusText}`;
+    return `${t('upload.status.label')}: ${statusText}`;
   };
   
     const SummaryCard = ({ icon, title, value, total }: { icon: React.ReactNode, title: string, value: string | number, total?: number }) => (
@@ -893,28 +892,13 @@ export default function UploadPage(){
       </CardHeader>
       <CardContent>
         <div className="text-2xl font-bold">{value}</div>
-        {total !== undefined && <p className="text-xs text-muted-foreground">out of {total}</p>}
+        {total !== undefined && <p className="text-xs text-muted-foreground">{t('upload.results.outOf')} {total}</p>}
       </CardContent>
     </Card>
   );
 
   const getButtonText = () => {
-    switch (workerStatus) {
-      case 'processing':
-      case 'blocking':
-      case 'building-edges':
-      case 'merging-edges':
-      case 'annotating':
-        return 'Processing...';
-      case 'caching':
-        return 'Caching Results...';
-      case 'done':
-        return 'Clustering Done!';
-      case 'error':
-        return 'Error! Retry?';
-      default:
-        return 'Start Clustering';
-    }
+    return t(`upload.buttons.${workerStatus}`);
   };
 
 
@@ -923,13 +907,13 @@ export default function UploadPage(){
       <Card>
         <CardHeader className="flex flex-row items-start justify-between">
           <div>
-            <CardTitle>1. Upload File</CardTitle>
-            <CardDescription>Select a file from your device to begin the analysis.</CardDescription>
+            <CardTitle>{t('upload.steps.1.title')}</CardTitle>
+            <CardDescription>{t('upload.steps.1.description')}</CardDescription>
           </div>
           <Button variant="outline" asChild>
               <Link href="/settings">
                 <Settings className="mr-2 h-4 w-4" />
-                Settings
+                {t('upload.buttons.settings')}
               </Link>
           </Button>
         </CardHeader>
@@ -942,12 +926,12 @@ export default function UploadPage(){
                         {file ? (
                           <>
                             <p className="font-semibold text-primary">{file.name}</p>
-                            <p className="text-xs text-muted-foreground">{rawRowsRef.current.length > 0 ? `${rawRowsRef.current.length} rows detected` : 'Reading file...'}</p>
+                            <p className="text-xs text-muted-foreground">{rawRowsRef.current.length > 0 ? `${rawRowsRef.current.length} ${t('upload.file.rowsDetected')}` : t('upload.file.reading')}</p>
                           </>
                         ) : (
                           <>
-                           <p className="mb-2 text-sm text-muted-foreground"><span className="font-semibold">Click to upload</span> or drag and drop</p>
-                           <p className="text-xs text-muted-foreground">XLSX, XLS, CSV, etc.</p>
+                           <p className="mb-2 text-sm text-muted-foreground"><span className="font-semibold">{t('upload.file.clickToUpload')}</span> {t('upload.file.orDragAndDrop')}</p>
+                           <p className="text-xs text-muted-foreground">{t('upload.file.fileTypes')}</p>
                           </>
                         )}
                     </div>
@@ -963,12 +947,12 @@ export default function UploadPage(){
                   setWorkerStatus('idle');
                   setProgressInfo({ status: 'idle', progress: 0 });
                   setFileReadProgress(0);
-                }} variant="outline">Reset</Button>
+                }} variant="outline">{t('upload.buttons.reset')}</Button>
             )}
           </div>
           {file && fileReadProgress > 0 && fileReadProgress < 100 && (
             <div className="mt-4">
-              <Label>Reading File...</Label>
+              <Label>{t('upload.file.reading')}</Label>
               <Progress value={fileReadProgress} />
             </div>
           )}
@@ -981,8 +965,8 @@ export default function UploadPage(){
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle>2. Map Columns</CardTitle>
-                  <CardDescription>Map your sheet columns to the required fields for analysis.</CardDescription>
+                  <CardTitle>{t('upload.steps.2.title')}</CardTitle>
+                  <CardDescription>{t('upload.steps.2.description')}</CardDescription>
                 </div>
                 <CollapsibleTrigger asChild>
                   <Button variant="ghost" size="sm">
@@ -999,7 +983,7 @@ export default function UploadPage(){
                     <CardHeader className="p-4 flex flex-row items-center justify-between">
                         <div className="flex items-center gap-2">
                             {mapping[field] ? <CheckCircle className="h-5 w-5 text-green-500" /> : <XCircle className="h-5 w-5 text-red-500" />}
-                            <Label htmlFor={field} className="capitalize font-semibold text-base">{field.replace(/_/g,' ')}{REQUIRED_MAPPING_FIELDS.includes(field) && <span className="text-destructive">*</span>}</Label>
+                            <Label htmlFor={field} className="capitalize font-semibold text-base">{t(`upload.mappingFields.${field}`)}{REQUIRED_MAPPING_FIELDS.includes(field as any) && <span className="text-destructive">*</span>}</Label>
                         </div>
                     </CardHeader>
                     <CardContent className="p-0">
@@ -1025,8 +1009,8 @@ export default function UploadPage(){
       {file && isMappingComplete && (
         <Card>
           <CardHeader>
-            <CardTitle>3. Run Clustering</CardTitle>
-            <CardDescription>Start the AI-powered analysis to find potential duplicates.</CardDescription>
+            <CardTitle>{t('upload.steps.3.title')}</CardTitle>
+            <CardDescription>{t('upload.steps.3.description')}</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
@@ -1055,20 +1039,19 @@ export default function UploadPage(){
 
       {workerStatus === 'done' && (
         <Card>
-          <CardHeader><CardTitle>4. Results</CardTitle><CardDescription>Summary of the clustering process.</CardDescription></CardHeader>
+          <CardHeader><CardTitle>{t('upload.steps.4.title')}</CardTitle><CardDescription>{t('upload.steps.4.description')}</CardDescription></CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-4">
-                <SummaryCard icon={<Users className="h-4 w-4 text-muted-foreground" />} title="Total Records" value={rawRowsRef.current.length} />
-                <SummaryCard icon={<Group className="h-4 w-4 text-muted-foreground" />} title="Clustered Records" value={clusters.flatMap(c => c.records).length} />
-                <SummaryCard icon={<Unlink className="h-4 w-4 text-muted-foreground" />} title="Unclustered Records" value={rawRowsRef.current.length - clusters.flatMap(c => c.records).length} />
-                <SummaryCard icon={<BoxSelect className="h-4 w-4 text-muted-foreground" />} title="Cluster Count" value={clusters.length} />
-                <SummaryCard icon={<Sigma className="h-4 w-4 text-muted-foreground" />} title="Avg. Cluster Size" value={clusters.length > 0 ? (clusters.flatMap(c => c.records).length / clusters.length).toFixed(2) : 0} />
+                <SummaryCard icon={<Users className="h-4 w-4 text-muted-foreground" />} title={t('upload.results.totalRecords')} value={rawRowsRef.current.length} />
+                <SummaryCard icon={<Group className="h-4 w-4 text-muted-foreground" />} title={t('upload.results.clusteredRecords')} value={clusters.flatMap(c => c.records).length} />
+                <SummaryCard icon={<Unlink className="h-4 w-4 text-muted-foreground" />} title={t('upload.results.unclusteredRecords')} value={rawRowsRef.current.length - clusters.flatMap(c => c.records).length} />
+                <SummaryCard icon={<BoxSelect className="h-4 w-4 text-muted-foreground" />} title={t('upload.results.clusterCount')} value={clusters.length} />
+                <SummaryCard icon={<Sigma className="h-4 w-4 text-muted-foreground" />} title={t('upload.results.avgClusterSize')} value={clusters.length > 0 ? (clusters.flatMap(c => c.records).length / clusters.length).toFixed(2) : 0} />
             </div>
-            <Button onClick={()=> router.push('/review') } disabled={clusters.length === 0}>Go to Review Page <ChevronRight className="ml-2 h-4 w-4" /></Button>
+            <Button onClick={()=> router.push('/review') } disabled={clusters.length === 0}>{t('upload.buttons.goToReview')} <ChevronRight className="ml-2 h-4 w-4" /></Button>
           </CardContent>
         </Card>
       )}
     </div>
   );
 }
-

@@ -1,5 +1,6 @@
 import { LayoutProvider } from "@/components/layout-provider";
 import { Toaster } from "@/components/ui/toaster";
+import { LanguageProvider } from "@/context/language-context";
 import "./globals.css";
 
 export default function AppLayout({
@@ -10,7 +11,9 @@ export default function AppLayout({
   return (
     <html lang="en">
       <body>
-        <LayoutProvider>{children}</LayoutProvider>
+        <LanguageProvider>
+          <LayoutProvider>{children}</LayoutProvider>
+        </LanguageProvider>
         <Toaster />
       </body>
     </html>
