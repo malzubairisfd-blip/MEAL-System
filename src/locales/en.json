@@ -130,7 +130,7 @@
   },
   "review": {
     "title": "Cluster Review",
-    "description": "Inspect and analyze potential duplicate clusters from the last processing run. Found {filteredClusters.length} of {allClusters.length} clusters.",
+    "description": "Inspect and analyze potential duplicate clusters from the last processing run. Found {'filteredClusters.length'} of {'allClusters.length'} clusters.",
     "buttons": {
       "backToUpload": "Back to Upload",
       "recalculate": "Recalculate Scores",
@@ -297,13 +297,42 @@
       "title": "Thresholds & Performance",
       "minPair": "Min Pair Score",
       "minInternal": "Min Internal Score",
-      "blockChunkSize": "Block Chunk Size"
+      "blockChunkSize": "Block Chunk Size",
+      "minPairDescription": "The minimum score (0 to 1) for two records to be considered a potential match and form a link. High values create fewer, more confident clusters. Low values create more, but potentially noisier, clusters.",
+      "minInternalDescription": "The minimum score (0 to 1) used to decide if records within a large, temporary cluster should remain together in the final, smaller clusters. High values result in smaller, more tightly-related final clusters.",
+      "blockChunkSizeDescription": "A performance setting for very large datasets. It breaks down large groups of potential matches into smaller chunks to manage memory. The default is usually fine."
     },
     "weights": {
-      "title": "Final Score Composition"
+      "title": "Final Score Composition",
+      "firstNameScore": "First Name Score",
+      "firstNameScoreDescription": "Weight for the similarity of the first name.",
+      "familyNameScore": "Family Name Score",
+      "familyNameScoreDescription": "Weight for the similarity of the family name (all parts except the first).",
+      "advancedNameScore": "Advanced Name Score",
+      "advancedNameScoreDescription": "Weight for advanced name matching techniques, like root-letter matching.",
+      "tokenReorderScore": "Token Reorder Score",
+      "tokenReorderScoreDescription": "Weight for detecting names with the same words but in a different order.",
+      "husbandScore": "Husband Score",
+      "husbandScoreDescription": "Weight for the similarity of the husband's name.",
+      "idScore": "ID Score",
+      "idScoreDescription": "Weight for matches on the National ID.",
+      "phoneScore": "Phone Score",
+      "phoneScoreDescription": "Weight for matches on the phone number.",
+      "childrenScore": "Children Score",
+      "childrenScoreDescription": "Weight for matching children's names.",
+      "locationScore": "Location Score",
+      "locationScoreDescription": "Weight for matching village or sub-district names."
     },
     "rules": {
-      "title": "Rules"
+      "title": "Rules",
+      "enableNameRootEngine": "Enable Name Root Engine",
+      "enableNameRootEngineDescription": "An advanced technique that tries to match names based on their likely root letters, catching more complex variations.",
+      "enableTribalLineage": "Enable Tribal Lineage",
+      "enableTribalLineageDescription": "Looks for and gives weight to matches in the tribal or family name parts of a full name.",
+      "enableMaternalLineage": "Enable Maternal Lineage",
+      "enableMaternalLineageDescription": "Gives weight to similarities found in the maternal parts of a name if they can be identified.",
+      "enablePolygamyRules": "Enable Polygamy Rules",
+      "enablePolygamyRulesDescription": "Applies special logic for polygamous relationships, such as checking if two women share the same husband and paternal line."
     },
     "testScoring": {
       "title": "Test Scoring",

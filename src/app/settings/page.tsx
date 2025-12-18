@@ -12,35 +12,10 @@ import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
 import { Save, RotateCcw, Upload, Download, Loader2, Plus, Minus, ArrowLeft } from "lucide-react";
 import Link from "next/link";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Info } from "lucide-react";
 import { useTranslation } from "@/hooks/use-translation";
 
 
 type Settings = any;
-
-const descriptions: Record<string, any> = {
-  minPair: "The minimum score (0 to 1) for two records to be considered a potential match and form a link. High values create fewer, more confident clusters. Low values create more, but potentially noisier, clusters.",
-  minInternal: "The minimum score (0 to 1) used to decide if records within a large, temporary cluster should remain together in the final, smaller clusters. High values result in smaller, more tightly-related final clusters.",
-  blockChunkSize: "A performance setting for very large datasets. It breaks down large groups of potential matches into smaller chunks to manage memory. The default is usually fine.",
-  finalScoreWeights: {
-    firstNameScore: "Weight for the similarity of the first name.",
-    familyNameScore: "Weight for the similarity of the family name (all parts except the first).",
-    advancedNameScore: "Weight for advanced name matching techniques, like root-letter matching.",
-    tokenReorderScore: "Weight for detecting names with the same words but in a different order.",
-    husbandScore: "Weight for the similarity of the husband's name.",
-    idScore: "Weight for matches on the National ID.",
-    phoneScore: "Weight for matches on the phone number.",
-    childrenScore: "Weight for matching children's names.",
-    locationScore: "Weight for matching village or sub-district names."
-  },
-  rules: {
-    enableNameRootEngine: "An advanced technique that tries to match names based on their likely root letters, catching more complex variations.",
-    enableTribalLineage: "Looks for and gives weight to matches in the tribal or family name parts of a full name.",
-    enableMaternalLineage: "Gives weight to similarities found in the maternal parts of a name if they can be identified.",
-    enablePolygamyRules: "Applies special logic for polygamous relationships, such as checking if two women share the same husband and paternal line.",
-  }
-}
 
 export default function SettingsPage() {
   const { t } = useTranslation();
@@ -247,29 +222,29 @@ export default function SettingsPage() {
               <div>
                 <div className="grid grid-cols-12 items-center gap-4">
                   <Label htmlFor="minPair" className="col-span-12 sm:col-span-3 flex items-center">{t('settings.thresholds.minPair')}: <b className="mx-1">{settings.thresholds.minPair}</b></Label>
-                  <Slider id="minPair" min={0} max={1} step={0.01} value={[settings.thresholds.minPair]} onValueChange={(v)=>update("thresholds.minPair", v[0])} className="col-span-12 sm:col-span-6" />
+                  <Slider dir="ltr" id="minPair" min={0} max={1} step={0.01} value={[settings.thresholds.minPair]} onValueChange={(v)=>update("thresholds.minPair", v[0])} className="col-span-12 sm:col-span-6" />
                   <div className="col-span-12 sm:col-span-3 flex items-center gap-1 justify-end">
                       <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleNumericChange('thresholds.minPair', -0.01)}><Minus className="h-4 w-4" /></Button>
                       <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleNumericChange('thresholds.minPair', 0.01)}><Plus className="h-4 w-4" /></Button>
                   </div>
                 </div>
-                 <p className="text-xs text-muted-foreground mt-1 pl-1">{descriptions.minPair}</p>
+                 <p className="text-xs text-muted-foreground mt-1 pl-1">{t('settings.thresholds.minPairDescription')}</p>
               </div>
               <div>
                 <div className="grid grid-cols-12 items-center gap-4">
                   <Label htmlFor="minInternal" className="col-span-12 sm:col-span-3 flex items-center">{t('settings.thresholds.minInternal')}: <b className="mx-1">{settings.thresholds.minInternal}</b></Label>
-                  <Slider id="minInternal" min={0} max={1} step={0.01} value={[settings.thresholds.minInternal]} onValueChange={(v)=>update("thresholds.minInternal", v[0])} className="col-span-12 sm:col-span-6" />
+                  <Slider dir="ltr" id="minInternal" min={0} max={1} step={0.01} value={[settings.thresholds.minInternal]} onValueChange={(v)=>update("thresholds.minInternal", v[0])} className="col-span-12 sm:col-span-6" />
                   <div className="col-span-12 sm:col-span-3 flex items-center gap-1 justify-end">
                       <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleNumericChange('thresholds.minInternal', -0.01)}><Minus className="h-4 w-4" /></Button>
                       <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleNumericChange('thresholds.minInternal', 0.01)}><Plus className="h-4 w-4" /></Button>
                   </div>
                 </div>
-                 <p className="text-xs text-muted-foreground mt-1 pl-1">{descriptions.minInternal}</p>
+                 <p className="text-xs text-muted-foreground mt-1 pl-1">{t('settings.thresholds.minInternalDescription')}</p>
               </div>
               <div>
                 <Label htmlFor="blockChunkSize">{t('settings.thresholds.blockChunkSize')}</Label>
                 <Input id="blockChunkSize" type="number" value={settings.thresholds.blockChunkSize} onChange={(e)=>update("thresholds.blockChunkSize", parseInt(e.target.value||"0"))}/>
-                <p className="text-xs text-muted-foreground mt-1">{descriptions.blockChunkSize}</p>
+                <p className="text-xs text-muted-foreground mt-1">{t('settings.thresholds.blockChunkSizeDescription')}</p>
               </div>
             </CardContent>
           </Card>
@@ -280,15 +255,15 @@ export default function SettingsPage() {
               {Object.entries(settings.finalScoreWeights).map(([k, v]: [string, any]) => (
                 <div key={k} className="flex flex-col gap-2 p-3 border rounded-md">
                    <div className="flex justify-between items-center">
-                     <Label htmlFor={`fsw-${k}`} className="capitalize flex items-center">{k.replace(/([A-Z])/g, ' $1')}</Label>
+                     <Label htmlFor={`fsw-${k}`} className="capitalize flex items-center">{t(`settings.weights.${k}`)}</Label>
                    </div>
                    <div className="flex items-center gap-2">
                         <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleWeightChange(k, -0.01)}><Minus className="h-4 w-4" /></Button>
                         <Input type="number" step="0.01" value={v || ''} onChange={(e)=>update(`finalScoreWeights.${k}`, parseFloat(e.target.value) || 0)} className="w-24 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"/>
                         <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleWeightChange(k, 0.01)}><Plus className="h-4 w-4" /></Button>
                    </div>
-                    <Slider id={`fsw-${k}`} min={0} max={1} step={0.01} value={[v]} onValueChange={(val)=>update(`finalScoreWeights.${k}`, val[0])} />
-                    <p className="text-xs text-muted-foreground mt-1">{descriptions.finalScoreWeights[k]}</p>
+                    <Slider dir="ltr" id={`fsw-${k}`} min={0} max={1} step={0.01} value={[v]} onValueChange={(val)=>update(`finalScoreWeights.${k}`, val[0])} />
+                    <p className="text-xs text-muted-foreground mt-1">{t(`settings.weights.${k}Description`)}</p>
                 </div>
               ))}
             </CardContent>
@@ -299,9 +274,9 @@ export default function SettingsPage() {
             <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {Object.entries(settings.rules).map(([k, v]: [string, any]) => (
                 <div key={k} className="flex items-start justify-between p-3 rounded-lg border">
-                  <div className="flex flex-col gap-1">
-                    <Label htmlFor={`r-${k}`} className="capitalize flex items-center">{k.replace(/([A-Z])/g, ' $1').replace('Enable ', '')}</Label>
-                    <p className="text-xs text-muted-foreground">{descriptions.rules[k]}</p>
+                  <div className="flex flex-col gap-1 flex-1 ltr:mr-4 rtl:ml-4">
+                    <Label htmlFor={`r-${k}`} className="capitalize flex items-center">{t(`settings.rules.${k}`)}</Label>
+                    <p className="text-xs text-muted-foreground">{t(`settings.rules.${k}Description`)}</p>
                   </div>
                   <Switch id={`r-${k}`} checked={v} onCheckedChange={(val)=>update(`rules.${k}`, val)} />
                 </div>

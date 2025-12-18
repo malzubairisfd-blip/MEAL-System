@@ -130,7 +130,7 @@
   },
   "review": {
     "title": "مراجعة المجموعات",
-    "description": "افحص وحلل مجموعات التكرار المحتملة من آخر عملية معالجة. تم العثور على {filteredClusters.length} من {allClusters.length} مجموعات.",
+    "description": "افحص وحلل مجموعات التكرار المحتملة من آخر عملية معالجة. تم العثور على {'filteredClusters.length'} من {'allClusters.length'} مجموعات.",
     "buttons": {
       "backToUpload": "العودة إلى الرفع",
       "recalculate": "إعادة حساب الدرجات",
@@ -297,13 +297,42 @@
       "title": "العتبات والأداء",
       "minPair": "أدنى درجة للزوج",
       "minInternal": "أدنى درجة داخلية",
-      "blockChunkSize": "حجم قطعة الكتلة"
+      "blockChunkSize": "حجم قطعة الكتلة",
+      "minPairDescription": "أدنى درجة (0 إلى 1) لاعتبار سجلين تطابقًا محتملاً وتشكيل رابط. القيم العالية تنشئ مجموعات أقل ولكن أكثر ثقة. القيم المنخفضة تنشئ مجموعات أكثر ولكن قد تكون مشوشة.",
+      "minInternalDescription": "أدنى درجة (0 إلى 1) تستخدم لتحديد ما إذا كانت السجلات داخل مجموعة مؤقتة كبيرة يجب أن تبقى معًا في المجموعات النهائية الأصغر. القيم العالية تؤدي إلى مجموعات نهائية أصغر وأكثر ارتباطًا.",
+      "blockChunkSizeDescription": "إعداد أداء لمجموعات البيانات الكبيرة جدًا. يقوم بتقسيم المجموعات الكبيرة من التطابقات المحتملة إلى أجزاء أصغر لإدارة الذاكرة. الإعداد الافتراضي عادة ما يكون جيدًا."
     },
     "weights": {
-      "title": "تكوين الدرجة النهائية"
+      "title": "تكوين الدرجة النهائية",
+      "firstNameScore": "درجة الاسم الأول",
+      "firstNameScoreDescription": "وزن تشابه الاسم الأول.",
+      "familyNameScore": "درجة اسم العائلة",
+      "familyNameScoreDescription": "وزن تشابه اسم العائلة (جميع الأجزاء ما عدا الأول).",
+      "advancedNameScore": "درجة الاسم المتقدمة",
+      "advancedNameScoreDescription": "وزن تقنيات مطابقة الأسماء المتقدمة، مثل مطابقة جذر الحروف.",
+      "tokenReorderScore": "درجة إعادة ترتيب الرموز",
+      "tokenReorderScoreDescription": "وزن الكشف عن الأسماء التي تحتوي على نفس الكلمات ولكن بترتيب مختلف.",
+      "husbandScore": "درجة الزوج",
+      "husbandScoreDescription": "وزن تشابه اسم الزوج.",
+      "idScore": "درجة الهوية",
+      "idScoreDescription": "وزن التطابق في الرقم القومي.",
+      "phoneScore": "درجة الهاتف",
+      "phoneScoreDescription": "وزن التطابق في رقم الهاتف.",
+      "childrenScore": "درجة الأطفال",
+      "childrenScoreDescription": "وزن تطابق أسماء الأطفال.",
+      "locationScore": "درجة الموقع",
+      "locationScoreDescription": "وزن تطابق أسماء القرية أو الناحية."
     },
     "rules": {
-      "title": "القواعد"
+      "title": "القواعد",
+      "enableNameRootEngine": "تمكين محرك جذر الاسم",
+      "enableNameRootEngineDescription": "تقنية متقدمة تحاول مطابقة الأسماء بناءً على جذورها المحتملة، لالتقاط اختلافات أكثر تعقيدًا.",
+      "enableTribalLineage": "تمكين نسب القبيلة",
+      "enableTribalLineageDescription": "يبحث ويعطي وزنًا للتطابقات في أجزاء الاسم القبلية أو العائلية للاسم الكامل.",
+      "enableMaternalLineage": "تمكين نسب الأم",
+      "enableMaternalLineageDescription": "يعطي وزنًا للتشابهات الموجودة في الأجزاء الأمومية من الاسم إذا كان من الممكن تحديدها.",
+      "enablePolygamyRules": "تمكين قواعد تعدد الزوجات",
+      "enablePolygamyRulesDescription": "يطبق منطقًا خاصًا للعلاقات متعددة الزوجات، مثل التحقق مما إذا كانت امرأتان تتشاركان نفس الزوج والنسب الأبوي."
     },
     "testScoring": {
       "title": "اختبار التسجيل",
