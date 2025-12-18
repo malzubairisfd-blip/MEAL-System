@@ -171,7 +171,7 @@ export default function ReviewPage() {
             <div>
               <CardTitle>{t('review.title')}</CardTitle>
               <CardDescription>
-                {t('review.description', {filteredClusters.length: filteredClusters.length, allClusters.length: allClusters.length})}
+                {t('review.description', {'filteredClusters.length': filteredClusters.length, 'allClusters.length': allClusters.length})}
               </CardDescription>
             </div>
              <div className="flex flex-col sm:flex-row gap-2">
