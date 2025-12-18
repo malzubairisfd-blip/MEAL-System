@@ -5,7 +5,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
 import ExcelJS from "exceljs";
-import { fullPairwiseBreakdown } from "@/lib/fuzzyCluster";
+import { fullPairwiseBreakdown } from "@/lib/scoring-server";
 import type { AuditFinding } from "@/lib/auditEngine";
 import type { RecordRow } from "@/lib/types";
 import { generateArabicClusterSummary } from '@/lib/arabicClusterSummary';
