@@ -142,7 +142,6 @@ async function enrichData(cachedData: any): Promise<EnrichedRecord[]> {
             const clusterInfo = clusterInfoMap.get(recordClusterId)!;
             
             const clusterRecords = clusters[recordClusterId - 1].records;
-            const otherRecords = clusterRecords.filter((r: RecordRow) => r._internalId !== record._internalId);
             
             let totalPairScore = 0;
             let totalNameScore = 0;
@@ -230,6 +229,9 @@ function createFormattedWorkbook(data: EnrichedRecord[], cachedData: any): Excel
     createEnrichedDataSheet(wb, data, originalHeaders);
     createSummarySheet(wb, allRecords, clusters, auditFindings || []);
     createClustersSheet(wb, clusters);
+    if (auditFindings && auditFindings.length > 0) {
+        createAuditSheet(wb, auditFindings, clusters);
+    }
 
     return wb;
 }
@@ -356,18 +358,9 @@ function createSummarySheet(wb: ExcelJS.Workbook, allRecords: RecordRow[], clust
     const clusteredPercentage = totalRecords > 0 ? (clusteredRecordsCount / totalRecords) : 0;
 
     const summaryStats = [
-        [
-            { title: "إجمالي السجلات المعالجة", value: totalRecords, icon: "👥" },
-            { title: "عدد المجموعات", value: numClusters, icon: "📁" }
-        ],
-        [
-            { title: "السجلات المجمعة", value: clusteredRecordsCount, icon: "🔗" },
-            { title: "السجلات غير المجمعة", value: unclusteredCount, icon: "👤" }
-        ],
-        [
-            { title: "متوسط حجم المجموعة", value: avgClusterSize.toFixed(2), icon: "📊" },
-            { title: "نسبة السجلات المجمعة", value: `${(clusteredPercentage * 100).toFixed(1)}%`, icon: "📈" }
-        ]
+        [{ title: "إجمالي السجلات المعالجة", value: totalRecords, icon: "👥" }, { title: "عدد المجموعات", value: numClusters, icon: "📁" }],
+        [{ title: "السجلات المجمعة", value: clusteredRecordsCount, icon: "🔗" }, { title: "السجلات غير المجمعة", value: unclusteredCount, icon: "👤" }],
+        [{ title: "متوسط حجم المجموعة", value: avgClusterSize.toFixed(2), icon: "📊" }, { title: "نسبة السجلات المجمعة", value: `${(clusteredPercentage * 100).toFixed(1)}%`, icon: "📈" }]
     ];
     
     let summaryCurrentRow = 4;
@@ -387,6 +380,9 @@ function createSummarySheet(wb: ExcelJS.Workbook, allRecords: RecordRow[], clust
 
 
     // --- Decision Counts ---
+    let decisionCurrentRow = summaryCurrentRow + 1; // Start after the summary stats
+    ws.getRow(decisionCurrentRow).height = 15; // Spacer row
+
     const decisionCounts = {
         'تكرار مؤكد': 0,
         'اشتباه تكرار مؤكد': 0,
@@ -408,13 +404,13 @@ function createSummarySheet(wb: ExcelJS.Workbook, allRecords: RecordRow[], clust
             decisionCounts[decision as keyof typeof decisionCounts]++;
         }
     });
-
+    
     const decisionStats = [
         [{ title: "تكرار مؤكد", value: decisionCounts['تكرار مؤكد'], icon: "✔️" }, { title: "اشتباه تكرار مؤكد", value: decisionCounts['اشتباه تكرار مؤكد'], icon: "❗" }],
         [{ title: "اشتباه تكرار", value: decisionCounts['اشتباه تكرار'], icon: "❓" }, { title: "إحتمالية تكرار", value: decisionCounts['إحتمالية تكرار'], icon: "❔" }],
     ];
 
-    let decisionCurrentRow = summaryCurrentRow + 1; // Start after the summary stats
+    decisionCurrentRow++;
     decisionStats.forEach(rowItems => {
         ws.getRow(decisionCurrentRow).height = 45;
         rowItems.forEach((stat, colIndex) => {
@@ -424,13 +420,14 @@ function createSummarySheet(wb: ExcelJS.Workbook, allRecords: RecordRow[], clust
             const cardCell = ws.getCell(decisionCurrentRow, startColNum);
             cardCell.value = { richText: [ { text: `${stat.icon}`, font: { size: 36, name: 'Segoe UI Emoji' } }, { text: `\n${stat.title}\n`, font: { size: 14 } }, { text: `${stat.value}`, font: { size: 24, bold: true } } ] };
             cardCell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
-            cardCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE6F2FF' } };
+            cardCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2F2F2' } }; // Light gray
             cardCell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
         });
         decisionCurrentRow += 5;
     });
 
-    let auditCurrentRow = decisionCurrentRow + 2; // Add space
+    let auditCurrentRow = decisionCurrentRow + 1; // Add space
+    ws.getRow(auditCurrentRow - 1).height = 15; // Spacer row
 
     // --- Audit Summary Data ---
     if (auditFindings.length > 0) {
@@ -452,9 +449,8 @@ function createSummarySheet(wb: ExcelJS.Workbook, allRecords: RecordRow[], clust
         };
 
         auditFindings.forEach(f => {
-            const uniqueRecordsInFinding = new Set(f.records.map(r => r._internalId));
             if (f.type in findingCounts) {
-                findingCounts[f.type] += uniqueRecordsInFinding.size;
+                 findingCounts[f.type] += new Set(f.records.map(r => r._internalId)).size;
             }
         });
 
@@ -483,6 +479,7 @@ function createSummarySheet(wb: ExcelJS.Workbook, allRecords: RecordRow[], clust
         });
     }
 }
+
 
 function createClustersSheet(wb: ExcelJS.Workbook, clusters: {records: RecordRow[], reasons: string[]}[]) {
     const ws = wb.addWorksheet("Cluster Details");
@@ -596,3 +593,178 @@ function createClustersSheet(wb: ExcelJS.Workbook, clusters: {records: RecordRow
     });
 }
     
+function createAuditSheet(wb: ExcelJS.Workbook, findings: AuditFinding[], clusters: {records: RecordRow[]}[]) {
+    const ws = wb.addWorksheet("نتائج التدقيق");
+    ws.views = [{ rightToLeft: true }];
+    
+    const recordToClusterIdMap = new Map<string, number>();
+    clusters.forEach((clusterObj, index) => {
+        clusterObj.records.forEach(record => {
+            recordToClusterIdMap.set(record._internalId!, index + 1);
+        });
+    });
+
+    const headers = [
+      { header: "الخطورة", key: "severity", width: 12 },
+      { header: "نوع النتيجة", key: "type", width: 40 },
+      { header: "الوصف", key: "description", width: 50 },
+      { header: "معرف المجموعة", key: "clusterId", width: 15 },
+      { header: "معرف المستفيد", key: "beneficiaryId", width: 20 },
+      { header: "اسم الزوجة", key: "womanName", width: 25 },
+      { header: "اسم الزوج", key: "husbandName", width: 25 },
+      { header: "الرقم القومي", key: "nationalId", width: 20 },
+      { header: "الهاتف", key: "phone", width: 20 },
+    ];
+    ws.columns = headers;
+    
+    const headerRow = ws.getRow(1);
+    headerRow.eachCell((cell) => {
+      cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFC00000" } };
+      cell.alignment = { horizontal: "center" };
+    });
+
+    const severityOrder = { high: 1, medium: 2, low: 3 };
+    const severityTranslations: Record<string, string> = { high: 'عالية', medium: 'متوسطة', low: 'منخفضة' };
+    const typeTranslations: Record<string, string> = {
+        "DUPLICATE_ID": "تكرار الرقم القومي",
+        "DUPLICATE_COUPLE": "ازدواجية الزوجين",
+        "WOMAN_MULTIPLE_HUSBANDS": "زوجة لديها عدة أزواج",
+        "HUSBAND_TOO_MANY_WIVES": "زوج لديه أكثر من 4 زوجات",
+        "MULTIPLE_NATIONAL_IDS": "زوجة لديها عدة أرقام قومية",
+        "HIGH_SIMILARITY": "تشابه عالي بين السجلات"
+    };
+
+    const descriptionTranslations: Record<string, (finding: AuditFinding, record: RecordRow) => string> = {
+        "DUPLICATE_ID": () => `الرقم القومي مكرر داخل المجموعة.`,
+        "DUPLICATE_COUPLE": () => `تطابق تام لاسم الزوجة والزوج.`,
+        "WOMAN_MULTIPLE_HUSBANDS": (f) => `الزوجة مسجلة مع عدة أزواج: ${[...new Set(f.records.map(rec => rec.husbandName))].join(', ')}`,
+        "HUSBAND_TOO_MANY_WIVES": (f) => `الزوج مسجل مع ${new Set(f.records.map(rec => rec.womanName)).size} زوجات، وهو ما يتجاوز الحد المسموح به.`,
+        "MULTIPLE_NATIONAL_IDS": (f, r) => `الزوجة '${r.womanName}' مرتبطة بعدة أرقام قومية: ${[...new Set(f.records.filter(rec => rec.womanName === r.womanName).map(rec=>rec.nationalId))].join(', ')}`,
+        "HIGH_SIMILARITY": (f) => `يوجد تشابه عالي في البيانات بين السجلات داخل هذه المجموعة.`,
+    };
+
+    // --- Beneficiary ID Consolidation Logic ---
+    const beneficiaryFindings = new Map<string, any>();
+    findings.forEach(finding => {
+        finding.records.forEach(record => {
+            const beneficiaryId = record.beneficiaryId;
+            if (!beneficiaryId) return;
+
+            const existing = beneficiaryFindings.get(beneficiaryId);
+            const translatedDescription = descriptionTranslations[finding.type] ? descriptionTranslations[finding.type](finding, record) : finding.description;
+
+            if (existing) {
+                if (severityOrder[finding.severity] < severityOrder[existing.severityValue]) {
+                    existing.severity = finding.severity;
+                    existing.severityValue = finding.severity;
+                }
+                existing.types.add(finding.type);
+                existing.descriptions.add(translatedDescription);
+            } else {
+                beneficiaryFindings.set(beneficiaryId, {
+                    ...record,
+                    severity: finding.severity,
+                    severityValue: finding.severity,
+                    types: new Set([finding.type]),
+                    descriptions: new Set([translatedDescription]),
+                    clusterId: recordToClusterIdMap.get(record._internalId!) || 'N/A'
+                });
+            }
+        });
+    });
+
+    let consolidatedData = Array.from(beneficiaryFindings.values()).map(f => ({
+        ...f,
+        type: Array.from(f.types).join(' + '),
+        description: Array.from(f.descriptions).join(' + ')
+    }));
+
+    // --- Cluster-level Consolidation ---
+    const clusterGroups = new Map<string, any[]>();
+    consolidatedData.forEach(record => {
+        const clusterId = record.clusterId;
+        if (!clusterGroups.has(clusterId)) {
+            clusterGroups.set(clusterId, []);
+        }
+        clusterGroups.get(clusterId)!.push(record);
+    });
+
+    let finalData: any[] = [];
+    clusterGroups.forEach((records, clusterId) => {
+        if (records.length === 0) return;
+
+        let highestSeverityValue: 'high' | 'medium' | 'low' = 'low';
+        const combinedTypes = new Set<string>();
+        const combinedDescriptions = new Set<string>();
+
+        records.forEach(record => {
+            if (severityOrder[record.severityValue] < severityOrder[highestSeverityValue]) {
+                highestSeverityValue = record.severityValue;
+            }
+            record.type.split(' + ').forEach((t: string) => combinedTypes.add(t));
+            record.description.split(' + ').forEach((d: string) => combinedDescriptions.add(d));
+        });
+
+        const unifiedType = Array.from(combinedTypes).map(t => typeTranslations[t] || t.replace(/_/g, ' ')).join(' + ');
+        const unifiedDescription = Array.from(combinedDescriptions).join(' + ');
+        const unifiedSeverity = severityTranslations[highestSeverityValue] || highestSeverityValue;
+        
+        const unifiedRecords = records.map(record => ({
+            ...record,
+            severity: unifiedSeverity,
+            severityValue: highestSeverityValue,
+            type: unifiedType,
+            description: unifiedDescription,
+        }));
+        finalData.push(...unifiedRecords);
+    });
+    
+    // --- Sorting Logic ---
+    finalData.sort((a, b) => {
+        const severityComparison = severityOrder[a.severityValue] - severityOrder[b.severityValue];
+        if (severityComparison !== 0) return severityComparison;
+        
+        const clusterIdA = a.clusterId === 'N/A' ? Infinity : a.clusterId;
+        const clusterIdB = b.clusterId === 'N/A' ? Infinity : b.clusterId;
+        if (clusterIdA !== clusterIdB) return clusterIdA - clusterIdB;
+
+        return String(a.beneficiaryId || '').localeCompare(String(b.beneficiaryId || ''));
+    });
+
+    // --- Add Rows to Sheet ---
+    let lastClusterId: string | number | null = null;
+    finalData.forEach((data, index) => {
+        const row = ws.addRow({
+            severity: data.severity,
+            type: data.type,
+            description: data.description,
+            clusterId: data.clusterId,
+            beneficiaryId: data.beneficiaryId,
+            womanName: data.womanName,
+            husbandName: data.husbandName,
+            nationalId: data.nationalId,
+            phone: data.phone,
+        });
+
+        // Add thick border for new cluster groups
+        if (index > 0 && data.clusterId !== lastClusterId) {
+           row.eachCell({ includeEmpty: true }, cell => {
+                cell.border = { ...cell.border, top: { style: 'thick', color: { argb: 'FF4F81BD' } } };
+           });
+        }
+        lastClusterId = data.clusterId;
+
+        const severityColor = data.severityValue === 'high' ? 'FFFFC7CE' : data.severityValue === 'medium' ? 'FFFFEB9C' : 'FFC6EFCE';
+        row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: severityColor } };
+            const key = headers[colNumber - 1].key;
+
+            if (['severity', 'clusterId', 'beneficiaryId', 'nationalId', 'phone'].includes(key)) {
+                cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+            } else if (['type', 'description', 'womanName', 'husbandName'].includes(key)) {
+                cell.alignment = { vertical: 'middle', horizontal: 'right', wrapText: true };
+            }
+        });
+    });
+}
