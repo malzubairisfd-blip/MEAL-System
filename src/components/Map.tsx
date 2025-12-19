@@ -1,39 +1,44 @@
-"use client";
+'use client';
 
-import React, { useEffect, useState } from 'react';
-import { MapContainer, TileLayer } from 'react-leaflet';
-import 'leaflet/dist/leaflet.css';
-import 'leaflet.markercluster/dist/MarkerCluster.css';
-import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
+import { useEffect, useRef } from "react";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
 
-import { useDashboard } from '@/app/report/page';
-import { ClusterLayer, HeatmapLayer } from '@/components/leaflet-layers';
-
-export function WestAfricaMap() {
-  const { setMapInstance, layerState } = useDashboard();
-  const [clusterData, setClusterData] = useState(null);
-  const [incidentsData, setIncidentsData] = useState(null);
+export default function WestAfricaMap() {
+  const mapRef = useRef<L.Map | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    fetch('/data/clusters.geojson').then(res => res.json()).then(setClusterData);
-    fetch('/data/incidents.geojson').then(res => res.json()).then(setIncidentsData);
+    if (!containerRef.current || mapRef.current) return;
+
+    // 🔒 Initialize ONCE
+    mapRef.current = L.map(containerRef.current, {
+      center: [13, 2],
+      zoom: 4,
+      preferCanvas: true,
+    });
+
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: "© OpenStreetMap",
+    }).addTo(mapRef.current);
+
+    // ✅ CLEANUP — THIS IS THE KEY
+    return () => {
+      if (mapRef.current) {
+        mapRef.current.remove();   // 🔥 destroys Leaflet instance
+        mapRef.current = null;
+      }
+    };
   }, []);
 
   return (
-    <MapContainer
-      center={[13, 2]}
-      zoom={4}
-      style={{ height: '100%', width: "100%", borderRadius: "12px" }}
-      whenCreated={setMapInstance}
-    >
-      <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-      />
-      
-      {layerState.clusters && clusterData && <ClusterLayer data={clusterData} />}
-      {layerState.heatmap && incidentsData && <HeatmapLayer data={incidentsData} />}
-      
-    </MapContainer>
+    <div
+      ref={containerRef}
+      style={{
+        height: "100%",
+        width: "100%",
+        borderRadius: "12px",
+      }}
+    />
   );
 }

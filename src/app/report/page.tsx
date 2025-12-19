@@ -27,7 +27,7 @@ const DashboardContext = createContext<{
 export const useDashboard = () => useContext(DashboardContext);
 
 // Dynamically import the map component to ensure it only runs on the client side
-const WestAfricaMap = dynamic(() => import('@/components/Map').then(mod => mod.WestAfricaMap), {
+const WestAfricaMap = dynamic(() => import('@/components/Map'), {
   ssr: false,
   loading: () => <p>Loading map...</p>,
 });
