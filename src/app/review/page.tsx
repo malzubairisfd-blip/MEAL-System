@@ -169,20 +169,9 @@ export default function ReviewPage() {
         }
     });
 
-    const total = allClusters.length;
-    
-    const colors = {
-        'تكرار مؤكد': '#DC2626', // red-600
-        'اشتباه تكرار مؤكد': '#F97316', // orange-500
-        'اشتباه تكرار': '#2563EB', // blue-600
-        'إحتمالية تكرار': '#6B7280' // gray-500
-    };
-
     return Object.entries(decisionCounts).map(([decision, count]) => ({
-      x: decision,
-      y: count,
-      text: `${((count / total) * 100).toFixed(1)}%`,
-      fill: colors[decision as keyof typeof colors]
+      name: decision,
+      value: count,
     }));
   }, [allClusters, loading]);
 
