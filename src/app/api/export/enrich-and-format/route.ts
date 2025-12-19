@@ -27,8 +27,30 @@ type EnrichedRecord = RecordRow & {
     phoneScore?: number;
     womanName_normalized?: string;
     husbandName_normalized?: string;
+    'تصنيف المجموعة المبدئي'?: string;
+    'نتائج تحليل المجموعة'?: string;
     [key: string]: any;
 };
+
+function getDecisionAndNote(finalScorePct: number) {
+  let decision = "إحتمالية تكرار";
+  let expertNote = "قد يكون هنالك إحتمالية لوجود تكرار نتيجة لتطابق بعض اجزاء من الاسم للمستفيدة او الزوج. يوصى بالتحقق المكتبي من المجموعة.";
+
+  if (finalScorePct >= 85) {
+    decision = "تكرار مؤكد";
+    expertNote =
+      "يوجد تطابق شامل في الأسماء والنسب مع احتمالية عالية أن السجلات تعود لنفس المستفيد. يوصى بمراجعه السجلات وابقاء الحاله التي تحتوي على اكثر دقة وشمولية في البيانات وتصنيف الحالات الأخرى في المجموعه بانها تكرار/ازدواج.";
+  } else if (finalScorePct >= 70) {
+    decision = "اشتباه تكرار مؤكد";
+    expertNote =
+      "يوجد تشابه مرتفع في الأسماء والنسب مع احتمالية مرتفعة أن السجلات تعود لنفس المستفيد. يوصى بمراجعه السجلات وفي حال كان هنالك حالات تكرار يتم إبقاء الحاله التي تحتوي على اكثر دقة وشمولية في البيانات وتصنيف الحالات الأخرى في المجموعه بانها تكرار/ازدواج او يتم تعليق المجموعه للتحقق الميداني.";
+  } else if (finalScorePct >= 60) {
+    decision = "اشتباه تكرار";
+    expertNote =
+      "يوجد تشابه جزئي، وقد يكون ناتجًا عن تشابه أسماء شائع في المنطقة. يوصى بالتحقق المكتبي والميداني من المجموعة.";
+  }
+  return { decision, expertNote };
+}
 
 function normalizeArabic(s: string): string {
   if (!s) return "";
@@ -76,7 +98,7 @@ async function enrichData(cachedData: any): Promise<EnrichedRecord[]> {
 
     const recordMap = new Map<string, RecordRow>(allRecords.map((r: RecordRow) => [r._internalId!, r]));
     const enrichedRecords: EnrichedRecord[] = [];
-    const clusterInfoMap = new Map<number, { maxScore: number, maxBeneficiaryId: number, size: number }>();
+    const clusterInfoMap = new Map<number, { maxScore: number, maxBeneficiaryId: number, size: number, decision: string, expertNote: string }>();
 
     clusters.forEach((clusterObj: { records: RecordRow[] }, index: number) => {
         const clusterId = index + 1;
@@ -91,8 +113,17 @@ async function enrichData(cachedData: any): Promise<EnrichedRecord[]> {
                 maxBeneficiaryId = beneficiaryId;
              }
         });
+        
+        const womanNameScores = pairs.map((p: any) => p.breakdown.nameScore || 0);
+        const husbandNameScores = pairs.map((p: any) => p.breakdown.husbandScore || 0);
+        const avgWomanNameScore = womanNameScores.length > 0 ? womanNameScores.reduce((a: number, b: number) => a + b, 0) / womanNameScores.length : 0;
+        const avgHusbandNameScore = husbandNameScores.length > 0 ? husbandNameScores.reduce((a: number, b: number) => a + b, 0) / husbandNameScores.length : 0;
+        const avgFinalScore = (avgWomanNameScore + avgHusbandNameScore) / 2;
+        const finalScorePct = Math.round(avgFinalScore * 100);
 
-        clusterInfoMap.set(clusterId, { maxScore, maxBeneficiaryId, size: clusterRecords.length });
+        const { decision, expertNote } = getDecisionAndNote(finalScorePct);
+
+        clusterInfoMap.set(clusterId, { maxScore, maxBeneficiaryId, size: clusterRecords.length, decision, expertNote });
     });
 
     allRecords.forEach((record: RecordRow) => {
@@ -144,6 +175,8 @@ async function enrichData(cachedData: any): Promise<EnrichedRecord[]> {
                 Cluster_ID: clusterInfo.maxBeneficiaryId || recordClusterId,
                 Cluster_Size: clusterInfo.size,
                 Max_PairScore: clusterInfo.maxScore,
+                'تصنيف المجموعة المبدئي': clusterInfo.decision,
+                'نتائج تحليل المجموعة': clusterInfo.expertNote,
                 Flag: flag(recordPairData.pairScore || 0),
             };
         }
@@ -178,8 +211,7 @@ function createFormattedWorkbook(data: EnrichedRecord[], cachedData: any): Excel
     wb.creator = "Beneficiary Insights";
     
     createEnrichedDataSheet(wb, data, originalHeaders);
-    createSummarySheet(wb, allRecords, clusters);
-    createAuditSummarySheet(wb, auditFindings || []);
+    createSummarySheet(wb, allRecords, clusters, auditFindings || []);
     createClustersSheet(wb, clusters);
     createAuditSheet(wb, auditFindings || [], clusters);
 
@@ -229,7 +261,7 @@ function createEnrichedDataSheet(wb: ExcelJS.Workbook, data: EnrichedRecord[], o
     ws.views = [{ rightToLeft: true }];
     
     const enrichmentHeaders = [
-        "Cluster_ID", "Cluster_Size", "Flag", "pairScore", "Max_PairScore", "nameScore", "husbandScore", "idScore", "phoneScore"
+        "Cluster_ID", "Cluster_Size", "Flag", "pairScore", "Max_PairScore", "nameScore", "husbandScore", "idScore", "phoneScore", "تصنيف المجموعة المبدئي", "نتائج تحليل المجموعة"
     ];
     
     const normalizedHeaders = [ "womanName_normalized", "husbandName_normalized" ];
@@ -239,7 +271,7 @@ function createEnrichedDataSheet(wb: ExcelJS.Workbook, data: EnrichedRecord[], o
     ws.columns = finalHeaders.map(h => ({
       header: h,
       key: h,
-      width: h === 'womanName' || h === 'husbandName' || originalHeaders.includes(h) ? 25 : 15
+      width: h === 'womanName' || h === 'husbandName' || originalHeaders.includes(h) ? 25 : (h === 'نتائج تحليل المجموعة' ? 50 : 15)
     }));
 
     ws.getRow(1).eachCell(cell => {
@@ -287,7 +319,7 @@ function createEnrichedDataSheet(wb: ExcelJS.Workbook, data: EnrichedRecord[], o
     }
 }
 
-function createSummarySheet(wb: ExcelJS.Workbook, allRecords: RecordRow[], clusters: {records: RecordRow[]}[]) {
+function createSummarySheet(wb: ExcelJS.Workbook, allRecords: RecordRow[], clusters: {records: RecordRow[]}[], auditFindings: AuditFinding[]) {
     const ws = wb.addWorksheet("Review Summary");
     ws.views = [{ rightToLeft: true }];
     
@@ -303,14 +335,37 @@ function createSummarySheet(wb: ExcelJS.Workbook, allRecords: RecordRow[], clust
     const totalRecords = allRecords.length;
     const clusteredRecordsCount = clusters.reduce((acc, c) => acc + c.records.length, 0);
     const numClusters = clusters.length;
-    const statsData = [
-        [{ title: "إجمالي السجلات المعالجة", value: totalRecords, icon: "👥" }, { title: "عدد المجموعات", value: numClusters, icon: "📂" }],
-        [{ title: "السجلات المجمعة", value: clusteredRecordsCount, icon: "🔗" }, { title: "السجلات غير المجمعة", value: totalRecords - clusteredRecordsCount, icon: "👤" }],
-        [{ title: "متوسط حجم المجموعة", value: numClusters > 0 ? (clusteredRecordsCount / numClusters).toFixed(2) : 0, icon: "📊" }, null]
-    ];
     
+    // --- Decision Counts ---
+    const decisionCounts = {
+        'تكرار مؤكد': 0,
+        'اشتباه تكرار مؤكد': 0,
+        'اشتباه تكرار': 0,
+        'إحتمالية تكرار': 0
+    };
+
+    clusters.forEach(clusterObj => {
+        const pairs = fullPairwiseBreakdown(clusterObj.records);
+        const womanNameScores = pairs.map((p: any) => p.breakdown.nameScore || 0);
+        const husbandNameScores = pairs.map((p: any) => p.breakdown.husbandScore || 0);
+        const avgWomanNameScore = womanNameScores.length > 0 ? womanNameScores.reduce((a: number, b: number) => a + b, 0) / womanNameScores.length : 0;
+        const avgHusbandNameScore = husbandNameScores.length > 0 ? husbandNameScores.reduce((a: number, b: number) => a + b, 0) / husbandNameScores.length : 0;
+        const avgFinalScore = (avgWomanNameScore + avgHusbandNameScore) / 2;
+        const finalScorePct = Math.round(avgFinalScore * 100);
+
+        const { decision } = getDecisionAndNote(finalScorePct);
+        if (decision in decisionCounts) {
+            decisionCounts[decision as keyof typeof decisionCounts]++;
+        }
+    });
+
+    const decisionStats = [
+        [{ title: "تكرار مؤكد", value: decisionCounts['تكرار مؤكد'], icon: "✔️" }, { title: "اشتباه تكرار مؤكد", value: decisionCounts['اشتباه تكرار مؤكد'], icon: "❗" }],
+        [{ title: "اشتباه تكرار", value: decisionCounts['اشتباه تكرار'], icon: "❓" }, { title: "إحتمالية تكرار", value: decisionCounts['إحتمالية تكرار'], icon: "❔" }],
+    ];
+
     let currentRow = 4;
-    statsData.forEach(rowItems => {
+    decisionStats.forEach(rowItems => {
         ws.getRow(currentRow).height = 45;
         rowItems.forEach((stat, colIndex) => {
             if (!stat) return;
@@ -324,6 +379,59 @@ function createSummarySheet(wb: ExcelJS.Workbook, allRecords: RecordRow[], clust
         });
         currentRow += 5;
     });
+
+    currentRow += 2; // Add space
+
+    // --- Audit Summary Data ---
+    if (auditFindings.length > 0) {
+        ws.mergeCells(`B${currentRow}:E${currentRow}`);
+        const auditTitleCell = ws.getCell(`B${currentRow}`);
+        auditTitleCell.value = "ملخص نتائج التدقيق";
+        auditTitleCell.font = { size: 18, bold: true, name: 'Calibri' };
+        auditTitleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+        ws.getRow(currentRow).height = 30;
+        currentRow++;
+        
+        const findingCounts: Record<string, number> = {
+          TOTAL_UNIQUE_RECORDS: new Set(auditFindings.flatMap(f => f.records.map(r => r._internalId))).size,
+          WOMAN_MULTIPLE_HUSBANDS: 0,
+          MULTIPLE_NATIONAL_IDS: 0,
+          DUPLICATE_ID: 0,
+          DUPLICATE_COUPLE: 0,
+          HIGH_SIMILARITY: 0
+        };
+
+        auditFindings.forEach(f => {
+            const uniqueRecordsInFinding = new Set(f.records.map(r => r._internalId));
+            if (f.type in findingCounts) {
+                findingCounts[f.type] += uniqueRecordsInFinding.size;
+            }
+        });
+
+        const auditSummaryCards = [
+            [{ title: "السجلات المدققة الفريدة", key: 'TOTAL_UNIQUE_RECORDS', icon: '🛡️' }, { title: "ازدواجية الزوجين", key: 'DUPLICATE_COUPLE', icon: '👨‍👩‍👧‍👦' }],
+            [{ title: "تعدد الأزواج", key: 'WOMAN_MULTIPLE_HUSBANDS', icon: '🙍‍♀️' }, { title: "تعدد أرقام الهوية", key: 'MULTIPLE_NATIONAL_IDS', icon: '💳' }],
+            [{ title: "ازدواجية الرقم القومي", key: 'DUPLICATE_ID', icon: '🧾' }, { title: "تشابه عالي", key: 'HIGH_SIMILARITY', icon: '✨' }]
+        ];
+        
+        auditSummaryCards.forEach((rowItems) => {
+            ws.getRow(currentRow).height = 45;
+            rowItems.forEach((stat, colIndex) => {
+                if (!stat) return;
+                const startColNum = colIndex === 0 ? 2 : 5;
+                ws.mergeCells(currentRow, startColNum, currentRow + 3, startColNum + 1);
+                const cardCell = ws.getCell(currentRow, startColNum);
+                
+                const count = findingCounts[stat.key];
+
+                cardCell.value = { richText: [ { text: `${stat.icon}`, font: { size: 36, name: 'Segoe UI Emoji' } }, { text: `\n${stat.title}\n`, font: { size: 14 } }, { text: `${count}`, font: { size: 24, bold: true } } ] };
+                cardCell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+                cardCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2F2F2' } };
+                cardCell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+            });
+            currentRow += 5;
+        });
+    }
 }
 
 function createClustersSheet(wb: ExcelJS.Workbook, clusters: {records: RecordRow[], reasons: string[]}[]) {
@@ -612,60 +720,5 @@ function createAuditSheet(wb: ExcelJS.Workbook, findings: AuditFinding[], cluste
                 cell.alignment = { vertical: 'middle', horizontal: 'right', wrapText: true };
             }
         });
-    });
-}
-
-function createAuditSummarySheet(wb: ExcelJS.Workbook, findings: AuditFinding[]) {
-    const ws = wb.addWorksheet("ملخص التدقيق");
-    ws.views = [{ rightToLeft: true }];
-    
-    ws.columns = [ { width: 5 }, { width: 25 }, { width: 5 }, { width: 5 }, { width: 25 }, { width: 5 }];
-
-    ws.mergeCells('B2:E2');
-    const titleCell = ws.getCell('B2');
-    titleCell.value = "ملخص نتائج التدقيق";
-    titleCell.font = { size: 24, bold: true, name: 'Calibri' };
-    titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
-    ws.getRow(2).height = 40;
-
-    const findingCounts: Record<string, number> = {
-      TOTAL_UNIQUE_RECORDS: new Set(findings.flatMap(f => f.records.map(r => r._internalId))).size,
-      WOMAN_MULTIPLE_HUSBANDS: 0,
-      MULTIPLE_NATIONAL_IDS: 0,
-      DUPLICATE_ID: 0,
-      DUPLICATE_COUPLE: 0,
-      HIGH_SIMILARITY: 0
-    };
-
-    findings.forEach(f => {
-        const uniqueRecordsInFinding = new Set(f.records.map(r => r._internalId));
-        if (f.type in findingCounts) {
-            findingCounts[f.type] += uniqueRecordsInFinding.size;
-        }
-    });
-
-    const summaryCards = [
-        [{ title: "السجلات المدققة الفريدة", key: 'TOTAL_UNIQUE_RECORDS', icon: '🛡️' }, { title: "ازدواجية الزوجين", key: 'DUPLICATE_COUPLE', icon: '👨‍👩‍👧‍👦' }],
-        [{ title: "تعدد الأزواج", key: 'WOMAN_MULTIPLE_HUSBANDS', icon: '🙍‍♀️' }, { title: "تعدد أرقام الهوية", key: 'MULTIPLE_NATIONAL_IDS', icon: '💳' }],
-        [{ title: "ازدواجية الرقم القومي", key: 'DUPLICATE_ID', icon: '🧾' }, { title: "تشابه عالي", key: 'HIGH_SIMILARITY', icon: '✨' }]
-    ];
-    
-    let currentRow = 4;
-    summaryCards.forEach((rowItems) => {
-        ws.getRow(currentRow).height = 45;
-        rowItems.forEach((stat, colIndex) => {
-            if (!stat) return;
-            const startColNum = colIndex === 0 ? 2 : 5;
-            ws.mergeCells(currentRow, startColNum, currentRow + 3, startColNum + 1);
-            const cardCell = ws.getCell(currentRow, startColNum);
-            
-            const count = findingCounts[stat.key];
-
-            cardCell.value = { richText: [ { text: `${stat.icon}`, font: { size: 36, name: 'Segoe UI Emoji' } }, { text: `\n${stat.title}\n`, font: { size: 14 } }, { text: `${count}`, font: { size: 24, bold: true } } ] };
-            cardCell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
-            cardCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2F2F2' } };
-            cardCell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
-        });
-        currentRow += 5;
     });
 }
