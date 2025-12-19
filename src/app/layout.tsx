@@ -7,8 +7,6 @@ import "./globals.css";
 // Register your Syncfusion license key here.
 // You can obtain a free community license from https://www.syncfusion.com/products/community-license
 // registerLicense('YOUR_SYNCFUSION_LICENSE_KEY');
-import '@syncfusion/ej2-base/styles/material.css';
-import '@syncfusion/ej2-react-charts/styles/material.css';
 
 
 export default function AppLayout({
