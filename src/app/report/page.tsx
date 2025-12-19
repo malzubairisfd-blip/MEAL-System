@@ -97,7 +97,7 @@ export default function ReportPage() {
                 {mapInstance && clusterData && <ClusterLayer data={clusterData} />}
                 {mapInstance && incidentData && <HeatmapLayer data={incidentData} />}
             </div>
-            <div className="side">
+            <div className="side md:col-span-12">
                 <SideIndicators />
             </div>
             <div className="trends">

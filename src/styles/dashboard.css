@@ -9,8 +9,8 @@
 
 /* Sections */
 .kpis { grid-column: span 12; }
-.map  { grid-column: span 8; height: 520px; }
-.side { grid-column: span 4; }
+.map  { grid-column: span 12; height: 520px; }
+.side { grid-column: span 12; }
 .trends { grid-column: span 8; }
 .donuts { grid-column: span 12; }
 
@@ -35,4 +35,13 @@
     padding: 16px;
     border-radius: 12px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+@media (min-width: 768px) {
+    .map {
+        grid-column: span 12;
+    }
+    .side {
+        grid-column: span 12;
+    }
 }
