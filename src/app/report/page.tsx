@@ -4,13 +4,15 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Loader2, Users, Group, Unlink, BoxSelect, AlertTriangle, ShieldCheck, CheckCircle, Sigma, Fingerprint, UserX, Copy } from 'lucide-react';
+import { Loader2, Users, Group, Unlink, BoxSelect, AlertTriangle, ShieldCheck, CheckCircle, Sigma, Fingerprint, UserX, Copy, Microscope, ClipboardList, FileDown } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, BarChart, Bar, XAxis, YAxis, Legend, CartesianGrid } from 'recharts';
 import { calculateClusterConfidence } from '@/lib/clusterConfidence';
 import { getDecisionAndNote } from '@/lib/arabicClusterSummary';
 import type { RecordRow } from '@/lib/types';
 import type { AuditFinding } from '@/app/audit/page';
+import { Button } from '@/components/ui/button';
+import Link from 'next/link';
 
 
 const KeyFigureCard = ({ title, value, icon, description }: { title: string, value: string | number, icon: React.ReactNode, description?: string }) => (
@@ -141,7 +143,8 @@ export default function ReportPage() {
             'إحتمالية تكرار': 0
         };
         data.clusters.forEach((cluster: any) => {
-            const { decision } = getDecisionAndNote(cluster.confidence || 0);
+             if (cluster.confidence === undefined) return;
+            const { decision } = getDecisionAndNote(cluster.confidence);
             if (decision in counts) {
                 counts[decision as keyof typeof counts]++;
             }
@@ -187,8 +190,17 @@ export default function ReportPage() {
         <div className="space-y-6">
             <Card className="bg-card/80 backdrop-blur-sm">
                 <CardHeader>
-                    <CardTitle className="text-3xl font-bold">Analysis Report</CardTitle>
-                    <CardDescription>A complete summary of the clustering and audit results.</CardDescription>
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                        <div>
+                            <CardTitle className="text-3xl font-bold">Analysis Report</CardTitle>
+                            <CardDescription>A complete summary of the clustering and audit results.</CardDescription>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            <Button variant="outline" asChild><Link href="/review"><Microscope className="mr-2"/>To Review</Link></Button>
+                            <Button variant="outline" asChild><Link href="/audit"><ClipboardList className="mr-2"/>To Audit</Link></Button>
+                            <Button variant="outline" asChild><Link href="/export"><FileDown className="mr-2"/>To Export</Link></Button>
+                        </div>
+                    </div>
                 </CardHeader>
             </Card>
 

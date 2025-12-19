@@ -2,7 +2,7 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Upload, Microscope, ClipboardList, ArrowRight, MoveRight, BarChartHorizontal } from "lucide-react";
+import { Upload, Microscope, ClipboardList, ArrowRight, MoveRight, BarChartHorizontal, FileDown } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTranslation } from "@/hooks/use-translation";
 
@@ -13,7 +13,7 @@ export default function DashboardPage() {
   const features = [
     {
       icon: <Upload className="h-10 w-10 text-blue-500" />,
-      title: t("dashboard.features.upload.title"),
+      title: t("sidebar.upload"),
       description: t("dashboard.features.upload.description"),
       link: "/upload",
       buttonText: t("dashboard.features.upload.button"),
@@ -21,7 +21,7 @@ export default function DashboardPage() {
     },
     {
       icon: <Microscope className="h-10 w-10 text-purple-500" />,
-      title: t("dashboard.features.review.title"),
+      title: t("sidebar.review"),
       description: t("dashboard.features.review.description"),
       link: "/review",
       buttonText: t("dashboard.features.review.button"),
@@ -29,8 +29,8 @@ export default function DashboardPage() {
     },
     {
       icon: <ClipboardList className="h-10 w-10 text-green-500" />,
-      title: t("dashboard.features.audit.title"),
-      description: t("dashboard.features.audit.description"),
+      title: t("sidebar.audit"),
+      description: "Run a comprehensive data integrity audit to find issues like invalid relationships or duplicate IDs.",
       link: "/audit",
       buttonText: t("dashboard.features.audit.button"),
       borderColor: "border-green-500/20",
@@ -42,6 +42,14 @@ export default function DashboardPage() {
       link: "/report",
       buttonText: t("dashboard.features.report.button"),
       borderColor: "border-yellow-500/20",
+    },
+    {
+      icon: <FileDown className="h-10 w-10 text-red-500" />,
+      title: t("sidebar.export"),
+      description: "Export the enriched data, cluster details, and audit findings into a comprehensive Excel report.",
+      link: "/export",
+      buttonText: "Go to Export",
+      borderColor: "border-red-500/20",
     },
   ];
 
@@ -62,7 +70,7 @@ export default function DashboardPage() {
 
       <div>
         <h2 className="text-2xl font-semibold mb-6">{t("dashboard.howItWorks")}</h2>
-        <div className="grid md:grid-cols-1 lg:grid-cols-4 gap-6">
+        <div className="grid md:grid-cols-1 lg:grid-cols-5 gap-6">
           {features.map((feature, index) => (
             <Card key={index} className={`flex flex-col transition-all duration-300 hover:shadow-xl hover:-translate-y-1 ${feature.borderColor} border-2`}>
               <CardHeader className="flex-col items-start gap-4">
