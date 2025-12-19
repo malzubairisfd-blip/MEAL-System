@@ -1,17 +1,19 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import type { RecordRow } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { Loader2, Search, ChevronLeft, AlertTriangle, ChevronRight, Sparkles, Microscope, Calculator } from "lucide-react";
+import { Loader2, Search, ChevronLeft, AlertTriangle, ChevronRight, Sparkles, Microscope, Calculator, PieChart } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
 import { PairwiseModal } from "@/components/PairwiseModal";
-import { generateArabicClusterSummary } from "@/lib/arabicClusterSummary";
+import { generateArabicClusterSummary, getDecisionAndNote } from "@/lib/arabicClusterSummary";
 import { calculateClusterConfidence } from "@/lib/clusterConfidence";
 import { useTranslation } from "@/hooks/use-translation";
+import { DecisionPieChart } from "@/components/DecisionPieChart";
+
 
 type Cluster = {
   records: RecordRow[];
@@ -147,6 +149,43 @@ export default function ReviewPage() {
     };
     applyFilter();
   }, [search, allClusters]);
+  
+  const decisionChartData = useMemo(() => {
+    if (loading || allClusters.length === 0 || allClusters.some(c => c.confidence === undefined)) {
+      return [];
+    }
+
+    const decisionCounts = {
+        'تكرار مؤكد': 0,
+        'اشتباه تكرار مؤكد': 0,
+        'اشتباه تكرار': 0,
+        'إحتمالية تكرار': 0
+    };
+
+    allClusters.forEach(cluster => {
+        const { decision } = getDecisionAndNote(cluster.confidence || 0);
+        if (decision in decisionCounts) {
+            decisionCounts[decision as keyof typeof decisionCounts]++;
+        }
+    });
+
+    const total = allClusters.length;
+    
+    const colors = {
+        'تكرار مؤكد': '#DC2626', // red-600
+        'اشتباه تكرار مؤكد': '#F97316', // orange-500
+        'اشتباه تكرار': '#2563EB', // blue-600
+        'إحتمالية تكرار': '#6B7280' // gray-500
+    };
+
+    return Object.entries(decisionCounts).map(([decision, count]) => ({
+      x: decision,
+      y: count,
+      text: `${((count / total) * 100).toFixed(1)}%`,
+      fill: colors[decision as keyof typeof colors]
+    }));
+  }, [allClusters, loading]);
+
 
   const handleInspect = (clusterRecords: RecordRow[]) => {
     setSelectedCluster(clusterRecords);
@@ -195,17 +234,34 @@ export default function ReviewPage() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-col sm:flex-row gap-4 mb-6">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                type="text"
-                placeholder={t('review.searchPlaceholder')}
-                className="pl-10"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-            </div>
+          <div className="mb-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+             <div className="lg:col-span-2">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      type="text"
+                      placeholder={t('review.searchPlaceholder')}
+                      className="pl-10"
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                    />
+                  </div>
+              </div>
+              <Card className="lg:col-span-1">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Final Decision Distribution</CardTitle>
+                      <PieChart className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent className="p-0 h-48">
+                      {loading || calculating ? (
+                           <div className="flex items-center justify-center h-full text-muted-foreground">
+                                <Loader2 className="h-6 w-6 animate-spin" />
+                           </div>
+                      ) : (
+                          <DecisionPieChart data={decisionChartData} />
+                      )}
+                  </CardContent>
+              </Card>
           </div>
                     
           {loading ? (
