@@ -406,8 +406,8 @@ function createSummarySheet(wb: ExcelJS.Workbook, allRecords: RecordRow[], clust
     });
     
     const decisionStats = [
-        [{ title: "تكرار مؤكد", value: decisionCounts['تكرار مؤكد'], icon: "✔️" }, { title: "اشتباه تكرار مؤكد", value: decisionCounts['اشتباه تكرار مؤكد'], icon: "❗" }],
-        [{ title: "اشتباه تكرار", value: decisionCounts['اشتباه تكرار'], icon: "❓" }, { title: "إحتمالية تكرار", value: decisionCounts['إحتمالية تكرار'], icon: "❔" }],
+        [{ title: "تكرار مؤكد", value: decisionCounts['تكرار مؤكد'], icon: "🚨" }, { title: "اشتباه تكرار مؤكد", value: decisionCounts['اشتباه تكرار مؤكد'], icon: "⚠️" }],
+        [{ title: "اشتباه تكرار", value: decisionCounts['اشتباه تكرار'], icon: "🔍" }, { title: "إحتمالية تكرار", value: decisionCounts['إحتمالية تكرار'], icon: "💡" }],
     ];
 
     decisionCurrentRow++;
