@@ -1,5 +1,4 @@
 
-
 import { NextResponse } from 'next/server';
 import fs from 'fs/promises';
 import path from 'path';
@@ -96,13 +95,17 @@ async function enrichData(cachedData: any): Promise<EnrichedRecord[]> {
         throw new Error("Invalid cache: missing rows or clusters.");
     }
 
-    const recordMap = new Map<string, RecordRow>(allRecords.map((r: RecordRow) => [r._internalId!, r]));
     const enrichedRecords: EnrichedRecord[] = [];
-    const clusterInfoMap = new Map<number, { maxScore: number, maxBeneficiaryId: number, size: number, decision: string, expertNote: string }>();
+    const recordClusterMap = new Map<string, number>();
+    const clusterInfoMap = new Map<number, { maxScore: number; maxBeneficiaryId: number; size: number; decision: string; expertNote: string; }>();
 
     clusters.forEach((clusterObj: { records: RecordRow[] }, index: number) => {
         const clusterId = index + 1;
         const clusterRecords = clusterObj.records;
+        if (!clusterRecords || clusterRecords.length === 0) return;
+
+        clusterRecords.forEach(r => recordClusterMap.set(r._internalId!, clusterId));
+
         const pairs = fullPairwiseBreakdown(clusterRecords);
         const maxScore = pairs.reduce((max, p) => Math.max(max, p.score), 0);
         
@@ -132,34 +135,29 @@ async function enrichData(cachedData: any): Promise<EnrichedRecord[]> {
             womanName_normalized: normalizeArabic(record.womanName || ''),
             husbandName_normalized: normalizeArabic(record.husbandName || ''),
         };
-        let recordClusterId: number | null = null;
-        let recordPairData: any = {};
-
-        for (let i = 0; i < clusters.length; i++) {
-            const cluster = clusters[i].records;
-            if (cluster.some((r: RecordRow) => r._internalId === record._internalId)) {
-                recordClusterId = i + 1;
-                const pairs = fullPairwiseBreakdown(cluster);
-                const relevantPair = pairs.find(p => p.a._internalId === record._internalId || p.b._internalId === record._internalId);
-                if (relevantPair) {
-                    recordPairData = {
-                        pairScore: relevantPair.score,
-                        nameScore: relevantPair.breakdown.nameScore,
-                        husbandScore: relevantPair.breakdown.husbandScore,
-                        idScore: relevantPair.breakdown.idScore,
-                        phoneScore: relevantPair.breakdown.phoneScore,
-                    };
-                } else {
-                     recordPairData = {
-                        pairScore: 0, nameScore: 0, husbandScore: 0, idScore: 0, phoneScore: 0
-                    };
-                }
-                break;
-            }
-        }
+        
+        const recordClusterId = recordClusterMap.get(record._internalId!);
 
         if (recordClusterId) {
             const clusterInfo = clusterInfoMap.get(recordClusterId)!;
+            const clusterRecords = clusters[recordClusterId - 1].records;
+            const otherRecords = clusterRecords.filter((r: RecordRow) => r._internalId !== record._internalId);
+            
+            let avgPairScore = 0;
+            let avgNameScore = 0;
+            let avgHusbandScore = 0;
+            let avgIdScore = 0;
+            let avgPhoneScore = 0;
+
+            if (otherRecords.length > 0) {
+                const results = otherRecords.map((other: RecordRow) => fullPairwiseBreakdown([record, other])[0]);
+                avgPairScore = results.reduce((sum, res) => sum + (res?.score || 0), 0) / results.length;
+                avgNameScore = results.reduce((sum, res) => sum + (res?.breakdown.nameScore || 0), 0) / results.length;
+                avgHusbandScore = results.reduce((sum, res) => sum + (res?.breakdown.husbandScore || 0), 0) / results.length;
+                avgIdScore = results.reduce((sum, res) => sum + (res?.breakdown.idScore || 0), 0) / results.length;
+                avgPhoneScore = results.reduce((sum, res) => sum + (res?.breakdown.phoneScore || 0), 0) / results.length;
+            }
+
             const flag = (score: number) => {
                 if (score >= 0.9) return "m?";
                 if (score >= 0.8) return "m";
@@ -170,14 +168,18 @@ async function enrichData(cachedData: any): Promise<EnrichedRecord[]> {
 
             enriched = {
                 ...enriched,
-                ...recordPairData,
+                pairScore: avgPairScore,
+                nameScore: avgNameScore,
+                husbandScore: avgHusbandScore,
+                idScore: avgIdScore,
+                phoneScore: avgPhoneScore,
                 ClusterID: recordClusterId,
                 Cluster_ID: clusterInfo.maxBeneficiaryId || recordClusterId,
                 Cluster_Size: clusterInfo.size,
                 Max_PairScore: clusterInfo.maxScore,
                 'تصنيف المجموعة المبدئي': clusterInfo.decision,
                 'نتائج تحليل المجموعة': clusterInfo.expertNote,
-                Flag: flag(recordPairData.pairScore || 0),
+                Flag: flag(avgPairScore),
             };
         }
         
@@ -722,3 +724,5 @@ function createAuditSheet(wb: ExcelJS.Workbook, findings: AuditFinding[], cluste
         });
     });
 }
+
+    
