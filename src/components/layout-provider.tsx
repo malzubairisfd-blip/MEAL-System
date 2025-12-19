@@ -24,6 +24,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "./ui/button";
+import { HorizontalNav } from "./HorizontalNav";
 
 export function LayoutProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -95,6 +96,7 @@ export function LayoutProvider({ children }: { children: React.ReactNode }) {
               </DropdownMenuContent>
             </DropdownMenu>
         </header>
+        <HorizontalNav links={sidebarLinks} />
         <main className="flex-1 overflow-auto p-4 md:p-6">
             {children}
         </main>

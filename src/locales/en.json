@@ -37,6 +37,10 @@
         "title": "Audit & Export",
         "description": "Run a comprehensive data integrity audit to find issues like invalid relationships or duplicate IDs, then export the enriched data to an Excel report.",
         "button": "Go to Audit"
+      },
+      "report": {
+        "description": "Visualize your clustering and audit results in an interactive dashboard with charts and key figures.",
+        "button": "View Report"
       }
     }
   },

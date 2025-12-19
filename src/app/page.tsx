@@ -2,7 +2,7 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Upload, Microscope, ClipboardList, ArrowRight, MoveRight } from "lucide-react";
+import { Upload, Microscope, ClipboardList, ArrowRight, MoveRight, BarChartHorizontal } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTranslation } from "@/hooks/use-translation";
 
@@ -35,6 +35,14 @@ export default function DashboardPage() {
       buttonText: t("dashboard.features.audit.button"),
       borderColor: "border-green-500/20",
     },
+     {
+      icon: <BarChartHorizontal className="h-10 w-10 text-yellow-500" />,
+      title: t("sidebar.report"),
+      description: t("dashboard.features.report.description"),
+      link: "/report",
+      buttonText: t("dashboard.features.report.button"),
+      borderColor: "border-yellow-500/20",
+    },
   ];
 
   return (
@@ -54,7 +62,7 @@ export default function DashboardPage() {
 
       <div>
         <h2 className="text-2xl font-semibold mb-6">{t("dashboard.howItWorks")}</h2>
-        <div className="grid md:grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid md:grid-cols-1 lg:grid-cols-4 gap-6">
           {features.map((feature, index) => (
             <Card key={index} className={`flex flex-col transition-all duration-300 hover:shadow-xl hover:-translate-y-1 ${feature.borderColor} border-2`}>
               <CardHeader className="flex-col items-start gap-4">
