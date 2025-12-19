@@ -194,7 +194,7 @@ export default function AuditPage() {
                     {rows.length > 0 && ` Ready to audit ${rows.length} records.`}
                   </CardDescription>
                 </div>
-                 <div className="flex gap-2">
+                 <div className="flex flex-col gap-2">
                     <Button variant="outline" asChild>
                         <Link href="/review">
                             <ChevronLeft className="mr-2 h-4 w-4" />
