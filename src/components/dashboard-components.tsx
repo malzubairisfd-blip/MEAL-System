@@ -7,12 +7,12 @@ import { useDashboard } from '@/app/report/page';
 
 export function KPISection() {
   const kpis = [
-    { label: "IDPs", value: "5.7M", icon: "👣" },
-    { label: "Refugees", value: "2.2M", icon: "🧍" },
-    { label: "People in Need", value: "31.4M", icon: "🚨" },
-    { label: "People Targeted", value: "20.5M", icon: "🎯" },
-    { label: "Funds Required", value: "$4.9B", icon: "💰" },
-    { label: "Funds Received", value: "$388M", icon: "🏦" },
+    { label: "People in Need", value: "21.6M", icon: "🚨" },
+    { label: "IDPs", value: "4.5M", icon: "👣" },
+    { label: "Returnees", value: "1.2M", icon: "🧍" },
+    { label: "People Targeted", value: "17.3M", icon: "🎯" },
+    { label: "Funds Required", value: "$4.34B", icon: "💰" },
+    { label: "Funds Received", value: "$1.32B", icon: "🏦" },
   ];
 
   return (
@@ -32,11 +32,11 @@ export function KPISection() {
 export function TrendSection() {
     const foodSecurityData = {
         years: ['2020', '2021', '2022', '2023', '2024'],
-        values: [15, 18, 22, 25, 28]
+        values: [17.9, 16.1, 17.4, 19.0, 17.0]
     };
     const nutritionData = {
         years: ['2020', '2021', '2022', '2023', '2024'],
-        values: [5, 6, 7, 8, 9]
+        values: [2.0, 2.2, 2.3, 2.2, 2.4]
     };
 
     return (
@@ -74,22 +74,22 @@ export function TrendChart({ title, data }: { title: string, data: { years: stri
 
 export function SideIndicators() {
     const { setSelectedRegion, selectedRegion } = useDashboard();
-    const countries = ['Nigeria', 'Mali', 'Niger', 'Burkina Faso', 'Chad'];
-    const values = [12, 8, 6, 5, 4];
+    const governorates = ['Hajjah', 'Al Hudaydah', 'Taizz', "Sana'a", 'Ibb', 'Dhamar', 'Amanat Al Asimah', 'Saada'];
+    const values = [2.2, 2.9, 2.4, 1.3, 1.8, 1.0, 1.9, 0.8];
     
     const barOption = {
         title: { 
-            text: 'People in Need by Country (Millions)',
+            text: 'People in Need by Governorate (Millions)',
             textStyle: { fontSize: 14, fontWeight: 'normal' }
         },
-        xAxis: { type: "category", data: countries },
+        xAxis: { type: "category", data: governorates, axisLabel: { interval: 0, rotate: 30 } },
         yAxis: { type: "value" },
         series: [{
             type: "bar",
             data: values,
             itemStyle: { color: "#41b6c4" }
         }],
-        grid: { left: '15%', right: '5%', top: '20%', bottom: '15%' },
+        grid: { left: '15%', right: '5%', top: '20%', bottom: '25%' },
         tooltip: { trigger: 'axis' }
     };
     
@@ -108,7 +108,7 @@ export function BottomDonuts() {
     const { setSelectedRegion, selectedRegion } = useDashboard();
     const fundingOption = {
         title: { 
-            text: 'Funding Status ($4.9B Required)',
+            text: 'Funding Status ($4.34B Required)',
             left: 'center',
             textStyle: { fontSize: 14, fontWeight: 'normal' }
         },
@@ -122,23 +122,23 @@ export function BottomDonuts() {
             emphasis: { label: { show: true, fontSize: '20', fontWeight: 'bold' } },
             labelLine: { show: false },
             data: [
-              { value: 388, name: "Funded" },
-              { value: 4512, name: "Unmet" }
+              { value: 1320, name: "Funded" },
+              { value: 3020, name: "Unmet" }
             ]
         }]
     };
     
     const countryData = [
-        { value: 12, name: 'Nigeria' },
-        { value: 8, name: 'Mali' },
-        { value: 6, name: 'Niger' },
-        { value: 5, name: 'Burkina Faso' },
-        { value: 4, name: 'Chad' },
+        { value: 2.9, name: 'Al Hudaydah' },
+        { value: 2.4, name: 'Taizz' },
+        { value: 2.2, name: 'Hajjah' },
+        { value: 1.9, name: "Amanat Al Asimah" },
+        { value: 1.8, name: 'Ibb' },
     ];
     
     const countryOption = {
         title: { 
-            text: 'People in Need by Country',
+            text: 'Top 5 Governorates (People in Need)',
             left: 'center',
             textStyle: { fontSize: 14, fontWeight: 'normal' }
         },
@@ -190,8 +190,8 @@ export function LayerToggles() {
           Security Heatmap
         </label>
         <label className="flex items-center gap-2 cursor-pointer">
-          <input type="checkbox" checked={layerState.admin}
-            onChange={() => setLayerState(s => ({ ...s, admin: !s.admin }))} />
+          <input type="checkbox" checked={layerState.admin1}
+            onChange={() => setLayerState(s => ({ ...s, admin1: !s.admin1 }))} />
           Admin Boundaries
         </label>
       </div>

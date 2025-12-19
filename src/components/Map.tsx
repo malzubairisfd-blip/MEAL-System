@@ -7,11 +7,20 @@ import { useDashboard } from "@/app/report/page";
 import type { FeatureCollection } from 'geojson';
 
 
-export default function WestAfricaMap({ yemenGeoJSON }: { yemenGeoJSON: FeatureCollection | null }) {
+interface MapProps {
+    admin1: FeatureCollection | null;
+    admin2: FeatureCollection | null;
+    admin3: FeatureCollection | null;
+}
+
+export default function WestAfricaMap({ admin1, admin2, admin3 }: MapProps) {
   const mapRef = useRef<L.Map | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const { setMapInstance, layerState } = useDashboard();
-  const adminLayerRef = useRef<L.GeoJSON | null>(null);
+  
+  const admin1LayerRef = useRef<L.GeoJSON | null>(null);
+  const admin2LayerRef = useRef<L.GeoJSON | null>(null);
+  const admin3LayerRef = useRef<L.GeoJSON | null>(null);
   const tileLayerRef = useRef<L.TileLayer | null>(null);
 
   useEffect(() => {
@@ -37,24 +46,52 @@ export default function WestAfricaMap({ yemenGeoJSON }: { yemenGeoJSON: FeatureC
     };
   }, [setMapInstance]);
 
-  useEffect(() => {
-    if (!mapRef.current || !yemenGeoJSON) return;
-
-    if (layerState.admin && !adminLayerRef.current) {
-      adminLayerRef.current = L.geoJSON(yemenGeoJSON, {
-        style: {
-          color: "#4a5568",
-          weight: 1,
-          opacity: 0.6,
-          fillColor: "#CBD5E0",
-          fillOpacity: 0.1
+  // Function to create and manage a GeoJSON layer
+  const manageGeoJsonLayer = (
+      map: L.Map, 
+      layerRef: React.MutableRefObject<L.GeoJSON | null>, 
+      data: FeatureCollection | null, 
+      visible: boolean, 
+      style: L.PathOptions,
+      nameProperty: string
+  ) => {
+    if (visible && data && !layerRef.current) {
+      layerRef.current = L.geoJSON(data, {
+        style: style,
+        onEachFeature: (feature, layer) => {
+          // Highlight on mouseover
+          layer.on('mouseover', (e) => {
+            const l = e.target;
+            l.setStyle({ weight: 3, color: '#333' });
+            l.bringToFront();
+          });
+          // Reset highlight on mouseout
+          layer.on('mouseout', (e) => {
+            layerRef.current?.resetStyle(e.target);
+          });
+           // Bind permanent tooltip for name display
+          if (feature.properties && feature.properties[nameProperty]) {
+            layer.bindTooltip(feature.properties[nameProperty], {
+              permanent: true,
+              direction: 'center',
+              className: 'admin-label'
+            }).openTooltip();
+          }
         }
-      }).addTo(mapRef.current);
-    } else if (!layerState.admin && adminLayerRef.current) {
-      mapRef.current.removeLayer(adminLayerRef.current);
-      adminLayerRef.current = null;
+      }).addTo(map);
+    } else if (!visible && layerRef.current) {
+      map.removeLayer(layerRef.current);
+      layerRef.current = null;
     }
-  }, [layerState.admin, yemenGeoJSON]);
+  };
+  
+  useEffect(() => {
+    if (!mapRef.current) return;
+    manageGeoJsonLayer(mapRef.current, admin1LayerRef, admin1, layerState.admin1, { color: "#4a5568", weight: 2, opacity: 0.8, fillOpacity: 0.1 }, 'ADM1_EN');
+    manageGeoJsonLayer(mapRef.current, admin2LayerRef, admin2, layerState.admin2, { color: "#718096", weight: 1.5, opacity: 0.7, fillOpacity: 0.1 }, 'ADM2_EN');
+    manageGeoJsonLayer(mapRef.current, admin3LayerRef, admin3, layerState.admin3, { color: "#A0AEC0", weight: 1, opacity: 0.6, fillOpacity: 0.1 }, 'ADM3_EN');
+  }, [layerState.admin1, layerState.admin2, layerState.admin3, admin1, admin2, admin3]);
+
 
   return (
     <div

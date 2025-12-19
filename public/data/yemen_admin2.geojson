@@ -1,0 +1,18 @@
+
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "ADM1_EN": "Sana'a", "ADM2_EN": "Bani Matar", "ADM2_AR": "بني مطر" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [44.0, 15.0], [44.2, 15.0], [44.2, 15.2], [44.0, 15.2], [44.0, 15.0]
+          ]
+        ]
+      }
+    }
+  ]
+}

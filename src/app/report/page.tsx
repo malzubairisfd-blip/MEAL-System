@@ -44,14 +44,17 @@ export default function ReportPage() {
   const [layerState, setLayerState] = useState({
     clusters: true,
     heatmap: false,
-    incidents: true,
-    admin: true,
+    admin1: true,
+    admin2: false,
+    admin3: false,
   });
   const { toast } = useToast();
 
   const [clusterData, setClusterData] = useState<FeatureCollection | null>(null);
   const [incidentData, setIncidentData] = useState<FeatureCollection | null>(null);
-  const [yemenGeoJSON, setYemenGeoJSON] = useState<FeatureCollection | null>(null);
+  const [yemenAdmin1, setYemenAdmin1] = useState<FeatureCollection | null>(null);
+  const [yemenAdmin2, setYemenAdmin2] = useState<FeatureCollection | null>(null);
+  const [yemenAdmin3, setYemenAdmin3] = useState<FeatureCollection | null>(null);
 
   useEffect(() => {
     fetch('/data/clusters.geojson')
@@ -60,9 +63,15 @@ export default function ReportPage() {
     fetch('/data/incidents.geojson')
         .then(res => res.json())
         .then(data => setIncidentData(data));
-    fetch('/data/yemen.geojson')
+    fetch('/data/yemen_admin1.geojson')
         .then(res => res.json())
-        .then(data => setYemenGeoJSON(data));
+        .then(data => setYemenAdmin1(data));
+    fetch('/data/yemen_admin2.geojson')
+        .then(res => res.json())
+        .then(data => setYemenAdmin2(data));
+    fetch('/data/yemen_admin3.geojson')
+        .then(res => res.json())
+        .then(data => setYemenAdmin3(data));
   }, []);
 
   const exportAction = (exportFn: () => void, format: string) => {
@@ -124,12 +133,16 @@ export default function ReportPage() {
                 <KPISection />
             </div>
             <div className="map relative" id="map-container">
-                <WestAfricaMap yemenGeoJSON={yemenGeoJSON} />
+                <WestAfricaMap 
+                  admin1={yemenAdmin1}
+                  admin2={yemenAdmin2}
+                  admin3={yemenAdmin3}
+                />
                 <LayerToggles />
                 {mapInstance && clusterData && <ClusterLayer data={clusterData} enabled={layerState.clusters}/>}
                 {mapInstance && incidentData && <HeatmapLayer points={incidentData.features.map(f => ({ lat: f.geometry.coordinates[1], lng: f.geometry.coordinates[0], intensity: f.properties.confidence ?? 0.5 }))} enabled={layerState.heatmap}/>}
             </div>
-            <div className="side">
+             <div className="side">
                 <SideIndicators />
             </div>
             <div className="trends">
@@ -155,6 +168,7 @@ function LayerToggles() {
   return (
     <div className="absolute top-4 right-4 bg-white p-3 rounded shadow-lg z-[1000]">
       <div className="flex flex-col gap-2">
+        <h4 className="font-bold text-sm mb-1">Data Layers</h4>
         <label className="flex items-center gap-2 cursor-pointer">
           <input type="checkbox" checked={layerState.clusters}
             onChange={() => setLayerState(s => ({ ...s, clusters: !s.clusters }))} />
@@ -165,10 +179,22 @@ function LayerToggles() {
             onChange={() => setLayerState(s => ({ ...s, heatmap: !s.heatmap }))} />
           Security Heatmap
         </label>
+        <hr className="my-2"/>
+        <h4 className="font-bold text-sm mb-1">Admin Boundaries</h4>
          <label className="flex items-center gap-2 cursor-pointer">
-          <input type="checkbox" checked={layerState.admin}
-            onChange={() => setLayerState(s => ({ ...s, admin: !s.admin }))} />
-          Admin Boundaries
+          <input type="checkbox" checked={layerState.admin1}
+            onChange={() => setLayerState(s => ({ ...s, admin1: !s.admin1 }))} />
+          Admin Level 1
+        </label>
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" checked={layerState.admin2}
+            onChange={() => setLayerState(s => ({ ...s, admin2: !s.admin2 }))} />
+          Admin Level 2
+        </label>
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" checked={layerState.admin3}
+            onChange={() => setLayerState(s => ({ ...s, admin3: !s.admin3 }))} />
+          Admin Level 3
         </label>
       </div>
     </div>

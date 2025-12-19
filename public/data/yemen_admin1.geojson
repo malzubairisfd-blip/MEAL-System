@@ -1,0 +1,30 @@
+
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "ADM1_EN": "Sana'a", "ADM1_AR": "صنعاء" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [44.0, 15.0], [44.5, 15.0], [44.5, 15.5], [44.0, 15.5], [44.0, 15.0]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "ADM1_EN": "Ta'izz", "ADM1_AR": "تعز" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [43.5, 13.5], [44.0, 13.5], [44.0, 14.0], [43.5, 14.0], [43.5, 13.5]
+          ]
+        ]
+      }
+    }
+  ]
+}

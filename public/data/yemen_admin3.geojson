@@ -1,0 +1,18 @@
+
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "ADM2_EN": "Bani Matar", "ADM3_EN": "Al Haymah", "ADM3_AR": "الحيمة" },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+         [
+            [44.05, 15.05], [44.15, 15.05], [44.15, 15.15], [44.05, 15.15], [44.05, 15.05]
+          ]
+        ]
+      }
+    }
+  ]
+}
