@@ -1,5 +1,7 @@
+
 import L from "leaflet";
 import "leaflet.markercluster";
+import "leaflet.heat";
 
 export function geoJsonToLeafletLayer(
   geojson: GeoJSON.FeatureCollection,

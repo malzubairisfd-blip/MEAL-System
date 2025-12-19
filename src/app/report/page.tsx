@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, createContext, useContext, useEffect } from 'react';
@@ -44,7 +45,7 @@ export default function ReportPage() {
 
   const exportPNG = () => {
     if (!mapInstance) return;
-    leafletImage(mapInstance, (err, canvas) => {
+    leafletImage(mapInstance, (err: any, canvas: HTMLCanvasElement) => {
         if (err) {
             console.error('Error exporting map to PNG:', err);
             return;
@@ -58,7 +59,7 @@ export default function ReportPage() {
 
   const exportPDF = () => {
     if (!mapInstance) return;
-    leafletImage(mapInstance, (err, canvas) => {
+    leafletImage(mapInstance, (err: any, canvas: HTMLCanvasElement) => {
         if (err) {
             console.error('Error exporting map to PDF:', err);
             return;

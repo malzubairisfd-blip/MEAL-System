@@ -1,49 +1,48 @@
+
 "use client";
 
-import { useMap } from "react-leaflet";
+import { useDashboard } from "@/app/report/page";
 import { useEffect } from "react";
 import { geoJsonToLeafletLayer, createHeatmapLayer, createClusterLayer } from "@/lib/geojson-utils";
-import { useDashboard } from "@/app/report/page";
+import type { FeatureCollection } from 'geojson';
 
-export function ClusterLayer({ data }: { data: any }) {
-  const map = useMap();
-  const { setSelectedRegion } = useDashboard();
+export function ClusterLayer({ data }: { data: FeatureCollection }) {
+  const { mapInstance, setSelectedRegion } = useDashboard();
 
   useEffect(() => {
-    if (!data) return;
+    if (!data || !mapInstance) return;
 
-    const layer = createClusterLayer(data.features);
-    
-    layer.on('click', (e: any) => {
-        if (e.layer.feature?.properties?.region) {
-            setSelectedRegion(e.layer.feature.properties.region);
-        }
+    const layer = geoJsonToLeafletLayer(data, {
+      colorByConfidence: true,
+      onClick: (props) => {
+        if(props.region) setSelectedRegion(props.region);
+      },
     });
 
-    layer.addTo(map);
+    layer.addTo(mapInstance);
 
     return () => {
-      map.removeLayer(layer);
+      mapInstance.removeLayer(layer);
     };
-  }, [data, map, setSelectedRegion]);
+  }, [data, mapInstance, setSelectedRegion]);
 
   return null;
 }
 
-export function HeatmapLayer({ data }: { data: any }) {
-  const map = useMap();
+export function HeatmapLayer({ data }: { data: FeatureCollection }) {
+  const { mapInstance } = useDashboard();
 
   useEffect(() => {
-    if (!data) return;
+    if (!data || !mapInstance) return;
 
     const layer = createHeatmapLayer(data.features);
 
-    layer.addTo(map);
+    layer.addTo(mapInstance);
 
     return () => {
-      map.removeLayer(layer);
+      mapInstance.removeLayer(layer);
     };
-  }, [data, map]);
+  }, [data, mapInstance]);
 
   return null;
 }

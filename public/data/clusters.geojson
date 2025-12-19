@@ -1,53 +1,21 @@
+
 {
-    "type": "FeatureCollection",
-    "features": [
-        {
-            "type": "Feature",
-            "properties": {
-                "cluster": false,
-                "confidence": 0.92,
-                "clusterId": 12,
-                "region": "Nigeria"
-            },
-            "geometry": {
-                "type": "Point",
-                "coordinates": [
-                    8.6753,
-                    9.0820
-                ]
-            }
-        },
-        {
-            "type": "Feature",
-            "properties": {
-                "cluster": true,
-                "confidence": 0.75,
-                "clusterId": 13,
-                "region": "Mali"
-            },
-            "geometry": {
-                "type": "Point",
-                "coordinates": [
-                    -7.98,
-                    12.63
-                ]
-            }
-        },
-        {
-            "type": "Feature",
-            "properties": {
-                "cluster": false,
-                "confidence": 0.55,
-                "clusterId": 14,
-                "region": "Niger"
-            },
-            "geometry": {
-                "type": "Point",
-                "coordinates": [
-                    2.12,
-                    13.51
-                ]
-            }
-        }
-    ]
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "cluster": false, "confidence": 0.92, "clusterId": 12, "region": "Nigeria" },
+      "geometry": { "type": "Point", "coordinates": [8.6753, 9.0820] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "cluster": false, "confidence": 0.75, "clusterId": 13, "region": "Mali" },
+      "geometry": { "type": "Point", "coordinates": [-4.0, 17.0] }
+    },
+     {
+      "type": "Feature",
+      "properties": { "cluster": false, "confidence": 0.6, "clusterId": 14, "region": "Niger" },
+      "geometry": { "type": "Point", "coordinates": [8.0, 17.5] }
+    }
+  ]
 }
