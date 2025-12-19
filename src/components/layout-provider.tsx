@@ -24,12 +24,46 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "./ui/button";
+import { useState, useEffect } from "react";
+
+// This wrapper component ensures the DropdownMenu only renders on the client, fixing hydration errors.
+function ClientOnlyLanguageSwitcher() {
+  const { language, setLanguage } = useLanguage();
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  if (!isClient) {
+    return null; // Don't render on the server
+  }
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" size="icon">
+          <Globe className="h-[1.2rem] w-[1.2rem]" />
+          <span className="sr-only">Toggle language</span>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onClick={() => setLanguage('en')} disabled={language === 'en'}>
+          English
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setLanguage('ar')} disabled={language === 'ar'}>
+          العربية
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 
 export function LayoutProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isActive = (path: string) => pathname === path;
-  const { t, language } = useTranslation();
-  const { setLanguage } = useLanguage();
+  const { t } = useTranslation();
 
   const sidebarLinks = [
     { href: "/", icon: <Home />, label: t("sidebar.dashboard") },
@@ -78,22 +112,7 @@ export function LayoutProvider({ children }: { children: React.ReactNode }) {
             <div className="flex-1">
                 <h1 className="text-lg font-semibold capitalize">{pageTitle}</h1>
             </div>
-             <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="icon">
-                  <Globe className="h-[1.2rem] w-[1.2rem]" />
-                  <span className="sr-only">Toggle language</span>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => setLanguage('en')} disabled={language === 'en'}>
-                  English
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setLanguage('ar')} disabled={language === 'ar'}>
-                  العربية
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+             <ClientOnlyLanguageSwitcher />
         </header>
         <main className="flex-1 overflow-auto p-4 md:p-6">
             {children}
