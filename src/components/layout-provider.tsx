@@ -14,7 +14,7 @@ import {
   SidebarTrigger,
   SidebarInset,
 } from "@/components/ui/sidebar";
-import { FileBarChart2, Upload, Microscope, ClipboardList, Home, Settings, FileDown, Globe } from "lucide-react";
+import { FileBarChart2, Upload, Microscope, ClipboardList, Home, Settings, FileDown, Globe, BarChartHorizontal } from "lucide-react";
 import { useTranslation } from "@/hooks/use-translation";
 import { useLanguage } from "@/context/language-context";
 import {
@@ -36,6 +36,7 @@ export function LayoutProvider({ children }: { children: React.ReactNode }) {
     { href: "/upload", icon: <Upload />, label: t("sidebar.upload") },
     { href: "/review", icon: <Microscope />, label: t("sidebar.review") },
     { href: "/audit", icon: <ClipboardList />, label: t("sidebar.audit") },
+    { href: "/report", icon: <BarChartHorizontal />, label: t("sidebar.report") },
     { href: "/export", icon: <FileDown />, label: t("sidebar.export") },
     { href: "/settings", icon: <Settings />, label: t("sidebar.settings") },
   ];

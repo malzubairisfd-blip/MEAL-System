@@ -4,6 +4,7 @@
     "upload": "Upload Data",
     "review": "Review Clusters",
     "audit": "Run Audit",
+    "report": "Report",
     "export": "Export Report",
     "settings": "Settings"
   },
@@ -12,6 +13,7 @@
     "upload": "Upload Data",
     "review": "Review Clusters",
     "audit": "Run Audit",
+    "report": "Report",
     "export": "Export Report",
     "settings": "Settings"
   },
