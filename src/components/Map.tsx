@@ -7,7 +7,7 @@ import 'leaflet.markercluster/dist/MarkerCluster.css';
 import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
 
 import { useDashboard } from '@/app/report/page';
-import { ClusterLayer, HeatmapLayer as IncidentsHeatmapLayer } from '@/components/leaflet-layers';
+import { ClusterLayer, HeatmapLayer } from '@/components/leaflet-layers';
 
 export function WestAfricaMap() {
   const { setMapInstance, layerState } = useDashboard();
@@ -21,7 +21,6 @@ export function WestAfricaMap() {
 
   return (
     <MapContainer
-      key="west-africa-map"
       center={[13, 2]}
       zoom={4}
       style={{ height: '100%', width: "100%", borderRadius: "12px" }}
@@ -33,7 +32,7 @@ export function WestAfricaMap() {
       />
       
       {layerState.clusters && clusterData && <ClusterLayer data={clusterData} />}
-      {layerState.heatmap && incidentsData && <IncidentsHeatmapLayer data={incidentsData} />}
+      {layerState.heatmap && incidentsData && <HeatmapLayer data={incidentsData} />}
       
     </MapContainer>
   );
