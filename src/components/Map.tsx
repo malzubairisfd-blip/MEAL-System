@@ -1,48 +1,15 @@
-
 'use client';
 
 import { useEffect, useRef } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { useDashboard } from "@/app/report/page";
-import { ClusterLayer, HeatmapLayer } from "./leaflet-layers";
-
-// Dummy data for demonstration
-const clusterData = {
-  "type": "FeatureCollection",
-  "features": [
-    {
-      "type": "Feature",
-      "properties": { "cluster": false, "confidence": 0.92, "clusterId": 12, "region": "Nigeria" },
-      "geometry": { "type": "Point", "coordinates": [8.6753, 9.0820] }
-    },
-    {
-      "type": "Feature",
-      "properties": { "cluster": false, "confidence": 0.75, "clusterId": 13, "region": "Mali" },
-      "geometry": { "type": "Point", "coordinates": [-4.0, 17.0] }
-    },
-     {
-      "type": "Feature",
-      "properties": { "cluster": false, "confidence": 0.6, "clusterId": 14, "region": "Niger" },
-      "geometry": { "type": "Point", "coordinates": [8.0, 17.5] }
-    }
-  ]
-};
-
-const incidentData = {
-    "type": "FeatureCollection",
-    "features": [
-        { "type": "Feature", "properties": { "confidence": 0.9 }, "geometry": { "type": "Point", "coordinates": [9, 10] } },
-        { "type": "Feature", "properties": { "confidence": 0.8 }, "geometry": { "type": "Point", "coordinates": [-3, 16] } },
-        { "type": "Feature", "properties": { "confidence": 0.85 }, "geometry": { "type": "Point", "coordinates": [7, 18] } }
-    ]
-};
-
 
 export default function WestAfricaMap() {
   const mapRef = useRef<L.Map | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const { setMapInstance, layerState } = useDashboard();
+  const adminLayerRef = useRef<L.TileLayer | null>(null);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -67,6 +34,20 @@ export default function WestAfricaMap() {
     };
   }, [setMapInstance]);
 
+  useEffect(() => {
+    if (!mapRef.current) return;
+
+    if (layerState.admin && !adminLayerRef.current) {
+      adminLayerRef.current = L.tileLayer("https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png", {
+        attribution: '© OpenStreetMap contributors, © CARTO',
+        pane: 'shadowPane' // to render labels above other layers
+      }).addTo(mapRef.current);
+    } else if (!layerState.admin && adminLayerRef.current) {
+      mapRef.current.removeLayer(adminLayerRef.current);
+      adminLayerRef.current = null;
+    }
+  }, [layerState.admin]);
+
   return (
     <div
       ref={containerRef}
@@ -77,13 +58,6 @@ export default function WestAfricaMap() {
         position: 'relative',
         zIndex: 0
       }}
-    >
-        {mapRef.current && (
-            <>
-                {layerState.clusters && <ClusterLayer data={clusterData} />}
-                {layerState.heatmap && <HeatmapLayer data={incidentData} />}
-            </>
-        )}
-    </div>
+    />
   );
 }

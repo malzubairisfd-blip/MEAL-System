@@ -189,6 +189,11 @@ export function LayerToggles() {
             onChange={() => setLayerState(s => ({ ...s, heatmap: !s.heatmap }))} />
           Security Heatmap
         </label>
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" checked={layerState.admin}
+            onChange={() => setLayerState(s => ({ ...s, admin: !s.admin }))} />
+          Admin Boundaries
+        </label>
       </div>
     </div>
   );

@@ -7,6 +7,7 @@ import leafletImage from 'leaflet-image';
 import jsPDF from 'jspdf';
 import { KPISection, TrendSection, SideIndicators, BottomDonuts, LayerToggles, DataTable } from '@/components/dashboard-components';
 import { Button } from '@/components/ui/button';
+import { ClusterLayer, HeatmapLayer } from '@/components/leaflet-layers';
 
 // 1. Global Dashboard State
 const DashboardContext = createContext<{
@@ -41,7 +42,20 @@ export default function ReportPage() {
     clusters: true,
     heatmap: false,
     incidents: true,
+    admin: true,
   });
+
+  const [clusterData, setClusterData] = useState(null);
+  const [incidentData, setIncidentData] = useState(null);
+
+  useEffect(() => {
+    fetch('/data/clusters.geojson')
+        .then(res => res.json())
+        .then(data => setClusterData(data));
+    fetch('/data/incidents.geojson')
+        .then(res => res.json())
+        .then(data => setIncidentData(data));
+  }, []);
 
   const exportPNG = () => {
     if (!mapInstance) return;
@@ -80,6 +94,8 @@ export default function ReportPage() {
             <div className="map relative" id="map-container">
                 <WestAfricaMap />
                 <LayerToggles />
+                {mapInstance && clusterData && <ClusterLayer data={clusterData} />}
+                {mapInstance && incidentData && <HeatmapLayer data={incidentData} />}
             </div>
             <div className="side">
                 <SideIndicators />
