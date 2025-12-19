@@ -1,11 +1,11 @@
 "use client";
 
-import React, { useState, createContext, useContext } from 'react';
+import React, { useState, createContext, useContext, useEffect } from 'react';
 import dynamic from 'next/dynamic';
-import { KPISection, TrendSection, SideIndicators, BottomDonuts, LayerToggles } from '@/components/dashboard-components';
-import { Button } from '@/components/ui/button';
-import html2canvas from 'html2canvas';
+import leafletImage from 'leaflet-image';
 import jsPDF from 'jspdf';
+import { KPISection, TrendSection, SideIndicators, BottomDonuts, LayerToggles, DataTable } from '@/components/dashboard-components';
+import { Button } from '@/components/ui/button';
 
 // 1. Global Dashboard State
 const DashboardContext = createContext<{
@@ -13,11 +13,15 @@ const DashboardContext = createContext<{
   setSelectedRegion: React.Dispatch<React.SetStateAction<string | null>>;
   layerState: any;
   setLayerState: React.Dispatch<React.SetStateAction<any>>;
+  mapInstance: L.Map | null;
+  setMapInstance: React.Dispatch<React.SetStateAction<L.Map | null>>;
 }>({
   selectedRegion: null,
   setSelectedRegion: () => {},
   layerState: {},
   setLayerState: () => {},
+  mapInstance: null,
+  setMapInstance: () => {},
 });
 
 export const useDashboard = () => useContext(DashboardContext);
@@ -31,58 +35,67 @@ const WestAfricaMap = dynamic(() => import('@/components/Map').then(mod => mod.W
 
 export default function ReportPage() {
   const [selectedRegion, setSelectedRegion] = useState<string | null>(null);
+  const [mapInstance, setMapInstance] = useState<L.Map | null>(null);
   const [layerState, setLayerState] = useState({
-    bubbles: true,
+    clusters: true,
     heatmap: false,
     incidents: true,
   });
 
-  const exportPNG = async () => {
-    const el = document.getElementById("map-container");
-    if (!el) return;
-
-    const canvas = await html2canvas(el, { useCORS: true });
-    const link = document.createElement("a");
-    link.download = "dashboard-map.png";
-    link.href = canvas.toDataURL();
-    link.click();
+  const exportPNG = () => {
+    if (!mapInstance) return;
+    leafletImage(mapInstance, (err, canvas) => {
+        if (err) {
+            console.error('Error exporting map to PNG:', err);
+            return;
+        }
+        const link = document.createElement('a');
+        link.download = 'dashboard-map.png';
+        link.href = canvas.toDataURL();
+        link.click();
+    });
   };
 
-  const exportPDF = async () => {
-    const el = document.getElementById("map-container");
-    if (!el) return;
-
-    const canvas = await html2canvas(el, { scale: 2, useCORS: true });
-    const img = canvas.toDataURL("image/png");
-
-    const pdf = new jsPDF("landscape", "mm", "a4");
-    pdf.addImage(img, "PNG", 10, 10, 280, 160);
-    pdf.save("dashboard-map.pdf");
+  const exportPDF = () => {
+    if (!mapInstance) return;
+    leafletImage(mapInstance, (err, canvas) => {
+        if (err) {
+            console.error('Error exporting map to PDF:', err);
+            return;
+        }
+        const img = canvas.toDataURL("image/png");
+        const pdf = new jsPDF("landscape", "mm", "a4");
+        pdf.addImage(img, "PNG", 10, 10, 280, 160);
+        pdf.save("dashboard-map.pdf");
+    });
   };
 
   return (
-    <DashboardContext.Provider value={{ selectedRegion, setSelectedRegion, layerState, setLayerState }}>
-      <div className="dashboard">
-        <div className="kpis">
-          <KPISection />
-        </div>
-        <div className="map relative" id="map-container">
-          <WestAfricaMap />
-          <LayerToggles />
-        </div>
-        <div className="side">
-          <SideIndicators />
-        </div>
-        <div className="trends">
-          <TrendSection />
-        </div>
-        <div className="donuts">
-          <BottomDonuts />
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4" style={{ gridColumn: 'span 12' }}>
-            <Button onClick={exportPNG}>Export Map as PNG</Button>
-            <Button onClick={exportPDF}>Export Map as PDF</Button>
-        </div>
+    <DashboardContext.Provider value={{ selectedRegion, setSelectedRegion, layerState, setLayerState, mapInstance, setMapInstance }}>
+        <div className="dashboard">
+            <div className="kpis">
+                <KPISection />
+            </div>
+            <div className="map relative" id="map-container">
+                <WestAfricaMap />
+                <LayerToggles />
+            </div>
+            <div className="side">
+                <SideIndicators />
+            </div>
+            <div className="trends">
+                <TrendSection />
+            </div>
+            <div className="donuts">
+                <BottomDonuts />
+            </div>
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-4" style={{ gridColumn: 'span 4' }}>
+                <DataTable />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4" style={{ gridColumn: 'span 4' }}>
+                <Button onClick={exportPNG}>Export Map as PNG</Button>
+                <Button onClick={exportPDF}>Export Map as PDF</Button>
+            </div>
       </div>
     </DashboardContext.Provider>
   );

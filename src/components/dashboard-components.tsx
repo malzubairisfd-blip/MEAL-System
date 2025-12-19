@@ -72,7 +72,7 @@ export function TrendChart({ title, data }: { title: string, data: { years: stri
 
 
 export function SideIndicators() {
-    const { setSelectedRegion } = useDashboard();
+    const { setSelectedRegion, selectedRegion } = useDashboard();
     const countries = ['Nigeria', 'Mali', 'Niger', 'Burkina Faso', 'Chad'];
     const values = [12, 8, 6, 5, 4];
     
@@ -93,7 +93,7 @@ export function SideIndicators() {
     };
     
     const onEvents = {
-        click: (params: any) => setSelectedRegion(params.name)
+        click: (params: any) => setSelectedRegion(params.name === selectedRegion ? null : params.name)
     };
 
     return (
@@ -104,7 +104,7 @@ export function SideIndicators() {
 }
 
 export function BottomDonuts() {
-    const { setSelectedRegion } = useDashboard();
+    const { setSelectedRegion, selectedRegion } = useDashboard();
     const fundingOption = {
         title: { 
             text: 'Funding Status ($4.9B Required)',
@@ -158,7 +158,7 @@ export function BottomDonuts() {
     };
     
     const onEvents = {
-        click: (params: any) => setSelectedRegion(params.name)
+        click: (params: any) => setSelectedRegion(params.name === selectedRegion ? null : params.name)
     };
 
     return (
@@ -179,19 +179,14 @@ export function LayerToggles() {
     <div className="absolute top-4 right-4 bg-white p-3 rounded shadow-lg z-[1000]">
       <div className="flex flex-col gap-2">
         <label className="flex items-center gap-2 cursor-pointer">
-          <input type="checkbox" checked={layerState.bubbles}
-            onChange={() => setLayerState(s => ({ ...s, bubbles: !s.bubbles }))} />
-          Population Bubbles
+          <input type="checkbox" checked={layerState.clusters}
+            onChange={() => setLayerState(s => ({ ...s, clusters: !s.clusters }))} />
+          Clusters
         </label>
         <label className="flex items-center gap-2 cursor-pointer">
           <input type="checkbox" checked={layerState.heatmap}
             onChange={() => setLayerState(s => ({ ...s, heatmap: !s.heatmap }))} />
           Security Heatmap
-        </label>
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input type="checkbox" checked={layerState.incidents}
-            onChange={() => setLayerState(s => ({ ...s, incidents: !s.incidents }))} />
-          Incident Points
         </label>
       </div>
     </div>
@@ -199,10 +194,9 @@ export function LayerToggles() {
 }
 
 export function DataTable() {
-    // This is a placeholder. A real implementation would fetch and display data.
     const { selectedRegion } = useDashboard();
     return (
-        <div className="data-table-container">
+        <div className="data-table-container chart-container">
             <h3 className="text-lg font-semibold">Data Table</h3>
             <p className="text-sm text-muted-foreground">Currently selected region: <span className="font-bold text-primary">{selectedRegion || 'None'}</span></p>
             {/* Table implementation would go here */}
