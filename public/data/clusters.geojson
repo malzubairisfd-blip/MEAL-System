@@ -1,21 +1,30 @@
-
 {
-  "type": "FeatureCollection",
-  "features": [
-    {
-      "type": "Feature",
-      "properties": { "cluster": false, "confidence": 0.92, "clusterId": 12, "region": "Nigeria" },
-      "geometry": { "type": "Point", "coordinates": [8.6753, 9.0820] }
-    },
-    {
-      "type": "Feature",
-      "properties": { "cluster": false, "confidence": 0.75, "clusterId": 13, "region": "Mali" },
-      "geometry": { "type": "Point", "coordinates": [-4.0, 17.0] }
-    },
-     {
-      "type": "Feature",
-      "properties": { "cluster": false, "confidence": 0.6, "clusterId": 14, "region": "Niger" },
-      "geometry": { "type": "Point", "coordinates": [8.0, 17.5] }
-    }
-  ]
+    "type": "FeatureCollection",
+    "features": [
+        {
+            "type": "Feature",
+            "properties": { "clusterId": 1, "confidence": 0.95, "region": "Sana'a" },
+            "geometry": { "type": "Point", "coordinates": [44.2063, 15.3547] }
+        },
+        {
+            "type": "Feature",
+            "properties": { "clusterId": 2, "confidence": 0.82, "region": "Aden" },
+            "geometry": { "type": "Point", "coordinates": [45.0366, 12.7794] }
+        },
+        {
+            "type": "Feature",
+            "properties": { "clusterId": 3, "confidence": 0.75, "region": "Taiz" },
+            "geometry": { "type": "Point", "coordinates": [44.0205, 13.5828] }
+        },
+        {
+            "type": "Feature",
+            "properties": { "clusterId": 4, "confidence": 0.65, "region": "Al Hudaydah" },
+            "geometry": { "type": "Point", "coordinates": [42.9569, 14.8021] }
+        },
+        {
+            "type": "Feature",
+            "properties": { "clusterId": 5, "confidence": 0.45, "region": "Ibb" },
+            "geometry": { "type": "Point", "coordinates": [44.1842, 13.9632] }
+        }
+    ]
 }

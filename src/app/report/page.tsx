@@ -5,9 +5,12 @@ import React, { useState, createContext, useContext, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import leafletImage from 'leaflet-image';
 import jsPDF from 'jspdf';
-import { KPISection, TrendSection, SideIndicators, BottomDonuts, LayerToggles, DataTable } from '@/components/dashboard-components';
+import 'jspdf-autotable';
+import { KPISection, TrendSection, SideIndicators, BottomDonuts, DataTable } from '@/components/dashboard-components';
 import { Button } from '@/components/ui/button';
 import { ClusterLayer, HeatmapLayer } from '@/components/leaflet-layers';
+import type { FeatureCollection } from 'geojson';
+import { useToast } from "@/hooks/use-toast";
 
 // 1. Global Dashboard State
 const DashboardContext = createContext<{
@@ -44,9 +47,11 @@ export default function ReportPage() {
     incidents: true,
     admin: true,
   });
+  const { toast } = useToast();
 
-  const [clusterData, setClusterData] = useState(null);
-  const [incidentData, setIncidentData] = useState(null);
+  const [clusterData, setClusterData] = useState<FeatureCollection | null>(null);
+  const [incidentData, setIncidentData] = useState<FeatureCollection | null>(null);
+  const [yemenGeoJSON, setYemenGeoJSON] = useState<FeatureCollection | null>(null);
 
   useEffect(() => {
     fetch('/data/clusters.geojson')
@@ -55,7 +60,26 @@ export default function ReportPage() {
     fetch('/data/incidents.geojson')
         .then(res => res.json())
         .then(data => setIncidentData(data));
+    fetch('/data/yemen.geojson')
+        .then(res => res.json())
+        .then(data => setYemenGeoJSON(data));
   }, []);
+
+  const exportAction = (exportFn: () => void, format: string) => {
+    toast({
+      title: `Exporting ${format}`,
+      description: "Your map image is being generated...",
+    });
+    try {
+      exportFn();
+    } catch(err: any) {
+      toast({
+        title: `Export Failed`,
+        description: `Could not export map to ${format}. ${err.message}`,
+        variant: "destructive",
+      });
+    }
+  };
 
   const exportPNG = () => {
     if (!mapInstance) return;
@@ -78,9 +102,17 @@ export default function ReportPage() {
             console.error('Error exporting map to PDF:', err);
             return;
         }
-        const img = canvas.toDataURL("image/png");
+        const imgData = canvas.toDataURL("image/png");
         const pdf = new jsPDF("landscape", "mm", "a4");
-        pdf.addImage(img, "PNG", 10, 10, 280, 160);
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = pdf.internal.pageSize.getHeight();
+        const canvasWidth = canvas.width;
+        const canvasHeight = canvas.height;
+        const ratio = canvasWidth / canvasHeight;
+        const width = pdfWidth - 20;
+        const height = width / ratio;
+
+        pdf.addImage(imgData, "PNG", 10, 10, width, height > pdfHeight - 20 ? pdfHeight - 20 : height);
         pdf.save("dashboard-map.pdf");
     });
   };
@@ -92,12 +124,12 @@ export default function ReportPage() {
                 <KPISection />
             </div>
             <div className="map relative" id="map-container">
-                <WestAfricaMap />
+                <WestAfricaMap yemenGeoJSON={yemenGeoJSON} />
                 <LayerToggles />
-                {mapInstance && clusterData && <ClusterLayer data={clusterData} />}
-                {mapInstance && incidentData && <HeatmapLayer data={incidentData} />}
+                {mapInstance && clusterData && <ClusterLayer data={clusterData} enabled={layerState.clusters}/>}
+                {mapInstance && incidentData && <HeatmapLayer points={incidentData.features.map(f => ({ lat: f.geometry.coordinates[1], lng: f.geometry.coordinates[0], intensity: f.properties.confidence ?? 0.5 }))} enabled={layerState.heatmap}/>}
             </div>
-            <div className="side md:col-span-12">
+            <div className="side">
                 <SideIndicators />
             </div>
             <div className="trends">
@@ -106,14 +138,39 @@ export default function ReportPage() {
             <div className="donuts">
                 <BottomDonuts />
             </div>
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-4" style={{ gridColumn: 'span 4' }}>
+             <div className="data-table">
                 <DataTable />
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4" style={{ gridColumn: 'span 4' }}>
-                <Button onClick={exportPNG}>Export Map as PNG</Button>
-                <Button onClick={exportPDF}>Export Map as PDF</Button>
+             <div className="export-buttons">
+                <Button onClick={() => exportAction(exportPNG, 'PNG')}>Export Map as PNG</Button>
+                <Button onClick={() => exportAction(exportPDF, 'PDF')}>Export Map as PDF</Button>
             </div>
       </div>
     </DashboardContext.Provider>
+  );
+}
+
+function LayerToggles() {
+  const { layerState, setLayerState } = useDashboard();
+  return (
+    <div className="absolute top-4 right-4 bg-white p-3 rounded shadow-lg z-[1000]">
+      <div className="flex flex-col gap-2">
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" checked={layerState.clusters}
+            onChange={() => setLayerState(s => ({ ...s, clusters: !s.clusters }))} />
+          Clusters
+        </label>
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" checked={layerState.heatmap}
+            onChange={() => setLayerState(s => ({ ...s, heatmap: !s.heatmap }))} />
+          Security Heatmap
+        </label>
+         <label className="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" checked={layerState.admin}
+            onChange={() => setLayerState(s => ({ ...s, admin: !s.admin }))} />
+          Admin Boundaries
+        </label>
+      </div>
+    </div>
   );
 }

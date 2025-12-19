@@ -1,9 +1,11 @@
-
 {
     "type": "FeatureCollection",
     "features": [
-        { "type": "Feature", "properties": { "confidence": 0.9 }, "geometry": { "type": "Point", "coordinates": [9, 10] } },
-        { "type": "Feature", "properties": { "confidence": 0.8 }, "geometry": { "type": "Point", "coordinates": [-3, 16] } },
-        { "type": "Feature", "properties": { "confidence": 0.85 }, "geometry": { "type": "Point", "coordinates": [7, 18] } }
+        { "type": "Feature", "properties": { "confidence": 0.9 }, "geometry": { "type": "Point", "coordinates": [44.21, 15.36] } },
+        { "type": "Feature", "properties": { "confidence": 0.85 }, "geometry": { "type": "Point", "coordinates": [44.22, 15.34] } },
+        { "type": "Feature", "properties": { "confidence": 0.8 }, "geometry": { "type": "Point", "coordinates": [45.0, 12.8] } },
+        { "type": "Feature", "properties": { "confidence": 0.7 }, "geometry": { "type": "Point", "coordinates": [45.05, 12.79] } },
+        { "type": "Feature", "properties": { "confidence": 0.75 }, "geometry": { "type": "Point", "coordinates": [44.0, 13.6] } },
+        { "type": "Feature", "properties": { "confidence": 0.6 }, "geometry": { "type": "Point", "coordinates": [43.0, 14.8] } }
     ]
 }

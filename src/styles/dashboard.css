@@ -11,8 +11,16 @@
 .kpis { grid-column: span 12; }
 .map  { grid-column: span 12; height: 520px; }
 .side { grid-column: span 12; }
-.trends { grid-column: span 8; }
+.trends { grid-column: span 12; }
 .donuts { grid-column: span 12; }
+.data-table { grid-column: span 12; }
+.export-buttons { 
+  grid-column: span 12;
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-start;
+}
+
 
 .kpi-card {
   background: white;
@@ -39,9 +47,21 @@
 
 @media (min-width: 768px) {
     .map {
-        grid-column: span 12;
+        grid-column: span 8;
     }
     .side {
-        grid-column: span 12;
+        grid-column: span 4;
+    }
+    .trends {
+      grid-column: span 8;
+    }
+    .donuts {
+      grid-column: span 4;
+    }
+    .data-table {
+      grid-column: span 12;
+    }
+    .export-buttons {
+      grid-column: span 12;
     }
 }
