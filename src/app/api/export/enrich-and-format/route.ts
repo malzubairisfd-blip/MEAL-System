@@ -222,10 +222,13 @@ function sortData(data: EnrichedRecord[]): EnrichedRecord[] {
 }
 
 function createFormattedWorkbook(data: EnrichedRecord[], cachedData: any): ExcelJS.Workbook {
-    const { rows: allRecords, clusters, auditFindings, originalHeaders } = cachedData;
+    const { rows: allRecords, clusters, auditFindings, originalHeaders, chartImages } = cachedData;
     const wb = new ExcelJS.Workbook();
     wb.creator = "Beneficiary Insights";
     
+    if (chartImages) {
+        createDashboardReportSheet(wb, allRecords, clusters, auditFindings || [], chartImages);
+    }
     createEnrichedDataSheet(wb, data, originalHeaders);
     createSummarySheet(wb, allRecords, clusters, auditFindings || []);
     createClustersSheet(wb, clusters);
@@ -767,4 +770,74 @@ function createAuditSheet(wb: ExcelJS.Workbook, findings: AuditFinding[], cluste
             }
         });
     });
+}
+function createDashboardReportSheet(wb: ExcelJS.Workbook, allRecords: RecordRow[], clusters: {records: RecordRow[]}[], auditFindings: AuditFinding[], chartImages: Record<string, string>) {
+    const ws = wb.addWorksheet("Dashboard Report");
+    ws.views = [{ rightToLeft: true }];
+    ws.columns = [
+        { width: 5 }, { width: 15 }, { width: 15 }, 
+        { width: 15 }, { width: 15 }, { width: 5 } 
+    ];
+
+    // --- Title ---
+    ws.mergeCells('B2:E2');
+    const titleCell = ws.getCell('B2');
+    titleCell.value = "Analysis Dashboard Report";
+    titleCell.font = { name: 'Calibri', size: 24, bold: true, color: { argb: 'FF002060' } };
+    titleCell.alignment = { horizontal: 'center' };
+    ws.getRow(2).height = 40;
+
+    // --- Key Figures ---
+    const totalRecords = allRecords.length;
+    const clusteredRecordsCount = clusters.reduce((acc, c) => acc + c.records.length, 0);
+    const unclusteredCount = totalRecords - clusteredRecordsCount;
+    const numClusters = clusters.length;
+
+    const keyFigures = [
+        { title: 'Total Records', value: totalRecords, cell: 'B4' },
+        { title: 'Clustered Records', value: clusteredRecordsCount, cell: 'C4' },
+        { title: 'Unclustered Records', value: unclusteredCount, cell: 'D4' },
+        { title: 'Total Clusters', value: numClusters, cell: 'E4' },
+    ];
+    
+    keyFigures.forEach(kf => {
+        const titleCell = ws.getCell(kf.cell);
+        titleCell.value = kf.title;
+        titleCell.font = { name: 'Calibri', size: 12, bold: true, color: { argb: 'FFFFFFFF' } };
+        titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4F81BD' } };
+        titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+        
+        const valueCell = ws.getCell(kf.cell.replace('4', '5'));
+        valueCell.value = kf.value;
+        valueCell.font = { name: 'Calibri', size: 20, bold: true, color: { argb: 'FF002060' } };
+        valueCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDCE6F1' } };
+        valueCell.alignment = { horizontal: 'center', vertical: 'middle' };
+        ws.getRow(5).height = 30;
+    });
+
+    // --- Add Images and Tables ---
+    if (chartImages.severityChart) {
+        const imageId = wb.addImage({
+            base64: chartImages.severityChart.split(',')[1],
+            extension: 'png',
+        });
+        ws.addImage(imageId, 'B7:C17');
+    }
+
+    if (chartImages.decisionChart) {
+        const imageId = wb.addImage({
+            base64: chartImages.decisionChart.split(',')[1],
+            extension: 'png',
+        });
+        ws.addImage(imageId, 'D7:E17');
+    }
+    
+    if (chartImages.topIssuesChart) {
+        const imageId = wb.addImage({
+            base64: chartImages.topIssuesChart.split(',')[1],
+            extension: 'png',
+        });
+        ws.addImage(imageId, 'B19:E30');
+    }
+
 }

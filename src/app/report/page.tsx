@@ -2,7 +2,7 @@
 // src/app/report/page.tsx
 "use client";
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader2, Users, Group, Unlink, BoxSelect, AlertTriangle, ShieldCheck, CheckCircle, Sigma, Fingerprint, UserX, Copy, Microscope, ClipboardList, FileDown } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -13,6 +13,7 @@ import type { RecordRow } from '@/lib/types';
 import type { AuditFinding } from '@/app/audit/page';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
+import { toPng } from 'html-to-image';
 
 
 const KeyFigureCard = ({ title, value, icon, description }: { title: string, value: string | number, icon: React.ReactNode, description?: string }) => (
@@ -57,6 +58,11 @@ export default function ReportPage() {
     const [data, setData] = useState<any>(null);
     const { toast } = useToast();
 
+    // Refs for chart containers
+    const severityChartRef = useRef<HTMLDivElement>(null);
+    const decisionChartRef = useRef<HTMLDivElement>(null);
+    const topIssuesChartRef = useRef<HTMLDivElement>(null);
+    
     useEffect(() => {
         const fetchData = async () => {
             setLoading(true);
@@ -105,6 +111,53 @@ export default function ReportPage() {
         };
         fetchData();
     }, [toast]);
+    
+     useEffect(() => {
+        if (!data || loading) return;
+
+        const cacheCharts = async () => {
+            const cacheId = sessionStorage.getItem('cacheId');
+            if (!cacheId) return;
+
+            const refs = {
+                severityChart: severityChartRef.current,
+                decisionChart: decisionChartRef.current,
+                topIssuesChart: topIssuesChartRef.current
+            };
+            
+            const images: { [key: string]: string } = {};
+            let hasGenerated = false;
+
+            for (const key in refs) {
+                const element = refs[key as keyof typeof refs];
+                if (element) {
+                    try {
+                        const dataUrl = await toPng(element, { cacheBust: true, pixelRatio: 2 });
+                        images[key] = dataUrl;
+                        hasGenerated = true;
+                    } catch (err) {
+                        console.error(`Failed to generate image for ${key}:`, err);
+                    }
+                }
+            }
+            
+            if (hasGenerated) {
+                try {
+                    await fetch('/api/chart-cache', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ cacheId, images }),
+                    });
+                } catch (err) {
+                    console.error("Failed to cache chart images:", err);
+                }
+            }
+        };
+        // Delay to ensure charts are rendered
+        const timer = setTimeout(cacheCharts, 1000); 
+        return () => clearTimeout(timer);
+    }, [data, loading]);
+
 
     const keyFigures = useMemo(() => {
         if (!data) return null;
@@ -217,7 +270,7 @@ export default function ReportPage() {
                         <CardTitle>Audit Findings by Severity</CardTitle>
                         <CardDescription>Breakdown of identified issues by their severity level.</CardDescription>
                     </CardHeader>
-                    <CardContent className="h-64">
+                    <CardContent ref={severityChartRef} className="h-64">
                          {auditSeverityData.length > 0 ? (
                             <ResponsiveContainer width="100%" height="100%">
                                 <PieChart>
@@ -245,7 +298,7 @@ export default function ReportPage() {
                         <CardTitle>Cluster Decision Analysis</CardTitle>
                          <CardDescription>Distribution of clusters based on the final decision category.</CardDescription>
                     </CardHeader>
-                    <CardContent className="h-64">
+                    <CardContent ref={decisionChartRef} className="h-64">
                         <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={decisionData} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border) / 0.5)" />
@@ -263,7 +316,7 @@ export default function ReportPage() {
                     <CardTitle>Top 5 Audit Issues by Type</CardTitle>
                     <CardDescription>The most frequent types of data integrity issues found in the records.</CardDescription>
                 </CardHeader>
-                <CardContent className="h-80">
+                <CardContent ref={topIssuesChartRef} className="h-80">
                      {topIssuesData.length > 0 ? (
                         <ResponsiveContainer width="100%" height="100%">
                              <BarChart data={topIssuesData} layout="vertical" margin={{ top: 5, right: 20, left: 120, bottom: 5 }}>
@@ -291,4 +344,3 @@ export default function ReportPage() {
         </div>
     );
 }
-

@@ -44,6 +44,7 @@
     "file-saver": "^2.0.5",
     "firebase": "^11.9.1",
     "genkit": "^1.0.0",
+    "html-to-image": "^1.11.11",
     "jspdf": "^2.5.1",
     "jspdf-autotable": "^3.8.2",
     "lucide-react": "^0.475.0",
