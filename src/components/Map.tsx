@@ -16,12 +16,13 @@ interface MapProps {
 export default function WestAfricaMap({ admin1, admin2, admin3 }: MapProps) {
   const mapRef = useRef<L.Map | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const { setMapInstance, layerState } = useDashboard();
+  const { setMapInstance, layerState, selectedRegion, setSelectedRegion } = useDashboard();
   
   const admin1LayerRef = useRef<L.GeoJSON | null>(null);
   const admin2LayerRef = useRef<L.GeoJSON | null>(null);
   const admin3LayerRef = useRef<L.GeoJSON | null>(null);
   const tileLayerRef = useRef<L.TileLayer | null>(null);
+  const selectionLayerRef = useRef<L.GeoJSON | null>(null);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -46,7 +47,6 @@ export default function WestAfricaMap({ admin1, admin2, admin3 }: MapProps) {
     };
   }, [setMapInstance]);
 
-  // Function to create and manage a GeoJSON layer
   const manageGeoJsonLayer = (
       map: L.Map, 
       layerRef: React.MutableRefObject<L.GeoJSON | null>, 
@@ -55,42 +55,87 @@ export default function WestAfricaMap({ admin1, admin2, admin3 }: MapProps) {
       style: L.PathOptions,
       nameProperty: string
   ) => {
-    if (visible && data && !layerRef.current) {
+    if (layerRef.current) {
+      map.removeLayer(layerRef.current);
+      layerRef.current = null;
+    }
+    if (visible && data) {
       layerRef.current = L.geoJSON(data, {
-        style: style,
+        style: feature => {
+          if (feature?.properties[nameProperty] === selectedRegion) {
+            return { ...style, opacity: 0, fillOpacity: 0 }; // Hide original layer when selected
+          }
+          return style;
+        },
         onEachFeature: (feature, layer) => {
-          // Highlight on mouseover
           layer.on('mouseover', (e) => {
-            const l = e.target;
-            l.setStyle({ weight: 3, color: '#333' });
-            l.bringToFront();
+            if (feature.properties[nameProperty] !== selectedRegion) {
+              const l = e.target;
+              l.setStyle({ weight: 3, color: '#333' });
+              l.bringToFront();
+            }
           });
-          // Reset highlight on mouseout
           layer.on('mouseout', (e) => {
-            layerRef.current?.resetStyle(e.target);
+             if (feature.properties[nameProperty] !== selectedRegion) {
+                layerRef.current?.resetStyle(e.target);
+             }
           });
-           // Bind permanent tooltip for name display
+          layer.on('click', () => {
+            setSelectedRegion(feature.properties[nameProperty]);
+          });
           if (feature.properties && feature.properties[nameProperty]) {
             layer.bindTooltip(feature.properties[nameProperty], {
-              permanent: true,
-              direction: 'center',
-              className: 'admin-label'
+              permanent: true, direction: 'center', className: 'admin-label'
             }).openTooltip();
           }
         }
       }).addTo(map);
-    } else if (!visible && layerRef.current) {
-      map.removeLayer(layerRef.current);
-      layerRef.current = null;
     }
   };
-  
+
   useEffect(() => {
     if (!mapRef.current) return;
     manageGeoJsonLayer(mapRef.current, admin1LayerRef, admin1, layerState.admin1, { color: "#4a5568", weight: 2, opacity: 0.8, fillOpacity: 0.1 }, 'ADM1_EN');
     manageGeoJsonLayer(mapRef.current, admin2LayerRef, admin2, layerState.admin2, { color: "#718096", weight: 1.5, opacity: 0.7, fillOpacity: 0.1 }, 'ADM2_EN');
     manageGeoJsonLayer(mapRef.current, admin3LayerRef, admin3, layerState.admin3, { color: "#A0AEC0", weight: 1, opacity: 0.6, fillOpacity: 0.1 }, 'ADM3_EN');
-  }, [layerState.admin1, layerState.admin2, layerState.admin3, admin1, admin2, admin3]);
+  }, [layerState, admin1, admin2, admin3, selectedRegion]); // Re-run when selectedRegion changes to update styles
+
+  useEffect(() => {
+    if (mapRef.current) {
+      if (selectionLayerRef.current) {
+        mapRef.current.removeLayer(selectionLayerRef.current);
+        selectionLayerRef.current = null;
+      }
+
+      if (selectedRegion) {
+        const allFeatures = [
+          ...(admin1?.features || []),
+          ...(admin2?.features || []),
+          ...(admin3?.features || [])
+        ];
+        const selectedFeature = allFeatures.find(f => 
+            f.properties?.ADM1_EN === selectedRegion || 
+            f.properties?.ADM2_EN === selectedRegion || 
+            f.properties?.ADM3_EN === selectedRegion
+        );
+
+        if (selectedFeature) {
+          selectionLayerRef.current = L.geoJSON(selectedFeature, {
+            style: {
+              color: '#d97706', // amber-600
+              weight: 3,
+              opacity: 1,
+              fillColor: '#fcd34d', // amber-300
+              fillOpacity: 0.7,
+            },
+          }).addTo(mapRef.current);
+           if (selectionLayerRef.current) {
+             selectionLayerRef.current.bringToFront();
+           }
+        }
+      }
+    }
+  }, [selectedRegion, admin1, admin2, admin3]);
 
 
   return (
