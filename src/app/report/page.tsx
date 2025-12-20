@@ -233,10 +233,10 @@ export default function ReportPage() {
             });
         }
 
-        await fetch('/api/chart-cache', {
+        await fetch('/api/cluster-cache', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ cacheId, images }),
+            body: JSON.stringify({ cacheId, chartImages: images }),
         });
 
         toast({ title: "Dashboard Cached", description: "Visuals have been saved. Proceeding to export page." });
@@ -277,7 +277,7 @@ export default function ReportPage() {
         {processedData && (
           <>
             <Collapsible defaultOpen={true}>
-              <Card ref={keyFiguresRef}>
+              <Card>
                 <CollapsibleTrigger asChild>
                     <CardHeader className="flex flex-row items-center justify-between cursor-pointer">
                         <div>
@@ -288,7 +288,9 @@ export default function ReportPage() {
                     </CardHeader>
                 </CollapsibleTrigger>
                 <CollapsibleContent>
-                   <KeyFigures data={processedData.keyFigures} />
+                   <div ref={keyFiguresRef}>
+                    <KeyFigures data={processedData.keyFigures} />
+                   </div>
                 </CollapsibleContent>
               </Card>
             </Collapsible>
@@ -313,9 +315,11 @@ export default function ReportPage() {
                         <div className="lg:col-span-1" ref={womenDonutRef}>
                             <WomenAndChildrenDonut data={processedData.charts.womenStats} />
                         </div>
-                        <div className="lg:col-span-2 grid grid-cols-2 gap-6" ref={genderVisualRef}>
-                            <GenderVisual gender="male" value={processedData.charts.gender.male} total={processedData.charts.gender.total} />
-                            <GenderVisual gender="female" value={processedData.charts.gender.female} total={processedData.charts.gender.total} />
+                        <div className="lg:col-span-2" ref={genderVisualRef}>
+                            <div className="grid grid-cols-2 gap-6">
+                                <GenderVisual gender="male" value={processedData.charts.gender.male} total={processedData.charts.gender.total} />
+                                <GenderVisual gender="female" value={processedData.charts.gender.female} total={processedData.charts.gender.total} />
+                            </div>
                         </div>
                     </div>
                 </CollapsibleContent>
