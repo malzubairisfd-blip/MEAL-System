@@ -20,12 +20,12 @@ export const MAPPING_FIELDS = [
 interface ColumnMappingProps {
   columns: string[];
   mapping: Record<string, string>;
-  setMapping: (mapping: Record<string, string>) => void;
+  onMappingChange: (mapping: Record<string, string>) => void;
 }
 
-export function ColumnMapping({ columns, mapping, setMapping }: ColumnMappingProps) {
+export function ColumnMapping({ columns, mapping, onMappingChange }: ColumnMappingProps) {
   const handleMappingChange = (field: string, value: string) => {
-    setMapping({ ...mapping, [field]: value });
+    onMappingChange({ ...mapping, [field]: value });
   };
 
   return (
@@ -40,7 +40,7 @@ export function ColumnMapping({ columns, mapping, setMapping }: ColumnMappingPro
           </CardHeader>
           <CardContent className="p-0">
             <ScrollArea className="h-48 border-t">
-              <RadioGroup value={mapping[field]} onValueChange={(v) => handleMappingChange(field, v)} className="p-4 grid grid-cols-1 gap-2">
+              <RadioGroup value={mapping[field]} onValueChange={(v) => handleMappingChange(field, v)} className="p-4 grid grid-cols-2 gap-2">
                 {columns.map(col => (
                   <div key={col} className="flex items-center space-x-2">
                     <RadioGroupItem value={col} id={`${field}-${col}`} />

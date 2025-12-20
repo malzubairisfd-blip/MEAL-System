@@ -39,6 +39,8 @@ const WestAfricaMap = dynamic(() => import('@/components/Map'), {
   loading: () => <p>Loading map...</p>,
 });
 
+const LOCAL_STORAGE_KEY_PREFIX = "beneficiary-report-mapping-";
+
 export default function ReportPage() {
   const { toast } = useToast();
   const router = useRouter();
@@ -60,7 +62,6 @@ export default function ReportPage() {
   const genderVisualRef = useRef<HTMLDivElement>(null);
   const bubbleStatsRef = useRef<HTMLDivElement>(null);
 
-
   // Load data from cache on initial render
   useEffect(() => {
     async function loadData() {
@@ -77,7 +78,30 @@ export default function ReportPage() {
         const data = await res.json();
         setAllRows(data.rows || []);
         if (data.rows && data.rows.length > 0) {
-            setColumns(Object.keys(data.rows[0]));
+            const fileColumns = Object.keys(data.rows[0]);
+            setColumns(fileColumns);
+            
+            // Load saved mapping from localStorage
+            const storageKey = LOCAL_STORAGE_KEY_PREFIX + fileColumns.join(',');
+            const saved = localStorage.getItem(storageKey);
+            if (saved) {
+              try { 
+                const savedMapping = JSON.parse(saved);
+                // Ensure all required fields have a value from the saved mapping
+                const initialMapping = MAPPING_FIELDS.reduce((acc, field) => {
+                    acc[field] = savedMapping[field] || "";
+                    return acc;
+                }, {} as Record<string, string>);
+                setMapping(initialMapping);
+              } catch {}
+            } else {
+              // Initialize empty mapping if nothing is saved
+              const initialMapping = MAPPING_FIELDS.reduce((acc, field) => {
+                  acc[field] = "";
+                  return acc;
+              }, {} as Record<string, string>);
+              setMapping(initialMapping);
+            }
         } else {
             toast({title: "No Records", description: "The cached data contains no records.", variant: "destructive"});
         }
@@ -89,6 +113,15 @@ export default function ReportPage() {
     }
     loadData();
   }, [toast]);
+  
+  const handleMappingChange = useCallback((newMapping: Record<string, string>) => {
+    setMapping(newMapping);
+    if(columns.length > 0){
+        const key = LOCAL_STORAGE_KEY_PREFIX + columns.join(',');
+        localStorage.setItem(key, JSON.stringify(newMapping));
+    }
+  }, [columns]);
+
 
   // Process data whenever mapping or rows change
   useEffect(() => {
@@ -236,7 +269,7 @@ export default function ReportPage() {
                 </CardHeader>
             </CollapsibleTrigger>
             <CollapsibleContent>
-              <ColumnMapping columns={columns} mapping={mapping} setMapping={setMapping} />
+              <ColumnMapping columns={columns} mapping={mapping} onMappingChange={handleMappingChange} />
             </CollapsibleContent>
           </Card>
         </Collapsible>
