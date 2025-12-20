@@ -94,7 +94,7 @@ export default function ReportPage() {
   useEffect(() => {
     if (allRows.length > 0 && MAPPING_FIELDS.every(field => mapping[field])) {
       const getUnique = (field: string) => new Set(allRows.map(r => r[mapping[field]]).filter(Boolean)).size;
-      const getSum = (field: string) => allRows.reduce((acc, r) => acc + (Number(r[mapping[field]]) === 1 ? 1 : 0), 0);
+      const getSum = (field: string) => allRows.reduce((acc, r) => acc + (Number(r[mapping[field]]) || 0), 0);
       const getUniqueCount = (field: string) => new Set(allRows.map(r => r[mapping[field]]).filter(Boolean)).size;
       
       const benefByVillage = allRows.reduce((acc, r) => {
@@ -113,6 +113,9 @@ export default function ReportPage() {
         }
         return acc;
       }, {} as Record<string, number>);
+      
+      const maleChildren = getSum('Male Children');
+      const femaleChildren = getSum('Female Children');
 
       const data = {
         keyFigures: {
@@ -130,13 +133,14 @@ export default function ReportPage() {
             { name: 'Handicapped Child', value: getSum('Women have handicapped children from 5 to 17 years old') },
           ],
           gender: {
-            male: getSum('Household Gender'), // Assuming 1 is male
-            female: allRows.length - getSum('Household Gender'), // Assuming others are female
+            male: maleChildren,
+            female: femaleChildren,
+            total: maleChildren + femaleChildren
           },
         },
         bubbles: [
           { label: 'HH Registered', value: getUniqueCount('Household registered'), icon: 'home' },
-          { label: 'Male HH', value: getSum('Household Gender'), icon: 'male' },
+          { label: 'Male HH', value: allRows.filter(r => Number(r[mapping['Household Gender']]) === 1).length, icon: 'male' },
           { label: 'Female HH', value: allRows.filter(r => Number(r[mapping['Household Gender']]) === 2).length, icon: 'female' },
           { label: 'Dislocated HH', value: getSum('Dislocated household'), icon: 'move' },
           { label: 'HH with Guest', value: getSum('Household having dislocated guest'), icon: 'users' },
@@ -277,8 +281,8 @@ export default function ReportPage() {
                             <WomenAndChildrenDonut data={processedData.charts.womenStats} />
                         </div>
                         <div className="lg:col-span-2 grid grid-cols-2 gap-6" ref={genderVisualRef}>
-                            <GenderVisual gender="male" value={processedData.charts.gender.male} total={processedData.charts.gender.male + processedData.charts.gender.female} />
-                            <GenderVisual gender="female" value={processedData.charts.gender.female} total={processedData.charts.gender.male + processedData.charts.gender.female} />
+                            <GenderVisual gender="male" value={processedData.charts.gender.male} total={processedData.charts.gender.total} />
+                            <GenderVisual gender="female" value={processedData.charts.gender.female} total={processedData.charts.gender.total} />
                         </div>
                     </div>
                 </CollapsibleContent>

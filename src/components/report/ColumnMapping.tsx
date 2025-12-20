@@ -13,7 +13,8 @@ export const MAPPING_FIELDS = [
   "Household having dislocated guest", "Beneficiaries registered", 
   "Pregnant woman", "Mothers having a child under 5 years old",
   "Women have handicapped children from 5 to 17 years old",
-  "Handicapped Woman", "Dislocated Woman"
+  "Handicapped Woman", "Dislocated Woman",
+  "Male Children", "Female Children"
 ];
 
 interface ColumnMappingProps {
