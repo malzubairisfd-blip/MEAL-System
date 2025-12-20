@@ -1,3 +1,4 @@
+
 "use client";
 
 import { usePathname } from "next/navigation";
@@ -61,9 +62,16 @@ function ClientOnlyLanguageSwitcher() {
 
 
 export function LayoutProvider({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
-  const isActive = (path: string) => pathname === path;
+  const currentPathname = usePathname();
+  const [pathname, setPathname] = useState(currentPathname);
   const { t } = useTranslation();
+
+  // Defer reading the pathname until after hydration on the client
+  useEffect(() => {
+    setPathname(currentPathname);
+  }, [currentPathname]);
+  
+  const isActive = (path: string) => pathname === path;
 
   const sidebarLinks = [
     { href: "/", icon: <Home />, label: t("sidebar.dashboard") },
