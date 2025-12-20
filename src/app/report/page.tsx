@@ -1,13 +1,12 @@
 
 "use client";
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import dynamic from 'next/dynamic';
-import leafletImage from 'leaflet-image';
-import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import { toPng } from 'html-to-image';
 import { useToast } from "@/hooks/use-toast";
 import type { RecordRow } from '@/lib/types';
+import { useRouter } from 'next/navigation';
 
 import {
     Collapsible,
@@ -16,7 +15,7 @@ import {
 } from "@/components/ui/collapsible";
 import { Card, CardHeader, CardContent, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Loader2, ChevronUp, ChevronsUpDown, FileDown, Image as ImageIcon, File as FileIcon } from "lucide-react";
+import { Loader2, ChevronsUpDown, FileDown } from "lucide-react";
 import { ColumnMapping, MAPPING_FIELDS } from '@/components/report/ColumnMapping';
 import { KeyFigures } from '@/components/report/KeyFigures';
 import { BeneficiariesByVillageChart, BeneficiariesByDayChart, WomenAndChildrenDonut } from '@/components/report/TableBarCharts';
@@ -42,6 +41,7 @@ const WestAfricaMap = dynamic(() => import('@/components/Map'), {
 
 export default function ReportPage() {
   const { toast } = useToast();
+  const router = useRouter();
   const [mapInstance, setMapInstance] = useState<L.Map | null>(null);
 
   // Data and Mapping State
@@ -50,6 +50,16 @@ export default function ReportPage() {
   const [allRows, setAllRows] = useState<RecordRow[]>([]);
   const [mapping, setMapping] = useState<Record<string, string>>({});
   const [processedData, setProcessedData] = useState<any>(null);
+  const [isExporting, setIsExporting] = useState(false);
+
+  // Refs for capturing components
+  const keyFiguresRef = useRef<HTMLDivElement>(null);
+  const byVillageChartRef = useRef<HTMLDivElement>(null);
+  const byDayChartRef = useRef<HTMLDivElement>(null);
+  const womenDonutRef = useRef<HTMLDivElement>(null);
+  const genderVisualRef = useRef<HTMLDivElement>(null);
+  const bubbleStatsRef = useRef<HTMLDivElement>(null);
+
 
   // Load data from cache on initial render
   useEffect(() => {
@@ -82,7 +92,7 @@ export default function ReportPage() {
 
   // Process data whenever mapping or rows change
   useEffect(() => {
-    if (allRows.length > 0 && Object.keys(mapping).length > 0) {
+    if (allRows.length > 0 && MAPPING_FIELDS.every(field => mapping[field])) {
       const getUnique = (field: string) => new Set(allRows.map(r => r[mapping[field]]).filter(Boolean)).size;
       const getSum = (field: string) => allRows.reduce((acc, r) => acc + (Number(r[mapping[field]]) === 1 ? 1 : 0), 0);
       const getUniqueCount = (field: string) => new Set(allRows.map(r => r[mapping[field]]).filter(Boolean)).size;
@@ -120,8 +130,8 @@ export default function ReportPage() {
             { name: 'Handicapped Child', value: getSum('Women have handicapped children from 5 to 17 years old') },
           ],
           gender: {
-            male: getSum('Household Gender'),
-            female: allRows.length - getSum('Household Gender'),
+            male: getSum('Household Gender'), // Assuming 1 is male
+            female: allRows.length - getSum('Household Gender'), // Assuming others are female
           },
         },
         bubbles: [
@@ -140,38 +150,67 @@ export default function ReportPage() {
     }
   }, [allRows, mapping]);
 
-  const exportAction = (exportFn: () => void, format: string) => {
-    toast({ title: `Exporting ${format}`, description: "Your map image is being generated..." });
-    try { exportFn(); } catch (err: any) {
-      toast({ title: `Export Failed`, description: `Could not export map to ${format}. ${err.message}`, variant: "destructive" });
+  const handleExport = async () => {
+    const cacheId = sessionStorage.getItem('cacheId');
+    if (!cacheId || !processedData) {
+        toast({ title: "Cannot Export", description: "Data is not ready or no cache ID found. Please process data first.", variant: "destructive" });
+        return;
     }
-  };
+    
+    setIsExporting(true);
+    toast({ title: "Preparing Export", description: "Capturing dashboard components as images..." });
+    
+    try {
+        const refs = {
+            keyFigures: keyFiguresRef,
+            byVillageChart: byVillageChartRef,
+            byDayChart: byDayChartRef,
+            womenDonut: womenDonutRef,
+            genderVisual: genderVisualRef,
+            bubbleStats: bubbleStatsRef,
+        };
+        
+        const images: Record<string, string> = {};
 
-  const exportPNG = () => {
-    if (!mapInstance) return;
-    leafletImage(mapInstance, (err: any, canvas: HTMLCanvasElement) => {
-      if (err) { console.error('Error exporting map to PNG:', err); return; }
-      const link = document.createElement('a');
-      link.download = 'dashboard-map.png';
-      link.href = canvas.toDataURL();
-      link.click();
-    });
-  };
+        for (const [key, ref] of Object.entries(refs)) {
+            if (ref.current) {
+                try {
+                    images[key] = await toPng(ref.current, { cacheBust: true, pixelRatio: 2 });
+                } catch (e) {
+                    console.error(`Failed to capture ${key}`, e);
+                    toast({ title: `Capture Failed`, description: `Could not capture the ${key} component.`, variant: "destructive" });
+                }
+            }
+        }
+        
+        if (mapInstance) {
+            images['map'] = await new Promise((resolve, reject) => {
+                const leafletImage = require('leaflet-image');
+                leafletImage(mapInstance, (err: any, canvas: HTMLCanvasElement) => {
+                    if (err) {
+                        reject(new Error("Failed to capture map image."));
+                        return;
+                    }
+                    resolve(canvas.toDataURL());
+                });
+            });
+        }
 
-  const exportPDF = () => {
-    if (!mapInstance) return;
-    leafletImage(mapInstance, (err: any, canvas: HTMLCanvasElement) => {
-      if (err) { console.error('Error exporting map to PDF:', err); return; }
-      const imgData = canvas.toDataURL("image/png");
-      const pdf = new jsPDF("landscape", "mm", "a4");
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
-      const ratio = canvas.width / canvas.height;
-      const width = pdfWidth - 20;
-      const height = width / ratio;
-      pdf.addImage(imgData, "PNG", 10, 10, width, height > pdfHeight - 20 ? pdfHeight - 20 : height);
-      pdf.save("dashboard-map.pdf");
-    });
+        await fetch('/api/chart-cache', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cacheId, images }),
+        });
+
+        toast({ title: "Dashboard Cached", description: "Visuals have been saved. Proceeding to export page." });
+        router.push('/export');
+
+    } catch (error: any) {
+        console.error("Export preparation failed:", error);
+        toast({ title: "Export Error", description: `An error occurred while preparing the export: ${error.message}`, variant: "destructive" });
+    } finally {
+        setIsExporting(false);
+    }
   };
   
     if (loading) {
@@ -201,7 +240,7 @@ export default function ReportPage() {
         {processedData && (
           <>
             <Collapsible defaultOpen={true}>
-              <Card>
+              <Card ref={keyFiguresRef}>
                 <CollapsibleTrigger asChild>
                     <CardHeader className="flex flex-row items-center justify-between cursor-pointer">
                         <div>
@@ -230,14 +269,14 @@ export default function ReportPage() {
                 </CollapsibleTrigger>
                 <CollapsibleContent className="p-6 pt-0 space-y-6">
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        <BeneficiariesByVillageChart data={processedData.charts.beneficiariesByVillage} />
-                        <BeneficiariesByDayChart data={processedData.charts.beneficiariesByDay} />
+                        <div ref={byVillageChartRef}><BeneficiariesByVillageChart data={processedData.charts.beneficiariesByVillage} /></div>
+                        <div ref={byDayChartRef}><BeneficiariesByDayChart data={processedData.charts.beneficiariesByDay} /></div>
                     </div>
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        <div className="lg:col-span-1">
+                        <div className="lg:col-span-1" ref={womenDonutRef}>
                             <WomenAndChildrenDonut data={processedData.charts.womenStats} />
                         </div>
-                        <div className="lg:col-span-2 grid grid-cols-2 gap-6">
+                        <div className="lg:col-span-2 grid grid-cols-2 gap-6" ref={genderVisualRef}>
                             <GenderVisual gender="male" value={processedData.charts.gender.male} total={processedData.charts.gender.male + processedData.charts.gender.female} />
                             <GenderVisual gender="female" value={processedData.charts.gender.female} total={processedData.charts.gender.male + processedData.charts.gender.female} />
                         </div>
@@ -246,7 +285,9 @@ export default function ReportPage() {
               </Card>
             </Collapsible>
 
-            <BubbleStats data={processedData.bubbles} />
+            <div ref={bubbleStatsRef}>
+              <BubbleStats data={processedData.bubbles} />
+            </div>
 
             <Collapsible defaultOpen={true}>
                 <Card>
@@ -263,13 +304,22 @@ export default function ReportPage() {
                         <div className="h-[600px] w-full rounded-md border" id="map-container">
                             <WestAfricaMap />
                         </div>
-                         <div className="flex gap-2 mt-4">
-                            <Button onClick={() => exportAction(exportPNG, 'PNG')}><ImageIcon className="mr-2"/>Export Map as PNG</Button>
-                            <Button onClick={() => exportAction(exportPDF, 'PDF')}><FileIcon className="mr-2"/>Export Map as PDF</Button>
-                        </div>
                     </CollapsibleContent>
                 </Card>
             </Collapsible>
+
+            <Card>
+                <CardHeader>
+                    <CardTitle>Export</CardTitle>
+                    <CardDescription>Generate and download the full Excel report including a dashboard sheet.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <Button onClick={handleExport} disabled={isExporting}>
+                        {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
+                        {isExporting ? 'Preparing...' : 'Go to Export Page'}
+                    </Button>
+                </CardContent>
+            </Card>
           </>
         )}
 
