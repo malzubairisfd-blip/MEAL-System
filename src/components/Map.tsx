@@ -1,147 +1,109 @@
+
 'use client';
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { useDashboard } from "@/app/report/page";
 import type { Feature, FeatureCollection } from 'geojson';
 
-
-interface MapProps {
-    admin1: FeatureCollection | null;
-    admin2: FeatureCollection | null;
-    admin3: FeatureCollection | null;
-}
-
-export default function WestAfricaMap({ admin1, admin2, admin3 }: MapProps) {
+export default function WestAfricaMap() {
   const mapRef = useRef<L.Map | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const { setMapInstance, layerState, selectedRegion, setSelectedRegion } = useDashboard();
+  const { setMapInstance } = useDashboard();
   
   const admin1LayerRef = useRef<L.GeoJSON | null>(null);
   const admin2LayerRef = useRef<L.GeoJSON | null>(null);
   const admin3LayerRef = useRef<L.GeoJSON | null>(null);
+  const selectionLayerRef = useRef<L.GeoJSON | null>(null);
+
+  const [admin1, setAdmin1] = useState<FeatureCollection | null>(null);
+  const [admin2, setAdmin2] = useState<FeatureCollection | null>(null);
+  const [admin3, setAdmin3] = useState<FeatureCollection | null>(null);
+  const [selectedRegion, setSelectedRegion] = useState<any | null>(null);
 
   useEffect(() => {
-    if (!containerRef.current || mapRef.current) return;
+    fetch('/data/yemen_admin1.geojson').then(res => res.json()).then(data => setAdmin1(data));
+    fetch('/data/yemen_admin2.geojson').then(res => res.json()).then(data => setAdmin2(data));
+    fetch('/data/yemen_admin3.geojson').then(res => res.json()).then(data => setAdmin3(data));
+  }, []);
 
-    const map = L.map(containerRef.current, {
-      center: [15.55, 48.52], // Centered on Yemen
-      zoom: 6,
-      preferCanvas: true,
-    });
-    mapRef.current = map;
-    setMapInstance(map);
+  useEffect(() => {
+    if (containerRef.current && !mapRef.current) {
+      const map = L.map(containerRef.current, {
+        center: [15.55, 48.52],
+        zoom: 6,
+        preferCanvas: true,
+      });
+      mapRef.current = map;
+      setMapInstance(map);
 
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png", {
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-    }).addTo(map);
+      L.tileLayer("https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png", {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+      }).addTo(map);
 
-    return () => {
-      if (mapRef.current) {
-        mapRef.current.remove();
-        mapRef.current = null;
-      }
-    };
+    }
   }, [setMapInstance]);
 
-  const manageGeoJsonLayer = (
-      map: L.Map, 
-      layerRef: React.MutableRefObject<L.GeoJSON | null>, 
-      data: FeatureCollection | null, 
-      visible: boolean, 
-      styles: { default: L.PathOptions, highlight: L.PathOptions, selected: L.PathOptions },
-      nameProperty: string,
-      isSelectable: boolean
+  const createLayer = (
+    data: FeatureCollection | null, 
+    style: L.PathOptions, 
+    nameProperty: string, 
+    isSelectable: boolean
   ) => {
-    if (layerRef.current) {
-      map.removeLayer(layerRef.current);
-      layerRef.current = null;
-    }
-    if (visible && data) {
-      layerRef.current = L.geoJSON(data, {
-        style: (feature?: Feature) => {
-          if (feature?.properties[nameProperty] === selectedRegion) {
-            return styles.selected;
-          }
-          return styles.default;
-        },
-        onEachFeature: (feature, layer) => {
-          // Always bind a tooltip, but don't make it permanent
-          if (feature.properties && feature.properties[nameProperty]) {
-            layer.bindTooltip(feature.properties[nameProperty], {
-              direction: 'center', 
-              className: 'admin-label',
-              permanent: false // This is the key change
-            });
-          }
-          
-          layer.on({
-            mouseover: (e) => {
-              if (feature.properties[nameProperty] !== selectedRegion) {
-                e.target.setStyle(styles.highlight);
-              }
-              e.target.bringToFront();
-            },
-            mouseout: (e) => {
-              // Let the main style function handle resetting the style based on selection
-               if (layerRef.current) {
-                layerRef.current.resetStyle(e.target);
-               }
-            },
-            click: () => {
-              if(isSelectable) {
-                const regionName = feature.properties[nameProperty];
-                setSelectedRegion(current => (current === regionName ? null : regionName));
-              }
+    if (!mapRef.current || !data) return null;
+    
+    const layer = L.geoJSON(data, {
+      style: (feature?: Feature) => feature?.properties?.[nameProperty] === selectedRegion?.properties?.[nameProperty] ? { ...style, color: '#d97706', weight: 3 } : style,
+      onEachFeature: (feature, layer) => {
+        layer.on({
+          mouseover: (e) => e.target.setStyle({ weight: 3, color: '#333' }),
+          mouseout: () => geoJsonLayer?.resetStyle(layer),
+          click: () => {
+            if (isSelectable) {
+              setSelectedRegion(feature);
             }
-          });
-        }
-      }).addTo(map);
-    }
-  };
-
-  useEffect(() => {
-    if (!mapRef.current) return;
-    
-    // Refresh layers to apply new styles when selectedRegion changes or layer visibility changes
-    manageGeoJsonLayer(mapRef.current, admin1LayerRef, admin1, layerState.admin1, 
-        { default: { color: "#4a5568", weight: 2, opacity: 0.8, fillOpacity: 0.1 },
-          highlight: { weight: 3, color: '#333', fillOpacity: 0.3 },
-          selected: { color: '#d97706', weight: 3, opacity: 1, fillOpacity: 0.5 } },
-        'ADM1_EN',
-        false // Not selectable
-    );
-    manageGeoJsonLayer(mapRef.current, admin2LayerRef, admin2, layerState.admin2, 
-        { default: { color: "#718096", weight: 1.5, opacity: 0.7, fillOpacity: 0.1 },
-          highlight: { weight: 3, color: '#333', fillOpacity: 0.3 },
-          selected: { color: '#d97706', weight: 3, opacity: 1, fillOpacity: 0.5 } },
-        'ADM2_EN',
-        false // Not selectable
-    );
-    manageGeoJsonLayer(mapRef.current, admin3LayerRef, admin3, layerState.admin3, 
-        { default: { color: "#A0AEC0", weight: 1, opacity: 0.6, fillOpacity: 0.1 },
-          highlight: { weight: 3, color: '#333', fillOpacity: 0.3 },
-          selected: { color: '#d97706', weight: 3, opacity: 1, fillOpacity: 0.5 } },
-        'ADM3_EN',
-        true // This is the selectable layer
-    );
-    
-  }, [layerState, admin1, admin2, admin3, selectedRegion, setSelectedRegion]);
-  
-  useEffect(() => {
-    if (!admin3LayerRef.current) return;
-    
-    // Handle opening/closing tooltips based on selection
-    admin3LayerRef.current.eachLayer(layer => {
-      const feature = (layer as L.GeoJSON).feature as Feature;
-      if (feature?.properties?.ADM3_EN === selectedRegion) {
-        layer.openTooltip();
-      } else {
-        layer.closeTooltip();
+          }
+        });
       }
     });
+    const geoJsonLayer = layer.addTo(mapRef.current);
+    return geoJsonLayer;
+  };
+  
+  useEffect(() => {
+    if (admin1LayerRef.current) mapRef.current?.removeLayer(admin1LayerRef.current);
+    admin1LayerRef.current = createLayer(admin1, { color: "#4a5568", weight: 2, opacity: 0.8, fillOpacity: 0.1 }, 'ADM1_EN', false);
 
+    if (admin2LayerRef.current) mapRef.current?.removeLayer(admin2LayerRef.current);
+    admin2LayerRef.current = createLayer(admin2, { color: "#718096", weight: 1.5, opacity: 0.7, fillOpacity: 0.1 }, 'ADM2_EN', false);
+
+    if (admin3LayerRef.current) mapRef.current?.removeLayer(admin3LayerRef.current);
+    admin3LayerRef.current = createLayer(admin3, { color: "#A0AEC0", weight: 1, opacity: 0.6, fillOpacity: 0.1 }, 'ADM3_EN', true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [admin1, admin2, admin3, selectedRegion]);
+
+  useEffect(() => {
+    if (selectionLayerRef.current) {
+        mapRef.current?.removeLayer(selectionLayerRef.current);
+    }
+    if (selectedRegion && mapRef.current) {
+        selectionLayerRef.current = L.geoJSON(selectedRegion, {
+            style: {
+                color: '#d97706',
+                weight: 3,
+                opacity: 1,
+                fillColor: '#fde047',
+                fillOpacity: 0.5
+            }
+        }).addTo(mapRef.current);
+        
+        selectionLayerRef.current.bindTooltip(selectedRegion.properties.ADM3_EN, {
+            permanent: true,
+            direction: 'center',
+            className: 'admin-label'
+        }).openTooltip();
+    }
   }, [selectedRegion]);
 
 
