@@ -16,6 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 import type { RecordRow } from "@/lib/types";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useTranslation } from "@/hooks/use-translation";
+import { Skeleton } from "@/components/ui/skeleton";
 
 function createWorkerScript() {
   return `
