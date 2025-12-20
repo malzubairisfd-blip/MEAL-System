@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "./ui/button";
 import { useState, useEffect } from "react";
+import { Skeleton } from "./ui/skeleton";
 
 // This wrapper component ensures the DropdownMenu only renders on the client, fixing hydration errors.
 function ClientOnlyLanguageSwitcher() {
@@ -64,7 +65,7 @@ function ClientOnlyLanguageSwitcher() {
 export function LayoutProvider({ children }: { children: React.ReactNode }) {
   const currentPathname = usePathname();
   const [pathname, setPathname] = useState(currentPathname);
-  const { t } = useTranslation();
+  const { t, isLoading: isTranslationLoading } = useTranslation();
 
   // Defer reading the pathname until after hydration on the client
   useEffect(() => {
@@ -96,16 +97,24 @@ export function LayoutProvider({ children }: { children: React.ReactNode }) {
         </SidebarHeader>
         <SidebarContent>
           <SidebarMenu>
-            {sidebarLinks.map(link => (
-              <SidebarMenuItem key={link.href}>
-                <SidebarMenuButton asChild isActive={isActive(link.href)}>
-                  <Link href={link.href}>
-                    {link.icon}
-                    <span>{link.label}</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            ))}
+            {isTranslationLoading ? (
+              <>
+                <Skeleton className="h-8 w-full" />
+                <Skeleton className="h-8 w-full" />
+                <Skeleton className="h-8 w-full" />
+              </>
+            ) : (
+               sidebarLinks.map(link => (
+                <SidebarMenuItem key={link.href}>
+                  <SidebarMenuButton asChild isActive={isActive(link.href)}>
+                    <Link href={link.href}>
+                      {link.icon}
+                      <span>{link.label}</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))
+            )}
           </SidebarMenu>
         </SidebarContent>
         <SidebarFooter>
@@ -118,7 +127,7 @@ export function LayoutProvider({ children }: { children: React.ReactNode }) {
         <header className="flex h-14 items-center gap-4 border-b bg-card px-6">
             <SidebarTrigger className="md:hidden" />
             <div className="flex-1">
-                <h1 className="text-lg font-semibold capitalize">{pageTitle}</h1>
+                {isTranslationLoading ? <Skeleton className="h-6 w-32" /> : <h1 className="text-lg font-semibold capitalize">{pageTitle}</h1>}
             </div>
              <ClientOnlyLanguageSwitcher />
         </header>

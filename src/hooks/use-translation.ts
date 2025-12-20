@@ -7,6 +7,7 @@ type Translations = { [key: string]: any };
 
 // This function safely retrieves a nested key from an object.
 const getNestedKey = (obj: Translations, key: string): string => {
+  if (!obj || Object.keys(obj).length === 0) return key;
   const keys = key.split('.');
   let result: any = obj;
   for (const k of keys) {
@@ -22,9 +23,11 @@ const getNestedKey = (obj: Translations, key: string): string => {
 export const useTranslation = () => {
   const { language } = useLanguage();
   const [translations, setTranslations] = useState<Translations>({});
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const loadTranslations = async () => {
+      setIsLoading(true);
       try {
         const module = await import(`@/locales/${language}.json`);
         setTranslations(module.default);
@@ -37,12 +40,15 @@ export const useTranslation = () => {
         } catch (fallbackError) {
             console.error(`Could not load fallback English translations`, fallbackError);
         }
+      } finally {
+        setIsLoading(false);
       }
     };
     loadTranslations();
   }, [language]);
 
   const t = useCallback((key: string, replacements?: { [key: string]: string | number }): string => {
+    if (isLoading) return ""; // Return empty string while loading
     let translated = getNestedKey(translations, key);
     if (replacements) {
         Object.keys(replacements).forEach(rKey => {
@@ -50,7 +56,7 @@ export const useTranslation = () => {
         });
     }
     return translated;
-  }, [translations]);
+  }, [translations, isLoading]);
 
-  return { t, language };
+  return { t, language, isLoading };
 };

@@ -5,10 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Upload, Microscope, ClipboardList, ArrowRight, MoveRight, BarChartHorizontal, FileDown } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTranslation } from "@/hooks/use-translation";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { t } = useTranslation();
+  const { t, isLoading: isTranslationLoading } = useTranslation();
 
   const features = [
     {
@@ -52,6 +53,24 @@ export default function DashboardPage() {
       borderColor: "border-red-500/20",
     },
   ];
+
+  if (isTranslationLoading) {
+    return (
+      <div className="space-y-12">
+        <Skeleton className="h-48 w-full" />
+        <div className="space-y-6">
+          <Skeleton className="h-8 w-48" />
+          <div className="grid md:grid-cols-1 lg:grid-cols-5 gap-6">
+            <Skeleton className="h-64 w-full" />
+            <Skeleton className="h-64 w-full" />
+            <Skeleton className="h-64 w-full" />
+            <Skeleton className="h-64 w-full" />
+            <Skeleton className="h-64 w-full" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-12">
