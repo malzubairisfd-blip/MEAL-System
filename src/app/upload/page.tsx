@@ -882,7 +882,7 @@ export default function UploadPage(){
     // load settings from server (if any): includes finalScoreWeights and thresholds
     let settings = {};
     try {
-      const res = await fetch(SETTINGS_ENDPOINT);
+      const res = await fetch("/api/settings");
       const d = await res.json();
       if(d.ok) settings = d.settings || {};
     } catch(_) {}
@@ -1055,7 +1055,7 @@ export default function UploadPage(){
         </Collapsible>
       )}
 
-      {file && isMappingComplete && (
+      {file && (
         <Card>
           <CardHeader>
             <CardTitle>{isTranslationLoading ? <Skeleton className="h-8 w-48"/> : t('upload.steps.3.title')}</CardTitle>
@@ -1063,8 +1063,11 @@ export default function UploadPage(){
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              <Button onClick={startClustering} disabled={workerStatus !== 'idle' && workerStatus !== 'done' && workerStatus !== 'error'}>
-                {(workerStatus === 'processing' || workerStatus === 'caching' || workerStatus === 'building-edges' || workerStatus === 'merging-edges') ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              <Button 
+                onClick={startClustering} 
+                disabled={!isMappingComplete || (workerStatus !== 'idle' && workerStatus !== 'done' && workerStatus !== 'error')}
+              >
+                {(workerStatus === 'processing' || workerStatus === 'caching' || workerStatus === 'building-edges' || workerStatus === 'merging-edges' || workerStatus === 'annotating' || workerStatus === 'blocking') ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 {getButtonText()}
               </Button>
 
