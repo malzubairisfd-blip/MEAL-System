@@ -816,28 +816,33 @@ function createDashboardReportSheet(wb: ExcelJS.Workbook, allRecords: RecordRow[
     });
 
     // --- Add Images and Tables ---
-    if (chartImages.severityChart) {
+    // Helper function to add an image from base64
+    const addImageFromBase64 = (base64: string, range: string) => {
+        if (!base64 || !base64.startsWith('data:image/png;base64,')) return;
         const imageId = wb.addImage({
-            base64: chartImages.severityChart.split(',')[1],
+            base64: base64.split(',')[1],
             extension: 'png',
         });
-        ws.addImage(imageId, 'B7:C17');
-    }
+        ws.addImage(imageId, range);
+    };
 
-    if (chartImages.decisionChart) {
-        const imageId = wb.addImage({
-            base64: chartImages.decisionChart.split(',')[1],
-            extension: 'png',
-        });
-        ws.addImage(imageId, 'D7:E17');
+    if (chartImages.byVillageChart) {
+        addImageFromBase64(chartImages.byVillageChart, 'B7:C17');
     }
-    
-    if (chartImages.topIssuesChart) {
-        const imageId = wb.addImage({
-            base64: chartImages.topIssuesChart.split(',')[1],
-            extension: 'png',
-        });
-        ws.addImage(imageId, 'B19:E30');
+    if (chartImages.byDayChart) {
+         addImageFromBase64(chartImages.byDayChart, 'D7:E17');
+    }
+    if (chartImages.womenDonut) {
+        addImageFromBase64(chartImages.womenDonut, 'B19:C29');
+    }
+    if (chartImages.genderVisual) {
+         addImageFromBase64(chartImages.genderVisual, 'D19:E29');
+    }
+    if (chartImages.bubbleStats) {
+        addImageFromBase64(chartImages.bubbleStats, 'B31:E41');
+    }
+     if (chartImages.map) {
+        addImageFromBase64(chartImages.map, 'B43:E58');
     }
 
 }

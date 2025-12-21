@@ -1129,13 +1129,6 @@ export default function UploadPage(){
                 <div className="space-y-2 mt-4">
                   <div className="flex justify-between items-center text-sm font-medium text-muted-foreground">
                     <span>{formattedStatus()}</span>
-                    <div className="flex items-center gap-2">
-                      <Clock className="h-4 w-4" />
-                      <span>{formatTime(timeInfo.elapsed)}</span>
-                      {timeInfo.remaining !== undefined && (
-                        <span className="text-xs">(est. {formatTime(timeInfo.remaining)} left)</span>
-                      )}
-                    </div>
                   </div>
                   <div className="relative h-4 w-full overflow-hidden rounded-full bg-secondary">
                     <Progress value={progressInfo.progress} className="absolute h-full w-full" />
@@ -1143,6 +1136,13 @@ export default function UploadPage(){
                         <span className="text-xs font-medium text-primary-foreground mix-blend-difference">{Math.round(progressInfo.progress)}%</span>
                     </div>
                   </div>
+                   <div className="flex items-center justify-end gap-2 text-sm text-muted-foreground">
+                      <Clock className="h-4 w-4" />
+                      <span>{formatTime(timeInfo.elapsed)}</span>
+                      {timeInfo.remaining !== undefined && (
+                        <span className="text-xs">(est. {formatTime(timeInfo.remaining)} left)</span>
+                      )}
+                    </div>
                 </div>
               )}
             </div>
