@@ -1,7 +1,7 @@
 // src/app/settings/page.tsx
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { computePairScore } from "@/lib/scoringClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -10,12 +10,23 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
-import { Save, RotateCcw, Upload, Download, Loader2, Plus, Minus, ArrowLeft } from "lucide-react";
+import { Save, RotateCcw, Upload, Download, Loader2, Plus, Minus, ArrowLeft, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useTranslation } from "@/hooks/use-translation";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 
 type Settings = any;
+const PROGRESS_KEY_PREFIX = "progress-";
+
+type SavedProgressFile = {
+  key: string;
+  name: string;
+  size: string;
+  date: string;
+};
+
 
 export default function SettingsPage() {
   const { t } = useTranslation();
@@ -26,6 +37,62 @@ export default function SettingsPage() {
   const [testB, setTestB] = useState({ womanName: "", husbandName: "", nationalId: "", phone: "" });
   const [lastResult, setLastResult] = useState<any>(null);
   const { toast } = useToast();
+  
+  const [savedProgressFiles, setSavedProgressFiles] = useState<SavedProgressFile[]>([]);
+  const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
+
+  const loadSavedProgress = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    const files: SavedProgressFile[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith(PROGRESS_KEY_PREFIX)) {
+        try {
+            const parts = key.substring(PROGRESS_KEY_PREFIX.length).split('-');
+            const date = new Date(parseInt(parts[parts.length-1])).toLocaleDateString();
+            const size = (parseInt(parts[parts.length-2]) / (1024*1024)).toFixed(2) + ' MB';
+            const name = parts.slice(0, -2).join('-');
+            files.push({ key, name, size, date });
+        } catch {
+             // Fallback for old key format
+             files.push({ key, name: key.substring(PROGRESS_KEY_PREFIX.length), size: 'N/A', date: 'N/A' });
+        }
+      }
+    }
+    setSavedProgressFiles(files);
+  }, []);
+
+  useEffect(() => {
+    loadSavedProgress();
+  }, [loadSavedProgress]);
+
+
+  const handleDeleteSelected = () => {
+    if (selectedFiles.length === 0) return;
+    selectedFiles.forEach(key => localStorage.removeItem(key));
+    toast({ title: `Deleted ${selectedFiles.length} saved progress file(s).`});
+    setSelectedFiles([]);
+    loadSavedProgress();
+  };
+
+  const handleDeleteAll = () => {
+    if (confirm("Are you sure you want to delete all saved progress data? This cannot be undone.")) {
+        savedProgressFiles.forEach(file => localStorage.removeItem(file.key));
+        toast({ title: "All saved progress has been deleted." });
+        setSelectedFiles([]);
+        loadSavedProgress();
+    }
+  };
+  
+  const handleSelectFile = (key: string, isSelected: boolean | 'indeterminate') => {
+      if (typeof isSelected !== 'boolean') return;
+      if (isSelected) {
+          setSelectedFiles(prev => [...prev, key]);
+      } else {
+          setSelectedFiles(prev => prev.filter(k => k !== key));
+      }
+  };
+
 
   const getDefaultSettings = () => ({
     thresholds: {
@@ -330,6 +397,54 @@ export default function SettingsPage() {
               )}
             </CardContent>
           </Card>
+          
+           <Card>
+            <CardHeader>
+                <CardTitle>Manage Saved Progress</CardTitle>
+                <CardDescription>Manage or delete saved clustering progress files to free up space or remove old data.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                {savedProgressFiles.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-4">No saved progress found.</p>
+                ) : (
+                    <>
+                        <div className="flex justify-end gap-2 mb-4">
+                             <Button variant="outline" size="sm" onClick={handleDeleteAll}>
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Delete All
+                            </Button>
+                            <Button variant="destructive" size="sm" onClick={handleDeleteSelected} disabled={selectedFiles.length === 0}>
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Delete Selected ({selectedFiles.length})
+                            </Button>
+                        </div>
+                        <ScrollArea className="h-48 rounded-md border">
+                            <div className="p-4 space-y-2">
+                                {savedProgressFiles.map((file) => (
+                                    <div key={file.key} className="flex items-center justify-between p-2 rounded-md hover:bg-muted">
+                                        <div className="flex items-center gap-3">
+                                            <Checkbox
+                                                id={file.key}
+                                                checked={selectedFiles.includes(file.key)}
+                                                onCheckedChange={(checked) => handleSelectFile(file.key, checked)}
+                                            />
+                                            <div className="grid gap-0.5">
+                                                <label htmlFor={file.key} className="text-sm font-medium leading-none truncate max-w-[200px]" title={file.name}>
+                                                    {file.name}
+                                                </label>
+                                                <p className="text-xs text-muted-foreground">
+                                                    {file.size} - {file.date}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </ScrollArea>
+                    </>
+                )}
+            </CardContent>
+           </Card>
         </aside>
       </main>
     </div>
