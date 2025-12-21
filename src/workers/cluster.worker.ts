@@ -6,7 +6,7 @@
 /* -------------------------
    Helpers & Normalizers
    ------------------------- */
-function normalizeArabicRaw(s) {
+function normalizeArabicRaw(s: any) {
   if (!s) return "";
   try { s = String(s); } catch { s = "";}
   s = s.normalize("NFKC");
@@ -20,23 +20,23 @@ function normalizeArabicRaw(s) {
   s = s.replace(/ئ/g, "ي");
   s = s.replace(/ة/g, "ه");
   s = s.replace(/گ/g, "ك");
-  s = s.replace(/[^ء-ي0-9a-zA-Z\\s]/g, " "); // keep Arabic letters, numbers, ascii, spaces
-  s = s.replace(/\\s+/g, " ").trim();
+  s = s.replace(/[^ء-ي0-9a-zA-Z\s]/g, " "); // keep Arabic letters, numbers, ascii, spaces
+  s = s.replace(/\s+/g, " ").trim();
   return s.toLowerCase();
 }
 
-function tokens(s) {
+function tokens(s: any) {
   const n = normalizeArabicRaw(s || "");
   if (!n) return [];
-  return n.split(/\\s+/).filter(Boolean);
+  return n.split(/\s+/).filter(Boolean);
 }
 
-function digitsOnly(s) {
+function digitsOnly(s: any) {
   if (s === null || s === undefined) return "";
-  return String(s).replace(/\\D/g, "");
+  return String(s).replace(/\D/g, "");
 }
 
-function normalizeChildrenField(val) {
+function normalizeChildrenField(val: any) {
   if (!val) return [];
   if (Array.isArray(val)) return val.map(x => String(x)).filter(Boolean);
   return String(val).split(/[;,|،]/).map(x => String(x).trim()).filter(Boolean);
@@ -52,7 +52,7 @@ function yieldToEventLoop() {
 /* -------------------------
    String similarity primitives
    ------------------------- */
-function jaroWinkler(a, b) {
+function jaroWinkler(a: any, b: any) {
   a = String(a || ""); b = String(b || "");
   if (!a || !b) return 0;
   const la = a.length, lb = b.length;
@@ -85,7 +85,7 @@ function jaroWinkler(a, b) {
   return jaro + prefix * 0.1 * (1 - jaro);
 }
 
-function tokenJaccard(aTokens, bTokens) {
+function tokenJaccard(aTokens: any, bTokens: any) {
   if (!aTokens.length && !bTokens.length) return 0;
   const A = new Set(aTokens), B = new Set(bTokens);
   let inter = 0;
@@ -94,7 +94,7 @@ function tokenJaccard(aTokens, bTokens) {
   return uni === 0 ? 0 : inter / uni;
 }
 
-function nameOrderFreeScore(aName, bName) {
+function nameOrderFreeScore(aName: any, bName: any) {
   const aT = tokens(aName), bT = tokens(bName);
   if (!aT.length || !bT.length) return 0;
   const A = new Set(aT), B = new Set(bT);
@@ -109,12 +109,12 @@ function nameOrderFreeScore(aName, bName) {
 /* -------------------------
    Component compare
    ------------------------- */
-function splitParts(name) {
+function splitParts(name: any) {
   if (!name) return [];
   return tokens(name);
 }
 
-function compareNameComponents(aName, bName) {
+function compareNameComponents(aName: any, bName: any) {
   // returns { partsA, partsB, partScores: [..], orderFree }
   const A = splitParts(aName);
   const B = splitParts(bName);
@@ -131,7 +131,7 @@ function compareNameComponents(aName, bName) {
 /* -------------------------
    Additional Rules
    ------------------------- */
-function applyAdditionalRules(a, b, opts) {
+function applyAdditionalRules(a: any, b: any, opts: any) {
   const minPair = opts?.thresholds?.minPair ?? 0.62;
   const jw = jaroWinkler;
 
@@ -139,7 +139,7 @@ function applyAdditionalRules(a, b, opts) {
   const B = splitParts(b.womanName_normalized || "");
   const HA = splitParts(a.husbandName_normalized || "");
   const HB = splitParts(b.husbandName_normalized || "");
-  const reasons = [];
+  const reasons: any[] = [];
 
   // RULE 0: strong token match (80%+ tokens overlap)
   {
@@ -181,10 +181,10 @@ function applyAdditionalRules(a, b, opts) {
     }
   }
 
-  const s93 = (x, y) => jw(x || "", y || "") >= 0.93;
-  const s95 = (x, y) => jw(x || "", y || "") >= 0.95;
+  const s93 = (x: any, y: any) => jw(x || "", y || "") >= 0.93;
+  const s95 = (x: any, y: any) => jw(x || "", y || "") >= 0.95;
 
-  const getPart = (arr, idx) => (arr && arr.length > idx) ? arr[idx] : "";
+  const getPart = (arr: any, idx: any) => (arr && arr.length > idx) ? arr[idx] : "";
 
   const F1 = getPart(A, 0), Fa1 = getPart(A, 1), G1 = getPart(A, 2), L1 = getPart(A, 3);
   const F2 = getPart(B, 0), Fa2 = getPart(B, 1), G2 = getPart(B, 2), L2 = getPart(B, 3);
@@ -262,7 +262,7 @@ function applyAdditionalRules(a, b, opts) {
 /* -------------------------
    pairwiseScore: tiered approach
    ------------------------- */
-function pairwiseScore(aRaw, bRaw, opts) {
+function pairwiseScore(aRaw: any, bRaw: any, opts: any) {
   const optsDefaults = {
     finalScoreWeights: {
       firstNameScore: 0.15,
@@ -330,7 +330,7 @@ function pairwiseScore(aRaw, bRaw, opts) {
   const firstNameScore = jaroWinkler(firstA, firstB);
   const familyNameScore = jaroWinkler(famA, famB);
   const advancedNameScore = (() => {
-    const root = s => splitParts(s).map(t => t.slice(0, 3)).join(" ");
+    const root = (s: any) => splitParts(s).map((t: any) => t.slice(0, 3)).join(" ");
     const rA = root(a.womanName_normalized), rB = root(b.womanName_normalized);
     if (!rA || !rB) return 0;
     return Math.min(0.5, jaroWinkler(rA, rB));
@@ -339,7 +339,7 @@ function pairwiseScore(aRaw, bRaw, opts) {
   const husbandScore = Math.max(jaroWinkler(a.husbandName_normalized, b.husbandName_normalized), nameOrderFreeScore(a.husbandName_normalized, b.husbandName_normalized));
   const phoneScoreVal = (a.phone && b.phone) ? (a.phone === b.phone ? 1 : (a.phone.slice(-6) === b.phone.slice(-6) ? 0.85 : (a.phone.slice(-4) === b.phone.slice(-4) ? 0.6 : 0))) : 0;
   const idScore = (a.nationalId && b.nationalId) ? (a.nationalId === b.nationalId ? 1 : (a.nationalId.slice(-5) === b.nationalId.slice(-5) ? 0.75 : 0)) : 0;
-  const childrenScore = tokenJaccard(a.children_normalized || [], b.children_normalized || []);
+  const childrenScore = tokenJaccard(a.children_normalized, b.children_normalized);
   let locationScore = 0;
   if (a.village_normalized && b.village_normalized && a.village_normalized === b.village_normalized) locationScore += 0.4;
   if (a.subdistrict_normalized && b.subdistrict_normalized && a.subdistrict_normalized === b.subdistrict_normalized) locationScore += 0.25;
@@ -358,7 +358,7 @@ function pairwiseScore(aRaw, bRaw, opts) {
 
   const breakdown = { firstNameScore, familyNameScore, advancedNameScore, tokenReorderScore, husbandScore, idScore, phoneScore: phoneScoreVal, childrenScore, locationScore };
   
-  const reasons = [];
+  const reasons: any[] = [];
   if (tokenReorderScore > 0.85) reasons.push("TOKEN_REORDER");
 
   return { score, breakdown, reasons };
@@ -367,7 +367,7 @@ function pairwiseScore(aRaw, bRaw, opts) {
 /* --------------------------------------
    Resumable Edge Building Logic
    -------------------------------------- */
-async function buildEdges(rows, minScore = 0.62, opts, resumeState = null) {
+async function buildEdges(rows: any, minScore = 0.62, opts: any, resumeState: any = null) {
   const n = rows.length;
   if (n <= 1) return { edges: [], finalState: null };
   
@@ -423,18 +423,21 @@ async function buildEdges(rows, minScore = 0.62, opts, resumeState = null) {
 
 
 class UF {
-  constructor(n) {
+  parent: any;
+  size: any;
+  members: any;
+  constructor(n: any) {
     this.parent = Array.from({ length: n }, (_, i) => i);
     this.size = Array(n).fill(1);
     this.members = new Map();
     for (let i = 0; i < n; i++) this.members.set(i, new Set([i]));
   }
-  find(x) {
+  find(x: any) {
     if (this.parent[x] === x) return x;
     this.parent[x] = this.find(this.parent[x]);
     return this.parent[x];
   }
-  merge(a, b) {
+  merge(a: any, b: any) {
     a = this.find(a); b = this.find(b);
     if (a === b) return a;
     if (this.size[a] < this.size[b]) [a, b] = [b, a];
@@ -445,16 +448,16 @@ class UF {
     this.members.delete(b);
     return a;
   }
-  rootMembers(x) {
+  rootMembers(x: any) {
     return Array.from(this.members.get(this.find(x)) || []);
   }
 }
 
 /* Split cluster so each piece <= 4 */
-function splitCluster(rowsSubset, minInternal = 0.50, opts) {
+function splitCluster(rowsSubset: any, minInternal = 0.50, opts: any) {
     if (rowsSubset.length <= 1) return []; // Return empty if not a potential cluster
     if (rowsSubset.length <= 4) {
-        const localEdges = [];
+        const localEdges: any[] = [];
         for (let i = 0; i < rowsSubset.length; i++) {
             for (let j = i + 1; j < rowsSubset.length; j++) {
                 const r = pairwiseScore(rowsSubset[i], rowsSubset[j], opts);
@@ -466,7 +469,7 @@ function splitCluster(rowsSubset, minInternal = 0.50, opts) {
         return [{ records: rowsSubset, reasons, pairScores }];
     }
 
-    const localEdges = [];
+    const localEdges: any[] = [];
     for (let i = 0; i < rowsSubset.length; i++) {
         for (let j = i + 1; j < rowsSubset.length; j++) {
             const r = pairwiseScore(rowsSubset[i], rowsSubset[j], opts);
@@ -489,10 +492,10 @@ function splitCluster(rowsSubset, minInternal = 0.50, opts) {
         groups.get(r).push(i);
     }
 
-    const result = [];
+    const result: any[] = [];
     for (const idxs of groups.values()) {
         if (idxs.length <= 1) continue; // Ignore single-record groups
-        const subset = idxs.map(i => rowsSubset[i]);
+        const subset = idxs.map((i: any) => rowsSubset[i]);
         const subEdges = localEdges.filter(e => idxs.includes(e.a) && idxs.includes(e.b));
         const reasons = Array.from(new Set(subEdges.flatMap(e => e.reasons)));
         const pairScores = subEdges.map(e => ({ finalScore: e.score, womanNameScore: e.breakdown.firstNameScore, husbandNameScore: e.breakdown.husbandScore }));
@@ -508,9 +511,9 @@ function splitCluster(rowsSubset, minInternal = 0.50, opts) {
 
 
 /* Main clustering pipeline */
-async function runClustering(rows, opts, resumeState) {
+async function runClustering(rows: any, opts: any, resumeState: any) {
   // ensure internal ids
-  rows.forEach((r, i) => r._internalId = r._internalId || 'row_' + i);
+  rows.forEach((r: any, i: any) => r._internalId = r._internalId || 'row_' + i);
 
   const minPair = opts?.thresholds?.minPair ?? 0.62;
   const minInternal = opts?.thresholds?.minInternal ?? 0.50;
@@ -523,8 +526,8 @@ async function runClustering(rows, opts, resumeState) {
 
   const uf = new UF(rows.length);
   const finalized = new Set();
-  const finalClusters = [];
-  const edgesUsed = [];
+  const finalClusters: any[] = [];
+  const edgesUsed: any[] = [];
   const rootReasons = new Map();
 
   for (let ei = 0; ei < edges.length; ei++) {
@@ -533,13 +536,13 @@ async function runClustering(rows, opts, resumeState) {
     const ra = uf.find(e.a), rb = uf.find(e.b);
     
     const currentReasons = rootReasons.get(ra) || new Set();
-    (e.reasons || []).forEach(r => currentReasons.add(r));
+    (e.reasons || []).forEach((r: any) => currentReasons.add(r));
     rootReasons.set(ra, currentReasons);
 
     if (ra === rb) { edgesUsed.push(e); continue; }
 
     const otherReasons = rootReasons.get(rb) || new Set();
-    (e.reasons || []).forEach(r => otherReasons.add(r));
+    (e.reasons || []).forEach((r: any) => otherReasons.add(r));
     rootReasons.set(rb, otherReasons);
 
     if (uf.size[ra] + uf.size[rb] <= 4) {
@@ -557,8 +560,8 @@ async function runClustering(rows, opts, resumeState) {
     for (const p of parts) {
        if (p.records.length <= 1) continue;
        finalClusters.push(p);
-       p.records.forEach(r => {
-           const originalIndex = rows.findIndex(row => row._internalId === r._internalId);
+       p.records.forEach((r: any) => {
+           const originalIndex = rows.findIndex((row: any) => row._internalId === r._internalId);
            if (originalIndex !== -1) finalized.add(originalIndex);
        });
     }
@@ -578,7 +581,7 @@ async function runClustering(rows, opts, resumeState) {
   }
   for (const [root, arr] of leftovers.entries()) {
     if (arr.length <= 1) continue;
-    const subRows = arr.map(i => rows[i]);
+    const subRows = arr.map((i: any) => rows[i]);
     const parts = splitCluster(subRows, minInternal, opts);
      for (const p of parts) {
         if (p.records.length > 1) {
@@ -592,7 +595,7 @@ async function runClustering(rows, opts, resumeState) {
   const clustersWithRecords = finalClusters
     .map(c => ({
         ...c,
-        records: c.records.map(r => rows.find(row => row._internalId === r._internalId))
+        records: c.records.map((r: any) => rows.find((row: any) => row._internalId === r._internalId))
     }))
     .filter(c => c.records.length > 1);
 
@@ -606,15 +609,15 @@ async function runClustering(rows, opts, resumeState) {
 /* -------------------------
    Worker message handling
    ------------------------- */
-let inbound = [];
+let inbound: any[] = [];
 let mapping = {};
 let options = {};
-let resumeState = null;
+let resumeState: any = null;
 let progressKey = ''; // Holds the file-specific progress key
 
-function mapIncomingRowsToInternal(rowsChunk, mapping) {
-  return rowsChunk.map((originalRecord, i) => {
-        const mapped = {
+function mapIncomingRowsToInternal(rowsChunk: any, mapping: any) {
+  return rowsChunk.map((originalRecord: any, i: any) => {
+        const mapped: any = {
             ...originalRecord,
             _internalId: "row_" + (inbound.length + i),
             womanName: "", husbandName: "", nationalId: "", phone: "", village: "", subdistrict: "", children: [],
@@ -641,7 +644,7 @@ function mapIncomingRowsToInternal(rowsChunk, mapping) {
     });
 }
 
-self.onmessage = function (ev) {
+self.onmessage = function (ev: any) {
   const msg = ev.data;
   if (!msg || !msg.type) return;
 
@@ -667,7 +670,7 @@ self.onmessage = function (ev) {
         postMessage({ type: 'progress', status: 'mapping-rows', progress: 5, completed: 0, total: inbound.length });
         const result = await runClustering(inbound, options, resumeState);
         postMessage({ type: 'done', payload: { rows: result.rows, clusters: result.clusters, edgesUsed: result.edgesUsed } });
-      } catch (err) {
+      } catch (err: any) {
         postMessage({ type: 'error', error: String(err && err.message ? err.message : err) });
       }
     }, 50);
