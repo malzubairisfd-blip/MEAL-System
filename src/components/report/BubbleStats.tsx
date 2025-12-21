@@ -1,7 +1,7 @@
 
 "use client";
 import { Card, CardContent } from "@/components/ui/card";
-import { Home, User, Users, Move, Baby, Accessibility, Pregnant, UserCog, Group } from "lucide-react";
+import { Home, User, Users, Move, Baby, Accessibility, HeartPulse, UserCog, Group } from "lucide-react";
 
 // Updated iconMap to use more descriptive icons
 const iconMap = {
@@ -11,7 +11,7 @@ const iconMap = {
   users: <Users className="h-6 w-6 text-white" />,
   move: <Move className="h-6 w-6 text-white" />,
   group: <Group className="h-6 w-6 text-white" />,
-  pregnant: <Pregnant className="h-6 w-6 text-white" />,
+  pregnant: <HeartPulse className="h-6 w-6 text-white" />,
   lactating: <Baby className="h-6 w-6 text-white" />, // Icon for lactating/mother < 5
   handicapped: <Accessibility className="h-6 w-6 text-white" />, // General handicapped icon
   child: <UserCog className="h-6 w-6 text-white" />, // Icon for woman with handicapped child
