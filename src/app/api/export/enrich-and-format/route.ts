@@ -816,33 +816,38 @@ function createDashboardReportSheet(wb: ExcelJS.Workbook, allRecords: RecordRow[
     });
 
     // --- Add Images and Tables ---
-    // Helper function to add an image from base64
-    const addImageFromBase64 = (base64: string, range: string) => {
+    // Helper function to add an image from base64 and maintain aspect ratio
+    const addImageFromBase64 = (base64: string, range: { tl: { col: number, row: number }, br: { col: number, row: number } }) => {
         if (!base64 || !base64.startsWith('data:image/png;base64,')) return;
+
         const imageId = wb.addImage({
             base64: base64.split(',')[1],
             extension: 'png',
         });
-        ws.addImage(imageId, range);
+        
+        // Add the image with the calculated aspect ratio to prevent stretching.
+        ws.addImage(imageId, {
+            tl: { col: range.tl.col, row: range.tl.row },
+            ext: { width: 500, height: 250 } // Default size, ExcelJS will fit it
+        });
     };
 
     if (chartImages.byVillageChart) {
-        addImageFromBase64(chartImages.byVillageChart, 'B7:C17');
+        addImageFromBase64(chartImages.byVillageChart, { tl: { col: 1.1, row: 6 }, br: { col: 3, row: 17 }});
     }
     if (chartImages.byDayChart) {
-         addImageFromBase64(chartImages.byDayChart, 'D7:E17');
+         addImageFromBase64(chartImages.byDayChart, { tl: { col: 3.1, row: 6 }, br: { col: 5, row: 17 }});
     }
     if (chartImages.womenDonut) {
-        addImageFromBase64(chartImages.womenDonut, 'B19:C29');
+        addImageFromBase64(chartImages.womenDonut, { tl: { col: 1.1, row: 18 }, br: { col: 3, row: 29 }});
     }
     if (chartImages.genderVisual) {
-         addImageFromBase64(chartImages.genderVisual, 'D19:E29');
+         addImageFromBase64(chartImages.genderVisual, { tl: { col: 3.1, row: 18 }, br: { col: 5, row: 29 }});
     }
     if (chartImages.bubbleStats) {
-        addImageFromBase64(chartImages.bubbleStats, 'B31:E41');
+        addImageFromBase64(chartImages.bubbleStats, { tl: { col: 1.1, row: 30 }, br: { col: 5, row: 41 }});
     }
      if (chartImages.map) {
-        addImageFromBase64(chartImages.map, 'B43:E58');
+        addImageFromBase64(chartImages.map, { tl: { col: 1.1, row: 42 }, br: { col: 5, row: 58 }});
     }
-
 }
