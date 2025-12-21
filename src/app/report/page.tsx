@@ -7,6 +7,7 @@ import { toPng } from 'html-to-image';
 import { useToast } from "@/hooks/use-toast";
 import type { RecordRow } from '@/lib/types';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 import {
     Collapsible,
@@ -15,7 +16,7 @@ import {
 } from "@/components/ui/collapsible";
 import { Card, CardHeader, CardContent, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Loader2, ChevronsUpDown, FileDown } from "lucide-react";
+import { Loader2, ChevronsUpDown, FileDown, Upload, Microscope, ClipboardList, Camera } from "lucide-react";
 import { ColumnMapping, MAPPING_FIELDS } from '@/components/report/ColumnMapping';
 import { KeyFigures } from '@/components/report/KeyFigures';
 import { BeneficiariesByVillageChart, BeneficiariesByDayChart, WomenAndChildrenDonut } from '@/components/report/TableBarCharts';
@@ -187,7 +188,7 @@ export default function ReportPage() {
     }
   }, [allRows, mapping]);
 
-  const handleExport = async () => {
+  const handleCaptureAndExport = async () => {
     const cacheId = sessionStorage.getItem('cacheId');
     if (!cacheId || !processedData) {
         toast({ title: "Cannot Export", description: "Data is not ready or no cache ID found. Please process data first.", variant: "destructive" });
@@ -257,6 +258,24 @@ export default function ReportPage() {
   return (
     <DashboardContext.Provider value={{ mapInstance, setMapInstance }}>
       <div className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Report Dashboard</CardTitle>
+            <CardDescription>
+              Visualize your data and navigate to other sections. Use the button below to capture this view for your final Excel export.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-wrap gap-2">
+            <Button variant="outline" asChild><Link href="/upload"><Upload className="mr-2"/>To Upload</Link></Button>
+            <Button variant="outline" asChild><Link href="/review"><Microscope className="mr-2"/>To Review</Link></Button>
+            <Button variant="outline" asChild><Link href="/audit"><ClipboardList className="mr-2"/>To Audit</Link></Button>
+            <Button onClick={handleCaptureAndExport} disabled={isExporting}>
+              {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Camera className="mr-2 h-4 w-4" />}
+              {isExporting ? 'Capturing...' : 'Capture and Go to Export'}
+            </Button>
+          </CardContent>
+        </Card>
+
         <Collapsible defaultOpen={true}>
           <Card>
             <CollapsibleTrigger asChild>
@@ -348,19 +367,6 @@ export default function ReportPage() {
                     </CollapsibleContent>
                 </Card>
             </Collapsible>
-
-            <Card>
-                <CardHeader>
-                    <CardTitle>Export</CardTitle>
-                    <CardDescription>Generate and download the full Excel report including a dashboard sheet.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <Button onClick={handleExport} disabled={isExporting}>
-                        {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
-                        {isExporting ? 'Preparing...' : 'Go to Export Page'}
-                    </Button>
-                </CardContent>
-            </Card>
           </>
         )}
 

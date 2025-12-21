@@ -764,9 +764,9 @@ function createAuditSheet(wb: ExcelJS.Workbook, findings: AuditFinding[], cluste
             const key = headers[colNumber - 1].key;
 
             if (['severity', 'clusterId', 'beneficiaryId', 'nationalId', 'phone'].includes(key)) {
-                cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+                cell.alignment = { ...cell.alignment, vertical: 'middle', horizontal: 'center', wrapText: true };
             } else if (['type', 'description', 'womanName', 'husbandName'].includes(key)) {
-                cell.alignment = { vertical: 'middle', horizontal: 'right', wrapText: true };
+                cell.alignment = { ...cell.alignment, vertical: 'middle', horizontal: 'right', wrapText: true };
             }
         });
     });

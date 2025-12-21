@@ -1,3 +1,4 @@
+
 // app/(app)/upload/page.tsx
 "use client";
 
@@ -5,7 +6,7 @@ import React, { useEffect, useState, useRef } from "react";
 import * as XLSX from "xlsx";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Upload, Settings, CheckCircle, XCircle, Loader2, ChevronRight, Users, Group, Unlink, BoxSelect, Sigma, ChevronsUpDown } from "lucide-react";
+import { Upload, Settings, CheckCircle, XCircle, Loader2, ChevronRight, Users, Group, Unlink, BoxSelect, Sigma, ChevronsUpDown, Clock } from "lucide-react";
 import { Card, CardHeader, CardContent, CardTitle, CardDescription } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
@@ -707,6 +708,7 @@ const PROGRESS_KEY_PREFIX = "progress-";
 
 
 type WorkerProgress = { status:string; progress:number; completed?:number; total?:number; }
+type TimeInfo = { elapsed: number; remaining?: number };
 
 export default function UploadPage(){
   const { t, isLoading: isTranslationLoading } = useTranslation();
@@ -721,8 +723,11 @@ export default function UploadPage(){
   const [clusters, setClusters] = useState<any[][]>([]);
   const [fileReadProgress, setFileReadProgress] = useState(0);
   const [isMappingOpen, setIsMappingOpen] = useState(true);
+  const [timeInfo, setTimeInfo] = useState<TimeInfo>({ elapsed: 0 });
   const rawRowsRef = useRef<any[]>([]);
   const workerRef = useRef<Worker|null>(null);
+  const timerRef = useRef<NodeJS.Timeout|null>(null);
+  const startTimeRef = useRef<number|null>(null);
   const { toast } = useToast();
   const router = useRouter();
 
@@ -752,6 +757,9 @@ export default function UploadPage(){
         setWorkerStatus(msg.status || 'working');
         setProgressInfo({ status: msg.status || 'working', progress: msg.progress ?? 0, completed: msg.completed, total: msg.total });
       } else if(msg.type === 'done'){
+        if (timerRef.current) clearInterval(timerRef.current);
+        startTimeRef.current = null;
+
         setWorkerStatus('caching');
         setProgressInfo({ status: 'caching', progress: 98 });
         const resultPayload = msg.payload || {};
@@ -782,10 +790,12 @@ export default function UploadPage(){
           toast({ title: t('upload.toasts.clusteringComplete.title'), description: t('upload.toasts.clusteringComplete.description', {count: resultClusters.length}) });
         } catch(err:any){
           setWorkerStatus('error');
+          if (timerRef.current) clearInterval(timerRef.current);
           toast({ title: t('upload.toasts.cacheError.title'), description: String(err), variant:"destructive" });
         }
       } else if(msg.type === 'error'){
         setWorkerStatus('error');
+        if (timerRef.current) clearInterval(timerRef.current);
         toast({ title: t('upload.toasts.workerError.title'), description: msg.error || 'Unknown', variant:"destructive" });
       }
     };
@@ -809,6 +819,7 @@ export default function UploadPage(){
 
     return () => {
       if(workerRef.current){ workerRef.current.terminate(); workerRef.current = null; }
+      if (timerRef.current) clearInterval(timerRef.current);
       document.removeEventListener("visibilitychange", handleVisibility);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -823,11 +834,33 @@ export default function UploadPage(){
     }
   }, [mapping, columns]);
 
+  // Timer effect
+  useEffect(() => {
+    if (workerStatus !== 'idle' && workerStatus !== 'done' && workerStatus !== 'error' && startTimeRef.current) {
+        if (timerRef.current) clearInterval(timerRef.current);
+        timerRef.current = setInterval(() => {
+            const elapsed = (Date.now() - startTimeRef.current!) / 1000;
+            let remaining;
+            if (progressInfo.progress > 0 && progressInfo.progress < 100) {
+                remaining = (elapsed / progressInfo.progress) * (100 - progressInfo.progress);
+            }
+            setTimeInfo({ elapsed, remaining });
+        }, 1000);
+    } else {
+        if (timerRef.current) clearInterval(timerRef.current);
+    }
+    return () => {
+        if (timerRef.current) clearInterval(timerRef.current);
+    }
+  }, [workerStatus, progressInfo.progress]);
+
   async function handleFile(e:React.ChangeEvent<HTMLInputElement>){
     const f = e.target.files?.[0];
     if(!f) return;
     setFile(f);
     setWorkerStatus('idle'); setProgressInfo({ status:'idle', progress:0 }); setClusters([]);
+    setTimeInfo({ elapsed: 0 });
+    if(timerRef.current) clearInterval(timerRef.current);
     setFileReadProgress(0);
     setIsMappingOpen(true);
     
@@ -869,9 +902,12 @@ export default function UploadPage(){
     if(!isMappingComplete){ toast({ title: t('upload.toasts.mappingIncomplete'), variant:"destructive"}); return; }
     if(!file) { toast({ title: "No file selected." }); return; }
 
-
     setIsMappingOpen(false);
-    setWorkerStatus('processing'); setProgressInfo({ status:'processing', progress:1 });
+    setWorkerStatus('processing'); 
+    setProgressInfo({ status:'processing', progress:1 });
+    setTimeInfo({ elapsed: 0 });
+    startTimeRef.current = Date.now();
+
 
     const fileKey = `${file.name}-${file.size}-${file.lastModified}`;
     const progressKey = `${PROGRESS_KEY_PREFIX}${fileKey}`;
@@ -911,6 +947,17 @@ export default function UploadPage(){
     }
     workerRef.current!.postMessage({ type:'end' });
   }
+
+  const formatTime = (seconds: number) => {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = Math.floor(seconds % 60);
+    return [
+        h > 0 ? `${h}h` : '',
+        m > 0 ? `${m}m` : '',
+        `${s}s`
+    ].filter(Boolean).join(' ');
+  };
 
   const formattedStatus = () => {
     const s = progressInfo.status || 'idle';
@@ -1001,6 +1048,8 @@ export default function UploadPage(){
                   setWorkerStatus('idle');
                   setProgressInfo({ status: 'idle', progress: 0 });
                   setFileReadProgress(0);
+                  setTimeInfo({elapsed: 0});
+                  if(timerRef.current) clearInterval(timerRef.current);
                 }} variant="outline">{t('upload.buttons.reset')}</Button>
             )}
           </div>
@@ -1080,6 +1129,13 @@ export default function UploadPage(){
                 <div className="space-y-2 mt-4">
                   <div className="flex justify-between items-center text-sm font-medium text-muted-foreground">
                     <span>{formattedStatus()}</span>
+                    <div className="flex items-center gap-2">
+                      <Clock className="h-4 w-4" />
+                      <span>{formatTime(timeInfo.elapsed)}</span>
+                      {timeInfo.remaining !== undefined && (
+                        <span className="text-xs">(est. {formatTime(timeInfo.remaining)} left)</span>
+                      )}
+                    </div>
                   </div>
                   <div className="relative h-4 w-full overflow-hidden rounded-full bg-secondary">
                     <Progress value={progressInfo.progress} className="absolute h-full w-full" />
