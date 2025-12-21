@@ -222,12 +222,12 @@ function sortData(data: EnrichedRecord[]): EnrichedRecord[] {
 }
 
 function createFormattedWorkbook(data: EnrichedRecord[], cachedData: any): ExcelJS.Workbook {
-    const { rows: allRecords, clusters, auditFindings, originalHeaders, chartImages } = cachedData;
+    const { rows: allRecords, clusters, auditFindings, originalHeaders, chartImages, processedDataForReport } = cachedData;
     const wb = new ExcelJS.Workbook();
     wb.creator = "Beneficiary Insights";
     
-    if (chartImages) {
-        createDashboardReportSheet(wb, allRecords, clusters, auditFindings || [], chartImages);
+    if (chartImages && processedDataForReport) {
+        createDashboardReportSheet(wb, allRecords, clusters, auditFindings || [], chartImages, processedDataForReport);
     }
     createEnrichedDataSheet(wb, data, originalHeaders);
     createSummarySheet(wb, allRecords, clusters, auditFindings || []);
@@ -287,12 +287,22 @@ function createEnrichedDataSheet(wb: ExcelJS.Workbook, data: EnrichedRecord[], o
     
     const normalizedHeaders = [ "womanName_normalized", "husbandName_normalized" ];
 
-    const finalHeaders = [ ...enrichmentHeaders, ...originalHeaders, ...normalizedHeaders ];
+    // Ensure all original headers are included, even if not present in the first record
+    const allOriginalHeaders = new Set<string>(originalHeaders || []);
+    data.forEach(record => {
+      Object.keys(record).forEach(key => {
+        if (!enrichmentHeaders.includes(key) && !normalizedHeaders.includes(key) && !key.startsWith('_')) {
+          allOriginalHeaders.add(key);
+        }
+      });
+    });
+
+    const finalHeaders = [ ...enrichmentHeaders, ...Array.from(allOriginalHeaders), ...normalizedHeaders ];
 
     ws.columns = finalHeaders.map(h => ({
       header: h,
       key: h,
-      width: h === 'womanName' || h === 'husbandName' || originalHeaders.includes(h) ? 25 : (h === 'نتائج تحليل المجموعة' ? 50 : 15)
+      width: h === 'womanName' || h === 'husbandName' ? 25 : (h === 'نتائج تحليل المجموعة' ? 50 : 15)
     }));
 
     ws.getRow(1).eachCell(cell => {
@@ -771,53 +781,46 @@ function createAuditSheet(wb: ExcelJS.Workbook, findings: AuditFinding[], cluste
         });
     });
 }
-function createDashboardReportSheet(wb: ExcelJS.Workbook, allRecords: RecordRow[], clusters: {records: RecordRow[]}[], auditFindings: AuditFinding[], chartImages: Record<string, string>) {
+function createDashboardReportSheet(wb: ExcelJS.Workbook, allRecords: RecordRow[], clusters: {records: RecordRow[]}[], auditFindings: AuditFinding[], chartImages: Record<string, string>, processedData: any) {
     const ws = wb.addWorksheet("Dashboard Report");
     ws.views = [{ rightToLeft: true }];
+
     ws.columns = [
-        { width: 5 }, { width: 15 }, { width: 15 }, 
-        { width: 15 }, { width: 15 }, { width: 5 } 
+        { width: 2 }, { width: 13 }, { width: 13 }, { width: 13 }, { width: 13 },
+        { width: 2 }, { width: 13 }, { width: 13 }, { width: 2 }
     ];
 
-    // --- Title ---
-    ws.mergeCells('B2:E2');
+    ws.mergeCells('B2:H2');
     const titleCell = ws.getCell('B2');
     titleCell.value = "Analysis Dashboard Report";
     titleCell.font = { name: 'Calibri', size: 24, bold: true, color: { argb: 'FF002060' } };
     titleCell.alignment = { horizontal: 'center' };
-    ws.getRow(2).height = 40;
+    ws.getRow(2).height = 30;
 
-    // --- Key Figures ---
-    const totalRecords = allRecords.length;
-    const clusteredRecordsCount = clusters.reduce((acc, c) => acc + c.records.length, 0);
-    const unclusteredCount = totalRecords - clusteredRecordsCount;
-    const numClusters = clusters.length;
-
-    const keyFigures = [
-        { title: 'Total Records', value: totalRecords, cell: 'B4' },
-        { title: 'Clustered Records', value: clusteredRecordsCount, cell: 'C4' },
-        { title: 'Unclustered Records', value: unclusteredCount, cell: 'D4' },
-        { title: 'Total Clusters', value: numClusters, cell: 'E4' },
+    const kf = processedData.keyFigures;
+    const keyFiguresData = [
+        { title: 'Team Leaders', value: kf.teamLeaders, cell: 'B4' },
+        { title: 'Surveyors', value: kf.surveyors, cell: 'D4' },
+        { title: 'Registration Days', value: kf.registrationDays, cell: 'F4' },
+        { title: 'Villages Targeted', value: kf.villages, cell: 'H4' },
     ];
     
-    keyFigures.forEach(kf => {
-        const titleCell = ws.getCell(kf.cell);
-        titleCell.value = kf.title;
+    keyFiguresData.forEach(item => {
+        const titleCell = ws.getCell(item.cell);
+        titleCell.value = item.title;
         titleCell.font = { name: 'Calibri', size: 12, bold: true, color: { argb: 'FFFFFFFF' } };
         titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4F81BD' } };
         titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
-        
-        const valueCell = ws.getCell(kf.cell.replace('4', '5'));
-        valueCell.value = kf.value;
+
+        const valueCell = ws.getCell(item.cell.replace('4', '5'));
+        valueCell.value = item.value;
         valueCell.font = { name: 'Calibri', size: 20, bold: true, color: { argb: 'FF002060' } };
         valueCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDCE6F1' } };
         valueCell.alignment = { horizontal: 'center', vertical: 'middle' };
-        ws.getRow(5).height = 30;
     });
+    ws.getRow(5).height = 30;
 
-    // --- Add Images and Tables ---
-    // Helper function to add an image from base64 and maintain aspect ratio
-    const addImageFromBase64 = (base64: string, range: { tl: { col: number, row: number }, br: { col: number, row: number } }) => {
+    const addImage = (base64: string, tl_col: number, tl_row: number, br_col: number, br_row: number) => {
         if (!base64 || !base64.startsWith('data:image/png;base64,')) return;
 
         const imageId = wb.addImage({
@@ -825,29 +828,41 @@ function createDashboardReportSheet(wb: ExcelJS.Workbook, allRecords: RecordRow[
             extension: 'png',
         });
         
-        // Add the image with the calculated aspect ratio to prevent stretching.
         ws.addImage(imageId, {
-            tl: { col: range.tl.col, row: range.tl.row },
-            ext: { width: 500, height: 250 } // Default size, ExcelJS will fit it
+            tl: { col: tl_col, row: tl_row },
+            br: { col: br_col, row: br_row },
+            editAs: 'oneCell'
         });
     };
+    
+    // Position tables and charts
+    const byDayData = processedData.charts.beneficiariesByDay.sort((a: any, b: any) => b.value - a.value);
+    ws.getCell('B7').value = "Beneficiaries by Registration Day";
+    ws.getCell('B7').font = { bold: true };
+    ws.getCell('B8').value = "Day";
+    ws.getCell('C8').value = "Beneficiaries";
+    ws.getRow(8).font = { bold: true };
+    byDayData.forEach((item: any, index: number) => {
+      ws.getCell(`B${9 + index}`).value = item.name;
+      ws.getCell(`C${9 + index}`).value = item.value;
+    });
 
-    if (chartImages.byVillageChart) {
-        addImageFromBase64(chartImages.byVillageChart, { tl: { col: 1.1, row: 6 }, br: { col: 3, row: 17 }});
-    }
-    if (chartImages.byDayChart) {
-         addImageFromBase64(chartImages.byDayChart, { tl: { col: 3.1, row: 6 }, br: { col: 5, row: 17 }});
-    }
-    if (chartImages.womenDonut) {
-        addImageFromBase64(chartImages.womenDonut, { tl: { col: 1.1, row: 18 }, br: { col: 3, row: 29 }});
-    }
-    if (chartImages.genderVisual) {
-         addImageFromBase64(chartImages.genderVisual, { tl: { col: 3.1, row: 18 }, br: { col: 5, row: 29 }});
-    }
-    if (chartImages.bubbleStats) {
-        addImageFromBase64(chartImages.bubbleStats, { tl: { col: 1.1, row: 30 }, br: { col: 5, row: 41 }});
-    }
-     if (chartImages.map) {
-        addImageFromBase64(chartImages.map, { tl: { col: 1.1, row: 42 }, br: { col: 5, row: 58 }});
-    }
+    addImage(chartImages.byDayChart, 2.1, 6.1, 4.9, 18.9);
+
+    const byVillageData = processedData.charts.beneficiariesByVillage.sort((a: any, b: any) => b.value - a.value);
+    ws.getCell('F7').value = "Beneficiaries by Village";
+    ws.getCell('F7').font = { bold: true };
+    ws.getCell('F8').value = "Village";
+    ws.getCell('G8').value = "Beneficiaries";
+    ws.getRow(8).font = { bold: true };
+    byVillageData.forEach((item: any, index: number) => {
+      ws.getCell(`F${9 + index}`).value = item.name;
+      ws.getCell(`G${9 + index}`).value = item.value;
+    });
+
+    addImage(chartImages.byVillageChart, 5.1, 6.1, 8.9, 18.9);
+    addImage(chartImages.genderVisual, 0.1, 20, 3.9, 30);
+    addImage(chartImages.womenDonut, 4.1, 20, 6.9, 30);
+    addImage(chartImages.bubbleStats, 0.1, 31, 3.9, 45);
+    addImage(chartImages.map, 4.1, 31, 8.9, 45);
 }

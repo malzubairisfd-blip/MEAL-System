@@ -23,7 +23,7 @@ const TableWithBarChart = ({ title, data, dataKeyLabel }: { title: string; data:
     tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
     grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
     xAxis: { type: 'value', boundaryGap: [0, 0.01] },
-    yAxis: { type: 'category', data: sortedData.map(d => d.name).reverse() },
+    yAxis: { type: 'category', data: sortedData.map(d => d.name).reverse(), axisLabel: { interval: 0, rotate: 0 } },
     series: [{
       type: 'bar',
       data: sortedData.map(d => d.value).reverse(),
@@ -36,8 +36,9 @@ const TableWithBarChart = ({ title, data, dataKeyLabel }: { title: string; data:
       <CardHeader>
         <CardTitle>{title}</CardTitle>
       </CardHeader>
-      <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <ScrollArea className="h-auto max-h-96">
+      <CardContent>
+        {/* The ScrollArea height is removed to allow full content rendering for image capture */}
+        <ScrollArea>
           <Table>
             <TableHeader>
               <TableRow>
@@ -55,7 +56,7 @@ const TableWithBarChart = ({ title, data, dataKeyLabel }: { title: string; data:
             </TableBody>
           </Table>
         </ScrollArea>
-        <div className="h-72">
+        <div className="h-72 mt-4">
           <ReactECharts option={option} style={{ height: '100%', width: '100%' }} />
         </div>
       </CardContent>

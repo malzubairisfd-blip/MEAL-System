@@ -56,7 +56,6 @@ export default function ReportPage() {
   const [isExporting, setIsExporting] = useState(false);
 
   // Refs for capturing components
-  const keyFiguresRef = useRef<HTMLDivElement>(null);
   const byVillageChartRef = useRef<HTMLDivElement>(null);
   const byDayChartRef = useRef<HTMLDivElement>(null);
   const womenDonutRef = useRef<HTMLDivElement>(null);
@@ -129,7 +128,6 @@ export default function ReportPage() {
     if (allRows.length > 0 && MAPPING_FIELDS.every(field => mapping[field])) {
       const getUnique = (field: string) => new Set(allRows.map(r => r[mapping[field]]).filter(Boolean)).size;
       const getSum = (field: string) => allRows.reduce((acc, r) => acc + (Number(r[mapping[field]]) || 0), 0);
-      const getUniqueCount = (field: string) => new Set(allRows.map(r => r[mapping[field]]).filter(Boolean)).size;
       
       const benefByVillage = allRows.reduce((acc, r) => {
         const village = r[mapping['Village targeted']];
@@ -173,14 +171,16 @@ export default function ReportPage() {
           },
         },
         bubbles: [
-          { label: 'HH Registered', value: getUniqueCount('Household registered'), icon: 'home' },
+          { label: 'HH Registered', value: getUnique('Household registered'), icon: 'home' },
           { label: 'Male HH', value: allRows.filter(r => Number(r[mapping['Household Gender']]) === 1).length, icon: 'male' },
           { label: 'Female HH', value: allRows.filter(r => Number(r[mapping['Household Gender']]) === 2).length, icon: 'female' },
           { label: 'Dislocated HH', value: getSum('Dislocated household'), icon: 'move' },
           { label: 'HH with Guest', value: getSum('Household having dislocated guest'), icon: 'users' },
-          { label: 'Beneficiaries', value: getUniqueCount('Beneficiaries registered'), icon: 'users' },
-          { label: 'Pregnant', value: getSum('Pregnant woman'), icon: 'female' },
-          { label: 'Handicapped Woman', value: getSum('Handicapped Woman'), icon: 'female' },
+          { label: 'Beneficiaries', value: getUnique('Beneficiaries registered'), icon: 'group' },
+          { label: 'Pregnant Woman', value: getSum('Pregnant woman'), icon: 'pregnant' },
+          { label: 'Lactating/Mother <5', value: getSum('Mothers having a child under 5 years old'), icon: 'lactating' },
+          { label: 'Handicapped Woman', value: getSum('Handicapped Woman'), icon: 'handicapped' },
+          { label: 'Woman w/ Handicapped Child', value: getSum('Women have handicapped children from 5 to 17 years old'), icon: 'child' },
           { label: 'Dislocated Woman', value: getSum('Dislocated Woman'), icon: 'move' },
         ]
       };
@@ -200,7 +200,6 @@ export default function ReportPage() {
     
     try {
         const refs = {
-            keyFigures: keyFiguresRef,
             byVillageChart: byVillageChartRef,
             byDayChart: byDayChartRef,
             womenDonut: womenDonutRef,
@@ -213,7 +212,7 @@ export default function ReportPage() {
         for (const [key, ref] of Object.entries(refs)) {
             if (ref.current) {
                 try {
-                    images[key] = await toPng(ref.current, { cacheBust: true, pixelRatio: 2 });
+                    images[key] = await toPng(ref.current, { cacheBust: true, pixelRatio: 2, style: { background: 'white' } });
                 } catch (e) {
                     console.error(`Failed to capture ${key}`, e);
                     toast({ title: `Capture Failed`, description: `Could not capture the ${key} component.`, variant: "destructive" });
@@ -237,7 +236,7 @@ export default function ReportPage() {
         await fetch('/api/cluster-cache', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ cacheId, chartImages: images }),
+            body: JSON.stringify({ cacheId, chartImages: images, processedDataForReport: processedData }),
         });
 
         toast({ title: "Dashboard Cached", description: "Visuals have been saved. Proceeding to export page." });
@@ -307,7 +306,7 @@ export default function ReportPage() {
                     </CardHeader>
                 </CollapsibleTrigger>
                 <CollapsibleContent>
-                   <div ref={keyFiguresRef}>
+                   <div>
                     <KeyFigures data={processedData.keyFigures} />
                    </div>
                 </CollapsibleContent>
@@ -327,8 +326,8 @@ export default function ReportPage() {
                 </CollapsibleTrigger>
                 <CollapsibleContent className="p-6 pt-0 space-y-6">
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        <div ref={byVillageChartRef}><BeneficiariesByVillageChart data={processedData.charts.beneficiariesByVillage} /></div>
                         <div ref={byDayChartRef}><BeneficiariesByDayChart data={processedData.charts.beneficiariesByDay} /></div>
+                        <div ref={byVillageChartRef}><BeneficiariesByVillageChart data={processedData.charts.beneficiariesByVillage} /></div>
                     </div>
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                         <div className="lg:col-span-1" ref={womenDonutRef}>
