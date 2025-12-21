@@ -391,17 +391,23 @@ function pairwiseScore(aRaw, bRaw, opts) {
 async function buildEdges(rows, minScore = 0.62, opts, resumeState = null) {
   const n = rows.length;
   if (n <= 1) return { edges: [], finalState: null };
+  
   const totalPairs = (n * (n - 1)) / 2;
   const edges = resumeState?.edges || [];
   let processed = resumeState?.processed || 0;
-  for (let i = resumeState?.i || 0; i < n; i++) {
-    for (let j = (i === (resumeState?.i || 0) ? resumeState?.j : undefined) ?? i + 1; j < n; j++) {
+  
+  let i = resumeState?.i || 0;
+  let j = resumeState?.j || i + 1;
+
+  for (; i < n; i++) {
+    for (; j < n; j++) {
       const result = pairwiseScore(rows[i], rows[j], opts);
       const score = result.score ?? 0;
       if (score >= minScore) {
         edges.push({ a: i, b: j, score, reasons: result.reasons || [] });
       }
       processed++;
+
       if (processed % 5000 === 0) {
         const progressState = { i, j: j + 1, edges, processed };
         postMessage({
@@ -418,10 +424,20 @@ async function buildEdges(rows, minScore = 0.62, opts, resumeState = null) {
         });
         await yieldToEventLoop();
       }
+
+      if (processed % 1000000 === 0) {
+        postMessage({
+          type: "debug",
+          message: \`Processed \${processed.toLocaleString()} / \${totalPairs.toLocaleString()}\`
+        });
+      }
     }
+    j = i + 2;
   }
+  
   postMessage({ type: "progress", status: "edges-built", progress: 50, completed: totalPairs, total: totalPairs });
   postMessage({ type: 'save_progress', key: progressKey, value: null });
+  
   edges.sort((x, y) => y.score - x.score);
   return { edges, finalState: null };
 }
@@ -864,6 +880,9 @@ export default function UploadPage(){
     if (savedProgressRaw) {
         try {
             resumeState = JSON.parse(savedProgressRaw);
+            if (resumeState) {
+              toast({ title: "Resuming Process", description: "Found saved progress for this file and will resume clustering."});
+            }
         } catch {}
     }
 
