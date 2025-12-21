@@ -388,6 +388,14 @@ function pairwiseScore(aRaw, bRaw, opts) {
 /* --------------------------------------
    Resumable Edge Building Logic
    -------------------------------------- */
+function pairIndexToIJ(k, n) {
+  const i = Math.floor(
+    n - 2 - Math.floor(Math.sqrt(-8 * k + 4 * n * (n - 1) - 7) / 2 - 0.5)
+  );
+  const j = k - ((n - 1 - i) * (n - 2 - i)) / 2 + i + 1;
+  return [i, j];
+}
+
 async function buildEdges(rows, minScore = 0.62, opts, resumeState = null) {
   const n = rows.length;
   if (n <= 1) return [];
