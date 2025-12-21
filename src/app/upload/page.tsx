@@ -388,36 +388,27 @@ function pairwiseScore(aRaw, bRaw, opts) {
 /* --------------------------------------
    Resumable Edge Building Logic
    -------------------------------------- */
-function pairIndexToIJ(k, n) {
-  const i = Math.floor(
-    n - 2 - Math.floor(Math.sqrt(-8 * k + 4 * n * (n - 1) - 7) / 2 - 0.5)
-  );
-  const j = k - ((n - 1 - i) * (n - 2 - i)) / 2 + i + 1;
-  return [i, j];
-}
-
 async function buildEdges(rows, minScore = 0.62, opts, resumeState = null) {
   const n = rows.length;
-  if (n <= 1) return [];
-
+  if (n <= 1) return { edges: [], finalState: null };
   const totalPairs = (n * (n - 1)) / 2;
-  const edges = [];
-  
-  let i = resumeState?.i ?? 0;
-  let j = resumeState?.j ?? i + 1;
-  let processed = 0; // Simple counter for reporting
-
-  for (; i < n; i++) {
-    for (; j < n; j++) {
+  const edges = resumeState?.edges || [];
+  let processed = resumeState?.processed || 0;
+  for (let i = resumeState?.i || 0; i < n; i++) {
+    for (let j = (i === (resumeState?.i || 0) ? resumeState?.j : undefined) ?? i + 1; j < n; j++) {
       const result = pairwiseScore(rows[i], rows[j], opts);
       const score = result.score ?? 0;
       if (score >= minScore) {
         edges.push({ a: i, b: j, score, reasons: result.reasons || [] });
       }
-      
       processed++;
-
       if (processed % 5000 === 0) {
+        const progressState = { i, j: j + 1, edges, processed };
+        postMessage({
+          type: "save_progress",
+          key: progressKey,
+          value: progressState
+        });
         postMessage({
           type: "progress",
           status: "building-edges",
@@ -425,24 +416,14 @@ async function buildEdges(rows, minScore = 0.62, opts, resumeState = null) {
           completed: processed,
           total: totalPairs
         });
-
-        postMessage({
-          type: "save_progress",
-          key: progressKey,
-          value: { i, j }
-        });
-
         await yieldToEventLoop();
       }
     }
-    j = i + 2; // Next iteration of outer loop starts j at i+1. But inner loop increments `j` first.
   }
-
   postMessage({ type: "progress", status: "edges-built", progress: 50, completed: totalPairs, total: totalPairs });
-  postMessage({ type: 'save_progress', key: progressKey, value: null }); // Mark as complete by clearing progress
-  
+  postMessage({ type: 'save_progress', key: progressKey, value: null });
   edges.sort((x, y) => y.score - x.score);
-  return edges;
+  return { edges, finalState: null };
 }
 
 
@@ -541,7 +522,7 @@ async function runClustering(rows, opts, resumeState) {
 
   postMessage({ type: "progress", status: "blocking", progress: 5, completed: 0, total: rows.length });
 
-  const edges = await buildEdges(rows, minPair, opts, resumeState);
+  const { edges } = await buildEdges(rows, minPair, opts, resumeState);
 
   postMessage({ type: "progress", status: "edges-built", progress: 60, completed: edges.length, total: Math.max(1, rows.length) });
 
