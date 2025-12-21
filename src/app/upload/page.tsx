@@ -20,7 +20,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 function createWorkerScript() {
   return `
-// WorkerScript v9 — File-specific Resumable Clustering
+// WorkerScript v10 — Resumable Cursor-based Clustering
 // Use as a web worker. Listens for messages: {type:'start', payload:{...}}, {type:'data', payload:{...}}, {type:'end'}, {type:'resume'}
 // Emits progress and final payload: postMessage({ type:'done', payload:{...} })
 
@@ -129,7 +129,6 @@ function nameOrderFreeScore(aName, bName) {
 
 /* -------------------------
    Component compare
-   - splits combined woman+husband into parts and compares part-by-part
    ------------------------- */
 function splitParts(name) {
   if (!name) return [];
@@ -140,7 +139,6 @@ function compareNameComponents(aName, bName) {
   // returns { partsA, partsB, partScores: [..], orderFree }
   const A = splitParts(aName);
   const B = splitParts(bName);
-  const minLen = Math.min(A.length, B.length);
   const partScores = [];
   for (let i = 0; i < Math.max(A.length, B.length); i++) {
     const pA = A[i] || "";
@@ -152,8 +150,7 @@ function compareNameComponents(aName, bName) {
 }
 
 /* -------------------------
-   Additional Rules (0..5) - includes your 5 rules and token-based rule
-   Returns boosted score (>= minPair) or null
+   Additional Rules
    ------------------------- */
 function applyAdditionalRules(a, b, opts) {
   const minPair = opts?.thresholds?.minPair ?? 0.62;
@@ -181,8 +178,6 @@ function applyAdditionalRules(a, b, opts) {
 
   /* ----------------------------------------------------
      RULE 6 — STRONG HOUSEHOLD + CHILDREN MATCH (CRITICAL)
-     This rule overrides all weak lineage noise
-     المرأة نفسها مع اختلاف النسب — الزوج + الأطفال حاسمين
   ---------------------------------------------------- */
   {
     const A_parts = splitParts(a.womanName_normalized);
@@ -202,16 +197,14 @@ function applyAdditionalRules(a, b, opts) {
       ) >= 0.90;
 
     if (firstNameMatch && husbandStrong && childrenMatch) {
-        reasons.push("DUPLICATED_HUSBAND_LINEAGE"); // This is close enough
+        reasons.push("DUPLICATED_HUSBAND_LINEAGE");
         return { score: minPair + 0.25, reasons }; // HARD FORCE DUPLICATE
     }
   }
 
-  // Helper thresholds
   const s93 = (x, y) => jw(x || "", y || "") >= 0.93;
   const s95 = (x, y) => jw(x || "", y || "") >= 0.95;
 
-  // Normalize accessors for first, father, grandfather, 4th/last
   const getPart = (arr, idx) => (arr && arr.length > idx) ? arr[idx] : "";
 
   const F1 = getPart(A, 0), Fa1 = getPart(A, 1), G1 = getPart(A, 2), L1 = getPart(A, 3);
@@ -395,53 +388,50 @@ function pairwiseScore(aRaw, bRaw, opts) {
 /* --------------------------------------
    Resumable Edge Building Logic
    -------------------------------------- */
-function pairIndexToIJ(k, n) {
-  let i = 0;
-  let remaining = k;
-  while (remaining >= n - i - 1) {
-    remaining -= (n - i - 1);
-    i++;
-  }
-  const j = i + 1 + remaining;
-  return [i, j];
-}
-
-async function buildEdges(rows, minScore = 0.62, opts, startProgress = 0) {
+async function buildEdges(rows, minScore = 0.62, opts, resumeState = null) {
   const n = rows.length;
   if (n <= 1) return [];
 
   const totalPairs = (n * (n - 1)) / 2;
   const edges = [];
   
-  let processed = startProgress;
+  let i = resumeState?.i ?? 0;
+  let j = resumeState?.j ?? i + 1;
+  let processed = 0; // Simple counter for reporting
 
-  for (let k = processed; k < totalPairs; k++) {
-    const [i, j] = pairIndexToIJ(k, n);
+  for (; i < n; i++) {
+    for (; j < n; j++) {
+      const result = pairwiseScore(rows[i], rows[j], opts);
+      const score = result.score ?? 0;
+      if (score >= minScore) {
+        edges.push({ a: i, b: j, score, reasons: result.reasons || [] });
+      }
+      
+      processed++;
 
-    const result = pairwiseScore(rows[i], rows[j], opts);
-    const score = result.score ?? 0;
-    if (score >= minScore) {
-      edges.push({ a: i, b: j, score, reasons: result.reasons || [] });
+      if (processed % 5000 === 0) {
+        postMessage({
+          type: "progress",
+          status: "building-edges",
+          progress: 10 + Math.round(40 * (processed / totalPairs)),
+          completed: processed,
+          total: totalPairs
+        });
+
+        postMessage({
+          type: "save_progress",
+          key: progressKey,
+          value: { i, j }
+        });
+
+        await yieldToEventLoop();
+      }
     }
-    
-    processed++;
-
-    if (processed % 300 === 0) {
-      postMessage({
-        type: "progress",
-        status: "building-edges",
-        progress: 10 + Math.round(40 * (processed / totalPairs)),
-        completed: processed,
-        total: totalPairs
-      });
-      // Use a file-specific key to save progress
-      postMessage({ type: 'save_progress', key: progressKey, value: processed });
-      await yieldToEventLoop();
-    }
+    j = i + 2; // Next iteration of outer loop starts j at i+1. But inner loop increments `j` first.
   }
 
-  postMessage({ type: "progress", status: "edges-built", progress: 50, completed: processed, total: totalPairs });
-  postMessage({ type: 'save_progress', key: progressKey, value: totalPairs }); // Mark as complete
+  postMessage({ type: "progress", status: "edges-built", progress: 50, completed: totalPairs, total: totalPairs });
+  postMessage({ type: 'save_progress', key: progressKey, value: null }); // Mark as complete by clearing progress
   
   edges.sort((x, y) => y.score - x.score);
   return edges;
@@ -534,7 +524,7 @@ function splitCluster(rowsSubset, minInternal = 0.50, opts) {
 
 
 /* Main clustering pipeline */
-async function runClustering(rows, opts, startProgress) {
+async function runClustering(rows, opts, resumeState) {
   // ensure internal ids
   rows.forEach((r, i) => r._internalId = r._internalId || 'row_' + i);
 
@@ -543,8 +533,7 @@ async function runClustering(rows, opts, startProgress) {
 
   postMessage({ type: "progress", status: "blocking", progress: 5, completed: 0, total: rows.length });
 
-  // Pass resumable progress to edge building
-  const edges = await buildEdges(rows, minPair, opts, startProgress);
+  const edges = await buildEdges(rows, minPair, opts, resumeState);
 
   postMessage({ type: "progress", status: "edges-built", progress: 60, completed: edges.length, total: Math.max(1, rows.length) });
 
@@ -577,7 +566,6 @@ async function runClustering(rows, opts, startProgress) {
       continue;
     }
     
-    // need to split combined component
     const combinedIdx = Array.from(new Set([...uf.rootMembers(ra), ...uf.rootMembers(rb)]));
     const combinedRows = combinedIdx.map(i => rows[i]);
     const parts = splitCluster(combinedRows, minInternal, opts);
@@ -626,8 +614,7 @@ async function runClustering(rows, opts, startProgress) {
 
   postMessage({ type: "progress", status: "annotating", progress: 95 });
 
-  // Cleanup progress on successful completion
-  postMessage({ type: 'save_progress', key: progressKey, value: 0 });
+  postMessage({ type: 'save_progress', key: progressKey, value: null });
 
   return { clusters: clustersWithRecords, edgesUsed, rows };
 }
@@ -638,7 +625,7 @@ async function runClustering(rows, opts, startProgress) {
 let inbound = [];
 let mapping = {};
 let options = {};
-let startProgress = 0;
+let resumeState = null;
 let progressKey = ''; // Holds the file-specific progress key
 
 function mapIncomingRowsToInternal(rowsChunk, mapping) {
@@ -677,8 +664,8 @@ self.addEventListener('message', function (ev) {
   if (msg.type === 'start') {
     mapping = msg.payload.mapping || {};
     options = msg.payload.options || {};
-    startProgress = msg.payload.startProgress || 0;
-    progressKey = msg.payload.progressKey || ''; // Receive the file-specific key
+    resumeState = msg.payload.resumeState || null;
+    progressKey = msg.payload.progressKey || '';
     inbound = [];
     postMessage({ type: 'progress', status: 'worker-ready', progress: 1 });
   } else if (msg.type === 'data') {
@@ -690,14 +677,15 @@ self.addEventListener('message', function (ev) {
     setTimeout(async () => {
       try {
         postMessage({ type: 'progress', status: 'mapping-rows', progress: 5, completed: 0, total: inbound.length });
-        const result = await runClustering(inbound, options, startProgress);
+        const result = await runClustering(inbound, options, resumeState);
         postMessage({ type: 'done', payload: { rows: result.rows, clusters: result.clusters, edgesUsed: result.edgesUsed } });
       } catch (err) {
         postMessage({ type: 'error', error: String(err && err.message ? err.message : err) });
       }
     }, 50);
   } else if (msg.type === 'resume') {
-     postMessage({ type: "status", message: "Resuming edge building…" });
+    resumeState = msg.payload;
+    postMessage({ type: "status", message: "Resuming edge building…" });
   }
 });
 `;
@@ -734,74 +722,82 @@ export default function UploadPage(){
   const router = useRouter();
 
   useEffect(()=>{
-    // create module worker
     if(typeof window === "undefined") return;
-    if(workerRef.current) return;
-    try {
-      const workerScript = createWorkerScript();
-      const blob = new Blob([workerScript], { type: 'application/javascript' });
-      const blobUrl = URL.createObjectURL(blob);
-      const w = new Worker(blobUrl);
 
-      workerRef.current = w;
-      w.onmessage = async (ev) => {
-        const msg = ev.data;
-        if(!msg || !msg.type) return;
-        
-        if (msg.type === 'save_progress') {
-            localStorage.setItem(msg.key, String(msg.value));
-            return;
-        }
+    const workerScript = createWorkerScript();
+    const blob = new Blob([workerScript], { type: 'application/javascript' });
+    const blobUrl = URL.createObjectURL(blob);
+    const w = new Worker(blobUrl);
 
-        if(msg.type === 'progress' || msg.type === 'status'){
-          setWorkerStatus(msg.status || 'working');
-          setProgressInfo({ status: msg.status || 'working', progress: msg.progress ?? 0, completed: msg.completed, total: msg.total });
-        } else if(msg.type === 'done'){
-          setWorkerStatus('caching');
-          setProgressInfo({ status: 'caching', progress: 98 });
-          const resultPayload = msg.payload || {};
-          const resultClusters = resultPayload.clusters || [];
-          setClusters(resultClusters);
-          
-          try {
-            const cacheId = 'cache-' + Date.now() + '-' + Math.random().toString(36).slice(2,9);
-            sessionStorage.setItem('cacheId', cacheId);
-            
-            const allRows = resultPayload.rows || [];
-            
-            const dataToCache = {
-                rows: allRows,
-                clusters: resultClusters,
-                originalHeaders: columns,
-            };
-
-            await fetch('/api/cluster-cache', { 
-                method:'POST', 
-                headers:{'Content-Type':'application/json'}, 
-                body: JSON.stringify({ cacheId, ...dataToCache }) 
-            });
-
-            sessionStorage.setItem('cacheTimestamp', Date.now().toString());
-            setWorkerStatus('done');
-            setProgressInfo({ status: 'done', progress: 100 });
-            toast({ title: t('upload.toasts.clusteringComplete.title'), description: t('upload.toasts.clusteringComplete.description', {count: resultClusters.length}) });
-          } catch(err:any){
-            setWorkerStatus('error');
-            toast({ title: t('upload.toasts.cacheError.title'), description: String(err), variant:"destructive" });
+    workerRef.current = w;
+    w.onmessage = async (ev) => {
+      const msg = ev.data;
+      if(!msg || !msg.type) return;
+      
+      if (msg.type === 'save_progress') {
+          if (msg.value) {
+            localStorage.setItem(msg.key, JSON.stringify(msg.value));
+          } else {
+            localStorage.removeItem(msg.key);
           }
-        } else if(msg.type === 'error'){
+          return;
+      }
+
+      if(msg.type === 'progress' || msg.type === 'status'){
+        setWorkerStatus(msg.status || 'working');
+        setProgressInfo({ status: msg.status || 'working', progress: msg.progress ?? 0, completed: msg.completed, total: msg.total });
+      } else if(msg.type === 'done'){
+        setWorkerStatus('caching');
+        setProgressInfo({ status: 'caching', progress: 98 });
+        const resultPayload = msg.payload || {};
+        const resultClusters = resultPayload.clusters || [];
+        setClusters(resultClusters);
+        
+        try {
+          const cacheId = 'cache-' + Date.now() + '-' + Math.random().toString(36).slice(2,9);
+          sessionStorage.setItem('cacheId', cacheId);
+          
+          const allRows = resultPayload.rows || [];
+          
+          const dataToCache = {
+              rows: allRows,
+              clusters: resultClusters,
+              originalHeaders: columns,
+          };
+
+          await fetch('/api/cluster-cache', { 
+              method:'POST', 
+              headers:{'Content-Type':'application/json'}, 
+              body: JSON.stringify({ cacheId, ...dataToCache }) 
+          });
+
+          sessionStorage.setItem('cacheTimestamp', Date.now().toString());
+          setWorkerStatus('done');
+          setProgressInfo({ status: 'done', progress: 100 });
+          toast({ title: t('upload.toasts.clusteringComplete.title'), description: t('upload.toasts.clusteringComplete.description', {count: resultClusters.length}) });
+        } catch(err:any){
           setWorkerStatus('error');
-          toast({ title: t('upload.toasts.workerError.title'), description: msg.error || 'Unknown', variant:"destructive" });
+          toast({ title: t('upload.toasts.cacheError.title'), description: String(err), variant:"destructive" });
         }
-      };
-    } catch(err:any){
-      console.error('Worker spawn failed', err);
-      toast({ title: t('upload.toasts.workerStartError.title'), description: String(err), variant:"destructive" });
-    }
+      } else if(msg.type === 'error'){
+        setWorkerStatus('error');
+        toast({ title: t('upload.toasts.workerError.title'), description: msg.error || 'Unknown', variant:"destructive" });
+      }
+    };
 
     const handleVisibility = () => {
-        if (document.visibilityState === "visible" && workerRef.current) {
-          workerRef.current.postMessage({ type: "resume" });
+        if (document.visibilityState === "visible" && workerRef.current && file) {
+            const fileKey = `${file.name}-${file.size}-${file.lastModified}`;
+            const progressKey = `${PROGRESS_KEY_PREFIX}${fileKey}`;
+            const savedProgressRaw = localStorage.getItem(progressKey);
+            if (savedProgressRaw) {
+                try {
+                    const savedProgress = JSON.parse(savedProgressRaw);
+                    if(savedProgress) {
+                       workerRef.current.postMessage({ type: "resume", payload: savedProgress });
+                    }
+                } catch {}
+            }
         }
     };
     document.addEventListener("visibilitychange", handleVisibility);
@@ -811,7 +807,7 @@ export default function UploadPage(){
       document.removeEventListener("visibilitychange", handleVisibility);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [columns, t]);
+  }, [columns, t, file]);
 
   useEffect(()=>{
     const allRequiredMapped = REQUIRED_MAPPING_FIELDS.every(f => !!mapping[f]);
@@ -829,11 +825,7 @@ export default function UploadPage(){
     setWorkerStatus('idle'); setProgressInfo({ status:'idle', progress:0 }); setClusters([]);
     setFileReadProgress(0);
     setIsMappingOpen(true);
-    // When a new file is uploaded, clear any old generic progress
-    const oldProgressKey = "edge-build-progress-v1";
-    localStorage.removeItem(oldProgressKey);
-
-
+    
     const reader = new FileReader();
     reader.onprogress = (event) => {
       if (event.lengthComputable) {
@@ -846,9 +838,11 @@ export default function UploadPage(){
         const wb = XLSX.read(buffer, { type: 'array', cellDates:true });
         const sheet = wb.Sheets[wb.SheetNames[0]];
         const json = XLSX.utils.sheet_to_json<any>(sheet, { defval: "" });
-        rawRowsRef.current = json; // Store raw rows
-        setColumns(Object.keys(json[0] || {}));
-        const storageKey = LOCAL_STORAGE_KEY_PREFIX + Object.keys(json[0]||{}).join(',');
+        rawRowsRef.current = json;
+        const fileColumns = Object.keys(json[0] || {});
+        setColumns(fileColumns);
+        
+        const storageKey = LOCAL_STORAGE_KEY_PREFIX + fileColumns.join(',');
         const saved = localStorage.getItem(storageKey);
         if(saved) {
           try { setMapping(JSON.parse(saved)); } catch {}
@@ -874,12 +868,16 @@ export default function UploadPage(){
     setIsMappingOpen(false);
     setWorkerStatus('processing'); setProgressInfo({ status:'processing', progress:1 });
 
-    // Create a unique key for the current file to manage its progress
     const fileKey = `${file.name}-${file.size}-${file.lastModified}`;
     const progressKey = `${PROGRESS_KEY_PREFIX}${fileKey}`;
-    const savedProgress = Number(localStorage.getItem(progressKey) || '0');
+    const savedProgressRaw = localStorage.getItem(progressKey);
+    let resumeState = null;
+    if (savedProgressRaw) {
+        try {
+            resumeState = JSON.parse(savedProgressRaw);
+        } catch {}
+    }
 
-    // load settings from server (if any): includes finalScoreWeights and thresholds
     let settings = {};
     try {
       const res = await fetch("/api/settings");
@@ -892,12 +890,11 @@ export default function UploadPage(){
       payload: { 
         mapping, 
         options: settings, 
-        startProgress: savedProgress,
-        progressKey: progressKey // Send the unique key to the worker
+        resumeState: resumeState,
+        progressKey: progressKey
       } 
     });
 
-    // stream rows in chunks
     const CHUNK = 2000;
     for(let i=0;i<rawRowsRef.current.length;i+=CHUNK){
       const chunk = rawRowsRef.current.slice(i,i+CHUNK);
