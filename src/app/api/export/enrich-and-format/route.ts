@@ -1,4 +1,5 @@
 
+
 import { NextResponse } from 'next/server';
 import fs from 'fs/promises';
 import path from 'path';
@@ -291,13 +292,15 @@ function createEnrichedDataSheet(wb: ExcelJS.Workbook, data: EnrichedRecord[], o
     const allOriginalHeaders = new Set<string>(originalHeaders || []);
     data.forEach(record => {
       Object.keys(record).forEach(key => {
-        if (!enrichmentHeaders.includes(key) && !normalizedHeaders.includes(key) && !key.startsWith('_')) {
-          allOriginalHeaders.add(key);
+        if (!enrichmentHeaders.includes(key) && !normalizedHeaders.includes(key) && !key.startsWith('_') && !Object.keys(record).find(k => k === 'ClusterID')) {
+           if (!allOriginalHeaders.has(key) && !enrichmentHeaders.includes(key) && !normalizedHeaders.includes(key)) {
+             allOriginalHeaders.add(key);
+           }
         }
       });
     });
 
-    const finalHeaders = [ ...enrichmentHeaders, ...Array.from(allOriginalHeaders), ...normalizedHeaders ];
+    const finalHeaders = [ ...enrichmentHeaders, ...Array.from(allOriginalHeaders) ];
 
     ws.columns = finalHeaders.map(h => ({
       header: h,
@@ -784,13 +787,22 @@ function createAuditSheet(wb: ExcelJS.Workbook, findings: AuditFinding[], cluste
 function createDashboardReportSheet(wb: ExcelJS.Workbook, allRecords: RecordRow[], clusters: {records: RecordRow[]}[], auditFindings: AuditFinding[], chartImages: Record<string, string>, processedData: any) {
     const ws = wb.addWorksheet("Dashboard Report");
     ws.views = [{ rightToLeft: true }];
-
+    
+    // Define column widths roughly based on the image proportions
     ws.columns = [
-        { width: 2 }, { width: 13 }, { width: 13 }, { width: 13 }, { width: 13 },
-        { width: 2 }, { width: 13 }, { width: 13 }, { width: 2 }
+        { width: 2 },  // A
+        { width: 13 }, // B
+        { width: 13 }, // C
+        { width: 2 },  // D
+        { width: 13 }, // E
+        { width: 13 }, // F
+        { width: 2 },  // G
+        { width: 13 }, // H
+        { width: 13 }, // I
     ];
 
-    ws.mergeCells('B2:H2');
+
+    ws.mergeCells('B2:I2');
     const titleCell = ws.getCell('B2');
     titleCell.value = "Analysis Dashboard Report";
     titleCell.font = { name: 'Calibri', size: 24, bold: true, color: { argb: 'FF002060' } };
@@ -799,10 +811,10 @@ function createDashboardReportSheet(wb: ExcelJS.Workbook, allRecords: RecordRow[
 
     const kf = processedData.keyFigures;
     const keyFiguresData = [
-        { title: 'Team Leaders', value: kf.teamLeaders, cell: 'B4' },
-        { title: 'Surveyors', value: kf.surveyors, cell: 'D4' },
-        { title: 'Registration Days', value: kf.registrationDays, cell: 'F4' },
-        { title: 'Villages Targeted', value: kf.villages, cell: 'H4' },
+        { title: 'Team Leaders', value: kf.teamLeaders, cell: 'H4' },
+        { title: 'Surveyors', value: kf.surveyors, cell: 'F4' },
+        { title: 'Registration Days', value: kf.registrationDays, cell: 'D4' },
+        { title: 'Villages Targeted', value: kf.villages, cell: 'B4' },
     ];
     
     keyFiguresData.forEach(item => {
@@ -817,8 +829,8 @@ function createDashboardReportSheet(wb: ExcelJS.Workbook, allRecords: RecordRow[
         valueCell.font = { name: 'Calibri', size: 20, bold: true, color: { argb: 'FF002060' } };
         valueCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDCE6F1' } };
         valueCell.alignment = { horizontal: 'center', vertical: 'middle' };
+        ws.getRow(5).height = 30;
     });
-    ws.getRow(5).height = 30;
 
     const addImage = (base64: string, tl_col: number, tl_row: number, br_col: number, br_row: number) => {
         if (!base64 || !base64.startsWith('data:image/png;base64,')) return;
@@ -835,34 +847,26 @@ function createDashboardReportSheet(wb: ExcelJS.Workbook, allRecords: RecordRow[
         });
     };
     
-    // Position tables and charts
-    const byDayData = processedData.charts.beneficiariesByDay.sort((a: any, b: any) => b.value - a.value);
-    ws.getCell('B7').value = "Beneficiaries by Registration Day";
-    ws.getCell('B7').font = { bold: true };
-    ws.getCell('B8').value = "Day";
-    ws.getCell('C8').value = "Beneficiaries";
-    ws.getRow(8).font = { bold: true };
-    byDayData.forEach((item: any, index: number) => {
-      ws.getCell(`B${9 + index}`).value = item.name;
-      ws.getCell(`C${9 + index}`).value = item.value;
-    });
+     const addImageWithProportions = (base64: string, tl: { col: number; row: number }, widthIn: number, heightIn: number) => {
+        if (!base64 || !base64.startsWith('data:image/png;base64,')) return;
+        const imageId = wb.addImage({
+            base64: base64.split(',')[1],
+            extension: 'png',
+        });
+        ws.addImage(imageId, {
+            tl: tl,
+            ext: { width: widthIn * 96, height: heightIn * 96 } // Convert inches to EMU
+        });
+    };
+    
+    // Add images according to the layout in the screenshot with specified sizes
+    addImageWithProportions(chartImages.byDayChart, { col: 1, row: 6 }, 3.61, 8.21); // B column
+    addImageWithProportions(chartImages.byVillageChart, { col: 4, row: 6 }, 3.61, 8.21); // E column
 
-    addImage(chartImages.byDayChart, 2.1, 6.1, 4.9, 18.9);
-
-    const byVillageData = processedData.charts.beneficiariesByVillage.sort((a: any, b: any) => b.value - a.value);
-    ws.getCell('F7').value = "Beneficiaries by Village";
-    ws.getCell('F7').font = { bold: true };
-    ws.getCell('F8').value = "Village";
-    ws.getCell('G8').value = "Beneficiaries";
-    ws.getRow(8).font = { bold: true };
-    byVillageData.forEach((item: any, index: number) => {
-      ws.getCell(`F${9 + index}`).value = item.name;
-      ws.getCell(`G${9 + index}`).value = item.value;
-    });
-
-    addImage(chartImages.byVillageChart, 5.1, 6.1, 8.9, 18.9);
-    addImage(chartImages.genderVisual, 0.1, 20, 3.9, 30);
-    addImage(chartImages.womenDonut, 4.1, 20, 6.9, 30);
-    addImage(chartImages.bubbleStats, 0.1, 31, 3.9, 45);
-    addImage(chartImages.map, 4.1, 31, 8.9, 45);
+    addImageWithProportions(chartImages.genderVisual, { col: 1, row: 21 }, 3.61, 3.74);
+    addImageWithProportions(chartImages.womenDonut, { col: 4, row: 21 }, 3.61, 3.74);
+    
+    addImageWithProportions(chartImages.bubbleStats, { col: 1, row: 26 }, 3.61, 7.8);
+    addImageWithProportions(chartImages.map, { col: 4, row: 26 }, 3.61, 7.8);
 }
+

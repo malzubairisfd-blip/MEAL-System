@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useEffect, useRef, useState } from "react";
@@ -10,17 +11,15 @@ import type { Feature, FeatureCollection } from 'geojson';
 export default function WestAfricaMap() {
   const mapRef = useRef<L.Map | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const { setMapInstance } = useDashboard();
+  const { setMapInstance, selectedFeatures } = useDashboard();
   
   const admin1LayerRef = useRef<L.GeoJSON | null>(null);
   const admin2LayerRef = useRef<L.GeoJSON | null>(null);
   const admin3LayerRef = useRef<L.GeoJSON | null>(null);
-  const selectionLayerRef = useRef<L.GeoJSON | null>(null);
 
   const [admin1, setAdmin1] = useState<FeatureCollection | null>(null);
   const [admin2, setAdmin2] = useState<FeatureCollection | null>(null);
   const [admin3, setAdmin3] = useState<FeatureCollection | null>(null);
-  const [selectedRegion, setSelectedRegion] = useState<any | null>(null);
 
   useEffect(() => {
     fetch('/data/yemen_admin1.geojson').then(res => res.json()).then(data => setAdmin1(data));
@@ -47,64 +46,50 @@ export default function WestAfricaMap() {
 
   const createLayer = (
     data: FeatureCollection | null, 
-    style: L.PathOptions, 
-    nameProperty: string, 
-    isSelectable: boolean
+    baseStyle: L.PathOptions, 
+    selectedStyle: L.PathOptions,
+    nameProperty: string
   ) => {
     if (!mapRef.current || !data) return null;
+
+    const selectedPcodes = new Set(selectedFeatures.map(f => f.properties?.ADM3_PCODE));
     
     const layer = L.geoJSON(data, {
-      style: (feature?: Feature) => feature?.properties?.[nameProperty] === selectedRegion?.properties?.[nameProperty] ? { ...style, color: '#d97706', weight: 3 } : style,
-      onEachFeature: (feature, layer) => {
-        layer.on({
-          mouseover: (e) => e.target.setStyle({ weight: 3, color: '#333' }),
-          mouseout: () => geoJsonLayer?.resetStyle(layer),
-          click: () => {
-            if (isSelectable) {
-              setSelectedRegion(feature);
-            }
-          }
-        });
-      }
+      style: (feature?: Feature) => {
+        if (feature && selectedPcodes.has(feature.properties?.[nameProperty.replace('_EN', '_PCODE')])) {
+          return selectedStyle;
+        }
+        return baseStyle;
+      },
     });
-    const geoJsonLayer = layer.addTo(mapRef.current);
-    return geoJsonLayer;
+    return layer.addTo(mapRef.current);
   };
   
   useEffect(() => {
-    if (admin1LayerRef.current) mapRef.current?.removeLayer(admin1LayerRef.current);
-    admin1LayerRef.current = createLayer(admin1, { color: "#4a5568", weight: 2, opacity: 0.8, fillOpacity: 0.1 }, 'ADM1_EN', false);
+    if (!mapRef.current) return;
+    
+    if (admin1LayerRef.current) mapRef.current.removeLayer(admin1LayerRef.current);
+    admin1LayerRef.current = createLayer(admin1, { color: "#4a5568", weight: 2, opacity: 0.8, fillOpacity: 0.1 }, {}, 'ADM1_EN');
 
-    if (admin2LayerRef.current) mapRef.current?.removeLayer(admin2LayerRef.current);
-    admin2LayerRef.current = createLayer(admin2, { color: "#718096", weight: 1.5, opacity: 0.7, fillOpacity: 0.1 }, 'ADM2_EN', false);
+    if (admin2LayerRef.current) mapRef.current.removeLayer(admin2LayerRef.current);
+    admin2LayerRef.current = createLayer(admin2, { color: "#718096", weight: 1.5, opacity: 0.7, fillOpacity: 0.1 }, {}, 'ADM2_EN');
 
-    if (admin3LayerRef.current) mapRef.current?.removeLayer(admin3LayerRef.current);
-    admin3LayerRef.current = createLayer(admin3, { color: "#A0AEC0", weight: 1, opacity: 0.6, fillOpacity: 0.1 }, 'ADM3_EN', true);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [admin1, admin2, admin3, selectedRegion]);
-
-  useEffect(() => {
-    if (selectionLayerRef.current) {
-        mapRef.current?.removeLayer(selectionLayerRef.current);
+    if (admin3LayerRef.current) mapRef.current.removeLayer(admin3LayerRef.current);
+    admin3LayerRef.current = createLayer(
+        admin3, 
+        { color: "#A0AEC0", weight: 1, opacity: 0.6, fillOpacity: 0.1 }, 
+        { color: '#d97706', weight: 3, opacity: 1, fillColor: '#fde047', fillOpacity: 0.5 },
+        'ADM3_EN'
+    );
+    
+    if (selectedFeatures.length > 0) {
+        const selectedGroup = L.featureGroup(selectedFeatures.map(f => L.geoJSON(f)));
+        mapRef.current.fitBounds(selectedGroup.getBounds());
+    } else {
+        mapRef.current.setView([15.55, 48.52], 6);
     }
-    if (selectedRegion && mapRef.current) {
-        selectionLayerRef.current = L.geoJSON(selectedRegion, {
-            style: {
-                color: '#d97706',
-                weight: 3,
-                opacity: 1,
-                fillColor: '#fde047',
-                fillOpacity: 0.5
-            }
-        }).addTo(mapRef.current);
-        
-        selectionLayerRef.current.bindTooltip(selectedRegion.properties.ADM3_EN, {
-            permanent: true,
-            direction: 'center',
-            className: 'admin-label'
-        }).openTooltip();
-    }
-  }, [selectedRegion]);
+
+  }, [admin1, admin2, admin3, selectedFeatures, mapRef.current]);
 
 
   return (

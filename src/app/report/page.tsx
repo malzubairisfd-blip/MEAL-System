@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
@@ -22,14 +23,34 @@ import { KeyFigures } from '@/components/report/KeyFigures';
 import { BeneficiariesByVillageChart, BeneficiariesByDayChart, WomenAndChildrenDonut } from '@/components/report/TableBarCharts';
 import { GenderVisual } from '@/components/report/GenderVisual';
 import { BubbleStats } from '@/components/report/BubbleStats';
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+    Command,
+    CommandEmpty,
+    CommandGroup,
+    CommandInput,
+    CommandItem,
+    CommandList,
+} from "@/components/ui/command";
+import { Check, PlusCircle } from 'lucide-react';
+import { Badge } from "@/components/ui/badge";
+import { cn } from '@/lib/utils';
+import type { Feature, FeatureCollection } from 'geojson';
+
 
 // Global Dashboard State
 export const DashboardContext = React.createContext<{
   mapInstance: L.Map | null;
   setMapInstance: React.Dispatch<React.SetStateAction<L.Map | null>>;
+  selectedFeatures: Feature[];
 }>({
   mapInstance: null,
   setMapInstance: () => {},
+  selectedFeatures: [],
 });
 
 export const useDashboard = () => React.useContext(DashboardContext);
@@ -54,6 +75,11 @@ export default function ReportPage() {
   const [mapping, setMapping] = useState<Record<string, string>>({});
   const [processedData, setProcessedData] = useState<any>(null);
   const [isExporting, setIsExporting] = useState(false);
+  
+  // Map State
+  const [admin3Data, setAdmin3Data] = useState<FeatureCollection | null>(null);
+  const [selectedFeatures, setSelectedFeatures] = useState<Feature[]>([]);
+
 
   // Refs for capturing components
   const byVillageChartRef = useRef<HTMLDivElement>(null);
@@ -61,6 +87,11 @@ export default function ReportPage() {
   const womenDonutRef = useRef<HTMLDivElement>(null);
   const genderVisualRef = useRef<HTMLDivElement>(null);
   const bubbleStatsRef = useRef<HTMLDivElement>(null);
+
+  // Load geojson data
+  useEffect(() => {
+    fetch('/data/yemen_admin3.geojson').then(res => res.json()).then(data => setAdmin3Data(data));
+  }, []);
 
   // Load data from cache on initial render
   useEffect(() => {
@@ -171,17 +202,17 @@ export default function ReportPage() {
           },
         },
         bubbles: [
-          { label: 'HH Registered', value: getUnique('Household registered'), icon: 'home' },
-          { label: 'Male HH', value: allRows.filter(r => Number(r[mapping['Household Gender']]) === 1).length, icon: 'male' },
-          { label: 'Female HH', value: allRows.filter(r => Number(r[mapping['Household Gender']]) === 2).length, icon: 'female' },
-          { label: 'Dislocated HH', value: getSum('Dislocated household'), icon: 'move' },
-          { label: 'HH with Guest', value: getSum('Household having dislocated guest'), icon: 'users' },
-          { label: 'Beneficiaries', value: getUnique('Beneficiaries registered'), icon: 'group' },
-          { label: 'Pregnant Woman', value: getSum('Pregnant woman'), icon: 'pregnant' },
-          { label: 'Lactating/Mother <5', value: getSum('Mothers having a child under 5 years old'), icon: 'lactating' },
-          { label: 'Handicapped Woman', value: getSum('Handicapped Woman'), icon: 'handicapped' },
-          { label: 'Woman w/ Handicapped Child', value: getSum('Women have handicapped children from 5 to 17 years old'), icon: 'child' },
-          { label: 'Dislocated Woman', value: getSum('Dislocated Woman'), icon: 'move' },
+          { label: 'HH Registered', value: getUnique('Household registered'), icon: 'home' as const },
+          { label: 'Male HH', value: allRows.filter(r => Number(r[mapping['Household Gender']]) === 1).length, icon: 'male' as const },
+          { label: 'Female HH', value: allRows.filter(r => Number(r[mapping['Household Gender']]) === 2).length, icon: 'female' as const },
+          { label: 'Dislocated HH', value: getSum('Dislocated household'), icon: 'move' as const },
+          { label: 'HH with Guest', value: getSum('Household having dislocated guest'), icon: 'users' as const },
+          { label: 'Beneficiaries', value: getUnique('Beneficiaries registered'), icon: 'group' as const },
+          { label: 'Pregnant Woman', value: getSum('Pregnant woman'), icon: 'pregnant' as const },
+          { label: 'Lactating/Mother <5', value: getSum('Mothers having a child under 5 years old'), icon: 'lactating' as const },
+          { label: 'Handicapped Woman', value: getSum('Handicapped Woman'), icon: 'handicapped' as const },
+          { label: 'Woman w/ Handicapped Child', value: getSum('Women have handicapped children from 5 to 17 years old'), icon: 'child' as const },
+          { label: 'Dislocated Woman', value: getSum('Dislocated Woman'), icon: 'move' as const },
         ]
       };
       setProcessedData(data);
@@ -255,7 +286,7 @@ export default function ReportPage() {
     }
 
   return (
-    <DashboardContext.Provider value={{ mapInstance, setMapInstance }}>
+    <DashboardContext.Provider value={{ mapInstance, setMapInstance, selectedFeatures }}>
       <div className="space-y-6">
         <Card>
           <CardHeader>
@@ -359,7 +390,85 @@ export default function ReportPage() {
                             <Button variant="ghost" size="sm"><ChevronsUpDown className="h-4 w-4" /></Button>
                         </CardHeader>
                     </CollapsibleTrigger>
-                    <CollapsibleContent className="p-6 pt-0">
+                    <CollapsibleContent className="p-6 pt-0 space-y-4">
+                         {admin3Data && (
+                            <div className="flex items-center gap-4">
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="w-full justify-start"
+                                        >
+                                            <PlusCircle className="mr-2 h-4 w-4" />
+                                            Select Regions
+                                            {selectedFeatures.length > 0 && (
+                                                <>
+                                                    <div className="mx-2 h-4 w-px bg-muted-foreground" />
+                                                    <div className="space-x-1">
+                                                        {selectedFeatures.length > 2 ? (
+                                                            <Badge
+                                                                variant="secondary"
+                                                                className="rounded-sm px-1 font-normal"
+                                                            >
+                                                                {selectedFeatures.length} selected
+                                                            </Badge>
+                                                        ) : (
+                                                            selectedFeatures.map((feature) => (
+                                                                <Badge
+                                                                    key={feature.properties?.ADM3_EN}
+                                                                    variant="secondary"
+                                                                    className="rounded-sm px-1 font-normal"
+                                                                >
+                                                                    {feature.properties?.ADM3_EN}
+                                                                </Badge>
+                                                            ))
+                                                        )}
+                                                    </div>
+                                                </>
+                                            )}
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-[300px] p-0" align="start">
+                                        <Command>
+                                            <CommandInput placeholder="Search regions..." />
+                                            <CommandList>
+                                                <CommandEmpty>No results found.</CommandEmpty>
+                                                <CommandGroup>
+                                                    {admin3Data.features.map((feature) => {
+                                                        const isSelected = selectedFeatures.some(sf => sf.properties?.ADM3_PCODE === feature.properties?.ADM3_PCODE);
+                                                        return (
+                                                            <CommandItem
+                                                                key={feature.properties?.ADM3_PCODE}
+                                                                onSelect={() => {
+                                                                    if (isSelected) {
+                                                                        setSelectedFeatures(selectedFeatures.filter(sf => sf.properties?.ADM3-PCODE !== feature.properties?.ADM3_PCODE));
+                                                                    } else {
+                                                                        setSelectedFeatures([...selectedFeatures, feature]);
+                                                                    }
+                                                                }}
+                                                            >
+                                                                <div
+                                                                    className={cn(
+                                                                        "mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary",
+                                                                        isSelected
+                                                                            ? "bg-primary text-primary-foreground"
+                                                                            : "opacity-50 [&_svg]:invisible"
+                                                                    )}
+                                                                >
+                                                                    <Check className={cn("h-4 w-4")} />
+                                                                </div>
+                                                                <span>{feature.properties?.ADM3_EN}</span>
+                                                            </CommandItem>
+                                                        );
+                                                    })}
+                                                </CommandGroup>
+                                            </CommandList>
+                                        </Command>
+                                    </PopoverContent>
+                                </Popover>
+                            </div>
+                        )}
                         <div className="h-[600px] w-full rounded-md border" id="map-container">
                             <WestAfricaMap />
                         </div>
