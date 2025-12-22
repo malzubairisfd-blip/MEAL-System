@@ -1,4 +1,3 @@
-
 // app/(app)/upload/page.tsx
 "use client";
 
@@ -26,6 +25,8 @@ type Mapping = {
 const MAPPING_FIELDS: (keyof Mapping)[] = ["womanName","husbandName","nationalId","phone","village","subdistrict","children", "beneficiaryId"];
 const REQUIRED_MAPPING_FIELDS: (keyof Mapping)[] = ["womanName","husbandName","nationalId","phone","village","subdistrict","children"];
 const LOCAL_STORAGE_KEY_PREFIX = "beneficiary-mapping-";
+const PROGRESS_KEY_PREFIX = "progress-";
+
 
 type WorkerProgress = { status:string; progress:number; completed?:number; total?:number; }
 type TimeInfo = { elapsed: number; remaining?: number };
@@ -70,6 +71,14 @@ export default function UploadPage(){
   const dbRef = useRef<IDBDatabase|null>(null);
   const { toast } = useToast();
   const router = useRouter();
+  
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js').catch(err => {
+            console.error("Service Worker registration failed:", err);
+        });
+    }
+  }, []);
 
   useEffect(()=>{
     const allRequiredMapped = REQUIRED_MAPPING_FIELDS.every(f => !!mapping[f]);
@@ -145,6 +154,7 @@ export default function UploadPage(){
   async function startClustering() {
     if (!rawRowsRef.current.length) { toast({ title: t('upload.toasts.noData') }); return; }
     if (!isMappingComplete) { toast({ title: t('upload.toasts.mappingIncomplete'), variant: "destructive" }); return; }
+    if (!file) { toast({ title: "No file selected."}); return; }
 
     setIsMappingOpen(false);
     setProcessingStatus('processing');
@@ -170,6 +180,20 @@ export default function UploadPage(){
         clearStore('clusters'),
         clearStore('edges')
     ]);
+    
+    const fileKey = `${file.name}-${file.size}-${file.lastModified}`;
+    const progressKey = `${PROGRESS_KEY_PREFIX}${fileKey}`;
+    const savedProgressRaw = localStorage.getItem(progressKey);
+    let resumeState = null;
+    if (savedProgressRaw) {
+        try {
+            resumeState = JSON.parse(savedProgressRaw);
+            if (resumeState) {
+              toast({ title: "Resuming Process", description: "Found saved progress for this file and will resume clustering."});
+            }
+        } catch {}
+    }
+
 
     try {
         const settingsRes = await fetch("/api/settings");
@@ -183,6 +207,8 @@ export default function UploadPage(){
                 rows: rawRowsRef.current,
                 mapping,
                 options: settings,
+                resumeState,
+                progressKey,
             }),
         });
 
@@ -218,6 +244,23 @@ export default function UploadPage(){
                     try {
                         const data = JSON.parse(dataStr);
                         
+                         if (data.type === 'save_progress') {
+                            if (data.value) {
+                                localStorage.setItem(data.key, JSON.stringify(data.value));
+                            } else {
+                                localStorage.removeItem(data.key);
+                            }
+                            continue;
+                        }
+
+                        if (navigator.serviceWorker.controller && data.type === 'progress') {
+                            navigator.serviceWorker.controller.postMessage({
+                                type: 'PROGRESS_NOTIFICATION',
+                                percent: Math.round(data.progress),
+                                status: data.status
+                            });
+                        }
+                        
                         if (data.type === 'progress' || data.type === 'status') {
                             setProcessingStatus(data.status || 'working');
                             setProgressInfo({ status: data.status || 'working', progress: data.progress ?? 0, completed: data.completed, total: data.total });
@@ -231,19 +274,25 @@ export default function UploadPage(){
                             if (timerRef.current) clearInterval(timerRef.current);
                             startTimeRef.current = null;
                             
+                            if (navigator.serviceWorker.controller) {
+                                navigator.serviceWorker.controller.postMessage({ type: 'DONE_NOTIFICATION' });
+                            }
+
                             setProcessingStatus('caching');
                             setProgressInfo({ status: 'caching', progress: 98 });
                             
                             const readAll = (store: string) =>
-                              new Promise<any[]>(resolve => {
+                              new Promise<any[]>((resolve, reject) => {
                                 if (!dbRef.current) return resolve([]);
                                 const tx = dbRef.current.transaction(store);
-                                const req = tx.objectStore(store).getAll();
-                                req.onsuccess = () => resolve(req.result);
+                                const storeReq = tx.objectStore(store);
+                                const req = storeReq.getAll();
+                                req.onsuccess = () => resolve(req.result.flat());
+                                req.onerror = () => reject(req.error);
                               });
 
                             const allRows = (await readAll("rows"))[0];
-                            const resultClusters = (await readAll("clusters")).flat();
+                            const resultClusters = (await readAll("clusters"));
                             
                             setClusters(resultClusters);
                             

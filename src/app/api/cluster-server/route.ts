@@ -353,7 +353,7 @@ function pairwiseScore(aRaw: any, bRaw: any, opts: any) {
 /* --------------------------------------
    Resumable Edge Building Logic
    -------------------------------------- */
-async function buildEdges(rows: any, minScore = 0.62, opts: any, resumeState: any = null, send: Function) {
+async function buildEdges(rows: any, minScore = 0.62, opts: any, resumeState: any = null, send: Function, progressKey: string) {
   const n = rows.length;
   if (n <= 1) return { edges: [], finalState: null };
   
@@ -374,6 +374,12 @@ async function buildEdges(rows: any, minScore = 0.62, opts: any, resumeState: an
       processed++;
 
       if (processed % 5000 === 0) {
+        const progressState = { i, j: j + 1, edges, processed };
+        send({
+          type: "save_progress",
+          key: progressKey,
+          value: progressState
+        });
         send({
           type: "progress",
           status: "building-edges",
@@ -388,6 +394,7 @@ async function buildEdges(rows: any, minScore = 0.62, opts: any, resumeState: an
   }
   
   send({ type: "progress", status: "edges-built", progress: 50, completed: totalPairs, total: totalPairs });
+  send({ type: 'save_progress', key: progressKey, value: null });
   
   edges.sort((x, y) => y.score - x.score);
   return { edges, finalState: null };
@@ -483,7 +490,7 @@ function splitCluster(rowsSubset: any, minInternal = 0.50, opts: any) {
 
 
 /* Main clustering pipeline */
-async function runClustering(rows: any, opts: any, resumeState: any, send: Function) {
+async function runClustering(rows: any, opts: any, resumeState: any, send: Function, progressKey: string) {
   // ensure internal ids
   rows.forEach((r: any, i: any) => r._internalId = r._internalId || 'row_' + i);
 
@@ -492,7 +499,7 @@ async function runClustering(rows: any, opts: any, resumeState: any, send: Funct
 
   send({ type: "progress", status: "blocking", progress: 5, completed: 0, total: rows.length });
 
-  const { edges } = await buildEdges(rows, minPair, opts, resumeState, send);
+  const { edges } = await buildEdges(rows, minPair, opts, resumeState, send, progressKey);
 
   send({ type: "progress", status: "edges-built", progress: 60, completed: edges.length, total: Math.max(1, rows.length) });
 
@@ -625,7 +632,7 @@ function mapIncomingRowsToInternal(rowsChunk: any, mapping: any, startIndex: num
 export async function POST(req: Request) {
     try {
         const body = await req.json();
-        const { rows, mapping, options, resumeState } = body;
+        const { rows, mapping, options, resumeState, progressKey } = body;
 
         if (!rows || !Array.isArray(rows) || !mapping) {
             return NextResponse.json({ ok: false, error: 'Invalid request body. "rows" and "mapping" are required.' }, { status: 400 });
@@ -650,7 +657,7 @@ export async function POST(req: Request) {
                     const mappedRows = mapIncomingRowsToInternal(rows, mapping, 0);
                     send({ type: 'progress', status: 'mapping-rows', progress: 5, completed: mappedRows.length, total: mappedRows.length });
 
-                    await runClustering(mappedRows, options, resumeState, send);
+                    await runClustering(mappedRows, options, resumeState, send, progressKey);
                     
                 } catch (err: any) {
                     send({ type: 'error', error: String(err && err.message ? err.message : err) });

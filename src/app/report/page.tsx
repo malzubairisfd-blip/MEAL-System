@@ -109,7 +109,7 @@ export default function ReportPage() {
         const data = await res.json();
         setAllRows(data.rows || []);
         if (data.rows && data.rows.length > 0) {
-            const fileColumns = Object.keys(data.rows[0]);
+            const fileColumns = data.originalHeaders || Object.keys(data.rows[0]);
             setColumns(fileColumns);
             
             // Load saved mapping from localStorage
@@ -442,7 +442,7 @@ export default function ReportPage() {
                                                                 key={feature.properties?.ADM3_PCODE}
                                                                 onSelect={() => {
                                                                     if (isSelected) {
-                                                                        setSelectedFeatures(selectedFeatures.filter(sf => sf.properties?.ADM3-PCODE !== feature.properties?.ADM3_PCODE));
+                                                                        setSelectedFeatures(selectedFeatures.filter(sf => sf.properties?.ADM3_PCODE !== feature.properties?.ADM3_PCODE));
                                                                     } else {
                                                                         setSelectedFeatures([...selectedFeatures, feature]);
                                                                     }

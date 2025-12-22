@@ -223,7 +223,7 @@ function sortData(data: EnrichedRecord[]): EnrichedRecord[] {
 }
 
 function createFormattedWorkbook(data: EnrichedRecord[], cachedData: any): ExcelJS.Workbook {
-    const { rows: allRecords, clusters, auditFindings, originalHeaders, chartImages, processedDataForReport } = cachedData;
+    const { rows: allRecords, clusters, auditFindings, chartImages, processedDataForReport } = cachedData;
     const wb = new ExcelJS.Workbook();
     wb.creator = "Beneficiary Insights";
     
@@ -832,7 +832,7 @@ function createDashboardReportSheet(wb: ExcelJS.Workbook, allRecords: RecordRow[
         ws.getRow(5).height = 30;
     });
 
-    const addImage = (base64: string, tl_col: number, tl_row: number, br_col: number, br_row: number) => {
+    const addImageToCell = (base64: string, cell: string) => {
         if (!base64 || !base64.startsWith('data:image/png;base64,')) return;
 
         const imageId = wb.addImage({
@@ -840,33 +840,14 @@ function createDashboardReportSheet(wb: ExcelJS.Workbook, allRecords: RecordRow[
             extension: 'png',
         });
         
-        ws.addImage(imageId, {
-            tl: { col: tl_col, row: tl_row },
-            br: { col: br_col, row: br_row },
-            editAs: 'oneCell'
-        });
-    };
-    
-     const addImageWithProportions = (base64: string, tl: { col: number; row: number }, widthIn: number, heightIn: number) => {
-        if (!base64 || !base64.startsWith('data:image/png;base64,')) return;
-        const imageId = wb.addImage({
-            base64: base64.split(',')[1],
-            extension: 'png',
-        });
-        ws.addImage(imageId, {
-            tl: tl,
-            ext: { width: widthIn * 96, height: heightIn * 96 } // Convert inches to EMU
-        });
+        ws.addImage(imageId, cell);
     };
     
     // Add images according to the layout in the screenshot with specified sizes
-    addImageWithProportions(chartImages.byDayChart, { col: 1, row: 6 }, 3.61, 8.21); // B column
-    addImageWithProportions(chartImages.byVillageChart, { col: 4, row: 6 }, 3.61, 8.21); // E column
-
-    addImageWithProportions(chartImages.genderVisual, { col: 1, row: 21 }, 3.61, 3.74);
-    addImageWithProportions(chartImages.womenDonut, { col: 4, row: 21 }, 3.61, 3.74);
-    
-    addImageWithProportions(chartImages.bubbleStats, { col: 1, row: 26 }, 3.61, 7.8);
-    addImageWithProportions(chartImages.map, { col: 4, row: 26 }, 3.61, 7.8);
+    addImageToCell(chartImages.byDayChart, 'B7');
+    addImageToCell(chartImages.byVillageChart, 'E7');
+    addImageToCell(chartImages.genderVisual, 'B47');
+    addImageToCell(chartImages.womenDonut, 'E47');
+    addImageToCell(chartImages.bubbleStats, 'E65');
+    addImageToCell(chartImages.map, 'B65');
 }
-

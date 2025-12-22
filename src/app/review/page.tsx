@@ -38,51 +38,65 @@ export default function ReviewPage() {
   const [itemsPerPage, setItemsPerPage] = useState(9);
 
   const handleCalculateScores = useCallback(async (clustersToScore: Cluster[]) => {
-    if (clustersToScore.length === 0 || clustersToScore.every(c => c.confidence !== undefined)) {
-        return; // Don't run if no clusters or if already scored
+    if (calculating || clustersToScore.length === 0 || clustersToScore.every(c => c.confidence !== undefined)) {
+        return;
     }
     setCalculating(true);
     toast({ title: t('review.toasts.calculatingScores.title'), description: t('review.toasts.calculatingScores.description', {'clustersToScore.length': clustersToScore.length}) });
 
-    const updatedClusters = await Promise.all(clustersToScore.map(async (cluster) => {
-        try {
-            const res = await fetch("/api/pairwise", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ cluster: cluster.records }),
-            });
-            if (!res.ok) return cluster;
-            const data = await res.json();
-            const pairs = data.pairs || [];
+    try {
+        const updatedClusters = await Promise.all(clustersToScore.map(async (cluster) => {
+            if (cluster.confidence !== undefined) return cluster;
+            try {
+                const res = await fetch("/api/pairwise", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ cluster: cluster.records }),
+                });
+                if (!res.ok) return cluster;
+                const data = await res.json();
+                const pairs = data.pairs || [];
 
-            if (pairs.length === 0) {
-                const confidence = calculateClusterConfidence(0, 0);
-                return { ...cluster, avgWomanNameScore: 0, avgHusbandNameScore: 0, avgFinalScore: 0, confidence };
+                if (pairs.length === 0) {
+                    const confidence = calculateClusterConfidence(0, 0);
+                    return { ...cluster, avgWomanNameScore: 0, avgHusbandNameScore: 0, avgFinalScore: 0, confidence };
+                }
+
+                const womanNameScores = pairs.map((p: any) => p.breakdown.nameScore || 0);
+                const husbandNameScores = pairs.map((p: any) => p.breakdown.husbandScore || 0);
+
+                const avgWomanNameScore = womanNameScores.reduce((a: number, b: number) => a + b, 0) / womanNameScores.length;
+                const avgHusbandNameScore = husbandNameScores.reduce((a: number, b: number) => a + b, 0) / husbandNameScores.length;
+                const avgFinalScore = (avgWomanNameScore + avgHusbandNameScore) / 2;
+
+                return {
+                    ...cluster,
+                    avgWomanNameScore,
+                    avgHusbandNameScore,
+                    avgFinalScore,
+                    confidence: calculateClusterConfidence(avgWomanNameScore, avgHusbandNameScore),
+                };
+            } catch (error) {
+                return cluster; // Return original cluster on error
             }
+        }));
 
-            const womanNameScores = pairs.map((p: any) => p.breakdown.nameScore || 0);
-            const husbandNameScores = pairs.map((p: any) => p.breakdown.husbandScore || 0);
+        setAllClusters(prev => {
+            const newClusters = [...prev];
+            updatedClusters.forEach(uc => {
+                const index = newClusters.findIndex(c => c.records.map(r => r._internalId).sort().join('-') === uc.records.map(r => r._internalId).sort().join('-'));
+                if (index !== -1) {
+                    newClusters[index] = uc;
+                }
+            });
+            return newClusters;
+        });
 
-            const avgWomanNameScore = womanNameScores.reduce((a: number, b: number) => a + b, 0) / womanNameScores.length;
-            const avgHusbandNameScore = husbandNameScores.reduce((a: number, b: number) => a + b, 0) / husbandNameScores.length;
-            const avgFinalScore = (avgWomanNameScore + avgHusbandNameScore) / 2;
-
-            return {
-                ...cluster,
-                avgWomanNameScore,
-                avgHusbandNameScore,
-                avgFinalScore,
-                confidence: calculateClusterConfidence(avgWomanNameScore, avgHusbandNameScore),
-            };
-        } catch (error) {
-            return cluster; // Return original cluster on error
-        }
-    }));
-
-    setAllClusters(updatedClusters);
-    setCalculating(false);
-    toast({ title: t('review.toasts.calculationComplete.title'), description: t('review.toasts.calculationComplete.description') });
-  }, [toast, t]);
+        toast({ title: t('review.toasts.calculationComplete.title'), description: t('review.toasts.calculationComplete.description') });
+    } finally {
+        setCalculating(false);
+    }
+  }, [toast, t, calculating]);
 
 
   useEffect(() => {
@@ -109,6 +123,7 @@ export default function ReviewPage() {
                   toast({ title: t('review.toasts.noClustersFound.title'), description: t('review.toasts.noClustersFound.description'), variant: "default" });
               } else {
                   toast({ title: t('review.toasts.clustersLoaded.title'), description: t('review.toasts.clustersLoaded.description', {'clusters.length': clusters.length}), variant: "default" });
+                  handleCalculateScores(clusters);
               }
           } else {
                toast({ title: t('review.toasts.loadErrorFromServer.title'), description: t('review.toasts.loadErrorFromServer.description'), variant: "destructive" });
@@ -120,13 +135,8 @@ export default function ReviewPage() {
       }
     }
     loadData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [toast, t]);
-  
-    useEffect(() => {
-        if (allClusters.length > 0 && !loading) {
-            handleCalculateScores(allClusters);
-        }
-    }, [allClusters, loading, handleCalculateScores]);
 
 
   useEffect(() => {
@@ -151,7 +161,7 @@ export default function ReviewPage() {
   }, [search, allClusters]);
   
   const decisionChartData = useMemo(() => {
-    if (loading || allClusters.length === 0 || allClusters.some(c => c.confidence === undefined)) {
+    if (allClusters.length === 0 || allClusters.some(c => c.confidence === undefined)) {
       return [];
     }
 
@@ -173,7 +183,7 @@ export default function ReviewPage() {
       name: decision,
       value: count,
     }));
-  }, [allClusters, loading]);
+  }, [allClusters]);
 
 
   const handleInspect = (clusterRecords: RecordRow[]) => {
