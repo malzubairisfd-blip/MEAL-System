@@ -144,6 +144,20 @@ function applyAdditionalRules(a: any, b: any, opts: any) {
   const HB = splitParts(b.husbandName_normalized || "");
   const reasons: any[] = [];
   
+  // RULE 0: strong token match (80%+ tokens overlap)
+  {
+    const setA = new Set(A);
+    const setB = new Set(B);
+    let inter = 0;
+    for (const t of setA) if (setB.has(t)) inter++;
+    const uni = new Set([...setA, ...setB]).size;
+    const ratio = uni === 0 ? 0 : inter / uni;
+    if (ratio >= 0.80) {
+      reasons.push("TOKEN_REORDER");
+      return { score: Math.min(1, minPair + 0.22), reasons };
+    }
+  }
+
   /* ----------------------------------------------------
      RULE 6 — STRONG HOUSEHOLD + CHILDREN MATCH (CRITICAL)
   ---------------------------------------------------- */
@@ -170,20 +184,6 @@ function applyAdditionalRules(a: any, b: any, opts: any) {
     }
   }
 
-
-  // RULE 0: strong token match (80%+ tokens overlap)
-  {
-    const setA = new Set(A);
-    const setB = new Set(B);
-    let inter = 0;
-    for (const t of setA) if (setB.has(t)) inter++;
-    const uni = new Set([...setA, ...setB]).size;
-    const ratio = uni === 0 ? 0 : inter / uni;
-    if (ratio >= 0.80) {
-      reasons.push("TOKEN_REORDER");
-      return { score: Math.min(1, minPair + 0.22), reasons };
-    }
-  }
 
   const s93 = (x: any, y: any) => jw(x || "", y || "") >= 0.93;
   const s95 = (x: any, y: any) => jw(x || "", y || "") >= 0.95;
@@ -670,5 +670,3 @@ export async function POST(req: Request) {
         return NextResponse.json({ ok: false, error: 'Failed to process request: ' + error.message }, { status: 500 });
     }
 }
-
-    
