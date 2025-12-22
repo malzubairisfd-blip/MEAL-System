@@ -42,7 +42,7 @@ export default function UploadPage(){
   const [clusters, setClusters] = useState<any[][]>([]);
   const [fileReadProgress, setFileReadProgress] = useState(0);
   const [isMappingOpen, setIsMappingOpen] = useState(true);
-    const [timeInfo, setTimeInfo] = useState<TimeInfo>({ elapsed: 0 });
+  const [timeInfo, setTimeInfo] = useState<TimeInfo>({ elapsed: 0 });
   const rawRowsRef = useRef<any[]>([]);
   const timerRef = useRef<NodeJS.Timeout|null>(null);
   const startTimeRef = useRef<number|null>(null);
@@ -159,9 +159,8 @@ export default function UploadPage(){
 
             buffer += decoder.decode(value, { stream: true });
             
-            // Process buffer line by line for SSE messages
             const lines = buffer.split('\n\n');
-            buffer = lines.pop() || ""; // Keep the last, possibly incomplete, line
+            buffer = lines.pop() || ""; 
 
             for (const line of lines) {
                 if (line.startsWith('data: ')) {
@@ -195,13 +194,12 @@ export default function UploadPage(){
                             setProcessingStatus('done');
                             setProgressInfo({ status: 'done', progress: 100 });
                             toast({ title: t('upload.toasts.clusteringComplete.title'), description: t('upload.toasts.clusteringComplete.description', {count: resultClusters.length}) });
-                            return; // Exit loop
+                            return; 
                         } else if (data.type === 'error') {
                             throw new Error(data.error || 'Unknown server error');
                         }
                     } catch (e: any) {
                         console.error('Failed to parse SSE message:', e.message, 'Raw data:', `"${dataStr}"`);
-                        // Don't throw here, just log the error and continue, as it might be a partial message
                     }
                 }
             }
