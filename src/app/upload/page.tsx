@@ -1,3 +1,4 @@
+
 // app/(app)/upload/page.tsx
 "use client";
 
@@ -29,6 +30,26 @@ const LOCAL_STORAGE_KEY_PREFIX = "beneficiary-mapping-";
 type WorkerProgress = { status:string; progress:number; completed?:number; total?:number; }
 type TimeInfo = { elapsed: number; remaining?: number };
 
+function openDB() {
+  return new Promise<IDBDatabase>((resolve, reject) => {
+    const req = indexedDB.open("cluster-cache", 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains("rows")) {
+        db.createObjectStore("rows");
+      }
+      if (!db.objectStoreNames.contains("clusters")) {
+        db.createObjectStore("clusters");
+      }
+      if (!db.objectStoreNames.contains("edges")) {
+        db.createObjectStore("edges");
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
 export default function UploadPage(){
   const { t, isLoading: isTranslationLoading } = useTranslation();
   const [columns, setColumns] = useState<string[]>([]);
@@ -46,6 +67,7 @@ export default function UploadPage(){
   const rawRowsRef = useRef<any[]>([]);
   const timerRef = useRef<NodeJS.Timeout|null>(null);
   const startTimeRef = useRef<number|null>(null);
+  const dbRef = useRef<IDBDatabase|null>(null);
   const { toast } = useToast();
   const router = useRouter();
 
@@ -129,6 +151,25 @@ export default function UploadPage(){
     setProgressInfo({ status: 'processing', progress: 1 });
     setTimeInfo({ elapsed: 0 });
     startTimeRef.current = Date.now();
+    
+    const db = await openDB();
+    dbRef.current = db;
+
+    const clearStore = (storeName: string) => {
+        return new Promise<void>((resolve, reject) => {
+            const tx = db.transaction(storeName, 'readwrite');
+            const store = tx.objectStore(storeName);
+            const req = store.clear();
+            req.onsuccess = () => resolve();
+            req.onerror = () => reject(req.error);
+        });
+    };
+
+    await Promise.all([
+        clearStore('rows'),
+        clearStore('clusters'),
+        clearStore('edges')
+    ]);
 
     try {
         const settingsRes = await fetch("/api/settings");
@@ -153,6 +194,15 @@ export default function UploadPage(){
         const decoder = new TextDecoder();
         let buffer = "";
 
+        const put = (store: string, key: string, value: any) => {
+          return new Promise<void>(resolve => {
+            if (!dbRef.current) return;
+            const tx = dbRef.current.transaction(store, "readwrite");
+            tx.objectStore(store).put(value, key);
+            tx.oncomplete = () => resolve();
+          });
+        }
+
         while (true) {
             const { done, value } = await reader.read();
             if (done) break;
@@ -171,14 +221,30 @@ export default function UploadPage(){
                         if (data.type === 'progress' || data.type === 'status') {
                             setProcessingStatus(data.status || 'working');
                             setProgressInfo({ status: data.status || 'working', progress: data.progress ?? 0, completed: data.completed, total: data.total });
-                        } else if (data.type === 'done') {
+                        } else if (data.type === 'cache_rows') {
+                            await put("rows", "all", data.payload);
+                        } else if (data.type === 'cache_clusters') {
+                            await put("clusters", `c_${data.index}`, data.payload);
+                        } else if (data.type === 'cache_edges') {
+                            await put("edges", `e_${data.index}`, data.payload);
+                        } else if (data.type === 'cache_done') {
                             if (timerRef.current) clearInterval(timerRef.current);
                             startTimeRef.current = null;
                             
                             setProcessingStatus('caching');
                             setProgressInfo({ status: 'caching', progress: 98 });
-                            const resultPayload = data.payload || {};
-                            const resultClusters = resultPayload.clusters || [];
+                            
+                            const readAll = (store: string) =>
+                              new Promise<any[]>(resolve => {
+                                if (!dbRef.current) return resolve([]);
+                                const tx = dbRef.current.transaction(store);
+                                const req = tx.objectStore(store).getAll();
+                                req.onsuccess = () => resolve(req.result);
+                              });
+
+                            const allRows = (await readAll("rows"))[0];
+                            const resultClusters = (await readAll("clusters")).flat();
+                            
                             setClusters(resultClusters);
                             
                             const cacheId = 'cache-' + Date.now() + '-' + Math.random().toString(36).slice(2,9);
@@ -187,7 +253,7 @@ export default function UploadPage(){
                             await fetch('/api/cluster-cache', { 
                                 method:'POST', 
                                 headers:{'Content-Type':'application/json'}, 
-                                body: JSON.stringify({ cacheId, rows: resultPayload.rows, clusters: resultClusters, originalHeaders: columns }) 
+                                body: JSON.stringify({ cacheId, rows: allRows, clusters: resultClusters, originalHeaders: columns }) 
                             });
 
                             sessionStorage.setItem('cacheTimestamp', Date.now().toString());

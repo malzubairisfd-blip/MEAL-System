@@ -2,10 +2,6 @@
 
 import {NextResponse} from 'next/server';
 
-// WorkerScript v10 — Resumable Cursor-based Clustering
-// Use as a web worker. Listens for messages: {type:'start', payload:{...}}, {type:'data', payload:{...}}, {type:'end'}, {type:'resume'}
-// Emits progress and final payload: postMessage({ type:'done', payload:{...} })
-
 /* -------------------------
    Helpers & Normalizers
    ------------------------- */
@@ -115,20 +111,6 @@ function nameOrderFreeScore(aName: any, bName: any) {
 function splitParts(name: any) {
   if (!name) return [];
   return tokens(name);
-}
-
-function compareNameComponents(aName: any, bName: any) {
-  // returns { partsA, partsB, partScores: [..], orderFree }
-  const A = splitParts(aName);
-  const B = splitParts(bName);
-  const partScores = [];
-  for (let i = 0; i < Math.max(A.length, B.length); i++) {
-    const pA = A[i] || "";
-    const pB = B[i] || "";
-    partScores.push(jaroWinkler(pA, pB));
-  }
-  const orderFree = nameOrderFreeScore(aName, bName);
-  return { partsA: A, partsB: B, partScores, orderFree };
 }
 
 /* -------------------------
@@ -591,14 +573,31 @@ async function runClustering(rows: any, opts: any, resumeState: any, send: Funct
 
   send({ type: "progress", status: "annotating", progress: 95 });
 
-  return { clusters: clustersWithRecords, edgesUsed, rows };
+  const CHUNK_SIZE = 1000;
+  function chunkArray(arr: any[], size: number) {
+    const out = [];
+    for (let i = 0; i < arr.length; i += size) {
+        out.push(arr.slice(i, i + size));
+    }
+    return out;
+  }
+
+  send({ type: "cache_rows", payload: rows });
+  chunkArray(clustersWithRecords, CHUNK_SIZE).forEach((chunk, i) => {
+      send({ type: "cache_clusters", index: i, payload: chunk });
+  });
+  chunkArray(edgesUsed, CHUNK_SIZE).forEach((chunk, i) => {
+      send({ type: "cache_edges", index: i, payload: chunk });
+  });
+  send({ type: "cache_done" });
 }
 
 
-function mapIncomingRowsToInternal(rowsChunk: any, mapping: any) {
+function mapIncomingRowsToInternal(rowsChunk: any, mapping: any, startIndex: number) {
   return rowsChunk.map((originalRecord: any, i: any) => {
         const mapped: any = {
             ...originalRecord,
+            _internalId: "row_" + (startIndex + i),
             womanName: "", husbandName: "", nationalId: "", phone: "", village: "", subdistrict: "", children: [],
         };
         
@@ -611,7 +610,6 @@ function mapIncomingRowsToInternal(rowsChunk: any, mapping: any) {
             }
         }
         
-        // Ensure children is an array for normalization
         mapped.children = normalizeChildrenField(mapped.children);
         
         mapped.womanName_normalized = normalizeArabicRaw(mapped.womanName);
@@ -637,22 +635,31 @@ export async function POST(req: Request) {
             async start(controller) {
                 const encoder = new TextEncoder();
                 const send = (data: any) => {
-                    controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+                    try {
+                        const message = `data: ${JSON.stringify(data)}\n\n`;
+                        controller.enqueue(encoder.encode(message));
+                    } catch (e) {
+                        // This can happen if the client disconnects.
+                        console.error("Failed to enqueue message:", e);
+                    }
                 };
 
                 try {
                     send({ type: 'progress', status: 'worker-ready', progress: 1 });
 
-                    const mappedRows = mapIncomingRowsToInternal(rows, mapping);
+                    const mappedRows = mapIncomingRowsToInternal(rows, mapping, 0);
                     send({ type: 'progress', status: 'mapping-rows', progress: 5, completed: mappedRows.length, total: mappedRows.length });
 
-                    const result = await runClustering(mappedRows, options, resumeState, send);
+                    await runClustering(mappedRows, options, resumeState, send);
                     
-                    send({ type: 'done', payload: { rows: result.rows, clusters: result.clusters, edgesUsed: result.edgesUsed } });
                 } catch (err: any) {
                     send({ type: 'error', error: String(err && err.message ? err.message : err) });
                 } finally {
-                    controller.close();
+                    try {
+                        controller.close();
+                    } catch (e) {
+                         console.error("Error closing stream controller:", e);
+                    }
                 }
             }
         });
