@@ -287,31 +287,47 @@ export default function UploadPage(){
                             }
 
                             setProcessingStatus('caching');
-                            setProgressInfo({ status: 'caching', progress: 98 });
-                            
-                            const readAll = (store: string) =>
-                              new Promise<any[]>((resolve, reject) => {
-                                if (!dbRef.current) return resolve([]);
-                                const tx = dbRef.current.transaction(store);
-                                const storeReq = tx.objectStore(store);
-                                const req = storeReq.getAll();
-                                req.onsuccess = () => resolve(req.result.flat());
-                                req.onerror = () => reject(req.error);
-                              });
+setProgressInfo({ status: 'caching', progress: 98 });
 
-                            const allRowsFromDB = (await readAll("rows"))[0];
-                            const resultClusters = (await readAll("clusters"));
-                            
-                            setClusters(resultClusters);
-                            
-                            const cacheId = 'cache-' + Date.now() + '-' + Math.random().toString(36).slice(2,9);
-                            sessionStorage.setItem('cacheId', cacheId);
-                            
-                            await fetch('/api/cluster-cache', { 
-                                method:'POST', 
-                                headers:{'Content-Type':'application/json'}, 
-                                body: JSON.stringify({ cacheId, rows: allRowsFromDB, clusters: resultClusters, originalHeaders: columns }) 
-                            });
+const readAll = (storeName: string): Promise<any[]> =>
+  new Promise((resolve, reject) => {
+    if (!dbRef.current) return resolve([]);
+    const tx = dbRef.current.transaction(storeName, "readonly");
+    const storeReq = tx.objectStore(storeName);
+    const req = storeReq.getAll();
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+
+// Read from a single key
+const readSingle = (storeName: string, key: string): Promise<any> =>
+  new Promise((resolve, reject) => {
+    if (!dbRef.current) return reject("DB not available");
+    const tx = dbRef.current.transaction(storeName, "readonly");
+    const storeReq = tx.objectStore(storeName);
+    const req = storeReq.get(key);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+
+const allRowsFromDB = await readSingle("rows", "all");
+const resultClusters = (await readAll("clusters")).flat();
+
+setClusters(resultClusters);
+
+const cacheId = 'cache-' + Date.now() + '-' + Math.random().toString(36).slice(2, 9);
+sessionStorage.setItem('cacheId', cacheId);
+
+await fetch('/api/cluster-cache', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    cacheId,
+    rows: allRowsFromDB,
+    clusters: resultClusters,
+    originalHeaders: columns,
+  }),
+});
 
                             sessionStorage.setItem('cacheTimestamp', Date.now().toString());
                             setProcessingStatus('done');

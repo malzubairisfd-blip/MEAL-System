@@ -96,10 +96,15 @@ async function enrichData(cachedData: any): Promise<EnrichedRecord[]> {
         throw new Error("Invalid cache: missing rows or clusters.");
     }
     
-    // Defensive check: if allRecords is an object with a single key (like from IndexedDB), use its value.
     if (typeof allRecords === 'object' && !Array.isArray(allRecords) && Object.keys(allRecords).length === 1) {
         allRecords = Object.values(allRecords)[0];
+    } else if (typeof allRecords === 'object' && !Array.isArray(allRecords) && Array.isArray(allRecords.rows)) {
+        allRecords = allRecords.rows;
+    } else if (Array.isArray(allRecords) && allRecords.length === 1 && Array.isArray(allRecords[0])) {
+        // Handle the case where rows are nested: [[...rows...]]
+        allRecords = allRecords[0];
     }
+
 
     if (!Array.isArray(allRecords)) {
         throw new Error("Invalid cache: 'rows' is not an array.");
