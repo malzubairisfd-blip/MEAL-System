@@ -291,7 +291,7 @@ export default function UploadPage(){
                                 req.onerror = () => reject(req.error);
                               });
 
-                            const allRows = (await readAll("rows"))[0];
+                            const allRowsFromDB = (await readAll("rows"))[0];
                             const resultClusters = (await readAll("clusters"));
                             
                             setClusters(resultClusters);
@@ -302,7 +302,7 @@ export default function UploadPage(){
                             await fetch('/api/cluster-cache', { 
                                 method:'POST', 
                                 headers:{'Content-Type':'application/json'}, 
-                                body: JSON.stringify({ cacheId, rows: allRows, clusters: resultClusters, originalHeaders: columns }) 
+                                body: JSON.stringify({ cacheId, rows: allRowsFromDB, clusters: resultClusters, originalHeaders: columns }) 
                             });
 
                             sessionStorage.setItem('cacheTimestamp', Date.now().toString());
