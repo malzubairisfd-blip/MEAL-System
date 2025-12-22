@@ -1,4 +1,3 @@
-
 // app/(app)/upload/page.tsx
 "use client";
 
@@ -18,9 +17,6 @@ import type { RecordRow } from "@/lib/types";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useTranslation } from "@/hooks/use-translation";
 import { Skeleton } from "@/components/ui/skeleton";
-import { registerServiceWorker } from "@/lib/registerSW";
-import { enableWakeLock } from "@/lib/wakeLock";
-import { setupVisibilityHandler } from "@/lib/visibility";
 
 type Mapping = {
   womanName: string; husbandName: string; nationalId: string; phone: string;
@@ -29,8 +25,6 @@ type Mapping = {
 const MAPPING_FIELDS: (keyof Mapping)[] = ["womanName","husbandName","nationalId","phone","village","subdistrict","children", "beneficiaryId"];
 const REQUIRED_MAPPING_FIELDS: (keyof Mapping)[] = ["womanName","husbandName","nationalId","phone","village","subdistrict","children"];
 const LOCAL_STORAGE_KEY_PREFIX = "beneficiary-mapping-";
-const PROGRESS_KEY_PREFIX = "progress-";
-
 
 type WorkerProgress = { status:string; progress:number; completed?:number; total?:number; }
 type TimeInfo = { elapsed: number; remaining?: number };
@@ -44,109 +38,16 @@ export default function UploadPage(){
   });
   const [isMappingComplete, setIsMappingComplete] = useState(false);
   const [progressInfo, setProgressInfo] = useState<WorkerProgress>({ status:"idle", progress:0 });
-  const [workerStatus, setWorkerStatus] = useState<string>("idle");
+  const [processingStatus, setProcessingStatus] = useState<string>("idle");
   const [clusters, setClusters] = useState<any[][]>([]);
   const [fileReadProgress, setFileReadProgress] = useState(0);
   const [isMappingOpen, setIsMappingOpen] = useState(true);
-  const [timeInfo, setTimeInfo] = useState<TimeInfo>({ elapsed: 0 });
+    const [timeInfo, setTimeInfo] = useState<TimeInfo>({ elapsed: 0 });
   const rawRowsRef = useRef<any[]>([]);
-  const workerRef = useRef<Worker|null>(null);
   const timerRef = useRef<NodeJS.Timeout|null>(null);
   const startTimeRef = useRef<number|null>(null);
   const { toast } = useToast();
   const router = useRouter();
-
-  useEffect(()=>{
-    if(typeof window === "undefined") return;
-
-    registerServiceWorker();
-    enableWakeLock();
-
-    const cleanupVisibilityHandler = setupVisibilityHandler(() => workerRef.current);
-    
-    // Create the worker
-    const w = new Worker(new URL('@/workers/cluster.worker.ts', import.meta.url), { type: 'module' });
-    workerRef.current = w;
-
-    w.onmessage = async (ev) => {
-      const msg = ev.data;
-      if(!msg || !msg.type) return;
-      
-      if (msg.type === 'save_progress') {
-          if (msg.value) {
-            localStorage.setItem(msg.key, JSON.stringify(msg.value));
-          } else {
-            localStorage.removeItem(msg.key);
-          }
-          return;
-      }
-      
-      if (document.visibilityState === 'hidden' && msg.type === 'progress') {
-         const sw = await navigator.serviceWorker.ready;
-         sw.active?.postMessage({
-            type: 'PROGRESS_NOTIFICATION',
-            percent: Math.round(msg.progress),
-            status: msg.status
-         });
-      }
-
-      if(msg.type === 'progress' || msg.type === 'status'){
-        setWorkerStatus(msg.status || 'working');
-        setProgressInfo({ status: msg.status || 'working', progress: msg.progress ?? 0, completed: msg.completed, total: msg.total });
-      } else if(msg.type === 'done'){
-        if (timerRef.current) clearInterval(timerRef.current);
-        startTimeRef.current = null;
-        
-        const sw = await navigator.serviceWorker.ready;
-        sw.active?.postMessage({ type: 'DONE_NOTIFICATION' });
-
-        setWorkerStatus('caching');
-        setProgressInfo({ status: 'caching', progress: 98 });
-        const resultPayload = msg.payload || {};
-        const resultClusters = resultPayload.clusters || [];
-        setClusters(resultClusters);
-        
-        try {
-          const cacheId = 'cache-' + Date.now() + '-' + Math.random().toString(36).slice(2,9);
-          sessionStorage.setItem('cacheId', cacheId);
-          
-          const allRows = resultPayload.rows || [];
-          
-          const dataToCache = {
-              rows: allRows,
-              clusters: resultClusters,
-              originalHeaders: columns,
-          };
-
-          await fetch('/api/cluster-cache', { 
-              method:'POST', 
-              headers:{'Content-Type':'application/json'}, 
-              body: JSON.stringify({ cacheId, ...dataToCache }) 
-          });
-
-          sessionStorage.setItem('cacheTimestamp', Date.now().toString());
-          setWorkerStatus('done');
-          setProgressInfo({ status: 'done', progress: 100 });
-          toast({ title: t('upload.toasts.clusteringComplete.title'), description: t('upload.toasts.clusteringComplete.description', {count: resultClusters.length}) });
-        } catch(err:any){
-          setWorkerStatus('error');
-          if (timerRef.current) clearInterval(timerRef.current);
-          toast({ title: t('upload.toasts.cacheError.title'), description: String(err), variant:"destructive" });
-        }
-      } else if(msg.type === 'error'){
-        setWorkerStatus('error');
-        if (timerRef.current) clearInterval(timerRef.current);
-        toast({ title: t('upload.toasts.workerError.title'), description: msg.error || 'Unknown', variant:"destructive" });
-      }
-    };
-
-    return () => {
-      if(workerRef.current){ workerRef.current.terminate(); workerRef.current = null; }
-      if (timerRef.current) clearInterval(timerRef.current);
-      cleanupVisibilityHandler();
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   useEffect(()=>{
     const allRequiredMapped = REQUIRED_MAPPING_FIELDS.every(f => !!mapping[f]);
@@ -159,7 +60,7 @@ export default function UploadPage(){
 
   // Timer effect
   useEffect(() => {
-    if (workerStatus !== 'idle' && workerStatus !== 'done' && workerStatus !== 'error' && startTimeRef.current) {
+    if (processingStatus !== 'idle' && processingStatus !== 'done' && processingStatus !== 'error' && startTimeRef.current) {
         if (timerRef.current) clearInterval(timerRef.current);
         timerRef.current = setInterval(() => {
             const elapsed = (Date.now() - startTimeRef.current!) / 1000;
@@ -175,13 +76,13 @@ export default function UploadPage(){
     return () => {
         if (timerRef.current) clearInterval(timerRef.current);
     }
-  }, [workerStatus, progressInfo.progress]);
+  }, [processingStatus, progressInfo.progress]);
 
   async function handleFile(e:React.ChangeEvent<HTMLInputElement>){
     const f = e.target.files?.[0];
     if(!f) return;
     setFile(f);
-    setWorkerStatus('idle'); setProgressInfo({ status:'idle', progress:0 }); setClusters([]);
+    setProcessingStatus('idle'); setProgressInfo({ status:'idle', progress:0 }); setClusters([]);
     setTimeInfo({ elapsed: 0 });
     if(timerRef.current) clearInterval(timerRef.current);
     setFileReadProgress(0);
@@ -219,57 +120,100 @@ export default function UploadPage(){
     setMapping(m => ({ ...m, [field]: value }));
   }
 
-  async function startClustering(){
-    if(!workerRef.current) { toast({ title: t('upload.toasts.workerNotReady') }); return; }
-    if(!rawRowsRef.current.length){ toast({ title: t('upload.toasts.noData') }); return; }
-    if(!isMappingComplete){ toast({ title: t('upload.toasts.mappingIncomplete'), variant:"destructive"}); return; }
-    if(!file) { toast({ title: "No file selected." }); return; }
+  async function startClustering() {
+    if (!rawRowsRef.current.length) { toast({ title: t('upload.toasts.noData') }); return; }
+    if (!isMappingComplete) { toast({ title: t('upload.toasts.mappingIncomplete'), variant: "destructive" }); return; }
 
     setIsMappingOpen(false);
-    setWorkerStatus('processing'); 
-    setProgressInfo({ status:'processing', progress:1 });
+    setProcessingStatus('processing');
+    setProgressInfo({ status: 'processing', progress: 1 });
     setTimeInfo({ elapsed: 0 });
     startTimeRef.current = Date.now();
 
-
-    const fileKey = `${file.name}-${file.size}-${file.lastModified}`;
-    const progressKey = `${PROGRESS_KEY_PREFIX}${fileKey}`;
-    const savedProgressRaw = localStorage.getItem(progressKey);
-    let resumeState = null;
-    if (savedProgressRaw) {
-        try {
-            resumeState = JSON.parse(savedProgressRaw);
-            if (resumeState) {
-              toast({ title: "Resuming Process", description: "Found saved progress for this file and will resume clustering."});
-            }
-        } catch {}
-    }
-
-    let settings = {};
     try {
-      const res = await fetch("/api/settings");
-      const d = await res.json();
-      if(d.ok) settings = d.settings || {};
-    } catch(_) {}
+        const settingsRes = await fetch("/api/settings");
+        const settingsData = await settingsRes.json();
+        const settings = settingsData.ok ? settingsData.settings : {};
 
-    workerRef.current!.postMessage({ 
-      type:'start', 
-      payload: { 
-        mapping, 
-        options: settings, 
-        resumeState: resumeState,
-        progressKey: progressKey
-      } 
-    });
+        const response = await fetch('/api/cluster-server', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                rows: rawRowsRef.current,
+                mapping,
+                options: settings,
+            }),
+        });
 
-    const CHUNK = 2000;
-    for(let i=0;i<rawRowsRef.current.length;i+=CHUNK){
-      const chunk = rawRowsRef.current.slice(i,i+CHUNK);
-      workerRef.current!.postMessage({ type:'data', payload:{ rows: chunk, total: rawRowsRef.current.length } });
-      await new Promise(r => setTimeout(r, 8));
+        if (!response.body) {
+            throw new Error("Response body is missing.");
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            
+            // Process buffer line by line for SSE messages
+            const lines = buffer.split('\n\n');
+            buffer = lines.pop() || ""; // Keep the last, possibly incomplete, line
+
+            for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                    const dataStr = line.substring(6);
+                    try {
+                        const data = JSON.parse(dataStr);
+                        
+                        if (data.type === 'progress' || data.type === 'status') {
+                            setProcessingStatus(data.status || 'working');
+                            setProgressInfo({ status: data.status || 'working', progress: data.progress ?? 0, completed: data.completed, total: data.total });
+                        } else if (data.type === 'done') {
+                            if (timerRef.current) clearInterval(timerRef.current);
+                            startTimeRef.current = null;
+                            
+                            setProcessingStatus('caching');
+                            setProgressInfo({ status: 'caching', progress: 98 });
+                            const resultPayload = data.payload || {};
+                            const resultClusters = resultPayload.clusters || [];
+                            setClusters(resultClusters);
+                            
+                            const cacheId = 'cache-' + Date.now() + '-' + Math.random().toString(36).slice(2,9);
+                            sessionStorage.setItem('cacheId', cacheId);
+                            
+                            await fetch('/api/cluster-cache', { 
+                                method:'POST', 
+                                headers:{'Content-Type':'application/json'}, 
+                                body: JSON.stringify({ cacheId, rows: resultPayload.rows, clusters: resultClusters, originalHeaders: columns }) 
+                            });
+
+                            sessionStorage.setItem('cacheTimestamp', Date.now().toString());
+                            setProcessingStatus('done');
+                            setProgressInfo({ status: 'done', progress: 100 });
+                            toast({ title: t('upload.toasts.clusteringComplete.title'), description: t('upload.toasts.clusteringComplete.description', {count: resultClusters.length}) });
+                            return; // Exit loop
+                        } else if (data.type === 'error') {
+                            throw new Error(data.error || 'Unknown server error');
+                        }
+                    } catch (e: any) {
+                        console.error('Failed to parse SSE message:', e.message, 'Raw data:', `"${dataStr}"`);
+                        // Don't throw here, just log the error and continue, as it might be a partial message
+                    }
+                }
+            }
+        }
+    } catch (err: any) {
+        console.error("Clustering process failed:", err);
+        setProcessingStatus('error');
+        if (timerRef.current) clearInterval(timerRef.current);
+        toast({ title: "Processing Error", description: err.message || "Failed to run clustering on the server.", variant: "destructive" });
     }
-    workerRef.current!.postMessage({ type:'end' });
   }
+
 
   const formatTime = (seconds: number) => {
     const h = Math.floor(seconds / 3600);
@@ -307,7 +251,7 @@ export default function UploadPage(){
 
   const getButtonText = () => {
      if(isTranslationLoading) return <Loader2 className="mr-2 h-4 w-4 animate-spin" />;
-     switch (workerStatus) {
+     switch (processingStatus) {
       case 'processing':
       case 'blocking':
       case 'building-edges':
@@ -368,7 +312,7 @@ export default function UploadPage(){
                   setColumns([]);
                   rawRowsRef.current = [];
                   setClusters([]);
-                  setWorkerStatus('idle');
+                  setProcessingStatus('idle');
                   setProgressInfo({ status: 'idle', progress: 0 });
                   setFileReadProgress(0);
                   setTimeInfo({elapsed: 0});
@@ -442,13 +386,13 @@ export default function UploadPage(){
             <div className="space-y-4">
               <Button 
                 onClick={startClustering} 
-                disabled={!isMappingComplete || (workerStatus !== 'idle' && workerStatus !== 'done' && workerStatus !== 'error')}
+                disabled={!isMappingComplete || (processingStatus !== 'idle' && processingStatus !== 'done' && processingStatus !== 'error')}
               >
-                {(workerStatus === 'processing' || workerStatus === 'caching' || workerStatus === 'building-edges' || workerStatus === 'merging-edges' || workerStatus === 'annotating' || workerStatus === 'blocking') ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                {(processingStatus === 'processing' || processingStatus === 'caching' || processingStatus === 'building-edges' || processingStatus === 'merging-edges' || processingStatus === 'annotating' || processingStatus === 'blocking') ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 {getButtonText()}
               </Button>
 
-              {(workerStatus !== 'idle' && workerStatus !== 'done' && workerStatus !== 'error') && (
+              {(processingStatus !== 'idle' && processingStatus !== 'done' && processingStatus !== 'error') && (
                 <div className="space-y-2 mt-4">
                   <div className="flex justify-between items-center text-sm font-medium text-muted-foreground">
                     <span>{formattedStatus()}</span>
@@ -473,7 +417,7 @@ export default function UploadPage(){
         </Card>
       )}
 
-      {workerStatus === 'done' && (
+      {processingStatus === 'done' && (
         <Card>
           <CardHeader><CardTitle>{isTranslationLoading ? <Skeleton className="h-8 w-48"/> : t('upload.steps.4.title')}</CardTitle><CardDescription>{isTranslationLoading ? <Skeleton className="h-5 w-64 mt-1"/> : t('upload.steps.4.description')}</CardDescription></CardHeader>
           <CardContent>
@@ -491,5 +435,3 @@ export default function UploadPage(){
     </div>
   );
 }
-
-    
