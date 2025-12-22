@@ -422,11 +422,11 @@ export default function ReportPage() {
                                                         ) : (
                                                             selectedFeatures.map((feature) => (
                                                                 <Badge
-                                                                    key={feature.properties?.ADM3_EN}
+                                                                    key={feature.properties?.ADM3_AR}
                                                                     variant="secondary"
                                                                     className="rounded-sm px-1 font-normal"
                                                                 >
-                                                                    {feature.properties?.ADM3_EN}
+                                                                    {feature.properties?.ADM3_AR}
                                                                 </Badge>
                                                             ))
                                                         )}
@@ -464,7 +464,7 @@ export default function ReportPage() {
                                                                 >
                                                                     <Check className={cn("h-4 w-4")} />
                                                                 </div>
-                                                                <span>{feature.properties?.ADM3_EN}</span>
+                                                                <span>{feature.properties?.ADM3_AR}</span>
                                                             </CommandItem>
                                                         );
                                                     })}

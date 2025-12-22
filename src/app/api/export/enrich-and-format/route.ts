@@ -800,21 +800,17 @@ function createDashboardReportSheet(wb: ExcelJS.Workbook, allRecords: RecordRow[
     const ws = wb.addWorksheet("Dashboard Report");
     ws.views = [{ rightToLeft: true }];
     
-    // Define column widths roughly based on the image proportions
     ws.columns = [
         { width: 2 },  // A
-        { width: 13 }, // B
-        { width: 13 }, // C
-        { width: 2 },  // D
-        { width: 13 }, // E
-        { width: 13 }, // F
-        { width: 2 },  // G
-        { width: 13 }, // H
-        { width: 13 }, // I
+        { width: 26 }, // B
+        { width: 26 }, // C
+        { width: 26 }, // D
+        { width: 26 }, // E
+        { width: 2 },  // F
     ];
 
 
-    ws.mergeCells('B2:I2');
+    ws.mergeCells('B2:E2');
     const titleCell = ws.getCell('B2');
     titleCell.value = "Analysis Dashboard Report";
     titleCell.font = { name: 'Calibri', size: 24, bold: true, color: { argb: 'FF002060' } };
@@ -823,9 +819,9 @@ function createDashboardReportSheet(wb: ExcelJS.Workbook, allRecords: RecordRow[
 
     const kf = processedData.keyFigures;
     const keyFiguresData = [
-        { title: 'Team Leaders', value: kf.teamLeaders, cell: 'H4' },
-        { title: 'Surveyors', value: kf.surveyors, cell: 'F4' },
-        { title: 'Registration Days', value: kf.registrationDays, cell: 'D4' },
+        { title: 'Team Leaders', value: kf.teamLeaders, cell: 'E4' },
+        { title: 'Surveyors', value: kf.surveyors, cell: 'D4' },
+        { title: 'Registration Days', value: kf.registrationDays, cell: 'C4' },
         { title: 'Villages Targeted', value: kf.villages, cell: 'B4' },
     ];
     
@@ -844,7 +840,7 @@ function createDashboardReportSheet(wb: ExcelJS.Workbook, allRecords: RecordRow[
         ws.getRow(5).height = 30;
     });
 
-    const addImageToCell = (base64: string, cell: string) => {
+    const addImageToCell = (base64: string, startRow: number, startCol: number, endRow: number, endCol: number) => {
         if (!base64 || !base64.startsWith('data:image/png;base64,')) return;
 
         const imageId = wb.addImage({
@@ -852,16 +848,28 @@ function createDashboardReportSheet(wb: ExcelJS.Workbook, allRecords: RecordRow[
             extension: 'png',
         });
         
-        ws.addImage(imageId, cell);
+        ws.addImage(imageId, {
+            tl: { col: startCol, row: startRow },
+            br: { col: endCol, row: endRow },
+            editAs: 'oneCell'
+        });
     };
     
-    // Add images according to the layout in the screenshot with specified sizes
-    addImageToCell(chartImages.byDayChart, 'B7');
-    addImageToCell(chartImages.byVillageChart, 'E7');
-    addImageToCell(chartImages.genderVisual, 'B47');
-    addImageToCell(chartImages.womenDonut, 'E47');
-    addImageToCell(chartImages.bubbleStats, 'E65');
-    addImageToCell(chartImages.map, 'B65');
+    let currentRow = 7;
+    
+    addImageToCell(chartImages.byDayChart, currentRow, 1, currentRow + 20, 2.8);
+    addImageToCell(chartImages.byVillageChart, currentRow, 3, currentRow + 20, 4.8);
+    currentRow += 22;
+
+    addImageToCell(chartImages.genderVisual, currentRow, 1, currentRow + 18, 2.8);
+    addImageToCell(chartImages.womenDonut, currentRow, 3, currentRow + 18, 4.8);
+    currentRow += 20;
+
+    addImageToCell(chartImages.bubbleStats, currentRow, 1, currentRow + 18, 4.8);
+    currentRow += 20;
+    
+    addImageToCell(chartImages.map, currentRow, 1, currentRow + 35, 4.8);
 }
+
 
 

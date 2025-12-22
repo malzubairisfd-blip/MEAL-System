@@ -56,7 +56,7 @@ export default function WestAfricaMap() {
     
     const layer = L.geoJSON(data, {
       style: (feature?: Feature) => {
-        if (feature && selectedPcodes.has(feature.properties?.[nameProperty.replace('_EN', '_PCODE')])) {
+        if (feature && selectedPcodes.has(feature.properties?.[nameProperty.replace('_AR', '_PCODE')])) {
           return selectedStyle;
         }
         return baseStyle;
@@ -69,17 +69,17 @@ export default function WestAfricaMap() {
     if (!mapRef.current) return;
     
     if (admin1LayerRef.current) mapRef.current.removeLayer(admin1LayerRef.current);
-    admin1LayerRef.current = createLayer(admin1, { color: "#4a5568", weight: 2, opacity: 0.8, fillOpacity: 0.1 }, {}, 'ADM1_EN');
+    admin1LayerRef.current = createLayer(admin1, { color: "#4a5568", weight: 2, opacity: 0.8, fillOpacity: 0.1 }, {}, 'ADM1_AR');
 
     if (admin2LayerRef.current) mapRef.current.removeLayer(admin2LayerRef.current);
-    admin2LayerRef.current = createLayer(admin2, { color: "#718096", weight: 1.5, opacity: 0.7, fillOpacity: 0.1 }, {}, 'ADM2_EN');
+    admin2LayerRef.current = createLayer(admin2, { color: "#718096", weight: 1.5, opacity: 0.7, fillOpacity: 0.1 }, {}, 'ADM2_AR');
 
     if (admin3LayerRef.current) mapRef.current.removeLayer(admin3LayerRef.current);
     admin3LayerRef.current = createLayer(
         admin3, 
         { color: "#A0AEC0", weight: 1, opacity: 0.6, fillOpacity: 0.1 }, 
         { color: '#d97706', weight: 3, opacity: 1, fillColor: '#fde047', fillOpacity: 0.5 },
-        'ADM3_EN'
+        'ADM3_AR'
     );
     
     if (selectedFeatures.length > 0) {
