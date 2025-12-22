@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import Link from "next/link";
+import { loadCachedResult } from "@/lib/cache";
 
 
 type DownloadVersion = {
@@ -48,44 +49,46 @@ export default function ExportPage() {
     const [clusterCount, setClusterCount] = useState(0);
     
     useEffect(() => {
-        const checkCache = async () => {
-            setInitialLoading(true);
-            const cacheId = sessionStorage.getItem('cacheId');
-            if (!cacheId) {
-                setIsReady(false);
-                setInitialLoading(false);
-                toast({ title: "No Data Found", description: "Please start from the upload page to generate data for export.", variant: "destructive" });
-                return;
-            }
-            
+        let alive = true;
+
+        const poll = async () => {
             try {
-                const res = await fetch(`/api/cluster-cache?id=${cacheId}`);
-                if (!res.ok) {
-                    throw new Error('Failed to fetch cached data. Please try the upload process again.');
-                }
-                const responseData = await res.json();
-                
-                const rows = responseData.rows || [];
-                const clusters = responseData.clusters || [];
-                
-                setRecordCount(rows.length);
-                setClusterCount(clusters.length);
+                const res = await loadCachedResult();
+                if (!alive) return;
 
-                if (rows.length > 0) {
-                    setIsReady(true);
+                if (res.status === "READY") {
+                    const data = res.data;
+                    const rows = data.rows || [];
+                    const clusters = data.clusters || [];
+                    
+                    setRecordCount(rows.length);
+                    setClusterCount(clusters.length);
+
+                    if (rows.length > 0) {
+                        setIsReady(true);
+                    } else {
+                        toast({ title: "No Records Found", description: "The cached data is empty. Please re-upload your file.", variant: "destructive" });
+                        setIsReady(false);
+                    }
+                    setInitialLoading(false);
+                } else if (res.status === "LOADING") {
+                    setTimeout(poll, 1000); // Wait for cache
                 } else {
-                     toast({ title: "No Records Found", description: "The cached data is empty. Please re-upload your file.", variant: "destructive" });
-                     setIsReady(false);
+                    toast({ title: "No Data", description: "Please upload data first.", variant: "destructive" });
+                    setInitialLoading(false);
+                    setIsReady(false);
                 }
-
             } catch (error: any) {
+                if (!alive) return;
                 setIsReady(false);
-                toast({ title: "Error Loading Data", description: error.message, variant: "destructive" });
-            } finally {
                 setInitialLoading(false);
+                toast({ title: "Error Loading Data", description: error.message, variant: "destructive" });
             }
         };
-        checkCache();
+
+        poll();
+
+        return () => { alive = false; };
     }, [toast]);
     
     const runSimulatedProgress = () => {
