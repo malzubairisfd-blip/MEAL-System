@@ -1,3 +1,4 @@
+
 // src/app/api/cluster-server/route.ts
 import { NextResponse } from 'next/server';
 
@@ -124,7 +125,7 @@ function applyAdditionalRules(a: any, b: any, opts: any) {
   const HB = splitParts(b.husbandName_normalized || "");
   const reasons: string[] = [];
 
-  // RULE 6 — STRONG HOUSEHOLD + CHILDREN MATCH (CRITICAL)
+    // RULE 6 — STRONG HOUSEHOLD + CHILDREN MATCH (CRITICAL)
   {
     const A_parts = splitParts(a.womanName_normalized);
     const B_parts = splitParts(b.womanName_normalized);
@@ -593,56 +594,70 @@ async function runClustering(rows: any[], opts: any, send: (data: any) => void) 
 
 // Server-Sent Events (SSE) handler
 export async function POST(req: Request) {
-    const { rows, mapping, options } = await req.json();
+    try {
+        const { rows, mapping, options } = await req.json();
 
-    const stream = new ReadableStream({
-        async start(controller) {
-            const encoder = new TextEncoder();
-            const send = (data: any) => {
-                controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
-            };
-
-            try {
-                // Map rows on the server
-                const inbound = rows.map((originalRecord: any, i: number) => {
-                    const mapped: any = {
-                        ...originalRecord,
-                        _internalId: "row_" + i,
-                        womanName: "", husbandName: "", nationalId: "", phone: "", village: "", subdistrict: "", children: [],
-                    };
-                    for (const key in mapping) {
-                        if (key === 'cluster_id') continue;
-                        const col = mapping[key];
-                        if (col && originalRecord[col] !== undefined) {
-                            mapped[key] = originalRecord[col];
-                        }
+        const stream = new ReadableStream({
+            async start(controller) {
+                const encoder = new TextEncoder();
+                const send = (data: any) => {
+                    try {
+                        controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+                    } catch (e) {
+                        console.error("Error sending data to stream:", e);
                     }
-                    mapped.children = normalizeChildrenField(mapped.children);
-                    return mapped;
-                });
+                };
 
-                send({ type: 'status', status: 'mapping-rows', progress: 5, completed: inbound.length, total: inbound.length });
-                
-                // Run the entire clustering process
-                const result = await runClustering(inbound, options, send);
-                
-                // Send the final result
-                send({ type: 'done', payload: result });
+                try {
+                    // Map rows on the server
+                    const inbound = rows.map((originalRecord: any, i: number) => {
+                        const mapped: any = {
+                            ...originalRecord,
+                            _internalId: "row_" + i,
+                            womanName: "", husbandName: "", nationalId: "", phone: "", village: "", subdistrict: "", children: [],
+                        };
+                        for (const key in mapping) {
+                            if (key === 'cluster_id') continue;
+                            const col = mapping[key];
+                            if (col && originalRecord[col] !== undefined) {
+                                mapped[key] = originalRecord[col];
+                            }
+                        }
+                        mapped.children = normalizeChildrenField(mapped.children);
+                        mapped.womanName_normalized = normalizeArabicRaw(mapped.womanName);
+                        mapped.husbandName_normalized = normalizeArabicRaw(mapped.husbandName);
+                        mapped.village_normalized = normalizeArabicRaw(mapped.village);
+                        mapped.subdistrict_normalized = normalizeArabicRaw(mapped.subdistrict);
+                        mapped.children_normalized = mapped.children.map(normalizeArabicRaw);
 
-            } catch (error: any) {
-                console.error('Clustering error on server:', error);
-                send({ type: 'error', error: error.message });
-            } finally {
-                controller.close();
+                        return mapped;
+                    });
+
+                    send({ type: 'status', status: 'mapping-rows', progress: 5, completed: inbound.length, total: inbound.length });
+                    
+                    // Run the entire clustering process
+                    const result = await runClustering(inbound, options, send);
+                    
+                    // Send the final result
+                    send({ type: 'done', payload: result });
+
+                } catch (error: any) {
+                    console.error('Clustering error on server:', error);
+                    send({ type: 'error', error: error.message });
+                } finally {
+                    controller.close();
+                }
             }
-        }
-    });
+        });
 
-    return new Response(stream, {
-        headers: {
-            'Content-Type': 'text/event-stream',
-            'Cache-Control': 'no-cache',
-            'Connection': 'keep-alive',
-        },
-    });
+        return new Response(stream, {
+            headers: {
+                'Content-Type': 'text/event-stream',
+                'Cache-Control': 'no-cache',
+                'Connection': 'keep-alive',
+            },
+        });
+    } catch(e: any) {
+         return NextResponse.json({ error: 'Failed to parse request body: ' + e.message }, { status: 400 });
+    }
 }
