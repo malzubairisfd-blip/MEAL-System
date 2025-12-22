@@ -303,19 +303,13 @@ function createEnrichedDataSheet(wb: ExcelJS.Workbook, data: EnrichedRecord[], o
     
     const normalizedHeaders = [ "womanName_normalized", "husbandName_normalized" ];
 
-    // Ensure all original headers are included, even if not present in the first record
-    const allOriginalHeaders = new Set<string>(originalHeaders || []);
-    data.forEach(record => {
-      Object.keys(record).forEach(key => {
-        if (!enrichmentHeaders.includes(key) && !normalizedHeaders.includes(key) && !key.startsWith('_') && !Object.keys(record).find(k => k === 'ClusterID')) {
-           if (!allOriginalHeaders.has(key) && !enrichmentHeaders.includes(key) && !normalizedHeaders.includes(key)) {
-             allOriginalHeaders.add(key);
-           }
-        }
-      });
-    });
-
-    const finalHeaders = [ ...enrichmentHeaders, ...Array.from(allOriginalHeaders) ];
+    // Get all keys from the first enriched record to create a dynamic header list
+    const allHeaders = data.length > 0 ? Object.keys(data[0]) : [];
+    
+    const finalHeaders = [
+        ...enrichmentHeaders,
+        ...(originalHeaders || []).filter(h => !enrichmentHeaders.includes(h) && !h.startsWith('_'))
+    ];
 
     ws.columns = finalHeaders.map(h => ({
       header: h,
