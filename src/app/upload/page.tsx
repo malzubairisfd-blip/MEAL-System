@@ -33,6 +33,26 @@ const PROGRESS_KEY_PREFIX = "progress-";
 type WorkerProgress = { status:string; progress:number; completed?:number; total?:number; }
 type TimeInfo = { elapsed: number; remaining?: number };
 
+async function clearStores(storeNames: string[]) {
+  const db = await openDB();
+
+  const existing = storeNames.filter(name =>
+    db.objectStoreNames.contains(name)
+  );
+
+  if (existing.length === 0) return;
+
+  return new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(existing, "readwrite");
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+
+    existing.forEach(name => {
+      tx.objectStore(name).clear();
+    });
+  });
+}
+
 export default function UploadPage(){
   const { t, isLoading: isTranslationLoading } = useTranslation();
   const [columns, setColumns] = useState<string[]>([]);
@@ -147,18 +167,7 @@ export default function UploadPage(){
     const db = await openDB();
     dbRef.current = db;
 
-    const clearStores = (storeNames: string[]) => {
-        return new Promise<void>((resolve, reject) => {
-            const tx = db.transaction(storeNames, 'readwrite');
-            tx.oncomplete = () => resolve();
-            tx.onerror = () => reject(tx.error);
-            storeNames.forEach(storeName => {
-                tx.objectStore(storeName).clear();
-            });
-        });
-    };
-
-    await clearStores(['rows', 'clusters', 'edges', 'meta']);
+    await clearStores(["rows", "clusters", "edges", "meta"]);
     
     const fileKey = `${file.name}-${file.size}-${file.lastModified}`;
     const progressKey = `${PROGRESS_KEY_PREFIX}${fileKey}`;

@@ -1,22 +1,32 @@
 
-export function openDB() {
-  return new Promise<IDBDatabase>((resolve, reject) => {
-    const req = indexedDB.open("cluster-cache", 1);
+
+const DB_NAME = "clustering-db";
+const DB_VERSION = 3; // 🔴 MUST BE INCREMENTED
+
+export function openDB(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+
     req.onupgradeneeded = () => {
       const db = req.result;
+
       if (!db.objectStoreNames.contains("rows")) {
         db.createObjectStore("rows");
       }
+
       if (!db.objectStoreNames.contains("clusters")) {
         db.createObjectStore("clusters");
       }
+
       if (!db.objectStoreNames.contains("edges")) {
         db.createObjectStore("edges");
       }
+
       if (!db.objectStoreNames.contains("meta")) {
         db.createObjectStore("meta");
       }
     };
+
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
   });
@@ -90,3 +100,5 @@ export async function loadCachedResult() {
      return { status: "ERROR" };
   }
 }
+
+    
