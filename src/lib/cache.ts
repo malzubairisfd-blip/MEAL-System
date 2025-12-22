@@ -1,0 +1,92 @@
+
+export function openDB() {
+  return new Promise<IDBDatabase>((resolve, reject) => {
+    const req = indexedDB.open("cluster-cache", 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains("rows")) {
+        db.createObjectStore("rows");
+      }
+      if (!db.objectStoreNames.contains("clusters")) {
+        db.createObjectStore("clusters");
+      }
+      if (!db.objectStoreNames.contains("edges")) {
+        db.createObjectStore("edges");
+      }
+      if (!db.objectStoreNames.contains("meta")) {
+        db.createObjectStore("meta");
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function isCacheReady(): Promise<boolean> {
+  try {
+    const db = await openDB();
+    return new Promise<boolean>(resolve => {
+      const tx = db.transaction("meta", "readonly");
+      const store = tx.objectStore("meta");
+      const req = store.get("ready");
+      req.onsuccess = () => resolve(Boolean(req.result));
+      req.onerror = () => resolve(false); // Resolve false on error
+    });
+  } catch (error) {
+    console.error("Failed to check cache readiness:", error);
+    return false;
+  }
+}
+
+export async function loadCachedResult() {
+  const ready = await isCacheReady();
+
+  if (!ready) {
+    return { status: "LOADING" };
+  }
+
+  try {
+    const db = await openDB();
+
+    const readAll = (storeName: string): Promise<any[]> =>
+      new Promise<any[]>((resolve, reject) => {
+        const tx = db.transaction(storeName, "readonly");
+        const store = tx.objectStore(storeName);
+        const req = store.getAll();
+        req.onsuccess = () => resolve(req.result.flat());
+        req.onerror = () => reject(req.error);
+      });
+    
+    const readHeaders = (): Promise<string[]> =>
+      new Promise<string[]>((resolve, reject) => {
+        const tx = db.transaction("meta", "readonly");
+        const store = tx.objectStore("meta");
+        const req = store.get("originalHeaders");
+        req.onsuccess = () => resolve(req.result || []);
+        req.onerror = () => reject(req.error);
+    });
+
+    const rows = (await readAll("rows"))[0];
+    const clusters = await readAll("clusters");
+    const edgesUsed = await readAll("edges");
+    const originalHeaders = await readHeaders();
+
+    if (!rows || !rows.length) {
+      // This is a corrupted state, but we handle it gracefully.
+      return { status: "CORRUPTED" };
+    }
+
+    return {
+      status: "READY",
+      data: {
+        rows,
+        clusters,
+        edgesUsed,
+        originalHeaders
+      }
+    };
+  } catch (error) {
+     console.error("Cache load failed:", error);
+     return { status: "ERROR" };
+  }
+}

@@ -17,6 +17,7 @@ import type { RecordRow } from "@/lib/types";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useTranslation } from "@/hooks/use-translation";
 import { Skeleton } from "@/components/ui/skeleton";
+import { openDB } from "@/lib/cache";
 
 type Mapping = {
   womanName: string; husbandName: string; nationalId: string; phone: string;
@@ -30,26 +31,6 @@ const PROGRESS_KEY_PREFIX = "progress-";
 
 type WorkerProgress = { status:string; progress:number; completed?:number; total?:number; }
 type TimeInfo = { elapsed: number; remaining?: number };
-
-function openDB() {
-  return new Promise<IDBDatabase>((resolve, reject) => {
-    const req = indexedDB.open("cluster-cache", 1);
-    req.onupgradeneeded = () => {
-      const db = req.result;
-      if (!db.objectStoreNames.contains("rows")) {
-        db.createObjectStore("rows");
-      }
-      if (!db.objectStoreNames.contains("clusters")) {
-        db.createObjectStore("clusters");
-      }
-      if (!db.objectStoreNames.contains("edges")) {
-        db.createObjectStore("edges");
-      }
-    };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-}
 
 export default function UploadPage(){
   const { t, isLoading: isTranslationLoading } = useTranslation();
@@ -178,7 +159,8 @@ export default function UploadPage(){
     await Promise.all([
         clearStore('rows'),
         clearStore('clusters'),
-        clearStore('edges')
+        clearStore('edges'),
+        clearStore('meta')
     ]);
     
     const fileKey = `${file.name}-${file.size}-${file.lastModified}`;
@@ -221,11 +203,12 @@ export default function UploadPage(){
         let buffer = "";
 
         const put = (store: string, key: string, value: any) => {
-          return new Promise<void>(resolve => {
-            if (!dbRef.current) return;
+          return new Promise<void>((resolve, reject) => {
+            if (!dbRef.current) return reject("DB not available");
             const tx = dbRef.current.transaction(store, "readwrite");
             tx.objectStore(store).put(value, key);
             tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
           });
         }
 
@@ -271,6 +254,9 @@ export default function UploadPage(){
                         } else if (data.type === 'cache_edges') {
                             await put("edges", `e_${data.index}`, data.payload);
                         } else if (data.type === 'cache_done') {
+                            await put("meta", "ready", true);
+                            await put("meta", "timestamp", Date.now());
+
                             if (timerRef.current) clearInterval(timerRef.current);
                             startTimeRef.current = null;
                             
