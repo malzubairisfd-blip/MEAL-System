@@ -300,22 +300,21 @@ function createEnrichedDataSheet(wb: ExcelJS.Workbook, data: EnrichedRecord[], o
     const enrichmentHeaders = [
         "Cluster_ID", "Cluster_Size", "Flag", "pairScore", "Max_PairScore", "nameScore", "husbandScore", "idScore", "phoneScore", "تصنيف المجموعة المبدئي", "نتائج تحليل المجموعة"
     ];
-    
-    const normalizedHeaders = [ "womanName_normalized", "husbandName_normalized" ];
 
-    // Get all keys from the first enriched record to create a dynamic header list
-    const allHeaders = data.length > 0 ? Object.keys(data[0]) : [];
-    
+    // Combine original headers (from the file) with the new enrichment headers
+    // Filter out internal fields like _internalId
     const finalHeaders = [
         ...enrichmentHeaders,
-        ...(originalHeaders || []).filter(h => !enrichmentHeaders.includes(h) && !h.startsWith('_'))
+        ...(originalHeaders || []).filter(h => !h.startsWith('_'))
     ];
-
-    ws.columns = finalHeaders.map(h => ({
-      header: h,
-      key: h,
-      width: h === 'womanName' || h === 'husbandName' ? 25 : (h === 'نتائج تحليل المجموعة' ? 50 : 15)
+    
+    // Use the combined list to define columns, ensuring the `key` matches the property name in `data`
+    ws.columns = finalHeaders.map(header => ({
+      header: header,
+      key: header,
+      width: header === 'womanName' || header === 'husbandName' ? 25 : (header === 'نتائج تحليل المجموعة' ? 50 : 15)
     }));
+
 
     ws.getRow(1).eachCell(cell => {
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF002060' } };
@@ -323,15 +322,19 @@ function createEnrichedDataSheet(wb: ExcelJS.Workbook, data: EnrichedRecord[], o
         cell.alignment = { horizontal: 'center' };
     });
     
+    // The data objects in `data` already contain both original and enriched fields
     ws.addRows(data);
     
     ws.eachRow({ includeEmpty: false }, (row, rowNumber) => {
         if (rowNumber === 1) return;
         
-        const rowData = data[rowNumber - 2];
-        if (!rowData || rowData.Max_PairScore === null || rowData.Max_PairScore === undefined) return;
+        // Use the row's own data. `data[rowNumber-2]` can be out of sync if there are empty rows.
+        const rowData = row.values as Record<string, any>;
+        const maxPairScoreValue = rowData[ws.getColumn('Max_PairScore').key as string];
+
+        if (maxPairScoreValue === null || maxPairScoreValue === undefined) return;
         
-        const score = Number(rowData.Max_PairScore);
+        const score = Number(maxPairScoreValue);
         let fillColor: string | undefined;
 
         if (score >= 0.9) { fillColor = 'FFFF0000'; } 
@@ -860,4 +863,5 @@ function createDashboardReportSheet(wb: ExcelJS.Workbook, allRecords: RecordRow[
     addImageToCell(chartImages.bubbleStats, 'E65');
     addImageToCell(chartImages.map, 'B65');
 }
+
 
