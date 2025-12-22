@@ -91,10 +91,20 @@ async function getCachedData(cacheId: string) {
 
 
 async function enrichData(cachedData: any): Promise<EnrichedRecord[]> {
-    const { rows: allRecords, clusters } = cachedData;
+    let { rows: allRecords, clusters, originalHeaders } = cachedData;
     if (!allRecords || !clusters) {
         throw new Error("Invalid cache: missing rows or clusters.");
     }
+    
+    // Defensive check: if allRecords is an object with a single key (like from IndexedDB), use its value.
+    if (typeof allRecords === 'object' && !Array.isArray(allRecords) && Object.keys(allRecords).length === 1) {
+        allRecords = Object.values(allRecords)[0];
+    }
+
+    if (!Array.isArray(allRecords)) {
+        throw new Error("Invalid cache: 'rows' is not an array.");
+    }
+
 
     const enrichedRecords: EnrichedRecord[] = [];
     const recordClusterMap = new Map<string, number>();
@@ -223,7 +233,7 @@ function sortData(data: EnrichedRecord[]): EnrichedRecord[] {
 }
 
 function createFormattedWorkbook(data: EnrichedRecord[], cachedData: any): ExcelJS.Workbook {
-    const { rows: allRecords, clusters, auditFindings, chartImages, processedDataForReport } = cachedData;
+    const { rows: allRecords, clusters, auditFindings, chartImages, processedDataForReport, originalHeaders } = cachedData;
     const wb = new ExcelJS.Workbook();
     wb.creator = "Beneficiary Insights";
     
@@ -851,3 +861,4 @@ function createDashboardReportSheet(wb: ExcelJS.Workbook, allRecords: RecordRow[
     addImageToCell(chartImages.bubbleStats, 'E65');
     addImageToCell(chartImages.map, 'B65');
 }
+
