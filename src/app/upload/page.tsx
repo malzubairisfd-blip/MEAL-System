@@ -143,10 +143,7 @@ export default function UploadPage(){
     } catch (e) {
         console.warn("Could not fetch settings, using defaults.", e);
     }
-
-    const es = new EventSource('/api/cluster-server', { withCredentials: true });
-
-    // The initial POST request to send data and start the process
+    
     fetch('/api/cluster-server', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -157,8 +154,8 @@ export default function UploadPage(){
         })
     }).then(async response => {
         if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.error || `Server error: ${response.statusText}`);
+            const error = await response.json().catch(() => ({ error: `Server error: ${response.statusText}` }));
+            throw new Error(error.error);
         }
         if (!response.body) {
             throw new Error("Response has no body");
@@ -166,17 +163,19 @@ export default function UploadPage(){
         
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
+        let buffer = '';
 
         while (true) {
             const { done, value } = await reader.read();
             if (done) break;
 
-            const chunk = decoder.decode(value);
-            const lines = chunk.split('\n\n').filter(Boolean);
+            buffer += decoder.decode(value, { stream: true });
+            const parts = buffer.split('\n\n');
+            buffer = parts.pop() || ''; // The last part might be incomplete
 
-            for (const line of lines) {
-                if (line.startsWith('data: ')) {
-                    const dataStr = line.substring(6);
+            for (const part of parts) {
+                if (part.startsWith('data: ')) {
+                    const dataStr = part.substring(6);
                     try {
                         const data = JSON.parse(dataStr);
                         
@@ -209,8 +208,8 @@ export default function UploadPage(){
                         } else if (data.type === 'error') {
                             throw new Error(data.error || 'Unknown server error');
                         }
-                    } catch (e) {
-                        console.error('Failed to parse SSE data chunk', e, dataStr);
+                    } catch (e: any) {
+                        console.error('Failed to parse SSE data chunk:', e.message, 'Chunk:', `"${dataStr}"`);
                     }
                 }
             }
