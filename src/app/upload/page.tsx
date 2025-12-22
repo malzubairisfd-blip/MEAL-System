@@ -1,3 +1,4 @@
+
 // app/(app)/upload/page.tsx
 "use client";
 
@@ -146,22 +147,18 @@ export default function UploadPage(){
     const db = await openDB();
     dbRef.current = db;
 
-    const clearStore = (storeName: string) => {
+    const clearStores = (storeNames: string[]) => {
         return new Promise<void>((resolve, reject) => {
-            const tx = db.transaction(storeName, 'readwrite');
-            const store = tx.objectStore(storeName);
-            const req = store.clear();
-            req.onsuccess = () => resolve();
-            req.onerror = () => reject(req.error);
+            const tx = db.transaction(storeNames, 'readwrite');
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
+            storeNames.forEach(storeName => {
+                tx.objectStore(storeName).clear();
+            });
         });
     };
 
-    await Promise.all([
-        clearStore('rows'),
-        clearStore('clusters'),
-        clearStore('edges'),
-        clearStore('meta')
-    ]);
+    await clearStores(['rows', 'clusters', 'edges', 'meta']);
     
     const fileKey = `${file.name}-${file.size}-${file.lastModified}`;
     const progressKey = `${PROGRESS_KEY_PREFIX}${fileKey}`;
@@ -256,6 +253,8 @@ export default function UploadPage(){
                         } else if (data.type === 'cache_done') {
                             await put("meta", "ready", true);
                             await put("meta", "timestamp", Date.now());
+                             await put("meta", "originalHeaders", columns);
+
 
                             if (timerRef.current) clearInterval(timerRef.current);
                             startTimeRef.current = null;
@@ -534,3 +533,5 @@ export default function UploadPage(){
     </div>
   );
 }
+
+    
