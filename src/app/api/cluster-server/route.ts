@@ -1,8 +1,7 @@
 
-import { NextResponse } from 'next/server';
-
-// WorkerScript v10 — Resumable Cursor-based Clustering. Adapted for server-side execution.
-// Receives data via POST, streams progress, and returns final cluster payload.
+// WorkerScript v10 — Resumable Cursor-based Clustering
+// Use as a web worker. Listens for messages: {type:'start', payload:{...}}, {type:'data', payload:{...}}, {type:'end'}, {type:'resume'}
+// Emits progress and final payload: postMessage({ type:'done', payload:{...} })
 
 /* -------------------------
    Helpers & Normalizers
@@ -115,6 +114,20 @@ function splitParts(name: any) {
   return tokens(name);
 }
 
+function compareNameComponents(aName: any, bName: any) {
+  // returns { partsA, partsB, partScores: [..], orderFree }
+  const A = splitParts(aName);
+  const B = splitParts(bName);
+  const partScores = [];
+  for (let i = 0; i < Math.max(A.length, B.length); i++) {
+    const pA = A[i] || "";
+    const pB = B[i] || "";
+    partScores.push(jaroWinkler(pA, pB));
+  }
+  const orderFree = nameOrderFreeScore(aName, bName);
+  return { partsA: A, partsB: B, partScores, orderFree };
+}
+
 /* -------------------------
    Additional Rules
    ------------------------- */
@@ -127,8 +140,22 @@ function applyAdditionalRules(a: any, b: any, opts: any) {
   const HA = splitParts(a.husbandName_normalized || "");
   const HB = splitParts(b.husbandName_normalized || "");
   const reasons: any[] = [];
-  
-    /* ----------------------------------------------------
+
+  // RULE 0: strong token match (80%+ tokens overlap)
+  {
+    const setA = new Set(A);
+    const setB = new Set(B);
+    let inter = 0;
+    for (const t of setA) if (setB.has(t)) inter++;
+    const uni = new Set([...setA, ...setB]).size;
+    const ratio = uni === 0 ? 0 : inter / uni;
+    if (ratio >= 0.80) {
+      reasons.push("TOKEN_REORDER");
+      return { score: Math.min(1, minPair + 0.22), reasons };
+    }
+  }
+
+  /* ----------------------------------------------------
      RULE 6 — STRONG HOUSEHOLD + CHILDREN MATCH (CRITICAL)
   ---------------------------------------------------- */
   {
@@ -151,20 +178,6 @@ function applyAdditionalRules(a: any, b: any, opts: any) {
     if (firstNameMatch && husbandStrong && childrenMatch) {
         reasons.push("DUPLICATED_HUSBAND_LINEAGE");
         return { score: minPair + 0.25, reasons }; // HARD FORCE DUPLICATE
-    }
-  }
-
-  // RULE 0: strong token match (80%+ tokens overlap)
-  {
-    const setA = new Set(A);
-    const setB = new Set(B);
-    let inter = 0;
-    for (const t of setA) if (setB.has(t)) inter++;
-    const uni = new Set([...setA, ...setB]).size;
-    const ratio = uni === 0 ? 0 : inter / uni;
-    if (ratio >= 0.80) {
-      reasons.push("TOKEN_REORDER");
-      return { score: Math.min(1, minPair + 0.22), reasons };
     }
   }
 
@@ -276,11 +289,11 @@ function pairwiseScore(aRaw: any, bRaw: any, opts: any) {
   o.thresholds = Object.assign({}, optsDefaults.thresholds, (opts && opts.thresholds) || {});
   o.rules = Object.assign({}, optsDefaults.rules, (opts && opts.rules) || {});
 
-  const a: any = {
+  const a = {
     womanName: aRaw.womanName || "", husbandName: aRaw.husbandName || "", nationalId: String(aRaw.nationalId || aRaw.id || ""),
     phone: digitsOnly(aRaw.phone || ""), village: aRaw.village || "", subdistrict: aRaw.subdistrict || "", children: aRaw.children || []
   };
-  const b: any = {
+  const b = {
     womanName: bRaw.womanName || "", husbandName: bRaw.husbandName || "", nationalId: String(bRaw.nationalId || bRaw.id || ""),
     phone: digitsOnly(bRaw.phone || ""), village: bRaw.village || "", subdistrict: bRaw.subdistrict || "", children: bRaw.children || []
   };
@@ -351,82 +364,63 @@ function pairwiseScore(aRaw: any, bRaw: any, opts: any) {
   return { score, breakdown, reasons };
 }
 
-/* -------------------------
-   Blocking, edges, union-find, splitting
-   ------------------------- */
-function buildBlocks(rows: any, opts: any) {
-  const blocks = new Map();
-  const prefix = 3;
-  for (let i = 0; i < rows.length; i++) {
-    const r = rows[i];
-    const wTokens = splitParts(r.womanName_normalized || "");
-    const hTokens = splitParts(r.husbandName_normalized || "");
-    const wFirst = wTokens[0] ? wTokens[0].slice(0, prefix) : "";
-    const hFirst = hTokens[0] ? hTokens[0].slice(0, prefix) : "";
-    const idLast4 = digitsOnly(r.nationalId || "").slice(-4) || "";
-    const phoneLast4 = digitsOnly(r.phone || "").slice(-4) || "";
-    const village = (r.village_normalized || "").slice(0, 6);
+/* --------------------------------------
+   Resumable Edge Building Logic
+   -------------------------------------- */
+async function buildEdges(rows: any, minScore = 0.62, opts: any, resumeState: any = null) {
+  const n = rows.length;
+  if (n <= 1) return { edges: [], finalState: null };
+  
+  const totalPairs = (n * (n - 1)) / 2;
+  const edges = resumeState?.edges || [];
+  let processed = resumeState?.processed || 0;
+  
+  let i = resumeState?.i || 0;
+  let j = resumeState?.j || i + 1;
 
-    const keys = new Set();
-    if (wFirst && hFirst && idLast4 && phoneLast4) keys.add("full:" + wFirst + ":" + hFirst + ":" + idLast4 + ":" + phoneLast4);
-    if (wFirst && phoneLast4) keys.add("wp:" + wFirst + ":" + phoneLast4);
-    if (wFirst && idLast4) keys.add("wi:" + wFirst + ":" + idLast4);
-    if (wFirst && hFirst) keys.add("wh:" + wFirst + ":" + hFirst);
-    if (hFirst) keys.add("h:" + hFirst);
-    if (wFirst) keys.add("w:" + wFirst);
-    if (village) keys.add("v:" + village);
-    if (keys.size === 0) keys.add("blk:all");
-
-    for (const k of keys) {
-      const arr = blocks.get(k) || [];
-      arr.push(i);
-      blocks.set(k, arr);
-    }
-  }
-  return Array.from(blocks.values());
-}
-
-function pushEdgesForList(list: any, rows: any, minScore: any, seen: any, edges: any, opts: any) {
-  for (let i = 0; i < list.length; i++) {
-    for (let j = i + 1; j < list.length; j++) {
-      const a = list[i], b = list[j];
-      const key = a < b ? a + '_' + b : b + '_' + a;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      const result = pairwiseScore(rows[a], rows[b], opts);
+  for (; i < n; i++) {
+    for (; j < n; j++) {
+      const result = pairwiseScore(rows[i], rows[j], opts);
       const score = result.score ?? 0;
-      if (score >= minScore) edges.push({ a, b, score, reasons: result.reasons || [] });
+      if (score >= minScore) {
+        edges.push({ a: i, b: j, score, reasons: result.reasons || [] });
+      }
+      processed++;
+
+      if (processed % 5000 === 0) {
+        const progressState = { i, j: j + 1, edges, processed };
+        postMessage({
+          type: "save_progress",
+          key: progressKey,
+          value: progressState
+        });
+        postMessage({
+          type: "progress",
+          status: "building-edges",
+          progress: 10 + Math.round(40 * (processed / totalPairs)),
+          completed: processed,
+          total: totalPairs
+        });
+        await yieldToEventLoop();
+      }
+
+      if (processed % 1000000 === 0) {
+        postMessage({
+          type: "debug",
+          message: `Processed ${processed.toLocaleString()} / ${totalPairs.toLocaleString()}`
+        });
+      }
     }
+    j = i + 2;
   }
+  
+  postMessage({ type: "progress", status: "edges-built", progress: 50, completed: totalPairs, total: totalPairs });
+  postMessage({ type: 'save_progress', key: progressKey, value: null });
+  
+  edges.sort((x, y) => y.score - x.score);
+  return { edges, finalState: null };
 }
 
-async function buildEdges(rows: any, minScore: any, opts: any, send: (data: any) => void) {
-  const blocks = buildBlocks(rows, opts);
-  const seen = new Set();
-  const edges: any[] = [];
-  const chunk = opts?.thresholds?.blockChunkSize ?? 3000;
-  for (let bi = 0; bi < blocks.length; bi++) {
-    const block = blocks[bi];
-    if (block.length > chunk) {
-      for (let s = 0; s < block.length; s += chunk) {
-        const part = block.slice(s, s + chunk);
-        pushEdgesForList(part, rows, minScore, seen, edges, opts);
-      }
-    } else {
-      pushEdgesForList(block, rows, minScore, seen, edges, opts);
-    }
-    if (bi % 20 === 0 || bi === blocks.length - 1) {
-      const pct = Math.round(10 + 40 * (bi / Math.max(1, blocks.length)));
-      send({ type: "progress", status: "building-edges", progress: pct, completed: bi + 1, total: blocks.length });
-      await yieldToEventLoop();
-    }
-  }
-  if (blocks.length > 0) {
-    send({ type: "progress", status: "building-edges", progress: 50, completed: blocks.length, total: blocks.length });
-  }
-  edges.sort((x, y) => y.score - x.score);
-  return edges;
-}
 
 class UF {
   parent: any;
@@ -517,18 +511,18 @@ function splitCluster(rowsSubset: any, minInternal = 0.50, opts: any) {
 
 
 /* Main clustering pipeline */
-async function runClustering(rows: any, opts: any, send: (data: any) => void) {
+async function runClustering(rows: any, opts: any, resumeState: any) {
   // ensure internal ids
   rows.forEach((r: any, i: any) => r._internalId = r._internalId || 'row_' + i);
 
   const minPair = opts?.thresholds?.minPair ?? 0.62;
   const minInternal = opts?.thresholds?.minInternal ?? 0.50;
 
-  send({ type: "progress", status: "blocking", progress: 5, completed: 0, total: rows.length });
+  postMessage({ type: "progress", status: "blocking", progress: 5, completed: 0, total: rows.length });
 
-  const edges = await buildEdges(rows, minPair, opts, send);
+  const { edges } = await buildEdges(rows, minPair, opts, resumeState);
 
-  send({ type: "progress", status: "edges-built", progress: 60, completed: edges.length, total: Math.max(1, rows.length) });
+  postMessage({ type: "progress", status: "edges-built", progress: 60, completed: edges.length, total: Math.max(1, rows.length) });
 
   const uf = new UF(rows.length);
   const finalized = new Set();
@@ -573,7 +567,7 @@ async function runClustering(rows: any, opts: any, send: (data: any) => void) {
     }
     edgesUsed.push(e);
     if (ei % 200 === 0) {
-        send({ type: "progress", status: "merging-edges", progress: 60 + Math.round(35 * (ei / edges.length)), completed: ei + 1, total: edges.length });
+        postMessage({ type: "progress", status: "merging-edges", progress: 60 + Math.round(35 * (ei / edges.length)), completed: ei + 1, total: edges.length });
         await yieldToEventLoop();
     }
   }
@@ -605,16 +599,27 @@ async function runClustering(rows: any, opts: any, send: (data: any) => void) {
     }))
     .filter(c => c.records.length > 1);
 
-  send({ type: "progress", status: "annotating", progress: 95 });
+  postMessage({ type: "progress", status: "annotating", progress: 95 });
+
+  postMessage({ type: 'save_progress', key: progressKey, value: null });
 
   return { clusters: clustersWithRecords, edgesUsed, rows };
 }
 
-function mapIncomingRowsToInternal(rowsChunk: any, mapping: any, existingCount: number) {
+/* -------------------------
+   Worker message handling
+   ------------------------- */
+let inbound: any[] = [];
+let mapping = {};
+let options = {};
+let resumeState: any = null;
+let progressKey = ''; // Holds the file-specific progress key
+
+function mapIncomingRowsToInternal(rowsChunk: any, mapping: any) {
   return rowsChunk.map((originalRecord: any, i: any) => {
         const mapped: any = {
             ...originalRecord,
-            _internalId: "row_" + (existingCount + i),
+            _internalId: "row_" + (inbound.length + i),
             womanName: "", husbandName: "", nationalId: "", phone: "", village: "", subdistrict: "", children: [],
         };
 
@@ -639,51 +644,35 @@ function mapIncomingRowsToInternal(rowsChunk: any, mapping: any, existingCount: 
     });
 }
 
-export async function POST(req: Request) {
-    try {
-        const { rows, mapping, options, resumeState } = await req.json();
+self.onmessage = function (ev: any) {
+  const msg = ev.data;
+  if (!msg || !msg.type) return;
 
-        if (!rows || !Array.isArray(rows) || !mapping) {
-            return new Response(JSON.stringify({ error: 'Invalid request body' }), { status: 400 });
-        }
+  if (msg.type === 'keep_alive' || msg.type === 'resume') {
+      return;
+  }
 
-        const stream = new ReadableStream({
-            async start(controller) {
-                const encoder = new TextEncoder();
-                const send = (data: any) => {
-                    try {
-                        controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
-                    } catch(e) {
-                        console.error("Failed to enqueue data", e);
-                    }
-                };
-
-                try {
-                    send({ type: 'progress', status: 'mapping-rows', progress: 5, completed: 0, total: rows.length });
-                    const mappedRows = mapIncomingRowsToInternal(rows, mapping, 0);
-
-                    const result = await runClustering(mappedRows, options, send);
-
-                    send({ type: 'done', payload: result });
-                    controller.close();
-                } catch (err: any) {
-                    send({ type: 'error', error: err.message || 'An unknown error occurred on the server.' });
-                    controller.close();
-                }
-            },
-        });
-
-        return new Response(stream, {
-            headers: {
-                'Content-Type': 'text/event-stream',
-                'Cache-Control': 'no-cache',
-                'Connection': 'keep-alive',
-            },
-        });
-
-    } catch (e: any) {
-        return NextResponse.json({ error: e.message }, { status: 500 });
-    }
-}
-
-    
+  if (msg.type === 'start') {
+    mapping = msg.payload.mapping || {};
+    options = msg.payload.options || {};
+    resumeState = msg.payload.resumeState || null;
+    progressKey = msg.payload.progressKey || '';
+    inbound = [];
+    postMessage({ type: 'progress', status: 'worker-ready', progress: 1 });
+  } else if (msg.type === 'data') {
+    const rows = Array.isArray(msg.payload.rows) ? msg.payload.rows : [];
+    const mapped = mapIncomingRowsToInternal(rows, mapping);
+    inbound.push(...mapped);
+    postMessage({ type: 'progress', status: 'receiving', progress: Math.min(5, 1 + Math.floor(inbound.length / 1000)), completed: inbound.length, total: msg.payload.total || undefined });
+  } else if (msg.type === 'end') {
+    setTimeout(async () => {
+      try {
+        postMessage({ type: 'progress', status: 'mapping-rows', progress: 5, completed: 0, total: inbound.length });
+        const result = await runClustering(inbound, options, resumeState);
+        postMessage({ type: 'done', payload: { rows: result.rows, clusters: result.clusters, edgesUsed: result.edgesUsed } });
+      } catch (err: any) {
+        postMessage({ type: 'error', error: String(err && err.message ? err.message : err) });
+      }
+    }, 50);
+  }
+};
