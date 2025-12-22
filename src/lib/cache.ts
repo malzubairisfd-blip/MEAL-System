@@ -75,15 +75,23 @@ export async function loadCachedResult() {
         req.onsuccess = () => resolve(req.result || []);
         req.onerror = () => reject(req.error);
     });
+    
+    const readSingle = (storeName: string, key: string): Promise<any> =>
+      new Promise<any>((resolve, reject) => {
+        const tx = db.transaction(storeName, "readonly");
+        const store = tx.objectStore(storeName);
+        const req = store.get(key);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
 
-    const rows = (await readAll("rows"))[0];
+    const rows = await readSingle("rows", "all");
     const clusters = await readAll("clusters");
     const edgesUsed = await readAll("edges");
     const originalHeaders = await readHeaders();
 
     if (!rows || !rows.length) {
-      // This is a corrupted state, but we handle it gracefully.
-      return { status: "CORRUPTED" };
+      return { status: "CORRUPTED", error: "Cache corrupted: rows missing." };
     }
 
     return {

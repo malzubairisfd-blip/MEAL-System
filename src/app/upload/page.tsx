@@ -128,7 +128,7 @@ export default function UploadPage(){
         setFileReadProgress(percentage);
       }
     };
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
         const buffer = e.target?.result;
         const wb = XLSX.read(buffer, { type: 'array', cellDates:true });
         const sheet = wb.Sheets[wb.SheetNames[0]];
@@ -145,6 +145,20 @@ export default function UploadPage(){
           setMapping({ womanName:"", husbandName:"", nationalId:"", phone:"", village:"", subdistrict:"", children:"", beneficiaryId:"" });
         }
         setFileReadProgress(100);
+
+        try {
+            const db = await openDB();
+            await new Promise<void>((resolve, reject) => {
+                const tx = db.transaction("rows", "readwrite");
+                tx.objectStore("rows").put(json, "all");
+                tx.oncomplete = () => resolve();
+                tx.onerror = () => reject(tx.error);
+            });
+            toast({ title: "File Ready", description: "Your file has been saved locally for processing." });
+        } catch (error) {
+            console.error("Failed to save rows to IndexedDB", error);
+            toast({ title: "Error Saving File", description: "Could not save file data locally.", variant: "destructive" });
+        }
     };
     reader.readAsArrayBuffer(f);
   }
@@ -167,7 +181,7 @@ export default function UploadPage(){
     const db = await openDB();
     dbRef.current = db;
 
-    await clearStores(["rows", "clusters", "edges", "meta"]);
+    await clearStores(["clusters", "edges", "meta"]);
     
     const fileKey = `${file.name}-${file.size}-${file.lastModified}`;
     const progressKey = `${PROGRESS_KEY_PREFIX}${fileKey}`;
@@ -254,7 +268,7 @@ export default function UploadPage(){
                             setProcessingStatus(data.status || 'working');
                             setProgressInfo({ status: data.status || 'working', progress: data.progress ?? 0, completed: data.completed, total: data.total });
                         } else if (data.type === 'cache_rows') {
-                            await put("rows", "all", data.payload);
+                            // This is now deprecated, rows are cached on upload
                         } else if (data.type === 'cache_clusters') {
                             await put("clusters", `c_${data.index}`, data.payload);
                         } else if (data.type === 'cache_edges') {
@@ -542,5 +556,3 @@ export default function UploadPage(){
     </div>
   );
 }
-
-    
