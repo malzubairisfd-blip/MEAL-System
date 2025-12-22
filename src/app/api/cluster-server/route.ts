@@ -1,13 +1,13 @@
 
 import { NextResponse } from 'next/server';
 
-// WorkerScript v7 — fuzzy clustering. Adapted for server-side execution.
+// WorkerScript v10 — Resumable Cursor-based Clustering. Adapted for server-side execution.
 // Receives data via POST, streams progress, and returns final cluster payload.
 
 /* -------------------------
    Helpers & Normalizers
    ------------------------- */
-function normalizeArabicRaw(s: any): string {
+function normalizeArabicRaw(s: any) {
   if (!s) return "";
   try { s = String(s); } catch { s = "";}
   s = s.normalize("NFKC");
@@ -26,27 +26,34 @@ function normalizeArabicRaw(s: any): string {
   return s.toLowerCase();
 }
 
-function tokens(s: any): string[] {
+function tokens(s: any) {
   const n = normalizeArabicRaw(s || "");
   if (!n) return [];
   return n.split(/\s+/).filter(Boolean);
 }
 
-function digitsOnly(s: any): string {
+function digitsOnly(s: any) {
   if (s === null || s === undefined) return "";
   return String(s).replace(/\D/g, "");
 }
 
-function normalizeChildrenField(val: any): string[] {
+function normalizeChildrenField(val: any) {
   if (!val) return [];
   if (Array.isArray(val)) return val.map(x => String(x)).filter(Boolean);
   return String(val).split(/[;,|،]/).map(x => String(x).trim()).filter(Boolean);
 }
 
+function yieldToEventLoop() {
+  return new Promise(resolve => {
+    setTimeout(resolve, 0);
+  });
+}
+
+
 /* -------------------------
    String similarity primitives
    ------------------------- */
-function jaroWinkler(a: any, b: any): number {
+function jaroWinkler(a: any, b: any) {
   a = String(a || ""); b = String(b || "");
   if (!a || !b) return 0;
   const la = a.length, lb = b.length;
@@ -79,7 +86,7 @@ function jaroWinkler(a: any, b: any): number {
   return jaro + prefix * 0.1 * (1 - jaro);
 }
 
-function tokenJaccard(aTokens: any, bTokens: any): number {
+function tokenJaccard(aTokens: any, bTokens: any) {
   if (!aTokens.length && !bTokens.length) return 0;
   const A = new Set(aTokens), B = new Set(bTokens);
   let inter = 0;
@@ -88,7 +95,7 @@ function tokenJaccard(aTokens: any, bTokens: any): number {
   return uni === 0 ? 0 : inter / uni;
 }
 
-function nameOrderFreeScore(aName: any, bName: any): number {
+function nameOrderFreeScore(aName: any, bName: any) {
   const aT = tokens(aName), bT = tokens(bName);
   if (!aT.length || !bT.length) return 0;
   const A = new Set(aT), B = new Set(bT);
@@ -100,12 +107,18 @@ function nameOrderFreeScore(aName: any, bName: any): number {
   return 0.7 * jacc + 0.3 * sj;
 }
 
-function splitParts(name: any): string[] {
+/* -------------------------
+   Component compare
+   ------------------------- */
+function splitParts(name: any) {
   if (!name) return [];
   return tokens(name);
 }
 
-function applyAdditionalRules(a: any, b: any, opts: any): { score: number; reasons: string[] } | null {
+/* -------------------------
+   Additional Rules
+   ------------------------- */
+function applyAdditionalRules(a: any, b: any, opts: any) {
   const minPair = opts?.thresholds?.minPair ?? 0.62;
   const jw = jaroWinkler;
 
@@ -113,26 +126,10 @@ function applyAdditionalRules(a: any, b: any, opts: any): { score: number; reaso
   const B = splitParts(b.womanName_normalized || "");
   const HA = splitParts(a.husbandName_normalized || "");
   const HB = splitParts(b.husbandName_normalized || "");
-  const reasons: string[] = [];
-
-  // RULE 0: strong token match (80%+ tokens overlap)
-  {
-    const setA = new Set(A);
-    const setB = new Set(B);
-    let inter = 0;
-    for (const t of setA) if (setB.has(t)) inter++;
-    const uni = new Set([...setA, ...setB]).size;
-    const ratio = uni === 0 ? 0 : inter / uni;
-    if (ratio >= 0.80) {
-      reasons.push("TOKEN_REORDER");
-      return { score: Math.min(1, minPair + 0.22), reasons };
-    }
-  }
-
-  /* ----------------------------------------------------
+  const reasons: any[] = [];
+  
+    /* ----------------------------------------------------
      RULE 6 — STRONG HOUSEHOLD + CHILDREN MATCH (CRITICAL)
-     This rule overrides all weak lineage noise
-     المرأة نفسها مع اختلاف النسب — الزوج + الأطفال حاسمين
   ---------------------------------------------------- */
   {
     const A_parts = splitParts(a.womanName_normalized);
@@ -152,16 +149,28 @@ function applyAdditionalRules(a: any, b: any, opts: any): { score: number; reaso
       ) >= 0.90;
 
     if (firstNameMatch && husbandStrong && childrenMatch) {
-        reasons.push("DUPLICATED_HUSBAND_LINEAGE"); // This is close enough
+        reasons.push("DUPLICATED_HUSBAND_LINEAGE");
         return { score: minPair + 0.25, reasons }; // HARD FORCE DUPLICATE
     }
   }
 
-  // Helper thresholds
+  // RULE 0: strong token match (80%+ tokens overlap)
+  {
+    const setA = new Set(A);
+    const setB = new Set(B);
+    let inter = 0;
+    for (const t of setA) if (setB.has(t)) inter++;
+    const uni = new Set([...setA, ...setB]).size;
+    const ratio = uni === 0 ? 0 : inter / uni;
+    if (ratio >= 0.80) {
+      reasons.push("TOKEN_REORDER");
+      return { score: Math.min(1, minPair + 0.22), reasons };
+    }
+  }
+
   const s93 = (x: any, y: any) => jw(x || "", y || "") >= 0.93;
   const s95 = (x: any, y: any) => jw(x || "", y || "") >= 0.95;
 
-  // Normalize accessors for first, father, grandfather, 4th/last
   const getPart = (arr: any, idx: any) => (arr && arr.length > idx) ? arr[idx] : "";
 
   const F1 = getPart(A, 0), Fa1 = getPart(A, 1), G1 = getPart(A, 2), L1 = getPart(A, 3);
@@ -237,6 +246,9 @@ function applyAdditionalRules(a: any, b: any, opts: any): { score: number; reaso
   return null;
 }
 
+/* -------------------------
+   pairwiseScore: tiered approach
+   ------------------------- */
 function pairwiseScore(aRaw: any, bRaw: any, opts: any) {
   const optsDefaults = {
     finalScoreWeights: {
@@ -264,11 +276,11 @@ function pairwiseScore(aRaw: any, bRaw: any, opts: any) {
   o.thresholds = Object.assign({}, optsDefaults.thresholds, (opts && opts.thresholds) || {});
   o.rules = Object.assign({}, optsDefaults.rules, (opts && opts.rules) || {});
 
-  const a = {
+  const a: any = {
     womanName: aRaw.womanName || "", husbandName: aRaw.husbandName || "", nationalId: String(aRaw.nationalId || aRaw.id || ""),
     phone: digitsOnly(aRaw.phone || ""), village: aRaw.village || "", subdistrict: aRaw.subdistrict || "", children: aRaw.children || []
   };
-  const b = {
+  const b: any = {
     womanName: bRaw.womanName || "", husbandName: bRaw.husbandName || "", nationalId: String(bRaw.nationalId || bRaw.id || ""),
     phone: digitsOnly(bRaw.phone || ""), village: bRaw.village || "", subdistrict: bRaw.subdistrict || "", children: bRaw.children || []
   };
@@ -323,8 +335,9 @@ function pairwiseScore(aRaw: any, bRaw: any, opts: any) {
   const W = o.finalScoreWeights;
   let score = (W.firstNameScore || 0) * firstNameScore + (W.familyNameScore || 0) * familyNameScore +
               (W.advancedNameScore || 0) * advancedNameScore + (W.tokenReorderScore || 0) * tokenReorderScore +
-              (W.husbandScore || 0) * husbandScore + (W.idScore || 0) * idScore + (W.phoneScore || 0) * phoneScoreVal +
-              (W.childrenScore || 0) * childrenScore + (W.locationScore || 0) * locationScore;
+              (W.husbandScore || 0) * husbandScore + (W.idScore || 0) * idScore +
+              (W.phoneScore || 0) * phoneScoreVal + (W.childrenScore || 0) * childrenScore +
+              (W.locationScore || 0) * locationScore;
 
   const strongParts = [firstNameScore, familyNameScore, tokenReorderScore].filter(v => v >= 0.85).length;
   if (strongParts >= 2) score = Math.min(1, score + 0.04);
@@ -332,7 +345,7 @@ function pairwiseScore(aRaw: any, bRaw: any, opts: any) {
 
   const breakdown = { firstNameScore, familyNameScore, advancedNameScore, tokenReorderScore, husbandScore, idScore, phoneScore: phoneScoreVal, childrenScore, locationScore };
   
-  const reasons: string[] = [];
+  const reasons: any[] = [];
   if (tokenReorderScore > 0.85) reasons.push("TOKEN_REORDER");
 
   return { score, breakdown, reasons };
@@ -387,7 +400,7 @@ function pushEdgesForList(list: any, rows: any, minScore: any, seen: any, edges:
   }
 }
 
-function buildEdges(rows: any, minScore: any, opts: any, send: (data: any) => void) {
+async function buildEdges(rows: any, minScore: any, opts: any, send: (data: any) => void) {
   const blocks = buildBlocks(rows, opts);
   const seen = new Set();
   const edges: any[] = [];
@@ -405,6 +418,7 @@ function buildEdges(rows: any, minScore: any, opts: any, send: (data: any) => vo
     if (bi % 20 === 0 || bi === blocks.length - 1) {
       const pct = Math.round(10 + 40 * (bi / Math.max(1, blocks.length)));
       send({ type: "progress", status: "building-edges", progress: pct, completed: bi + 1, total: blocks.length });
+      await yieldToEventLoop();
     }
   }
   if (blocks.length > 0) {
@@ -446,7 +460,7 @@ class UF {
 }
 
 /* Split cluster so each piece <= 4 */
-function splitCluster(rowsSubset: any, minInternal = 0.50, opts: any): any[] {
+function splitCluster(rowsSubset: any, minInternal = 0.50, opts: any) {
     if (rowsSubset.length <= 1) return []; // Return empty if not a potential cluster
     if (rowsSubset.length <= 4) {
         const localEdges: any[] = [];
@@ -509,11 +523,10 @@ async function runClustering(rows: any, opts: any, send: (data: any) => void) {
 
   const minPair = opts?.thresholds?.minPair ?? 0.62;
   const minInternal = opts?.thresholds?.minInternal ?? 0.50;
-  const blockChunkSize = opts?.thresholds?.blockChunkSize ?? 3000;
 
   send({ type: "progress", status: "blocking", progress: 5, completed: 0, total: rows.length });
 
-  const edges = buildEdges(rows, minPair, Object.assign({}, opts, { thresholds: { ...((opts && opts.thresholds) || {}), blockChunkSize } }), send);
+  const edges = await buildEdges(rows, minPair, opts, send);
 
   send({ type: "progress", status: "edges-built", progress: 60, completed: edges.length, total: Math.max(1, rows.length) });
 
@@ -546,7 +559,6 @@ async function runClustering(rows: any, opts: any, send: (data: any) => void) {
       continue;
     }
     
-    // need to split combined component
     const combinedIdx = Array.from(new Set([...uf.rootMembers(ra), ...uf.rootMembers(rb)]));
     const combinedRows = combinedIdx.map(i => rows[i]);
     const parts = splitCluster(combinedRows, minInternal, opts);
@@ -560,7 +572,10 @@ async function runClustering(rows: any, opts: any, send: (data: any) => void) {
        });
     }
     edgesUsed.push(e);
-    if (ei % 200 === 0) send({ type: "progress", status: "merging-edges", progress: 60 + Math.round(20 * (ei / edges.length)), completed: ei + 1, total: edges.length });
+    if (ei % 200 === 0) {
+        send({ type: "progress", status: "merging-edges", progress: 60 + Math.round(35 * (ei / edges.length)), completed: ei + 1, total: edges.length });
+        await yieldToEventLoop();
+    }
   }
 
   // leftovers
@@ -591,6 +606,7 @@ async function runClustering(rows: any, opts: any, send: (data: any) => void) {
     .filter(c => c.records.length > 1);
 
   send({ type: "progress", status: "annotating", progress: 95 });
+
   return { clusters: clustersWithRecords, edgesUsed, rows };
 }
 
@@ -603,7 +619,6 @@ function mapIncomingRowsToInternal(rowsChunk: any, mapping: any, existingCount: 
         };
 
         for (const key in mapping) {
-            // Do not map cluster_id, it is system-generated and should not overwrite original data
             if (key === 'cluster_id') continue;
             
             const col = mapping[key];
@@ -614,7 +629,6 @@ function mapIncomingRowsToInternal(rowsChunk: any, mapping: any, existingCount: 
         
         mapped.children = normalizeChildrenField(mapped.children);
         
-        // Add normalized fields, which will be stored and used
         mapped.womanName_normalized = normalizeArabicRaw(mapped.womanName);
         mapped.husbandName_normalized = normalizeArabicRaw(mapped.husbandName);
         mapped.village_normalized = normalizeArabicRaw(mapped.village);
@@ -627,7 +641,7 @@ function mapIncomingRowsToInternal(rowsChunk: any, mapping: any, existingCount: 
 
 export async function POST(req: Request) {
     try {
-        const { rows, mapping, options } = await req.json();
+        const { rows, mapping, options, resumeState } = await req.json();
 
         if (!rows || !Array.isArray(rows) || !mapping) {
             return new Response(JSON.stringify({ error: 'Invalid request body' }), { status: 400 });
@@ -637,11 +651,15 @@ export async function POST(req: Request) {
             async start(controller) {
                 const encoder = new TextEncoder();
                 const send = (data: any) => {
-                    controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+                    try {
+                        controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+                    } catch(e) {
+                        console.error("Failed to enqueue data", e);
+                    }
                 };
 
                 try {
-                    send({ type: 'status', status: 'mapping-rows', progress: 5, completed: 0, total: rows.length });
+                    send({ type: 'progress', status: 'mapping-rows', progress: 5, completed: 0, total: rows.length });
                     const mappedRows = mapIncomingRowsToInternal(rows, mapping, 0);
 
                     const result = await runClustering(mappedRows, options, send);
@@ -667,3 +685,5 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: e.message }, { status: 500 });
     }
 }
+
+    
