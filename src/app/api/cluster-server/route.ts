@@ -398,36 +398,56 @@ async function buildEdges(rows: any, minScore = 0.62, opts: any, resumeState: an
 }
 
 
-class UF {
-  parent: any;
-  size: any;
-  members: any;
-  constructor(n: any) {
-    this.parent = Array.from({ length: n }, (_, i) => i);
-    this.size = Array(n).fill(1);
-    this.members = new Map();
-    for (let i = 0; i < n; i++) this.members.set(i, new Set([i]));
+class DSU {
+  parent: Map<any, any>;
+  size: Map<any, any>;
+
+  constructor() {
+    this.parent = new Map();
+    this.size = new Map();
   }
-  find(x: any) {
-    if (this.parent[x] === x) return x;
-    this.parent[x] = this.find(this.parent[x]);
-    return this.parent[x];
+
+  make(x: any) {
+    if (!this.parent.has(x)) {
+      this.parent.set(x, x);
+      this.size.set(x, 1);
+    }
   }
-  merge(a: any, b: any) {
-    a = this.find(a); b = this.find(b);
-    if (a === b) return a;
-    if (this.size[a] < this.size[b]) [a, b] = [b, a];
-    this.parent[b] = a;
-    this.size[a] += this.size[b];
-    const mb = this.members.get(b), ma = this.members.get(a);
-    for (const m of mb) ma.add(m);
-    this.members.delete(b);
-    return a;
+
+  find(x: any): any {
+    if (this.parent.get(x) !== x) {
+      this.parent.set(x, this.find(this.parent.get(x)));
+    }
+    return this.parent.get(x);
   }
-  rootMembers(x: any) {
-    return Array.from(this.members.get(this.find(x)) || []);
+
+  union(a: any, b: any) {
+    const rootA = this.find(a);
+    const rootB = this.find(b);
+    if (rootA !== rootB) {
+      if (this.size.get(rootA) < this.size.get(rootB)) {
+        this.parent.set(rootA, rootB);
+        this.size.set(rootB, this.size.get(rootB) + this.size.get(rootA));
+      } else {
+        this.parent.set(rootB, rootA);
+        this.size.set(rootA, this.size.get(rootA) + this.size.get(rootB));
+      }
+    }
+  }
+  
+  getGroups(): Map<any, any[]> {
+    const groups = new Map<any, any[]>();
+    for (const item of this.parent.keys()) {
+        const root = this.find(item);
+        if (!groups.has(root)) {
+            groups.set(root, []);
+        }
+        groups.get(root)!.push(item);
+    }
+    return groups;
   }
 }
+
 
 /* Split cluster so each piece <= 4 */
 function splitCluster(rowsSubset: any, minInternal = 0.50, opts: any) {
@@ -454,19 +474,17 @@ function splitCluster(rowsSubset: any, minInternal = 0.50, opts: any) {
     }
     localEdges.sort((x, y) => y.score - x.score);
 
-    const uf = new UF(rowsSubset.length);
+    const uf = new DSU();
+    rowsSubset.forEach((r: any, i: number) => uf.make(i));
+
     for (const e of localEdges) {
-        const ra = uf.find(e.a), rb = uf.find(e.b);
+        const ra = uf.find(e.a);
+        const rb = uf.find(e.b);
         if (ra === rb) continue;
-        if (uf.size[ra] + uf.size[rb] <= 4) uf.merge(ra, rb);
+        if (uf.size.get(ra) + uf.size.get(rb) <= 4) uf.union(ra, rb);
     }
 
-    const groups = new Map();
-    for (let i = 0; i < rowsSubset.length; i++) {
-        const r = uf.find(i);
-        if (!groups.has(r)) groups.set(r, []);
-        groups.get(r).push(i);
-    }
+    const groups = uf.getGroups();
 
     const result: any[] = [];
     for (const idxs of groups.values()) {
@@ -502,80 +520,31 @@ async function runClustering(rows: any, opts: any, resumeState: any, send: Funct
 
   send({ type: "progress", status: "edges-built", progress: 60, completed: edges.length, total: Math.max(1, rows.length) });
 
-  const uf = new UF(rows.length);
-  const finalized = new Set();
+  const dsu = new DSU();
+  rows.forEach((r:any) => dsu.make(r._internalId));
+
+  for (const edge of edges) {
+      dsu.union(rows[edge.a]._internalId, rows[edge.b]._internalId);
+  }
+
+  const superClusters = dsu.getGroups();
   const finalClusters: any[] = [];
-  const edgesUsed: any[] = [];
-  const rootReasons = new Map();
-
-  for (let ei = 0; ei < edges.length; ei++) {
-    const e = edges[ei];
-    if (finalized.has(e.a) || finalized.has(e.b)) continue;
-    const ra = uf.find(e.a), rb = uf.find(e.b);
-    
-    const currentReasons = rootReasons.get(ra) || new Set();
-    (e.reasons || []).forEach((r: any) => currentReasons.add(r));
-    rootReasons.set(ra, currentReasons);
-
-    if (ra === rb) { edgesUsed.push(e); continue; }
-
-    const otherReasons = rootReasons.get(rb) || new Set();
-    (e.reasons || []).forEach((r: any) => otherReasons.add(r));
-    rootReasons.set(rb, otherReasons);
-
-    if (uf.size[ra] + uf.size[rb] <= 4) {
-      const mergedRoot = uf.merge(ra, rb);
-      const allReasons = new Set([...(rootReasons.get(ra) || []), ...(rootReasons.get(rb) || [])]);
-      rootReasons.set(mergedRoot, allReasons);
-      edgesUsed.push(e);
-      continue;
-    }
-    
-    const combinedIdx = Array.from(new Set([...uf.rootMembers(ra), ...uf.rootMembers(rb)]));
-    const combinedRows = combinedIdx.map(i => rows[i]);
-    const parts = splitCluster(combinedRows, minInternal, opts);
-
-    for (const p of parts) {
-       if (p.records.length <= 1) continue;
-       finalClusters.push(p);
-       p.records.forEach((r: any) => {
-           const originalIndex = rows.findIndex((row: any) => row._internalId === r._internalId);
-           if (originalIndex !== -1) finalized.add(originalIndex);
-       });
-    }
-    edgesUsed.push(e);
-    if (ei % 200 === 0) {
-        send({ type: "progress", status: "merging-edges", progress: 60 + Math.round(35 * (ei / edges.length)), completed: ei + 1, total: edges.length });
+  
+  let processedCount = 0;
+  for (const group of superClusters.values()) {
+      if (group.length > 1) {
+          const clusterRows = group.map(internalId => rows.find((r:any) => r._internalId === internalId));
+          const splitResult = splitCluster(clusterRows, minInternal, opts);
+          finalClusters.push(...splitResult);
+      }
+      processedCount++;
+      if (processedCount % 100 === 0) {
+        send({ type: "progress", status: "merging-edges", progress: 60 + Math.round(35 * (processedCount / superClusters.size)), completed: processedCount, total: superClusters.size });
         await yieldToEventLoop();
-    }
+      }
   }
-
-  // leftovers
-  const leftovers = new Map();
-  for (let i = 0; i < rows.length; i++) {
-    if (finalized.has(i)) continue;
-    const r = uf.find(i);
-    const arr = leftovers.get(r) || []; arr.push(i); leftovers.set(r, arr);
-  }
-  for (const [root, arr] of leftovers.entries()) {
-    if (arr.length <= 1) continue;
-    const subRows = arr.map((i: any) => rows[i]);
-    const parts = splitCluster(subRows, minInternal, opts);
-     for (const p of parts) {
-        if (p.records.length > 1) {
-            const allPartReasons = new Set([...p.reasons, ...(rootReasons.get(root) || [])]);
-            p.reasons = Array.from(allPartReasons);
-            finalClusters.push(p);
-        }
-    }
-  }
-
-  const clustersWithRecords = finalClusters
-    .map(c => ({
-        ...c,
-        records: c.records.map((r: any) => rows.find((row: any) => row._internalId === r._internalId))
-    }))
-    .filter(c => c.records.length > 1);
+  
+  const clustersWithRecords = finalClusters.filter(c => c.records.length > 1);
 
   send({ type: "progress", status: "annotating", progress: 95 });
 
@@ -592,7 +561,7 @@ async function runClustering(rows: any, opts: any, resumeState: any, send: Funct
   chunkArray(clustersWithRecords, CHUNK_SIZE).forEach((chunk, i) => {
       send({ type: "cache_clusters", index: i, payload: chunk });
   });
-  chunkArray(edgesUsed, CHUNK_SIZE).forEach((chunk, i) => {
+  chunkArray(edges, CHUNK_SIZE).forEach((chunk, i) => {
       send({ type: "cache_edges", index: i, payload: chunk });
   });
   send({ type: "cache_done" });
