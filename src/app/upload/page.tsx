@@ -1,4 +1,3 @@
-
 // app/(app)/upload/page.tsx
 "use client";
 
@@ -67,6 +66,7 @@ export default function UploadPage(){
   const [fileReadProgress, setFileReadProgress] = useState(0);
   const [isMappingOpen, setIsMappingOpen] = useState(true);
   const [timeInfo, setTimeInfo] = useState<TimeInfo>({ elapsed: 0 });
+  const [filePrepStatus, setFilePrepStatus] = useState<'idle' | 'preparing' | 'done'>('idle');
   const rawRowsRef = useRef<any[]>([]);
   const timerRef = useRef<NodeJS.Timeout|null>(null);
   const startTimeRef = useRef<number|null>(null);
@@ -120,6 +120,7 @@ export default function UploadPage(){
     if(timerRef.current) clearInterval(timerRef.current);
     setFileReadProgress(0);
     setIsMappingOpen(true);
+    setFilePrepStatus('preparing');
     
     const reader = new FileReader();
     reader.onprogress = (event) => {
@@ -132,8 +133,15 @@ export default function UploadPage(){
         const buffer = e.target?.result;
         const wb = XLSX.read(buffer, { type: 'array', cellDates:true });
         const sheet = wb.Sheets[wb.SheetNames[0]];
-        const json = XLSX.utils.sheet_to_json<any>(sheet, { defval: "" });
-        rawRowsRef.current = json;
+        const json: RecordRow[] = XLSX.utils.sheet_to_json<any>(sheet, { defval: "" });
+        
+        // --- New Step: Assign _internalId ---
+        json.forEach((row, index) => {
+            row._internalId = `row_${index}`;
+        });
+        toast({ title: "Preparation Step 1/2", description: "Internal IDs assigned to all records." });
+
+        rawRowsRef.current = json; // Store rows with internal IDs
         const fileColumns = Object.keys(json[0] || {});
         setColumns(fileColumns);
         
@@ -146,6 +154,7 @@ export default function UploadPage(){
         }
         setFileReadProgress(100);
 
+        // --- New Step: Save to IndexedDB ---
         try {
             const db = await openDB();
             await new Promise<void>((resolve, reject) => {
@@ -154,10 +163,12 @@ export default function UploadPage(){
                 tx.oncomplete = () => resolve();
                 tx.onerror = () => reject(tx.error);
             });
-            toast({ title: "File Ready", description: "Your file has been saved locally for processing." });
+            toast({ title: "Preparation Step 2/2", description: "File data with internal IDs has been saved locally for processing." });
+            setFilePrepStatus('done');
         } catch (error) {
             console.error("Failed to save rows to IndexedDB", error);
             toast({ title: "Error Saving File", description: "Could not save file data locally.", variant: "destructive" });
+            setFilePrepStatus('idle');
         }
     };
     reader.readAsArrayBuffer(f);
@@ -456,6 +467,7 @@ await fetch('/api/cluster-cache', {
                   setFileReadProgress(0);
                   setTimeInfo({elapsed: 0});
                   if(timerRef.current) clearInterval(timerRef.current);
+                  setFilePrepStatus('idle');
                 }} variant="outline">{t('upload.buttons.reset')}</Button>
             )}
           </div>
@@ -525,10 +537,10 @@ await fetch('/api/cluster-cache', {
             <div className="space-y-4">
               <Button 
                 onClick={startClustering} 
-                disabled={!isMappingComplete || (processingStatus !== 'idle' && processingStatus !== 'done' && processingStatus !== 'error')}
+                disabled={!isMappingComplete || (processingStatus !== 'idle' && processingStatus !== 'done' && processingStatus !== 'error') || filePrepStatus !== 'done'}
               >
-                {(processingStatus === 'processing' || processingStatus === 'caching' || processingStatus === 'building-edges' || processingStatus === 'merging-edges' || processingStatus === 'annotating' || processingStatus === 'blocking') ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                {getButtonText()}
+                {processingStatus !== 'idle' && processingStatus !== 'done' && processingStatus !== 'error' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                {filePrepStatus === 'preparing' ? 'Preparing File...' : getButtonText()}
               </Button>
 
               {(processingStatus !== 'idle' && processingStatus !== 'done' && processingStatus !== 'error') && (

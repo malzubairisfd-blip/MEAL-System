@@ -1,4 +1,3 @@
-
 import { NextResponse } from 'next/server';
 import fs from 'fs/promises';
 import path from 'path';
@@ -14,16 +13,20 @@ import { calculateClusterConfidence } from '@/lib/clusterConfidence';
 const getTmpDir = () => path.join(os.tmpdir(), 'beneficiary-insights-cache');
 
 type EnrichedRecord = RecordRow & {
-    ClusterID: number | null;
-    Cluster_ID: number | null;
-    Cluster_Size: number | null;
-    Flag: string | null;
-    Max_PairScore: number | null;
-    pairScore: number | null;
-    nameScore: number | null;
-    husbandScore: number | null;
-    idScore: number | null;
-    phoneScore: number | null;
+    ClusterID?: number | null;
+    Cluster_ID?: number | null;
+    Cluster_Size?: number | null;
+    Flag?: string | null;
+    Max_PairScore?: number | null;
+    pairScore?: number;
+    nameScore?: number;
+    husbandScore?: number;
+    idScore?: number;
+    phoneScore?: number;
+    womanName_normalized?: string;
+    husbandName_normalized?: string;
+    'تصنيف المجموعة المبدئي'?: string;
+    'نتائج تحليل المجموعة'?: string;
     [key: string]: any;
 };
 
@@ -86,133 +89,139 @@ async function getCachedData(cacheId: string) {
 
 
 async function enrichData(cachedData: any): Promise<EnrichedRecord[]> {
-  const { rows, clusters, mapping } = cachedData;
-  const beneficiaryIdCol = mapping?.beneficiaryId;
-
-  const clusterStats = new Map<number, {
-    maxPairScore: number;
-    maxBeneficiaryId: number;
-    size: number;
-  }>();
-
-  clusters.forEach((c: any, idx: number) => {
-    const cid = idx + 1;
-    let maxScore = 0;
-    let maxBen = 0;
-
-    c.records.forEach((r: RecordRow) => {
-      const benIdVal = beneficiaryIdCol ? r[beneficiaryIdCol] : undefined;
-      const ben = Number(benIdVal);
-      if (!isNaN(ben)) maxBen = Math.max(maxBen, ben);
-    });
-
-    if (c.records.length > 1) {
-      const pairs = fullPairwiseBreakdown(c.records);
-      pairs.forEach(p => maxScore = Math.max(maxScore, p.score));
+    const { rows: allRecords, clusters } = cachedData;
+    if (!allRecords || !clusters) {
+        throw new Error("Invalid cache: missing rows or clusters.");
     }
 
-    clusterStats.set(cid, {
-      maxPairScore: maxScore,
-      maxBeneficiaryId: maxBen,
-      size: c.records.length
-    });
-  });
+    const enrichedRecords: EnrichedRecord[] = [];
+    const recordClusterMap = new Map<string, number>();
+    const clusterInfoMap = new Map<number, { maxScore: number; maxBeneficiaryId: number; size: number; decision: string; expertNote: string; }>();
 
-  const recordToClusterId = new Map<string, number>();
-  clusters.forEach((c: any, idx: number) => {
-    c.records.forEach((r: RecordRow) => {
-      recordToClusterId.set(r._internalId!, idx + 1);
-    });
-  });
+    clusters.forEach((clusterObj: { records: RecordRow[] }, index: number) => {
+        const clusterId = index + 1;
+        const clusterRecords = clusterObj.records;
+        if (!clusterRecords || clusterRecords.length === 0) return;
 
-  const enriched: EnrichedRecord[] = rows.map((r: RecordRow) => {
-    const clusterId = recordToClusterId.get(r._internalId!);
-    
-    const baseEnrichedRecord: EnrichedRecord = {
-      ...r,
-      ClusterID: null,
-      Cluster_ID: null,
-      Cluster_Size: null,
-      Flag: null,
-      Max_PairScore: null,
-      pairScore: null,
-      nameScore: null,
-      husbandScore: null,
-      idScore: null,
-      phoneScore: null,
-    };
+        clusterRecords.forEach(r => recordClusterMap.set(r._internalId!, clusterId));
 
-    if (!clusterId) {
-      return baseEnrichedRecord;
-    }
-
-    const stats = clusterStats.get(clusterId)!;
-    const cluster = clusters[clusterId - 1];
-    const comparisons = cluster.records.filter(
-      (x: RecordRow) => x._internalId !== r._internalId
-    );
-
-    let totals = { pair: 0, name: 0, husband: 0, id: 0, phone: 0 };
-    let count = 0;
-
-    if (comparisons.length > 0) {
-        comparisons.forEach((other: RecordRow) => {
-            const res = fullPairwiseBreakdown([r, other])[0];
-            if (!res) return;
-            totals.pair += res.score;
-            totals.name += res.breakdown.nameScore || 0;
-            totals.husband += res.breakdown.husbandScore || 0;
-            totals.id += res.breakdown.idScore || 0;
-            totals.phone += res.breakdown.phoneScore || 0;
-            count++;
+        const pairs = fullPairwiseBreakdown(clusterRecords);
+        const maxScore = pairs.reduce((max, p) => Math.max(max, p.score), 0);
+        
+        let maxBeneficiaryId = 0;
+        clusterRecords.forEach(r => {
+             const beneficiaryId = Number(r.beneficiaryId);
+             if (!isNaN(beneficiaryId) && beneficiaryId > maxBeneficiaryId) {
+                maxBeneficiaryId = beneficiaryId;
+             }
         });
-    }
+        
+        const womanNameScores = pairs.map((p: any) => p.breakdown.nameScore || 0);
+        const husbandNameScores = pairs.map((p: any) => p.breakdown.husbandScore || 0);
+        const avgWomanNameScore = womanNameScores.length > 0 ? womanNameScores.reduce((a: number, b: number) => a + b, 0) / womanNameScores.length : 0;
+        const avgHusbandNameScore = husbandNameScores.length > 0 ? husbandNameScores.reduce((a: number, b: number) => a + b, 0) / husbandNameScores.length : 0;
+        const avgFinalScore = (avgWomanNameScore + avgHusbandNameScore) / 2;
+        const finalScorePct = Math.round(avgFinalScore * 100);
 
-    const avg = (v: number) => (count > 0 ? v / count : 0);
-    const pairScore = avg(totals.pair);
+        const { decision, expertNote } = getDecisionAndNote(finalScorePct);
 
-    const flag =
-      pairScore >= 0.9 ? "m?" :
-      pairScore >= 0.8 ? "m"  :
-      pairScore >= 0.7 ? "??" :
-      pairScore >  0   ? "?"  : null;
+        clusterInfoMap.set(clusterId, { maxScore, maxBeneficiaryId, size: clusterRecords.length, decision, expertNote });
+    });
+
+    allRecords.forEach((record: RecordRow) => {
+        let enriched: EnrichedRecord = { 
+            ...record,
+            womanName_normalized: normalizeArabic(record.womanName || ''),
+            husbandName_normalized: normalizeArabic(record.husbandName || ''),
+        };
+        
+        const recordClusterId = recordClusterMap.get(record._internalId!);
+
+        if (recordClusterId) {
+            const clusterInfo = clusterInfoMap.get(recordClusterId)!;
+            
+            const clusterRecords = clusters[recordClusterId - 1].records;
+            
+            let totalPairScore = 0;
+            let totalNameScore = 0;
+            let totalHusbandScore = 0;
+            let totalIdScore = 0;
+            let totalPhoneScore = 0;
+            let comparisonCount = 0;
+            
+            if (clusterRecords.length > 1) {
+                for (let i = 0; i < clusterRecords.length; i++) {
+                    if (clusterRecords[i]._internalId === record._internalId) continue;
+                    
+                    const result = fullPairwiseBreakdown([record, clusterRecords[i]])[0];
+                    if (result) {
+                        totalPairScore += result.score;
+                        totalNameScore += result.breakdown.nameScore || 0;
+                        totalHusbandScore += result.breakdown.husbandScore || 0;
+                        totalIdScore += result.breakdown.idScore || 0;
+                        totalPhoneScore += result.breakdown.phoneScore || 0;
+                        comparisonCount++;
+                    }
+                }
+            }
+           
+            const avgPairScore = comparisonCount > 0 ? totalPairScore / comparisonCount : 0;
+            const avgNameScore = comparisonCount > 0 ? totalNameScore / comparisonCount : 0;
+            const avgHusbandScore = comparisonCount > 0 ? totalHusbandScore / comparisonCount : 0;
+            const avgIdScore = comparisonCount > 0 ? totalIdScore / comparisonCount : 0;
+            const avgPhoneScore = comparisonCount > 0 ? totalPhoneScore / comparisonCount : 0;
+
+            const flag = (score: number) => {
+                if (score >= 0.9) return "m?";
+                if (score >= 0.8) return "m";
+                if (score >= 0.7) return "??";
+                if (score > 0) return "?";
+                return null;
+            };
+
+            enriched = {
+                ...enriched,
+                pairScore: avgPairScore,
+                nameScore: avgNameScore,
+                husbandScore: avgHusbandScore,
+                idScore: avgIdScore,
+                phoneScore: avgPhoneScore,
+                ClusterID: recordClusterId,
+                Cluster_ID: clusterInfo.maxBeneficiaryId || recordClusterId,
+                Cluster_Size: clusterInfo.size,
+                Max_PairScore: clusterInfo.maxScore,
+                'تصنيف المجموعة المبدئي': clusterInfo.decision,
+                'نتائج تحليل المجموعة': clusterInfo.expertNote,
+                Flag: flag(avgPairScore),
+            };
+        }
+        
+        enrichedRecords.push(enriched);
+    });
     
-    baseEnrichedRecord.ClusterID = clusterId;
-    baseEnrichedRecord.Cluster_ID = stats.maxBeneficiaryId;
-    baseEnrichedRecord.Cluster_Size = stats.size;
-    baseEnrichedRecord.Flag = flag;
-    baseEnrichedRecord.Max_PairScore = stats.maxPairScore;
-    baseEnrichedRecord.pairScore = pairScore;
-    baseEnrichedRecord.nameScore = avg(totals.name);
-    baseEnrichedRecord.husbandScore = avg(totals.husband);
-    baseEnrichedRecord.idScore = avg(totals.id);
-    baseEnrichedRecord.phoneScore = avg(totals.phone);
-
-    return baseEnrichedRecord;
-  });
-
-  return enriched;
+    return enrichedRecords;
 }
-
-
 
 function sortData(data: EnrichedRecord[]): EnrichedRecord[] {
-  return data.sort((a, b) => {
-    const scoreA = a.Max_PairScore ?? 0;
-    const scoreB = b.Max_PairScore ?? 0;
-    if (scoreB !== scoreA) {
-      return scoreB - scoreA;
-    }
-    
-    const clusterA = a.Cluster_ID ?? Infinity;
-    const clusterB = b.Cluster_ID ?? Infinity;
-    return clusterA - clusterB;
-  });
+    return data.sort((a, b) => {
+        const scoreA = a.Max_PairScore ?? -1;
+        const scoreB = b.Max_PairScore ?? -1;
+        if (scoreA !== scoreB) {
+            return scoreB - scoreA;
+        }
+
+        const clusterA = a.Cluster_ID ?? Number.MAX_SAFE_INTEGER;
+        const clusterB = b.Cluster_ID ?? Number.MAX_SAFE_INTEGER;
+        if (clusterA !== clusterB) {
+            return clusterA - clusterB;
+        }
+        
+        return (String(a.beneficiaryId) || "").localeCompare(String(b.beneficiaryId) || "");
+    });
 }
 
-
 function createFormattedWorkbook(data: EnrichedRecord[], cachedData: any): ExcelJS.Workbook {
-    const { rows: allRecords, clusters, auditFindings, chartImages, processedDataForReport, originalHeaders } = cachedData;
+    const { rows: allRecords, clusters, auditFindings, originalHeaders, chartImages, processedDataForReport } = cachedData;
     const wb = new ExcelJS.Workbook();
     wb.creator = "Beneficiary Insights";
     
@@ -271,30 +280,31 @@ function createEnrichedDataSheet(wb: ExcelJS.Workbook, data: EnrichedRecord[], o
     const ws = wb.addWorksheet("Enriched Data");
     ws.views = [{ rightToLeft: true }];
     
-    const LEFT_COLUMNS = [
-      "ClusterID",
-      "Cluster_ID",
-      "Cluster_Size",
-      "Flag",
-      "Max_PairScore",
-      "pairScore",
-      "nameScore",
-      "husbandScore",
-      "idScore",
-      "phoneScore"
+    const enrichmentHeaders = [
+        "Cluster_ID", "Cluster_Size", "Flag", "pairScore", "Max_PairScore", "nameScore", "husbandScore", "idScore", "phoneScore", "تصنيف المجموعة المبدئي", "نتائج تحليل المجموعة"
     ];
+    
+    const normalizedHeaders = [ "womanName_normalized", "husbandName_normalized" ];
 
-    const finalHeaders = [
-      ...LEFT_COLUMNS,
-      ...(originalHeaders || []).filter(h => !h.startsWith("_")),
-    ];
+    // Ensure all original headers are included, even if not present in the first record
+    const allOriginalHeaders = new Set<string>(originalHeaders || []);
+    data.forEach(record => {
+      Object.keys(record).forEach(key => {
+        if (!enrichmentHeaders.includes(key) && !normalizedHeaders.includes(key) && !key.startsWith('_') && !Object.keys(record).find(k => k === 'ClusterID')) {
+           if (!allOriginalHeaders.has(key) && !enrichmentHeaders.includes(key) && !normalizedHeaders.includes(key)) {
+             allOriginalHeaders.add(key);
+           }
+        }
+      });
+    });
+
+    const finalHeaders = [ ...enrichmentHeaders, ...Array.from(allOriginalHeaders) ];
 
     ws.columns = finalHeaders.map(h => ({
       header: h,
       key: h,
-      width: h.length > 30 ? 40 : 16
+      width: h === 'womanName' || h === 'husbandName' ? 25 : (h === 'نتائج تحليل المجموعة' ? 50 : 15)
     }));
-
 
     ws.getRow(1).eachCell(cell => {
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF002060' } };
@@ -304,47 +314,40 @@ function createEnrichedDataSheet(wb: ExcelJS.Workbook, data: EnrichedRecord[], o
     
     ws.addRows(data);
     
-    let lastCluster: any = null;
+    ws.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+        if (rowNumber === 1) return;
+        
+        const rowData = data[rowNumber - 2];
+        if (!rowData || rowData.Max_PairScore === null || rowData.Max_PairScore === undefined) return;
+        
+        const score = Number(rowData.Max_PairScore);
+        let fillColor: string | undefined;
 
-    ws.eachRow((row, idx) => {
-      if (idx === 1) return;
+        if (score >= 0.9) { fillColor = 'FFFF0000'; } 
+        else if (score >= 0.8) { fillColor = 'FFFFC7CE'; } 
+        else if (score >= 0.7) { fillColor = 'FFFFC000'; } 
+        else if (score > 0) { fillColor = 'FFFFFF00'; }
 
-      const cid = row.getCell("ClusterID").value;
-      const score = Number(row.getCell("Max_PairScore").value || 0);
-
-      let color: string | null = null;
-      let fontColor = 'FF000000'; // Black text default
-      if (score >= 0.9) {
-          color = "FFFF0000"; // Red background
-          fontColor = 'FFFFFFFF'; // White text
-      } else if (score >= 0.8) {
-          color = "FFD966"; // Darker Yellow
-      } else if (score >= 0.7) {
-          color = "FFF4B084"; // Orange
-      } else if (score > 0) {
-          color = "FFFFFF00"; // Yellow
-      }
-      
-      row.eachCell({ includeEmpty: false }, cell => {
-        cell.border = { top:{style:"thin"}, bottom:{style:"thin"}, left:{style:"thin"}, right:{style:"thin"} };
-        if (color) {
-            cell.fill = { type:"pattern", pattern:"solid", fgColor:{argb:color} };
-            cell.font = { ...cell.font, bold: true, color: { argb: fontColor } };
+        if (fillColor) {
+            row.eachCell({ includeEmpty: true }, (cell) => {
+                  cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fillColor } };
+                  if (score >= 0.9) {
+                      cell.font = { ...cell.font, bold: true, color: { argb: 'FFFFFFFF' } };
+                  }
+            });
         }
-      });
-      
-      if (cid && cid !== lastCluster && lastCluster !== null) {
-        row.eachCell(cell => {
-          cell.border = { ...cell.border, top:{style:"thick", color: { argb: 'FF002060' }} };
-        });
-      }
-
-      lastCluster = cid;
     });
 
-    const maxPairScoreCol = ws.getColumn("Max_PairScore");
-    if (maxPairScoreCol) {
-        ws.spliceColumns(maxPairScoreCol.number, 1);
+    let lastClusterId: number | string | null = null;
+    for (let i = 2; i <= ws.rowCount; i++) {
+        const row = ws.getRow(i);
+        const cid = row.getCell('Cluster_ID').value;
+        if (cid !== null && cid !== lastClusterId && lastClusterId !== null) {
+            row.eachCell({ includeEmpty: true }, cell => {
+                cell.border = { ...cell.border, top: { style: 'thick', color: { argb: 'FF002060' } } };
+            });
+        }
+        lastClusterId = cid;
     }
 }
 
@@ -402,15 +405,15 @@ function createSummarySheet(wb: ExcelJS.Workbook, allRecords: RecordRow[], clust
     };
 
     clusters.forEach(clusterObj => {
-        if (!clusterObj.records || clusterObj.records.length < 2) return;
         const pairs = fullPairwiseBreakdown(clusterObj.records);
         const womanNameScores = pairs.map((p: any) => p.breakdown.nameScore || 0);
         const husbandNameScores = pairs.map((p: any) => p.breakdown.husbandScore || 0);
         const avgWomanNameScore = womanNameScores.length > 0 ? womanNameScores.reduce((a: number, b: number) => a + b, 0) / womanNameScores.length : 0;
         const avgHusbandNameScore = husbandNameScores.length > 0 ? husbandNameScores.reduce((a: number, b: number) => a + b, 0) / husbandNameScores.length : 0;
-        const confidence = calculateClusterConfidence(avgWomanNameScore, avgHusbandNameScore);
+        const avgFinalScore = (avgWomanNameScore + avgHusbandNameScore) / 2;
+        const finalScorePct = Math.round(avgFinalScore * 100);
 
-        const { decision } = getDecisionAndNote(confidence);
+        const { decision } = getDecisionAndNote(finalScorePct);
         if (decision in decisionCounts) {
             decisionCounts[decision as keyof typeof decisionCounts]++;
         }
@@ -441,7 +444,7 @@ function createSummarySheet(wb: ExcelJS.Workbook, allRecords: RecordRow[], clust
     ws.getRow(auditCurrentRow - 1).height = 15; // Spacer row
 
     // --- Audit Summary Data ---
-    if (auditFindings && auditFindings.length > 0) {
+    if (auditFindings.length > 0) {
         ws.mergeCells(`B${auditCurrentRow}:D${auditCurrentRow}`);
         const auditTitleCell = ws.getCell(`B${auditCurrentRow}`);
         auditTitleCell.value = "ملخص نتائج التدقيق";
@@ -522,13 +525,15 @@ function createClustersSheet(wb: ExcelJS.Workbook, clusters: {records: RecordRow
         const husbandNameScores = pairs.map((p: any) => p.breakdown.husbandScore || 0);
         const avgWomanNameScore = womanNameScores.length > 0 ? womanNameScores.reduce((a: number, b: number) => a + b, 0) / womanNameScores.length : 0;
         const avgHusbandNameScore = husbandNameScores.length > 0 ? husbandNameScores.reduce((a: number, b: number) => a + b, 0) / husbandNameScores.length : 0;
-
+        const avgFinalScore = (avgWomanNameScore + avgHusbandNameScore) / 2;
         const confidence = calculateClusterConfidence(avgWomanNameScore, avgHusbandNameScore);
         
         const clusterObjectForSummary = {
-            ...clusterObj,
+            records: clusterRecords,
+            reasons: clusterObj.reasons || [],
             avgWomanNameScore,
             avgHusbandNameScore,
+            avgFinalScore,
             confidence,
         };
 
@@ -781,17 +786,21 @@ function createDashboardReportSheet(wb: ExcelJS.Workbook, allRecords: RecordRow[
     const ws = wb.addWorksheet("Dashboard Report");
     ws.views = [{ rightToLeft: true }];
     
+    // Define column widths roughly based on the image proportions
     ws.columns = [
         { width: 2 },  // A
-        { width: 26 }, // B
-        { width: 26 }, // C
-        { width: 26 }, // D
-        { width: 26 }, // E
-        { width: 2 },  // F
+        { width: 13 }, // B
+        { width: 13 }, // C
+        { width: 2 },  // D
+        { width: 13 }, // E
+        { width: 13 }, // F
+        { width: 2 },  // G
+        { width: 13 }, // H
+        { width: 13 }, // I
     ];
 
 
-    ws.mergeCells('B2:E2');
+    ws.mergeCells('B2:I2');
     const titleCell = ws.getCell('B2');
     titleCell.value = "Analysis Dashboard Report";
     titleCell.font = { name: 'Calibri', size: 24, bold: true, color: { argb: 'FF002060' } };
@@ -800,9 +809,9 @@ function createDashboardReportSheet(wb: ExcelJS.Workbook, allRecords: RecordRow[
 
     const kf = processedData.keyFigures;
     const keyFiguresData = [
-        { title: 'Team Leaders', value: kf.teamLeaders, cell: 'E4' },
-        { title: 'Surveyors', value: kf.surveyors, cell: 'D4' },
-        { title: 'Registration Days', value: kf.registrationDays, cell: 'C4' },
+        { title: 'Team Leaders', value: kf.teamLeaders, cell: 'H4' },
+        { title: 'Surveyors', value: kf.surveyors, cell: 'F4' },
+        { title: 'Registration Days', value: kf.registrationDays, cell: 'D4' },
         { title: 'Villages Targeted', value: kf.villages, cell: 'B4' },
     ];
     
@@ -821,7 +830,7 @@ function createDashboardReportSheet(wb: ExcelJS.Workbook, allRecords: RecordRow[
         ws.getRow(5).height = 30;
     });
 
-    const addImageToCell = (base64: string, startRow: number, startCol: number, endRow: number, endCol: number) => {
+    const addImage = (base64: string, tl_col: number, tl_row: number, br_col: number, br_row: number) => {
         if (!base64 || !base64.startsWith('data:image/png;base64,')) return;
 
         const imageId = wb.addImage({
@@ -830,28 +839,31 @@ function createDashboardReportSheet(wb: ExcelJS.Workbook, allRecords: RecordRow[
         });
         
         ws.addImage(imageId, {
-            tl: { col: startCol, row: startRow },
-            br: { col: endCol, row: endRow },
+            tl: { col: tl_col, row: tl_row },
+            br: { col: br_col, row: br_row },
             editAs: 'oneCell'
         });
     };
     
-    let currentRow = 7;
+     const addImageWithProportions = (base64: string, tl: { col: number; row: number }, widthIn: number, heightIn: number) => {
+        if (!base64 || !base64.startsWith('data:image/png;base64,')) return;
+        const imageId = wb.addImage({
+            base64: base64.split(',')[1],
+            extension: 'png',
+        });
+        ws.addImage(imageId, {
+            tl: tl,
+            ext: { width: widthIn * 96, height: heightIn * 96 } // Convert inches to EMU
+        });
+    };
     
-    addImageToCell(chartImages.byDayChart, currentRow, 1, currentRow + 20, 4.8);
-    currentRow += 22;
+    // Add images according to the layout in the screenshot with specified sizes
+    addImageWithProportions(chartImages.byDayChart, { col: 1, row: 6 }, 3.61, 8.21); // B column
+    addImageWithProportions(chartImages.byVillageChart, { col: 4, row: 6 }, 3.61, 8.21); // E column
 
-    addImageToCell(chartImages.byVillageChart, currentRow, 1, currentRow + 20, 4.8);
-    currentRow += 22;
-
-    addImageToCell(chartImages.genderVisual, currentRow, 1, currentRow + 18, 4.8);
-    currentRow += 20;
-
-    addImageToCell(chartImages.womenDonut, currentRow, 1, currentRow + 18, 4.8);
-    currentRow += 20;
-
-    addImageToCell(chartImages.bubbleStats, currentRow, 1, currentRow + 18, 4.8);
-    currentRow += 20;
+    addImageWithProportions(chartImages.genderVisual, { col: 1, row: 21 }, 3.61, 3.74);
+    addImageWithProportions(chartImages.womenDonut, { col: 4, row: 21 }, 3.61, 3.74);
     
-    addImageToCell(chartImages.map, currentRow, 1, currentRow + 35, 4.8);
+    addImageWithProportions(chartImages.bubbleStats, { col: 1, row: 26 }, 3.61, 7.8);
+    addImageWithProportions(chartImages.map, { col: 4, row: 26 }, 3.61, 7.8);
 }
