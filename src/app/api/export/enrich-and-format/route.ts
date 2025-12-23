@@ -14,20 +14,17 @@ import { calculateClusterConfidence } from '@/lib/clusterConfidence';
 const getTmpDir = () => path.join(os.tmpdir(), 'beneficiary-insights-cache');
 
 type EnrichedRecord = RecordRow & {
-    ClusterID?: number | null;
-    Cluster_ID?: number | null;
-    Cluster_Size?: number | null;
-    Flag?: string | null;
-    Max_PairScore?: number | null;
-    pairScore?: number;
-    nameScore?: number;
-    husbandScore?: number;
-    idScore?: number;
-    phoneScore?: number;
-    womanName_normalized?: string;
-    husbandName_normalized?: string;
-    'تصنيف المجموعة المبدئي'?: string;
-    'نتائج تحليل المجموعة'?: string;
+    ClusterID: number | null;
+    Cluster_ID: number | null;
+    Cluster_Size: number | null;
+    Flag: string | null;
+    Max_PairScore: number | null;
+    pairScore: number | null;
+    nameScore: number | null;
+    husbandScore: number | null;
+    idScore: number | null;
+    phoneScore: number | null;
+    'womanName | husbandName | children | nationalId | phone | village | subdistrict': string;
     [key: string]: any;
 };
 
@@ -93,19 +90,7 @@ async function enrichData(cachedData: any): Promise<EnrichedRecord[]> {
   const { rows, clusters, mapping } = cachedData;
   const beneficiaryIdCol = mapping?.beneficiaryId;
 
-  const enriched: EnrichedRecord[] = [];
-
-  /** XLOOKUP map: beneficiaryId → record */
-  const rowLookup = new Map<string, RecordRow>();
-  if (beneficiaryIdCol) {
-    rows.forEach((r: RecordRow) => {
-      const benId = r[beneficiaryIdCol];
-      if (benId) rowLookup.set(String(benId), r);
-    });
-  }
-
-
-  /** Cluster aggregations (MAXIFS / COUNTIF equivalents) */
+  // Pre-calculate stats for each cluster
   const clusterStats = new Map<number, {
     maxPairScore: number;
     maxBeneficiaryId: number;
@@ -123,8 +108,10 @@ async function enrichData(cachedData: any): Promise<EnrichedRecord[]> {
       if (!isNaN(ben)) maxBen = Math.max(maxBen, ben);
     });
 
-    const pairs = fullPairwiseBreakdown(c.records);
-    pairs.forEach(p => maxScore = Math.max(maxScore, p.score));
+    if (c.records.length > 1) {
+      const pairs = fullPairwiseBreakdown(c.records);
+      pairs.forEach(p => maxScore = Math.max(maxScore, p.score));
+    }
 
     clusterStats.set(cid, {
       maxPairScore: maxScore,
@@ -133,42 +120,63 @@ async function enrichData(cachedData: any): Promise<EnrichedRecord[]> {
     });
   });
 
-  /** Build enriched rows */
-  rows.forEach((r: RecordRow) => {
-    let clusterId: number | null = null;
-
-    clusters.forEach((c: any, idx: number) => {
-      if (c.records.some((x: RecordRow) => x._internalId === r._internalId)) {
-        clusterId = idx + 1;
-      }
+  // Map each record's internal ID to its cluster ID
+  const recordToClusterId = new Map<string, number>();
+  clusters.forEach((c: any, idx: number) => {
+    c.records.forEach((r: RecordRow) => {
+      recordToClusterId.set(r._internalId!, idx + 1);
     });
+  });
+
+  const enriched: EnrichedRecord[] = rows.map((r: RecordRow) => {
+    const clusterId = recordToClusterId.get(r._internalId!);
+    
+    // Create a base enriched record for EVERY row to ensure consistent structure
+    const baseEnrichedRecord: EnrichedRecord = {
+      ...r,
+      ClusterID: null,
+      Cluster_ID: null,
+      Cluster_Size: null,
+      Flag: null,
+      Max_PairScore: null,
+      pairScore: null,
+      nameScore: null,
+      husbandScore: null,
+      idScore: null,
+      phoneScore: null,
+      "womanName | husbandName | children | nationalId | phone | village | subdistrict":
+        `${r.womanName || ""} | ${r.husbandName || ""} | ${(Array.isArray(r.children) ? r.children.join(', ') : r.children) || ""} | ${r.nationalId || ""} | ${r.phone || ""} | ${r.village || ""} | ${r.subdistrict || ""}`
+    };
 
     if (!clusterId) {
-      enriched.push({ ...r });
-      return;
+      // If the row is not in any cluster, return the base record with nulls
+      return baseEnrichedRecord;
     }
 
+    // If the row IS in a cluster, calculate and add the enriched data
     const stats = clusterStats.get(clusterId)!;
-    const comparisons = clusters[clusterId - 1].records.filter(
+    const cluster = clusters[clusterId - 1];
+    const comparisons = cluster.records.filter(
       (x: RecordRow) => x._internalId !== r._internalId
     );
 
     let totals = { pair: 0, name: 0, husband: 0, id: 0, phone: 0 };
     let count = 0;
 
-    comparisons.forEach(other => {
-      const res = fullPairwiseBreakdown([r, other])[0];
-      if (!res) return;
-      totals.pair += res.score;
-      totals.name += res.breakdown.nameScore || 0;
-      totals.husband += res.breakdown.husbandScore || 0;
-      totals.id += res.breakdown.idScore || 0;
-      totals.phone += res.breakdown.phoneScore || 0;
-      count++;
-    });
+    if (comparisons.length > 0) {
+        comparisons.forEach((other: RecordRow) => {
+            const res = fullPairwiseBreakdown([r, other])[0];
+            if (!res) return;
+            totals.pair += res.score;
+            totals.name += res.breakdown.nameScore || 0;
+            totals.husband += res.breakdown.husbandScore || 0;
+            totals.id += res.breakdown.idScore || 0;
+            totals.phone += res.breakdown.phoneScore || 0;
+            count++;
+        });
+    }
 
-    const avg = (v: number) => (count ? v / count : 0);
-
+    const avg = (v: number) => (count > 0 ? v / count : 0);
     const pairScore = avg(totals.pair);
 
     const flag =
@@ -176,38 +184,38 @@ async function enrichData(cachedData: any): Promise<EnrichedRecord[]> {
       pairScore >= 0.8 ? "m"  :
       pairScore >= 0.7 ? "??" :
       pairScore >  0   ? "?"  : null;
+    
+    // Populate the enriched fields
+    baseEnrichedRecord.ClusterID = clusterId;
+    baseEnrichedRecord.Cluster_ID = stats.maxBeneficiaryId;
+    baseEnrichedRecord.Cluster_Size = stats.size;
+    baseEnrichedRecord.Flag = flag;
+    baseEnrichedRecord.Max_PairScore = stats.maxPairScore;
+    baseEnrichedRecord.pairScore = pairScore;
+    baseEnrichedRecord.nameScore = avg(totals.name);
+    baseEnrichedRecord.husbandScore = avg(totals.husband);
+    baseEnrichedRecord.idScore = avg(totals.id);
+    baseEnrichedRecord.phoneScore = avg(totals.phone);
 
-    enriched.push({
-      ...r,
-
-      /** LEFT COLUMNS */
-      ClusterID: clusterId,
-      Cluster_ID: stats.maxBeneficiaryId,
-      Cluster_Size: stats.size,
-      Flag: flag,
-      Max_PairScore: stats.maxPairScore,
-      pairScore,
-      nameScore: avg(totals.name),
-      husbandScore: avg(totals.husband),
-      idScore: avg(totals.id),
-      phoneScore: avg(totals.phone),
-
-      /** RIGHT COLUMNS */
-      "womanName | husbandName | children | nationalId | phone | village | subdistrict":
-        `${r.womanName || ""} | ${r.husbandName || ""} | ${r.children || ""} | ${r.nationalId || ""} | ${r.phone || ""} | ${r.village || ""} | ${r.subdistrict || ""}`
-    });
+    return baseEnrichedRecord;
   });
 
   return enriched;
 }
 
 
+
 function sortData(data: EnrichedRecord[]): EnrichedRecord[] {
   return data.sort((a, b) => {
-    if ((b.Max_PairScore ?? 0) !== (a.Max_PairScore ?? 0))
-      return (b.Max_PairScore ?? 0) - (a.Max_PairScore ?? 0);
-
-    return (a.Cluster_ID ?? 0) - (b.Cluster_ID ?? 0);
+    const scoreA = a.Max_PairScore ?? 0;
+    const scoreB = b.Max_PairScore ?? 0;
+    if (scoreB !== scoreA) {
+      return scoreB - scoreA;
+    }
+    
+    const clusterA = a.Cluster_ID ?? Infinity;
+    const clusterB = b.Cluster_ID ?? Infinity;
+    return clusterA - clusterB;
   });
 }
 
@@ -318,27 +326,40 @@ function createEnrichedDataSheet(wb: ExcelJS.Workbook, data: EnrichedRecord[], o
       const cid = row.getCell("ClusterID").value;
       const score = Number(row.getCell("Max_PairScore").value || 0);
 
-      let color = null;
-      if (score >= 0.9) color = "FFFF0000";
-      else if (score >= 0.8) color = "FFD966";
-      else if (score >= 0.7) color = "FFF4B084";
-      else if (score > 0) color = "FFFFFF00";
-
-      row.eachCell(cell => {
+      let color: string | null = null;
+      let fontColor = 'FF000000'; // Black text default
+      if (score >= 0.9) {
+          color = "FFFF0000"; // Red background
+          fontColor = 'FFFFFFFF'; // White text
+      } else if (score >= 0.8) {
+          color = "FFD966"; // Darker Yellow
+      } else if (score >= 0.7) {
+          color = "FFF4B084"; // Orange
+      } else if (score > 0) {
+          color = "FFFFFF00"; // Yellow
+      }
+      
+      row.eachCell({ includeEmpty: false }, cell => {
         cell.border = { top:{style:"thin"}, bottom:{style:"thin"}, left:{style:"thin"}, right:{style:"thin"} };
-        if (color) cell.fill = { type:"pattern", pattern:"solid", fgColor:{argb:color} };
+        if (color) {
+            cell.fill = { type:"pattern", pattern:"solid", fgColor:{argb:color} };
+            cell.font = { ...cell.font, bold: true, color: { argb: fontColor } };
+        }
       });
-
-      if (cid !== lastCluster && lastCluster !== null) {
+      
+      if (cid && cid !== lastCluster && lastCluster !== null) {
         row.eachCell(cell => {
-          cell.border = { ...cell.border, top:{style:"thick"} };
+          cell.border = { ...cell.border, top:{style:"thick", color: { argb: 'FF002060' }} };
         });
       }
 
       lastCluster = cid;
     });
 
-    ws.spliceColumns(ws.getColumn("Max_PairScore").number, 1);
+    const maxPairScoreCol = ws.getColumn("Max_PairScore");
+    if (maxPairScoreCol) {
+        ws.spliceColumns(maxPairScoreCol.number, 1);
+    }
 }
 
 function createSummarySheet(wb: ExcelJS.Workbook, allRecords: RecordRow[], clusters: {records: RecordRow[]}[], auditFindings: AuditFinding[]) {
@@ -395,15 +416,15 @@ function createSummarySheet(wb: ExcelJS.Workbook, allRecords: RecordRow[], clust
     };
 
     clusters.forEach(clusterObj => {
+        if (!clusterObj.records || clusterObj.records.length < 2) return;
         const pairs = fullPairwiseBreakdown(clusterObj.records);
         const womanNameScores = pairs.map((p: any) => p.breakdown.nameScore || 0);
         const husbandNameScores = pairs.map((p: any) => p.breakdown.husbandScore || 0);
         const avgWomanNameScore = womanNameScores.length > 0 ? womanNameScores.reduce((a: number, b: number) => a + b, 0) / womanNameScores.length : 0;
         const avgHusbandNameScore = husbandNameScores.length > 0 ? husbandNameScores.reduce((a: number, b: number) => a + b, 0) / husbandNameScores.length : 0;
-        const avgFinalScore = (avgWomanNameScore + avgHusbandNameScore) / 2;
-        const finalScorePct = Math.round(avgFinalScore * 100);
+        const confidence = calculateClusterConfidence(avgWomanNameScore, avgHusbandNameScore);
 
-        const { decision } = getDecisionAndNote(finalScorePct);
+        const { decision } = getDecisionAndNote(confidence);
         if (decision in decisionCounts) {
             decisionCounts[decision as keyof typeof decisionCounts]++;
         }
@@ -434,7 +455,7 @@ function createSummarySheet(wb: ExcelJS.Workbook, allRecords: RecordRow[], clust
     ws.getRow(auditCurrentRow - 1).height = 15; // Spacer row
 
     // --- Audit Summary Data ---
-    if (auditFindings.length > 0) {
+    if (auditFindings && auditFindings.length > 0) {
         ws.mergeCells(`B${auditCurrentRow}:D${auditCurrentRow}`);
         const auditTitleCell = ws.getCell(`B${auditCurrentRow}`);
         auditTitleCell.value = "ملخص نتائج التدقيق";
@@ -515,15 +536,13 @@ function createClustersSheet(wb: ExcelJS.Workbook, clusters: {records: RecordRow
         const husbandNameScores = pairs.map((p: any) => p.breakdown.husbandScore || 0);
         const avgWomanNameScore = womanNameScores.length > 0 ? womanNameScores.reduce((a: number, b: number) => a + b, 0) / womanNameScores.length : 0;
         const avgHusbandNameScore = husbandNameScores.length > 0 ? husbandNameScores.reduce((a: number, b: number) => a + b, 0) / husbandNameScores.length : 0;
-        const avgFinalScore = (avgWomanNameScore + avgHusbandNameScore) / 2;
+
         const confidence = calculateClusterConfidence(avgWomanNameScore, avgHusbandNameScore);
         
         const clusterObjectForSummary = {
-            records: clusterRecords,
-            reasons: clusterObj.reasons || [],
+            ...clusterObj,
             avgWomanNameScore,
             avgHusbandNameScore,
-            avgFinalScore,
             confidence,
         };
 
