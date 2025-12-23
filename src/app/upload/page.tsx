@@ -276,7 +276,8 @@ export default function UploadPage(){
                         } else if (data.type === 'cache_done') {
                             await put("meta", "ready", true);
                             await put("meta", "timestamp", Date.now());
-                             await put("meta", "originalHeaders", columns);
+                            await put("meta", "originalHeaders", columns);
+                            await put("meta", "mapping", mapping);
 
 
                             if (timerRef.current) clearInterval(timerRef.current);
@@ -301,7 +302,7 @@ const readAll = (storeName: string): Promise<any[]> =>
 
 // Read from a single key
 const readSingle = (storeName: string, key: string): Promise<any> =>
-  new Promise((resolve, reject) => {
+  new Promise<any>((resolve, reject) => {
     if (!dbRef.current) return reject("DB not available");
     const tx = dbRef.current.transaction(storeName, "readonly");
     const storeReq = tx.objectStore(storeName);
@@ -326,6 +327,7 @@ await fetch('/api/cluster-cache', {
     rows: allRowsFromDB,
     clusters: resultClusters,
     originalHeaders: columns,
+    mapping: mapping,
   }),
 });
 

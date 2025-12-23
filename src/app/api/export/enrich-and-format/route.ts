@@ -1,3 +1,4 @@
+
 import { NextResponse } from 'next/server';
 import fs from 'fs/promises';
 import path from 'path';
@@ -89,15 +90,20 @@ async function getCachedData(cacheId: string) {
 
 
 async function enrichData(cachedData: any): Promise<EnrichedRecord[]> {
-  const { rows, clusters } = cachedData;
+  const { rows, clusters, mapping } = cachedData;
+  const beneficiaryIdCol = mapping?.beneficiaryId;
 
   const enriched: EnrichedRecord[] = [];
 
   /** XLOOKUP map: beneficiaryId → record */
   const rowLookup = new Map<string, RecordRow>();
-  rows.forEach((r: RecordRow) => {
-    if (r.beneficiaryId) rowLookup.set(String(r.beneficiaryId), r);
-  });
+  if (beneficiaryIdCol) {
+    rows.forEach((r: RecordRow) => {
+      const benId = r[beneficiaryIdCol];
+      if (benId) rowLookup.set(String(benId), r);
+    });
+  }
+
 
   /** Cluster aggregations (MAXIFS / COUNTIF equivalents) */
   const clusterStats = new Map<number, {
@@ -112,7 +118,8 @@ async function enrichData(cachedData: any): Promise<EnrichedRecord[]> {
     let maxBen = 0;
 
     c.records.forEach((r: RecordRow) => {
-      const ben = Number(r.beneficiaryId);
+      const benIdVal = beneficiaryIdCol ? r[beneficiaryIdCol] : undefined;
+      const ben = Number(benIdVal);
       if (!isNaN(ben)) maxBen = Math.max(maxBen, ben);
     });
 
