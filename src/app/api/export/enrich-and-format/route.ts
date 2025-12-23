@@ -365,7 +365,7 @@ function createSummarySheet(wb: ExcelJS.Workbook, allRecords: RecordRow[], clust
         ws.getRow(summaryCurrentRow).height = 45;
         rowItems.forEach((stat, colIndex) => {
             const startColNum = colIndex === 0 ? 2 : 4;
-            ws.mergeCells(summaryCurrentRow, startColNum, summaryCurrentRow + 3, summaryCurrentRow);
+            ws.mergeCells(summaryCurrentRow, startColNum, summaryCurrentRow + 3, startColNum);
             const cardCell = ws.getCell(summaryCurrentRow, startColNum);
             cardCell.value = { richText: [ { text: `${stat.icon}`, font: { size: 36, name: 'Segoe UI Emoji' } }, { text: `\n${stat.title}\n`, font: { size: 14 } }, { text: `${stat.value}`, font: { size: 24, bold: true } } ] };
             cardCell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
