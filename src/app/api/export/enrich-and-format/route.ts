@@ -24,7 +24,6 @@ type EnrichedRecord = RecordRow & {
     husbandScore: number | null;
     idScore: number | null;
     phoneScore: number | null;
-    'womanName | husbandName | children | nationalId | phone | village | subdistrict': string;
     [key: string]: any;
 };
 
@@ -90,7 +89,6 @@ async function enrichData(cachedData: any): Promise<EnrichedRecord[]> {
   const { rows, clusters, mapping } = cachedData;
   const beneficiaryIdCol = mapping?.beneficiaryId;
 
-  // Pre-calculate stats for each cluster
   const clusterStats = new Map<number, {
     maxPairScore: number;
     maxBeneficiaryId: number;
@@ -120,7 +118,6 @@ async function enrichData(cachedData: any): Promise<EnrichedRecord[]> {
     });
   });
 
-  // Map each record's internal ID to its cluster ID
   const recordToClusterId = new Map<string, number>();
   clusters.forEach((c: any, idx: number) => {
     c.records.forEach((r: RecordRow) => {
@@ -131,7 +128,6 @@ async function enrichData(cachedData: any): Promise<EnrichedRecord[]> {
   const enriched: EnrichedRecord[] = rows.map((r: RecordRow) => {
     const clusterId = recordToClusterId.get(r._internalId!);
     
-    // Create a base enriched record for EVERY row to ensure consistent structure
     const baseEnrichedRecord: EnrichedRecord = {
       ...r,
       ClusterID: null,
@@ -144,16 +140,12 @@ async function enrichData(cachedData: any): Promise<EnrichedRecord[]> {
       husbandScore: null,
       idScore: null,
       phoneScore: null,
-      "womanName | husbandName | children | nationalId | phone | village | subdistrict":
-        `${r.womanName || ""} | ${r.husbandName || ""} | ${(Array.isArray(r.children) ? r.children.join(', ') : r.children) || ""} | ${r.nationalId || ""} | ${r.phone || ""} | ${r.village || ""} | ${r.subdistrict || ""}`
     };
 
     if (!clusterId) {
-      // If the row is not in any cluster, return the base record with nulls
       return baseEnrichedRecord;
     }
 
-    // If the row IS in a cluster, calculate and add the enriched data
     const stats = clusterStats.get(clusterId)!;
     const cluster = clusters[clusterId - 1];
     const comparisons = cluster.records.filter(
@@ -185,7 +177,6 @@ async function enrichData(cachedData: any): Promise<EnrichedRecord[]> {
       pairScore >= 0.7 ? "??" :
       pairScore >  0   ? "?"  : null;
     
-    // Populate the enriched fields
     baseEnrichedRecord.ClusterID = clusterId;
     baseEnrichedRecord.Cluster_ID = stats.maxBeneficiaryId;
     baseEnrichedRecord.Cluster_Size = stats.size;
@@ -293,14 +284,9 @@ function createEnrichedDataSheet(wb: ExcelJS.Workbook, data: EnrichedRecord[], o
       "phoneScore"
     ];
 
-    const RIGHT_COLUMNS = [
-      "womanName | husbandName | children | nationalId | phone | village | subdistrict"
-    ];
-
     const finalHeaders = [
       ...LEFT_COLUMNS,
       ...(originalHeaders || []).filter(h => !h.startsWith("_")),
-      ...RIGHT_COLUMNS
     ];
 
     ws.columns = finalHeaders.map(h => ({
