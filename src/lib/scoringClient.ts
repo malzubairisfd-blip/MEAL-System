@@ -261,7 +261,7 @@ function applyAdditionalRules(a, b, opts) {
       nameOrderFreeScore(
         a.husbandName_normalized,
         b.husbandName_normalized
-      ) >= 0.80; // Adjusted from 0.95
+      ) >= 0.80;
 
     const familySame =
       jw(A[A.length - 1], B[B.length - 1]) >= 0.90;
