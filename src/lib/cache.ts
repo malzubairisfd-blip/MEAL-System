@@ -49,6 +49,15 @@ async function isCacheReady(): Promise<boolean> {
 }
 
 export async function loadCachedResult() {
+  if (typeof window === 'undefined') {
+    return { status: "LOADING" };
+  }
+
+  const cacheId = sessionStorage.getItem('cacheId');
+  if (!cacheId) {
+    return { status: "NO_DATA" };
+  }
+
   const ready = await isCacheReady();
 
   if (!ready) {
