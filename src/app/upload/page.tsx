@@ -1,3 +1,4 @@
+
 // app/(app)/upload/page.tsx
 "use client";
 
@@ -114,57 +115,32 @@ export default function UploadPage(){
 
     const edges = allEdgesRef.current;
     
+    // CRITICAL: Deterministic global sort
     edges.sort((a,b) => b.score - a.score || a.a - b.a || a.b - b.b);
     
     const dsu = new DSU();
+    // CRITICAL: Initialize DSU with all record IDs
     rawRowsRef.current.forEach(r => dsu.make(r._internalId));
     
-    const edgesUsed = [];
-    const minInternal = 0.50; // default, can be from settings
-    
-    const finalClusters: any[] = [];
-    const finalized = new Set<string>();
-
     for(const edge of edges) {
         const idA = rawRowsRef.current[edge.a]?._internalId;
         const idB = rawRowsRef.current[edge.b]?._internalId;
+
         if (!idA || !idB) continue;
         
-        if (finalized.has(idA) || finalized.has(idB)) continue;
-
-        const rootA = dsu.find(idA);
-        const rootB = dsu.find(idB);
-
-        if (rootA === rootB) continue;
-        
-        const sizeA = dsu.size.get(rootA) || 1;
-        const sizeB = dsu.size.get(rootB) || 1;
-
-        if (sizeA + sizeB <= 4) {
-            dsu.union(rootA, rootB);
-            edgesUsed.push(edge);
-        } else {
-             const combinedMembers = [...(dsu.members.get(rootA) || []), ...(dsu.members.get(rootB) || [])];
-             const combinedRows = combinedMembers.map(id => rawRowsRef.current.find(r => r._internalId === id));
-             
-             // This is a simplified split for demonstration. A full split logic would be needed.
-             // For now, we'll just add the current members as separate clusters if they are large enough.
-             if (sizeA > 1) {
-                finalClusters.push({ records: dsu.members.get(rootA)?.map(id => rawRowsRef.current.find(r => r._internalId === id)) || [], reasons: [] });
-                dsu.members.get(rootA)?.forEach(id => finalized.add(id));
-             }
-             if (sizeB > 1) {
-                finalClusters.push({ records: dsu.members.get(rootB)?.map(id => rawRowsRef.current.find(r => r._internalId === id)) || [], reasons: [] });
-                dsu.members.get(rootB)?.forEach(id => finalized.add(id));
-             }
-        }
+        // Correctly union the string IDs
+        dsu.union(idA, idB);
     }
     
-    const leftoverGroups = dsu.getGroups();
-    for (const members of leftoverGroups.values()) {
-        if (members.length > 1 && !finalized.has(members[0])) {
-            finalClusters.push({ records: members.map(id => rawRowsRef.current.find(r => r._internalId === id)), reasons: [] });
-        }
+    const groups = dsu.getGroups();
+    const finalClusters: any[] = [];
+    for (const members of groups.values()) {
+      if (members.length > 1) {
+        finalClusters.push({ 
+          records: members.map(id => rawRowsRef.current.find(r => r._internalId === id)),
+          reasons: [] // Reasons are derived from edges, can be added here if needed
+        });
+      }
     }
 
     setClusters(finalClusters);
@@ -232,7 +208,13 @@ export default function UploadPage(){
         const startPair = i * pairsPerWorker;
         const endPair = Math.min(startPair + pairsPerWorker, totalPairsRef.current);
         
-        if (startPair >= endPair) continue;
+        if (startPair >= endPair) {
+            completedWorkersRef.current++;
+            if (completedWorkersRef.current === numCores) {
+                finalizeClustering();
+            }
+            continue;
+        };
 
         worker.postMessage({
             rows: rawRowsRef.current,
