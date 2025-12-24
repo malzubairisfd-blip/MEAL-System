@@ -40,7 +40,6 @@ import { Check, PlusCircle } from 'lucide-react';
 import { Badge } from "@/components/ui/badge";
 import { cn } from '@/lib/utils';
 import type { Feature, FeatureCollection } from 'geojson';
-import { loadCachedResult } from '@/lib/cache';
 
 
 // Global Dashboard State
@@ -94,58 +93,56 @@ export default function ReportPage() {
     fetch('/data/yemen_admin3.geojson').then(res => res.json()).then(data => setAdmin3Data(data));
   }, []);
 
-  // Poll for cached data on initial render
+  // Fetch cached data on initial render
   useEffect(() => {
-    let alive = true;
+    const loadData = async () => {
+        const cacheId = sessionStorage.getItem('cacheId');
+        if (!cacheId) {
+            toast({ title: "No Data", description: "Please upload data first.", variant: "destructive" });
+            setLoadingState("ERROR");
+            return;
+        }
 
-    const poll = async () => {
         try {
-            const res = await loadCachedResult();
-            if (!alive) return;
-
-            if (res.status === "READY") {
-                const data = res.data;
-                setAllRows(data.rows || []);
-                if (data.rows && data.rows.length > 0) {
-                    const fileColumns = data.originalHeaders || Object.keys(data.rows[0]);
-                    setColumns(fileColumns);
-                    
-                    const storageKey = LOCAL_STORAGE_KEY_PREFIX + fileColumns.join(',');
-                    const saved = localStorage.getItem(storageKey);
-                    const initialMapping = MAPPING_FIELDS.reduce((acc, field) => {
-                        acc[field] = "";
-                        return acc;
-                    }, {} as Record<string, string>);
-                    
-                    if (saved) {
-                        try {
-                            const savedMapping = JSON.parse(saved);
-                            for(const field of MAPPING_FIELDS) {
-                                initialMapping[field] = savedMapping[field] || "";
-                            }
-                        } catch {}
-                    }
-                    setMapping(initialMapping);
-                } else {
-                     toast({title: "No Records", description: "The cached data contains no records.", variant: "destructive"});
-                }
-                setLoadingState("READY");
-            } else if (res.status === "LOADING") {
-                setTimeout(poll, 1000); // Wait for cache
-            } else {
-                 toast({ title: "No Data", description: "Please upload data first.", variant: "destructive" });
-                 setLoadingState("ERROR");
+            const res = await fetch(`/api/cluster-cache?id=${cacheId}`);
+            if (!res.ok) {
+                throw new Error('Failed to fetch cached data. Please try the upload process again.');
             }
+            const data = await res.json();
+            
+            setAllRows(data.rows || []);
+            if (data.rows && data.rows.length > 0) {
+                const fileColumns = data.originalHeaders || Object.keys(data.rows[0]);
+                setColumns(fileColumns);
+                
+                const storageKey = LOCAL_STORAGE_KEY_PREFIX + fileColumns.join(',');
+                const saved = localStorage.getItem(storageKey);
+                const initialMapping = MAPPING_FIELDS.reduce((acc, field) => {
+                    acc[field] = "";
+                    return acc;
+                }, {} as Record<string, string>);
+                
+                if (saved) {
+                    try {
+                        const savedMapping = JSON.parse(saved);
+                        for(const field of MAPPING_FIELDS) {
+                            initialMapping[field] = savedMapping[field] || "";
+                        }
+                    } catch {}
+                }
+                setMapping(initialMapping);
+            } else {
+                 toast({title: "No Records", description: "The cached data contains no records.", variant: "destructive"});
+            }
+            setLoadingState("READY");
         } catch (error: any) {
              toast({ title: "Error loading data", description: error.message, variant: "destructive" });
              setLoadingState("ERROR");
         }
     };
 
-    poll();
-
-    return () => { alive = false; };
-}, [toast]);
+    loadData();
+  }, [toast]);
   
   const handleMappingChange = useCallback((newMapping: Record<string, string>) => {
     setMapping(newMapping);
