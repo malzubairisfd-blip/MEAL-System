@@ -16,6 +16,8 @@ import { useToast } from "@/hooks/use-toast";
 import type { RecordRow } from "@/lib/types";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { DSU } from "@/lib/dsu";
+import { computePairScore } from "@/lib/scoringClient";
+
 
 type Mapping = {
   womanName: string; husbandName: string; nationalId: string; phone: string;
@@ -53,6 +55,115 @@ function mapIncomingRowsToInternal(rowsChunk: any[], mapping: Mapping) {
         
         return mapped as RecordRow;
     });
+}
+
+function hierarchicalRecluster(records: RecordRow[]) {
+    const normalizeArabic = (s: string) => {
+        if (!s) return "";
+        return s.normalize("NFKC").replace(/[^\p{L}\p{N}\s]/gu, "").replace(/\s+/g, " ").trim().toLowerCase();
+    };
+
+    const getTokens = (name: string) => normalizeArabic(name).split(" ");
+
+    const getSignature = (rec: RecordRow) => {
+        const womanTokens = getTokens(rec.womanName || "");
+        const first = womanTokens[0] || "";
+        const father = womanTokens[1] || "";
+        const grandfather = womanTokens[2] || "";
+        const lastName = womanTokens[womanTokens.length - 1] || "";
+
+        return {
+            _internalId: rec._internalId,
+            record: rec,
+            womanTokens,
+            coreSignature: `${first} ${father} ${grandfather}`.trim(),
+            fullSignature: `${first} ${father} ${grandfather} ${lastName}`.trim(),
+            normalizedFullName: normalizeArabic(rec.womanName || ""),
+            surname: lastName
+        };
+    };
+
+    let processedIds = new Set<string>();
+    let finalClusters: RecordRow[][] = [];
+
+    const signatures = records.map(getSignature);
+
+    // Rule 1: Exact Dominant Full Match
+    const exactMatchGroups = new Map<string, RecordRow[]>();
+    signatures.forEach(sig => {
+        if (processedIds.has(sig._internalId!)) return;
+
+        const key = sig.normalizedFullName || sig.fullSignature;
+        if (!exactMatchGroups.has(key)) exactMatchGroups.set(key, []);
+        exactMatchGroups.get(key)!.push(sig.record);
+    });
+
+    exactMatchGroups.forEach(group => {
+        if (group.length > 1) {
+            finalClusters.push(group);
+            group.forEach(r => processedIds.add(r._internalId!));
+        }
+    });
+
+    // Rule 2: Shared Surname + Partial Lineage
+    const remainingSignatures = signatures.filter(sig => !processedIds.has(sig._internalId!));
+    const surnameGroups = new Map<string, typeof remainingSignatures>();
+    remainingSignatures.forEach(sig => {
+        if (sig.surname) {
+            if (!surnameGroups.has(sig.surname)) surnameGroups.set(sig.surname, []);
+            surnameGroups.get(sig.surname)!.push(sig);
+        }
+    });
+
+    surnameGroups.forEach(group => {
+        if (group.length > 1) {
+            while (group.length > 0) {
+                const current = group.shift()!;
+                const matches = [current];
+
+                for (let i = group.length - 1; i >= 0; i--) {
+                    const other = group[i];
+                    const lineageTokensA = current.womanTokens.slice(1, 4);
+                    const lineageTokensB = other.womanTokens.slice(1, 4);
+                    let sharedTokens = 0;
+                    if (lineageTokensA[0] && lineageTokensA[0] === lineageTokensB[0]) sharedTokens++;
+                    if (lineageTokensA[1] && lineageTokensA[1] === lineageTokensB[1]) sharedTokens++;
+                    if (lineageTokensA[2] && lineageTokensA[2] === lineageTokensB[2]) sharedTokens++;
+
+                    if (sharedTokens >= 2) {
+                        matches.push(other);
+                        group.splice(i, 1);
+                    }
+                }
+                if (matches.length > 1) {
+                    finalClusters.push(matches.map(m => m.record));
+                    matches.forEach(m => processedIds.add(m._internalId!));
+                }
+            }
+        }
+    });
+    
+    // Rule 3: Core 3 + Same Tribe
+    const finalRemainingSigs = signatures.filter(sig => !processedIds.has(sig._internalId!));
+    const tribeGroups = new Map<string, typeof finalRemainingSigs>();
+    finalRemainingSigs.forEach(sig => {
+        const tribeKey = sig.coreSignature;
+        if (!tribeGroups.has(tribeKey)) tribeGroups.set(tribeKey, []);
+        tribeGroups.get(tribeKey)!.push(sig);
+    });
+
+    tribeGroups.forEach(group => {
+        if (group.length > 1) {
+            finalClusters.push(group.map(g => g.record));
+            group.forEach(g => processedIds.add(g._internalId!));
+        }
+    });
+
+    // Add any remaining ungrouped records as individual clusters
+    const leftovers = signatures.filter(sig => !processedIds.has(sig._internalId!));
+    leftovers.forEach(sig => finalClusters.push([sig.record]));
+
+    return finalClusters.filter(c => c.length > 0);
 }
 
 
@@ -153,18 +264,49 @@ export default function UploadPage(){
     }
     
     const groups = dsu.getGroups();
-    const finalClusters: any[] = [];
+    let initialClusters: any[] = [];
     for (const members of groups.values()) {
       if (members.length > 1) {
         const clusterRecords = members.map(id => mappedRows.find(r => r._internalId === id)).filter(Boolean);
         if (clusterRecords.length > 1) {
-          finalClusters.push({ 
+          initialClusters.push({ 
             records: clusterRecords,
             reasons: [] // Reasons are derived later in the review page
           });
         }
       }
     }
+    
+    const oversized = initialClusters.filter(c => c.records.length > 5);
+    const normal = initialClusters.filter(c => c.records.length <= 5);
+    let finalClusters = [...normal];
+
+    if (oversized.length > 0) {
+        setWorkerStatus('re-clustering');
+        for (let i = 0; i < oversized.length; i++) {
+            const cluster = oversized[i];
+            const subClusters = hierarchicalRecluster(cluster.records);
+            
+            subClusters.forEach(sub => {
+                if (sub.length > 1) { // Only add if it's still a cluster
+                    finalClusters.push({
+                        records: sub,
+                        reasons: cluster.reasons, // Carry over original reasons
+                        parentCluster: i + 1
+                    });
+                }
+            });
+            
+            setProgressInfo({
+                status: 're-clustering',
+                progress: 95 + Math.round(5 * ((i + 1) / oversized.length)),
+                completed: i + 1,
+                total: oversized.length
+            });
+            await new Promise(r => setTimeout(r, 20)); // Allow UI to update
+        }
+    }
+
 
     setClusters(finalClusters);
     
@@ -233,13 +375,15 @@ export default function UploadPage(){
     }
 
     const pairsPerWorker = Math.ceil(numPairs / numCores);
-    
+    let currentPair = 0;
+
     for (let i = 0; i < numCores; i++) {
         const worker = new Worker(new URL('@/workers/cluster.worker.ts', import.meta.url));
         workersRef.current.push(worker);
 
-        const startPair = i * pairsPerWorker;
+        const startPair = currentPair;
         const endPair = Math.min(startPair + pairsPerWorker, numPairs);
+        currentPair = endPair;
         
         if (startPair >= endPair) {
             completedWorkersRef.current++;
@@ -248,13 +392,6 @@ export default function UploadPage(){
             }
             continue;
         };
-
-        worker.postMessage({
-            rows: mappedRows,
-            options: settings,
-            startPair,
-            endPair
-        });
 
         worker.onmessage = (e) => {
             const { type, edges, processed, error } = e.data;
@@ -289,7 +426,14 @@ export default function UploadPage(){
             console.error('Worker uncaught error:', e);
             toast({ title: "Worker Error", description: e.message || 'An uncaught error occurred. Check console for details.', variant: "destructive" });
             setWorkerStatus('error');
-        }
+        };
+
+        worker.postMessage({
+            rows: mappedRows,
+            options: settings,
+            startPair,
+            endPair
+        });
     }
   }
 
@@ -323,6 +467,8 @@ export default function UploadPage(){
       case 'building-edges':
       case 'merging-edges':
         return 'Processing...';
+      case 're-clustering':
+        return 'Refining Clusters...';
       case 'caching':
         return 'Caching Results...';
       case 'done':
@@ -448,7 +594,7 @@ export default function UploadPage(){
           <CardContent>
             <div className="space-y-4">
               <Button onClick={startClustering} disabled={workerStatus !== 'idle' && workerStatus !== 'done' && workerStatus !== 'error'}>
-                {(workerStatus === 'processing' || workerStatus === 'caching' || workerStatus === 'building-edges' || workerStatus === 'merging-edges') ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                {(workerStatus === 'processing' || workerStatus === 'caching' || workerStatus === 'building-edges' || workerStatus === 'merging-edges' || workerStatus === 're-clustering') ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 {getButtonText()}
               </Button>
 
@@ -488,5 +634,3 @@ export default function UploadPage(){
     </div>
   );
 }
-
-    

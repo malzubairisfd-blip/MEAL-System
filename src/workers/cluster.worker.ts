@@ -1,4 +1,3 @@
-
 // WorkerScript v12 — Parallel Pair Scoring with Mapped Data
 // Receives a range of pairs to score and sends back qualifying edges.
 
@@ -120,8 +119,10 @@ function preprocessRows(rows: any[]) {
             womanFirstChar: '',
             husbandFirstChar: ''
         };
-        norm.womanFirstChar = (norm.woman[0] || '').charAt(0);
-        norm.husbandFirstChar = (norm.husband[0] || '').charAt(0);
+        const womanTokens = norm.woman.split(" ");
+        const husbandTokens = norm.husband.split(" ");
+        norm.womanFirstChar = (womanTokens[0] || '').charAt(0);
+        norm.husbandFirstChar = (husbandTokens[0] || '').charAt(0);
         return { ...r, _norm: norm };
     });
 }
@@ -255,15 +256,8 @@ function applyAdditionalRules(a: any, b: any, opts: any) {
   // ✅ Rule 8 — Administrative placeholder override
   {
     const investigationWords = [
-      "تحت",
-      "التحقيق",
-      "مراجعة",
-      "قيد",
-      "موقوف",
-      "غير",
-      "مكتمل",
-      "التحقق",
-      "مراجعه"
+      "تحت", "التحقيق", "مراجعة", "قيد", "موقوف",
+      "غير", "مكتمل", "التحقق", "مراجعه"
     ];
 
     const hasInvestigation =
@@ -294,7 +288,7 @@ function applyAdditionalRules(a: any, b: any, opts: any) {
       nameOrderFreeScore(
         a._norm.husband,
         b._norm.husband
-      ) >= 0.95;
+      ) >= 0.80; // Adjusted from 0.95
 
     const familySame =
       jw(A[A.length - 1], B[B.length - 1]) >= 0.90;
@@ -392,8 +386,9 @@ function pairwiseScore(aRaw: any, bRaw: any, opts: any) {
 
 // Convert a flat pair index k to indices (i, j)
 function getIndicesFromPairIndex(k: number, n: number) {
-    const i = n - 2 - Math.floor(Math.sqrt(-8*k + 4*n*(n-1)-7)/2.0 - 0.5);
-    const j = k + i + 1 - Math.floor(((n-1)*n)/2) + Math.floor(((n-i)*((n-i)-1))/2);
+    // Correct formula for converting flat index to pair indices
+    const i = n - 2 - Math.floor(Math.sqrt(-8 * k + 4 * n * (n - 1) - 7) / 2 - 0.5);
+    const j = k + i + 1 - Math.floor(n * (n - 1) / 2) + Math.floor((n - i) * (n - i - 1) / 2);
     return { i, j };
 }
 

@@ -1,5 +1,3 @@
-
-
 // src/lib/scoringClient.ts
 
 // This file is a client-side mirror of the worker's scoring logic.
@@ -114,6 +112,7 @@ function applyAdditionalRules(a, b, opts) {
   const B = splitParts(b.womanName_normalized || "");
   const HA = splitParts(a.husbandName_normalized || "");
   const HB = splitParts(b.husbandName_normalized || "");
+  const reasons = [];
 
   // RULE 0: strong token match (80%+ tokens overlap)
   {
@@ -123,20 +122,19 @@ function applyAdditionalRules(a, b, opts) {
     for (const t of setA) if (setB.has(t)) inter++;
     const uni = new Set([...setA, ...setB]).size;
     const ratio = uni === 0 ? 0 : inter / uni;
-    if (ratio >= 0.80) return Math.min(1, minPair + 0.22);
+    if (ratio >= 0.80) {
+      reasons.push("TOKEN_REORDER");
+      return { score: Math.min(1, minPair + 0.22), reasons };
+    }
   }
 
-  /* ----------------------------------------------------
-     RULE 6 — STRONG HOUSEHOLD + CHILDREN MATCH (CRITICAL)
-     This rule overrides all weak lineage noise
-     المرأة نفسها مع اختلاف النسب — الزوج + الأطفال حاسمين
-  ---------------------------------------------------- */
+  /* RULE 6 — STRONG HOUSEHOLD + CHILDREN MATCH (CRITICAL) */
   {
-    const A = splitParts(a.womanName_normalized);
-    const B = splitParts(b.womanName_normalized);
+    const A_parts = splitParts(a.womanName_normalized);
+    const B_parts = splitParts(b.womanName_normalized);
 
     const firstNameMatch =
-      A.length > 0 && B.length > 0 && jw(A[0], B[0]) >= 0.93;
+      A_parts.length > 0 && B_parts.length > 0 && jw(A_parts[0], B_parts[0]) >= 0.93;
 
     const husbandStrong =
       jw(a.husbandName_normalized, b.husbandName_normalized) >= 0.90 ||
@@ -149,112 +147,133 @@ function applyAdditionalRules(a, b, opts) {
       ) >= 0.90;
 
     if (firstNameMatch && husbandStrong && childrenMatch) {
-      return minPair + 0.25; // HARD FORCE DUPLICATE
+        reasons.push("DUPLICATED_HUSBAND_LINEAGE");
+        return { score: minPair + 0.25, reasons }; // HARD FORCE DUPLICATE
     }
   }
 
   // Helper thresholds
-  const s90 = (x, y) => jw(x || "", y || "") >= 0.90;
   const s93 = (x, y) => jw(x || "", y || "") >= 0.93;
   const s95 = (x, y) => jw(x || "", y || "") >= 0.95;
 
-  // Normalize accessors for first, father, grandfather, 4th/last
   const getPart = (arr, idx) => (arr && arr.length > idx) ? arr[idx] : "";
 
   const F1 = getPart(A, 0), Fa1 = getPart(A, 1), G1 = getPart(A, 2), L1 = getPart(A, 3);
   const F2 = getPart(B, 0), Fa2 = getPart(B, 1), G2 = getPart(B, 2), L2 = getPart(B, 3);
 
-  const HF1 = getPart(HA, 0), HFa1 = getPart(HA, 1), HG1 = getPart(HA, 2);
-  const HF2 = getPart(HB, 0), HFa2 = getPart(HB, 1), HG2 = getPart(HB, 2);
+  const HF1 = getPart(HA, 0);
+  const HF2 = getPart(HB, 0);
 
-  // RULE 1:
   if (s93(F1, F2) && s93(Fa1, Fa2) && s93(G1, G2) && jw(L1 || "", L2 || "") < 0.85) {
-    if (jw(HF1, HF2) < 0.7) return Math.min(1, minPair + 0.18);
-  }
-
-  // RULE 2:
-  if (s93(F1, F2) && s93(Fa1, Fa2) && s93(G1, G2) && jw(L1, L2) >= 0.85) {
-    if (jw(HF1, HF2) < 0.7) return Math.min(1, minPair + 0.18);
-  }
-
-  // RULE 3:
-  if ((A.length === 4 && B.length === 5) || (A.length === 5 && B.length === 4)) {
-    if (s93(F1, F2) && s93(Fa1, Fa2) && s93(G1, G2) && s93(L1 || "", L2 || "")) {
-      if (jw(HF1, HF2) < 0.7) return Math.min(1, minPair + 0.17);
+    if (jw(HF1, HF2) < 0.7) {
+        reasons.push("WOMAN_LINEAGE_MATCH");
+        return { score: Math.min(1, minPair + 0.18), reasons };
     }
   }
 
-  // RULE 4:
+  if (s93(F1, F2) && s93(Fa1, Fa2) && s93(G1, G2) && jw(L1, L2) >= 0.85) {
+    if (jw(HF1, HF2) < 0.7) {
+        reasons.push("WOMAN_LINEAGE_MATCH");
+        return { score: Math.min(1, minPair + 0.18), reasons };
+    }
+  }
+
+  if ((A.length === 4 && B.length === 5) || (A.length === 5 && B.length === 4)) {
+    if (s93(F1, F2) && s93(Fa1, Fa2) && s93(G1, G2) && s93(L1 || "", L2 || "")) {
+      if (jw(HF1, HF2) < 0.7) {
+          reasons.push("WOMAN_LINEAGE_MATCH");
+          return { score: Math.min(1, minPair + 0.17), reasons };
+      }
+    }
+  }
+
   if ((A.length === 4 && B.length === 5) || (A.length === 5 && B.length === 4)) {
     if (s95(F1, F2) && s93(L1 || "", L2 || "") && s95(HF1, HF2)) {
       if (s93(Fa1, Fa2) && !s93(G1, G2)) {
-        return Math.min(1, minPair + 0.20);
+          reasons.push("DUPLICATED_HUSBAND_LINEAGE");
+          return { score: Math.min(1, minPair + 0.20), reasons };
       }
     }
   }
 
-  // RULE 5:
   if ((A.length === 4 && B.length === 5) || (A.length === 5 && B.length === 4)) {
     if (s93(F1, F2) && s93(Fa1, Fa2) && s93(G1, G2)) {
-      if (jw(HF1, HF2) < 0.7) return Math.min(1, minPair + 0.16);
+      if (jw(HF1, HF2) < 0.7) {
+          reasons.push("WOMAN_LINEAGE_MATCH");
+          return { score: Math.min(1, minPair + 0.16), reasons };
+      }
     }
   }
 
-  /* ============================================================
-     RULE — DOMINANT LINEAGE MATCH (WOMAN + HUSBAND)
-     Designed for Arabic multi-part shifting names
-     ============================================================ */
+  /* RULE — DOMINANT LINEAGE MATCH (WOMAN + HUSBAND) */
   {
-    const minPair = opts?.thresholds?.minPair ?? 0.62;
-    const jw = jaroWinkler;
-
-    const A = splitParts(a.womanName_normalized || "");
-    const B = splitParts(b.womanName_normalized || "");
-
-    const HA = splitParts(a.husbandName_normalized || "");
-    const HB = splitParts(b.husbandName_normalized || "");
-
     if (A.length >= 3 && B.length >= 3 && HA.length >= 3 && HB.length >= 3) {
-
-      /* ---------- WOMAN LINEAGE ---------- */
-      const womanFatherOK =
-        jw(A[1], B[1]) >= 0.93;
-
-      const womanGrandOK =
-        jw(A[2], B[2]) >= 0.93;
-
-      const womanFamilyOK =
-        jw(A[A.length - 1], B[B.length - 1]) >= 0.90;
-
-      const womanLineageStrong =
-        womanFatherOK && womanGrandOK && womanFamilyOK;
-
-      /* ---------- STRONG HUSBAND DUPLICATION ---------- */
+      const womanFatherOK = jw(A[1], B[1]) >= 0.93;
+      const womanGrandOK = jw(A[2], B[2]) >= 0.93;
+      const womanFamilyOK = jw(A[A.length - 1], B[B.length - 1]) >= 0.90;
+      const womanLineageStrong = womanFatherOK && womanGrandOK && womanFamilyOK;
       const husbandFirstOK  = jw(HA[0], HB[0]) >= 0.93;
       const husbandFatherOK = jw(HA[1], HB[1]) >= 0.93;
       const husbandGrandOK  = jw(HA[2], HB[2]) >= 0.93;
-      const husbandFamilyOK =
-        jw(HA[HA.length - 1], HB[HB.length - 1]) >= 0.90;
+      const husbandFamilyOK = jw(HA[HA.length - 1], HB[HB.length - 1]) >= 0.90;
+      const husbandIsSamePerson = husbandFirstOK && husbandFatherOK && husbandGrandOK && husbandFamilyOK;
+      const womanFirstSupport = jw(A[0], B[0]) >= 0.55 || jw(A[0], B[0]) === 0;
 
-      const husbandIsSamePerson =
-        husbandFirstOK &&
-        husbandFatherOK &&
-        husbandGrandOK &&
-        husbandFamilyOK;
-
-      /* ---------- SOFT FIRST NAME SUPPORT ---------- */
-      const womanFirstSupport =
-        jw(A[0], B[0]) >= 0.55 ||           // allows هدى / اهداء
-        jw(A[0], B[0]) === 0;               // allow total mismatch
-
-      /* ---------- FINAL DECISION ---------- */
-      if (
-        womanLineageStrong &&
-        husbandIsSamePerson &&
-        womanFirstSupport
-      ) {
-        return Math.min(1, minPair + 0.23);
+      if (womanLineageStrong && husbandIsSamePerson && womanFirstSupport) {
+        reasons.push("DUPLICATED_HUSBAND_LINEAGE");
+        return { score: Math.min(1, minPair + 0.23), reasons };
       }
+    }
+  }
+
+  // ✅ Rule 8 — Administrative placeholder override
+  {
+    const investigationWords = [
+      "تحت", "التحقيق", "مراجعة", "قيد", "موقوف",
+      "غير", "مكتمل", "التحقق", "مراجعه"
+    ];
+
+    const hasInvestigation =
+      investigationWords.some(w => A.includes(w)) ||
+      investigationWords.some(w => B.includes(w)) ||
+      investigationWords.some(w => HA.includes(w)) ||
+      investigationWords.some(w => HB.includes(w));
+
+    if (
+      hasInvestigation &&
+      jw(A[0], B[0]) >= 0.95 && // woman first name
+      jw(A[A.length - 1], B[B.length - 1]) >= 0.90 && // woman family
+      nameOrderFreeScore(
+        a.husbandName_normalized,
+        b.husbandName_normalized
+      ) >= 0.93
+    ) {
+      return {
+        score: minPair + 0.25,
+        reasons: ["INVESTIGATION_PLACEHOLDER"]
+      };
+    }
+  }
+
+  // ✅ Rule 9 — Polygamy household with shared lineage
+  {
+    const husbandSame =
+      nameOrderFreeScore(
+        a.husbandName_normalized,
+        b.husbandName_normalized
+      ) >= 0.80; // Adjusted from 0.95
+
+    const familySame =
+      jw(A[A.length - 1], B[B.length - 1]) >= 0.90;
+
+    const lineageOverlap =
+      A.filter(x => B.some(y => jw(x, y) >= 0.93)).length >= 3;
+
+    if (husbandSame && familySame && lineageOverlap) {
+      return {
+        score: minPair + 0.30,
+        reasons: ["POLYGAMY_SHARED_HOUSEHOLD"]
+      };
     }
   }
 
@@ -328,9 +347,9 @@ export function computePairScore(aRaw, bRaw, opts) {
     return { score: 0.97, breakdown: { reason: "POLYGAMY_STRONG" } };
   }
 
-  const ruleBoost = applyAdditionalRules(a, b, o);
-  if (ruleBoost !== null) {
-    return { score: Math.min(1, ruleBoost), breakdown: { reason: "ADDITIONAL_RULE", boostedTo: ruleBoost } };
+  const ruleResult = applyAdditionalRules(a, b, o);
+  if (ruleResult) {
+    return { score: Math.min(1, ruleResult.score), breakdown: { reason: "ADDITIONAL_RULE", boostedTo: ruleResult.score }, reasons: ruleResult.reasons };
   }
 
   const A = splitParts(a.womanName_normalized), B = splitParts(b.womanName_normalized);
