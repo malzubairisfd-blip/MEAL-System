@@ -17,6 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 import type { RecordRow } from "@/lib/types";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { DSU } from "@/lib/dsu";
+import { openDB } from "@/lib/cache";
 
 
 type Mapping = {
@@ -79,7 +80,7 @@ export default function UploadPage(){
         setFileReadProgress(percentage);
       }
     };
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
         const buffer = e.target?.result;
         const wb = XLSX.read(buffer, { type: 'array', cellDates:true });
         const sheet = wb.Sheets[wb.SheetNames[0]];
@@ -99,6 +100,21 @@ export default function UploadPage(){
           setMapping({ womanName:"", husbandName:"", nationalId:"", phone:"", village:"", subdistrict:"", children:"", beneficiaryId:"" });
         }
         setFileReadProgress(100);
+
+        // --- New Step: Save to IndexedDB ---
+        try {
+            const db = await openDB();
+            await new Promise<void>((resolve, reject) => {
+                const tx = db.transaction("rows", "readwrite");
+                tx.objectStore("rows").put(json, "all");
+                tx.oncomplete = () => resolve();
+                tx.onerror = () => reject(tx.error);
+            });
+            toast({ title: "File Ready", description: "File data has been saved locally for processing." });
+        } catch (error) {
+            console.error("Failed to save rows to IndexedDB", error);
+            toast({ title: "Error Saving File", description: "Could not save file data locally.", variant: "destructive" });
+        }
     };
     reader.readAsArrayBuffer(f);
   }
@@ -378,7 +394,7 @@ export default function UploadPage(){
                     <CardHeader className="p-4 flex flex-row items-center justify-between">
                         <div className="flex items-center gap-2">
                             {mapping[field] ? <CheckCircle className="h-5 w-5 text-green-500" /> : <XCircle className="h-5 w-5 text-red-500" />}
-                            <Label htmlFor={field} className="capitalize font-semibold text-base">{field.replace(/_/g,' ')}{REQUIRED_MAPPING_FIELDS.includes(field) && <span className="text-destructive">*</span>}</Label>
+                            <Label htmlFor={field} className="capitalize font-semibold text-base">{field.replace(/_/g,' ')}{REQUIRED_MAPPING_FIELDS.includes(field as keyof Mapping) && <span className="text-destructive">*</span>}</Label>
                         </div>
                     </CardHeader>
                     <CardContent className="p-0">
