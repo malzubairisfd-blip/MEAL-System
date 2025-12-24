@@ -251,6 +251,64 @@ function applyAdditionalRules(a: any, b: any, opts: any) {
       }
     }
   }
+  
+  // ✅ Rule 8 — Administrative placeholder override
+  {
+    const investigationWords = [
+      "تحت",
+      "التحقيق",
+      "مراجعة",
+      "قيد",
+      "موقوف",
+      "غير",
+      "مكتمل",
+      "التحقق",
+      "مراجعه"
+    ];
+
+    const hasInvestigation =
+      investigationWords.some(w => A.includes(w)) ||
+      investigationWords.some(w => B.includes(w)) ||
+      investigationWords.some(w => HA.includes(w)) ||
+      investigationWords.some(w => HB.includes(w));
+
+    if (
+      hasInvestigation &&
+      jw(A[0], B[0]) >= 0.95 && // woman first name
+      jw(A[A.length - 1], B[B.length - 1]) >= 0.90 && // woman family
+      nameOrderFreeScore(
+        a._norm.husband,
+        b._norm.husband
+      ) >= 0.93
+    ) {
+      return {
+        score: minPair + 0.25,
+        reasons: ["INVESTIGATION_PLACEHOLDER"]
+      };
+    }
+  }
+
+  // ✅ Rule 9 — Polygamy household with shared lineage
+  {
+    const husbandSame =
+      nameOrderFreeScore(
+        a._norm.husband,
+        b._norm.husband
+      ) >= 0.95;
+
+    const familySame =
+      jw(A[A.length - 1], B[B.length - 1]) >= 0.90;
+
+    const lineageOverlap =
+      A.filter(x => B.some(y => jw(x, y) >= 0.93)).length >= 3;
+
+    if (husbandSame && familySame && lineageOverlap) {
+      return {
+        score: minPair + 0.30,
+        reasons: ["POLYGAMY_SHARED_HOUSEHOLD"]
+      };
+    }
+  }
 
   return null;
 }
@@ -386,5 +444,3 @@ self.onmessage = (ev) => {
       self.postMessage({ type: 'error', error: { message: error.message, stack: error.stack } });
   }
 };
-
-    
