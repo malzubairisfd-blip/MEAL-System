@@ -1,3 +1,4 @@
+
 import { NextResponse } from 'next/server';
 import fs from 'fs/promises';
 import path from 'path';
@@ -13,8 +14,8 @@ import { calculateClusterConfidence } from '@/lib/clusterConfidence';
 const getTmpDir = () => path.join(os.tmpdir(), 'beneficiary-insights-cache');
 
 type EnrichedRecord = RecordRow & {
-    ClusterID?: number | null;
-    Cluster_ID?: number | null;
+    ClusterID?: number | null; // Internal sequential ID
+    Generated_Cluster_ID?: number | null; // The one for display, avoids conflict
     Cluster_Size?: number | null;
     Flag?: string | null;
     Max_PairScore?: number | null;
@@ -89,7 +90,7 @@ async function getCachedData(cacheId: string) {
 
 
 async function enrichData(cachedData: any): Promise<EnrichedRecord[]> {
-    const { rows: allRecords, clusters } = cachedData;
+    const { rows: allRecords, clusters, originalHeaders } = cachedData;
     if (!allRecords || !clusters) {
         throw new Error("Invalid cache: missing rows or clusters.");
     }
@@ -186,8 +187,8 @@ async function enrichData(cachedData: any): Promise<EnrichedRecord[]> {
                 husbandScore: avgHusbandScore,
                 idScore: avgIdScore,
                 phoneScore: avgPhoneScore,
-                ClusterID: recordClusterId,
-                Cluster_ID: clusterInfo.maxBeneficiaryId || recordClusterId,
+                ClusterID: recordClusterId, // internal sequential ID
+                Generated_Cluster_ID: clusterInfo.maxBeneficiaryId || recordClusterId,
                 Cluster_Size: clusterInfo.size,
                 Max_PairScore: clusterInfo.maxScore,
                 'تصنيف المجموعة المبدئي': clusterInfo.decision,
@@ -210,8 +211,8 @@ function sortData(data: EnrichedRecord[]): EnrichedRecord[] {
             return scoreB - scoreA;
         }
 
-        const clusterA = a.Cluster_ID ?? Number.MAX_SAFE_INTEGER;
-        const clusterB = b.Cluster_ID ?? Number.MAX_SAFE_INTEGER;
+        const clusterA = a.Generated_Cluster_ID ?? Number.MAX_SAFE_INTEGER;
+        const clusterB = b.Generated_Cluster_ID ?? Number.MAX_SAFE_INTEGER;
         if (clusterA !== clusterB) {
             return clusterA - clusterB;
         }
@@ -280,26 +281,32 @@ function createEnrichedDataSheet(wb: ExcelJS.Workbook, data: EnrichedRecord[], o
     const ws = wb.addWorksheet("Enriched Data");
     ws.views = [{ rightToLeft: true }];
     
-    const enrichmentHeaders = [
-        "Cluster_ID", "Cluster_Size", "Flag", "pairScore", "Max_PairScore", "nameScore", "husbandScore", "idScore", "phoneScore", "تصنيف المجموعة المبدئي", "نتائج تحليل المجموعة"
-    ];
-    
-    const normalizedHeaders = [ "womanName_normalized", "husbandName_normalized" ];
-
-    // Ensure all original headers are included, even if not present in the first record
     const allOriginalHeaders = new Set<string>(originalHeaders || []);
     data.forEach(record => {
       Object.keys(record).forEach(key => {
-        if (!enrichmentHeaders.includes(key) && !normalizedHeaders.includes(key) && !key.startsWith('_') && !Object.keys(record).find(k => k === 'ClusterID')) {
-           if (!allOriginalHeaders.has(key) && !enrichmentHeaders.includes(key) && !normalizedHeaders.includes(key)) {
-             allOriginalHeaders.add(key);
-           }
-        }
+         if (!key.startsWith('_') && key !== 'ClusterID' && key !== 'Generated_Cluster_ID') {
+           allOriginalHeaders.add(key);
+         }
       });
     });
 
-    const finalHeaders = [ ...enrichmentHeaders, ...Array.from(allOriginalHeaders) ];
+    // Check if a 'cluster_id' column already exists in the original data.
+    const hasOriginalClusterId = originalHeaders.some(h => h.toLowerCase() === 'cluster_id');
 
+    let enrichmentHeaders = [
+        "Cluster_Size", "Flag", "pairScore", "Max_PairScore", "nameScore", "husbandScore", "idScore", "phoneScore", "تصنيف المجموعة المبدئي", "نتائج تحليل المجموعة"
+    ];
+    
+    // Use Generated_Cluster_ID if the original file has cluster_id, otherwise use Cluster_ID
+    const clusterIdColumnName = hasOriginalClusterId ? "Generated_Cluster_ID" : "Cluster_ID";
+    enrichmentHeaders.unshift(clusterIdColumnName);
+
+
+    const headersToExclude = ['ClusterID', 'Generated_Cluster_ID', 'womanName_normalized', 'husbandName_normalized', 'pairScore', 'nameScore', 'husbandScore', 'idScore', 'phoneScore', 'Max_PairScore', 'Cluster_Size', 'Flag', 'تصنيف المجموعة المبدئي', 'نتائج تحليل المجموعة'];
+    const finalOriginalHeaders = Array.from(allOriginalHeaders).filter(h => !headersToExclude.includes(h) && !h.startsWith('_'));
+    
+    const finalHeaders = [ ...enrichmentHeaders, ...finalOriginalHeaders ];
+    
     ws.columns = finalHeaders.map(h => ({
       header: h,
       key: h,
@@ -312,7 +319,18 @@ function createEnrichedDataSheet(wb: ExcelJS.Workbook, data: EnrichedRecord[], o
         cell.alignment = { horizontal: 'center' };
     });
     
-    ws.addRows(data);
+    // Map data correctly for writing rows
+    const dataForSheet = data.map(record => {
+        const newRecord: any = { ...record };
+        if (hasOriginalClusterId) {
+            newRecord['Generated_Cluster_ID'] = record.Generated_Cluster_ID;
+        } else {
+            newRecord['Cluster_ID'] = record.Generated_Cluster_ID;
+        }
+        return newRecord;
+    });
+
+    ws.addRows(dataForSheet);
     
     ws.eachRow({ includeEmpty: false }, (row, rowNumber) => {
         if (rowNumber === 1) return;
@@ -341,7 +359,7 @@ function createEnrichedDataSheet(wb: ExcelJS.Workbook, data: EnrichedRecord[], o
     let lastClusterId: number | string | null = null;
     for (let i = 2; i <= ws.rowCount; i++) {
         const row = ws.getRow(i);
-        const cid = row.getCell('Cluster_ID').value;
+        const cid = row.getCell(clusterIdColumnName).value;
         if (cid !== null && cid !== lastClusterId && lastClusterId !== null) {
             row.eachCell({ includeEmpty: true }, cell => {
                 cell.border = { ...cell.border, top: { style: 'thick', color: { argb: 'FF002060' } } };
@@ -789,13 +807,13 @@ function createDashboardReportSheet(wb: ExcelJS.Workbook, allRecords: RecordRow[
     // Define column widths roughly based on the image proportions
     ws.columns = [
         { width: 2 },  // A
-        { width: 13 }, // B
+        { width: 18 }, // B
         { width: 13 }, // C
-        { width: 2 },  // D
+        { width: 18 }, // D
         { width: 13 }, // E
-        { width: 13 }, // F
-        { width: 2 },  // G
-        { width: 13 }, // H
+        { width: 18 }, // F
+        { width: 13 }, // G
+        { width: 18 }, // H
         { width: 13 }, // I
     ];
 
@@ -816,12 +834,14 @@ function createDashboardReportSheet(wb: ExcelJS.Workbook, allRecords: RecordRow[
     ];
     
     keyFiguresData.forEach(item => {
+        ws.mergeCells(`${item.cell}:${String.fromCharCode(item.cell.charCodeAt(0) + 1)}4`);
         const titleCell = ws.getCell(item.cell);
         titleCell.value = item.title;
         titleCell.font = { name: 'Calibri', size: 12, bold: true, color: { argb: 'FFFFFFFF' } };
         titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4F81BD' } };
         titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
 
+        ws.mergeCells(`${item.cell.replace('4', '5')}:${String.fromCharCode(item.cell.charCodeAt(0) + 1)}5`);
         const valueCell = ws.getCell(item.cell.replace('4', '5'));
         valueCell.value = item.value;
         valueCell.font = { name: 'Calibri', size: 20, bold: true, color: { argb: 'FF002060' } };
@@ -845,25 +865,22 @@ function createDashboardReportSheet(wb: ExcelJS.Workbook, allRecords: RecordRow[
         });
     };
     
-     const addImageWithProportions = (base64: string, tl: { col: number; row: number }, widthIn: number, heightIn: number) => {
-        if (!base64 || !base64.startsWith('data:image/png;base64,')) return;
-        const imageId = wb.addImage({
-            base64: base64.split(',')[1],
-            extension: 'png',
-        });
-        ws.addImage(imageId, {
-            tl: tl,
-            ext: { width: widthIn * 96, height: heightIn * 96 } // Convert inches to EMU
-        });
-    };
+    // Add images in a two-column grid layout
+    let currentRow = 6;
+    const chartHeight = 20; // 20 rows per chart
     
-    // Add images according to the layout in the screenshot with specified sizes
-    addImageWithProportions(chartImages.byDayChart, { col: 1, row: 6 }, 3.61, 8.21); // B column
-    addImageWithProportions(chartImages.byVillageChart, { col: 4, row: 6 }, 3.61, 8.21); // E column
+    // Column 1
+    addImage(chartImages.byDayChart, 1, currentRow, 4.5, currentRow + chartHeight);
+    currentRow += chartHeight + 1;
+    addImage(chartImages.genderVisual, 1, currentRow, 4.5, currentRow + chartHeight);
+    currentRow += chartHeight + 1;
+    addImage(chartImages.bubbleStats, 1, currentRow, 4.5, currentRow + chartHeight);
 
-    addImageWithProportions(chartImages.genderVisual, { col: 1, row: 21 }, 3.61, 3.74);
-    addImageWithProportions(chartImages.womenDonut, { col: 4, row: 21 }, 3.61, 3.74);
-    
-    addImageWithProportions(chartImages.bubbleStats, { col: 1, row: 26 }, 3.61, 7.8);
-    addImageWithProportions(chartImages.map, { col: 4, row: 26 }, 3.61, 7.8);
+    // Column 2
+    currentRow = 6; // Reset for second column
+    addImage(chartImages.byVillageChart, 5, currentRow, 8.5, currentRow + chartHeight);
+    currentRow += chartHeight + 1;
+    addImage(chartImages.womenDonut, 5, currentRow, 8.5, currentRow + chartHeight);
+    currentRow += chartHeight + 1;
+    addImage(chartImages.map, 5, currentRow, 8.5, currentRow + chartHeight);
 }
