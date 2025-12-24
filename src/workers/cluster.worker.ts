@@ -1,3 +1,4 @@
+
 // WorkerScript v12 — Parallel Pair Scoring with Mapped Data
 // Receives a range of pairs to score and sends back qualifying edges.
 
@@ -333,8 +334,8 @@ function pairwiseScore(aRaw: any, bRaw: any, opts: any) {
 
 // Convert a flat pair index k to indices (i, j)
 function getIndicesFromPairIndex(k: number, n: number) {
-    const i = Math.floor(n - 1.5 - Math.sqrt((n - 1.5) ** 2 - 2 * k));
-    const j = k - (n - 1) * i + Math.floor((i * (i + 1)) / 2) + i + 1;
+    const i = n - 2 - Math.floor(Math.sqrt(-8*k + 4*n*(n-1)-7)/2.0 - 0.5);
+    const j = k + i + 1 - Math.floor(((n-1)*n)/2) + Math.floor(((n-i)*((n-i)-1))/2);
     return { i, j };
 }
 
@@ -343,40 +344,47 @@ function getIndicesFromPairIndex(k: number, n: number) {
    Worker message handling
    ------------------------- */
 self.onmessage = (ev) => {
-  const { rows, options, startPair, endPair } = ev.data;
-  
-  const preprocessedRows = preprocessRows(rows);
-  
-  const n = preprocessedRows.length;
-  const minScore = options?.thresholds?.minPair ?? 0.62;
-  const edges = [];
-  let processed = 0;
-
-  for (let k = startPair; k < endPair; k++) {
-    const { i, j } = getIndicesFromPairIndex(k, n);
+  try {
+    const { rows, options, startPair, endPair } = ev.data;
     
-    if (i >= n || j >= n) continue;
-
-    const rowA = preprocessedRows[i];
-    const rowB = preprocessedRows[j];
+    const preprocessedRows = preprocessRows(rows);
     
-    // Binary Threshold Pruning
-    if (rowA._norm.womanFirstChar !== rowB._norm.womanFirstChar && rowA._norm.husbandFirstChar !== rowB._norm.husbandFirstChar) {
-        processed++;
-        continue;
-    }
+    const n = preprocessedRows.length;
+    const minScore = options?.thresholds?.minPair ?? 0.62;
+    const edges = [];
+    let processed = 0;
 
-    const scoreResult = pairwiseScore(rowA, rowB, options);
-    if (scoreResult && scoreResult.score >= minScore) {
-      edges.push({ a: i, b: j, score: scoreResult.score, reasons: scoreResult.reasons || [] });
-    }
+    for (let k = startPair; k < endPair; k++) {
+      const { i, j } = getIndicesFromPairIndex(k, n);
+      
+      if (i >= n || j >= n) continue;
 
-    processed++;
-    if (processed % 20000 === 0) {
-      self.postMessage({ type: 'progress', processed });
-      processed = 0; // Reset after posting
+      const rowA = preprocessedRows[i];
+      const rowB = preprocessedRows[j];
+      
+      // Binary Threshold Pruning
+      if (rowA._norm.womanFirstChar !== rowB._norm.womanFirstChar && rowA._norm.husbandFirstChar !== rowB._norm.husbandFirstChar) {
+          processed++;
+          continue;
+      }
+
+      const scoreResult = pairwiseScore(rowA, rowB, options);
+      if (scoreResult && scoreResult.score >= minScore) {
+        edges.push({ a: i, b: j, score: scoreResult.score, reasons: scoreResult.reasons || [] });
+      }
+
+      processed++;
+      if (processed > 0 && processed % 20000 === 0) {
+        self.postMessage({ type: 'progress', processed });
+        processed = 0; // Reset after posting
+      }
     }
+    
+    self.postMessage({ type: 'done', edges: edges, processed });
+
+  } catch (error: any) {
+      self.postMessage({ type: 'error', error: { message: error.message, stack: error.stack } });
   }
-  
-  self.postMessage({ type: 'done', edges: edges, processed });
 };
+
+    

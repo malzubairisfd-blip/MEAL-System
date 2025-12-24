@@ -257,7 +257,14 @@ export default function UploadPage(){
         });
 
         worker.onmessage = (e) => {
-            const { type, edges, processed } = e.data;
+            const { type, edges, processed, error } = e.data;
+            if (type === 'error') {
+                console.error('Worker error:', error?.message);
+                toast({ title: "Worker Error", description: error?.message || 'An unknown error occurred in the worker.', variant: "destructive" });
+                setWorkerStatus('error');
+                workersRef.current.forEach(w => w.terminate());
+                return;
+            }
 
             if (type === 'progress') {
                 processedPairsRef.current += processed;
@@ -279,8 +286,8 @@ export default function UploadPage(){
         };
 
         worker.onerror = (e) => {
-            console.error('Worker error:', e);
-            toast({ title: "Worker Error", description: e.message, variant: "destructive" });
+            console.error('Worker uncaught error:', e);
+            toast({ title: "Worker Error", description: e.message || 'An uncaught error occurred. Check console for details.', variant: "destructive" });
             setWorkerStatus('error');
         }
     }
@@ -481,3 +488,5 @@ export default function UploadPage(){
     </div>
   );
 }
+
+    
