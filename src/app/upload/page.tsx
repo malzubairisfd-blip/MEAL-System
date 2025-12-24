@@ -1,4 +1,3 @@
-
 // app/(app)/upload/page.tsx
 "use client";
 
@@ -34,6 +33,7 @@ type WorkerProgress = { status:string; progress:number; completed?:number; total
 export default function UploadPage(){
   const [columns, setColumns] = useState<string[]>([]);
   const [file, setFile] = useState<File|null>(null);
+  const [filePrepStatus, setFilePrepStatus] = useState('idle');
   const [mapping, setMapping] = useState<Mapping>({
     womanName: "", husbandName:"", nationalId:"", phone:"", village:"", subdistrict:"", children:"", beneficiaryId:""
   });
@@ -41,7 +41,6 @@ export default function UploadPage(){
   const [progressInfo, setProgressInfo] = useState<WorkerProgress>({ status:"idle", progress:0 });
   const [workerStatus, setWorkerStatus] = useState<string>("idle");
   const [clusters, setClusters] = useState<any[][]>([]);
-  const [fileReadProgress, setFileReadProgress] = useState(0);
   const [isMappingOpen, setIsMappingOpen] = useState(true);
   const rawRowsRef = useRef<any[]>([]);
   
@@ -70,27 +69,29 @@ export default function UploadPage(){
     if(!f) return;
     setFile(f);
     setWorkerStatus('idle'); setProgressInfo({ status:'idle', progress:0 }); setClusters([]);
-    setFileReadProgress(0);
     setIsMappingOpen(true);
+    setFilePrepStatus('reading');
 
     const reader = new FileReader();
     reader.onprogress = (event) => {
       if (event.lengthComputable) {
-        const percentage = (event.loaded / event.total) * 100;
-        setFileReadProgress(percentage);
+        const percentage = Math.round((event.loaded / event.total) * 100);
+         setProgressInfo({ status: 'reading-file', progress: percentage, completed: event.loaded, total: event.total });
       }
     };
     reader.onload = async (e) => {
+        setFilePrepStatus('processing');
         const buffer = e.target?.result;
         const wb = XLSX.read(buffer, { type: 'array', cellDates:true });
         const sheet = wb.Sheets[wb.SheetNames[0]];
         const json = XLSX.utils.sheet_to_json<any>(sheet, { defval: "" });
         
+        toast({ title: "Preparation Step 1/2", description: "Assigning internal IDs to records..." });
         json.forEach((row, index) => {
             row._internalId = `row_${index}`;
         });
 
-        rawRowsRef.current = json; // Store raw rows
+        rawRowsRef.current = json;
         setColumns(Object.keys(json[0] || {}));
         const storageKey = LOCAL_STORAGE_KEY_PREFIX + Object.keys(json[0]||{}).join(',');
         const saved = localStorage.getItem(storageKey);
@@ -99,8 +100,7 @@ export default function UploadPage(){
         } else {
           setMapping({ womanName:"", husbandName:"", nationalId:"", phone:"", village:"", subdistrict:"", children:"", beneficiaryId:"" });
         }
-        setFileReadProgress(100);
-
+        
         // --- New Step: Save to IndexedDB ---
         try {
             const db = await openDB();
@@ -110,10 +110,12 @@ export default function UploadPage(){
                 tx.oncomplete = () => resolve();
                 tx.onerror = () => reject(tx.error);
             });
-            toast({ title: "File Ready", description: "File data has been saved locally for processing." });
+            toast({ title: "Preparation Step 2/2", description: "File data with internal IDs has been saved locally for processing." });
+            setFilePrepStatus('done');
         } catch (error) {
             console.error("Failed to save rows to IndexedDB", error);
             toast({ title: "Error Saving File", description: "Could not save file data locally.", variant: "destructive" });
+            setFilePrepStatus('idle');
         }
     };
     reader.readAsArrayBuffer(f);
@@ -125,17 +127,15 @@ export default function UploadPage(){
 
   const finalizeClustering = async () => {
     setWorkerStatus('merging-edges');
-    setProgressInfo({ status: 'merging-edges', progress: 80 });
+    setProgressInfo({ status: 'merging-edges', progress: 80, completed: processedPairsRef.current, total: totalPairsRef.current });
     
-    await new Promise(r => setTimeout(r, 50)); // Allow UI to update
+    await new Promise(r => setTimeout(r, 50));
 
     const edges = allEdgesRef.current;
     
-    // CRITICAL: Deterministic global sort
     edges.sort((a,b) => b.score - a.score || a.a - b.a || a.b - b.b);
     
     const dsu = new DSU();
-    // CRITICAL: Initialize DSU with all record IDs
     rawRowsRef.current.forEach(r => dsu.make(r._internalId));
     
     for(const edge of edges) {
@@ -144,7 +144,6 @@ export default function UploadPage(){
 
         if (!idA || !idB) continue;
         
-        // Correctly union the string IDs
         dsu.union(idA, idB);
     }
     
@@ -152,17 +151,20 @@ export default function UploadPage(){
     const finalClusters: any[] = [];
     for (const members of groups.values()) {
       if (members.length > 1) {
-        finalClusters.push({ 
-          records: members.map(id => rawRowsRef.current.find(r => r._internalId === id)),
-          reasons: [] // Reasons are derived from edges, can be added here if needed
-        });
+        const clusterRecords = members.map(id => rawRowsRef.current.find(r => r._internalId === id)).filter(Boolean);
+        if (clusterRecords.length > 1) {
+          finalClusters.push({ 
+            records: clusterRecords,
+            reasons: []
+          });
+        }
       }
     }
 
     setClusters(finalClusters);
     
     setWorkerStatus('caching');
-    setProgressInfo({ status: 'caching', progress: 98 });
+    setProgressInfo({ status: 'caching', progress: 98, completed: processedPairsRef.current, total: totalPairsRef.current });
     
     try {
       const cacheId = 'cache-' + Date.now() + '-' + Math.random().toString(36).slice(2,9);
@@ -215,6 +217,13 @@ export default function UploadPage(){
     const numCores = navigator.hardwareConcurrency || 4;
     const n = rawRowsRef.current.length;
     totalPairsRef.current = (n * (n - 1)) / 2;
+
+    if (totalPairsRef.current === 0) {
+        toast({ title: "No pairs to compare", description: "Not enough data to perform clustering." });
+        setWorkerStatus('done');
+        return;
+    }
+
     const pairsPerWorker = Math.ceil(totalPairsRef.current / numCores);
     
     for (let i = 0; i < numCores; i++) {
@@ -242,10 +251,9 @@ export default function UploadPage(){
 
         worker.onmessage = (e) => {
             const { type, edges, processed } = e.data;
-
             if (type === 'progress') {
                 processedPairsRef.current += processed;
-                const percent = totalPairsRef.current > 0 ? Math.floor((processedPairsRef.current / totalPairsRef.current) * 70) + 10 : 10;
+                const percent = totalPairsRef.current > 0 ? Math.floor((processedPairsRef.current / totalPairsRef.current) * 80) + 10 : 10;
                  setProgressInfo({
                     status: 'building-edges',
                     progress: percent,
@@ -271,9 +279,13 @@ export default function UploadPage(){
 
   const formattedStatus = () => {
     const s = progressInfo.status || 'idle';
-    let statusText = s.replace(/-/g, ' '); // a bit nicer looking
+    let statusText = s.replace(/-/g, ' ');
     statusText = statusText.charAt(0).toUpperCase() + statusText.slice(1);
     
+    if (s === 'reading-file' && progressInfo.total) {
+        return `Status: Reading file (${(progressInfo.completed!/1024/1024).toFixed(2)} / ${(progressInfo.total/1024/1024).toFixed(2)} MB)`;
+    }
+
     if (progressInfo.completed !== undefined && progressInfo.total) {
       return `Status: ${statusText} (${progressInfo.completed.toLocaleString()}/${progressInfo.total.toLocaleString()})`;
     }
@@ -357,14 +369,14 @@ export default function UploadPage(){
                   setClusters([]);
                   setWorkerStatus('idle');
                   setProgressInfo({ status: 'idle', progress: 0 });
-                  setFileReadProgress(0);
+                  setFilePrepStatus('idle');
                 }} variant="outline">Reset</Button>
             )}
           </div>
-          {file && fileReadProgress > 0 && fileReadProgress < 100 && (
+          {(filePrepStatus === 'reading' || filePrepStatus === 'processing') && (
             <div className="mt-4">
-              <Label>Reading File...</Label>
-              <Progress value={fileReadProgress} />
+              <Label>{filePrepStatus === 'reading' ? 'Reading File...' : 'Processing File...'}</Label>
+              <Progress value={progressInfo.progress} />
             </div>
           )}
         </CardContent>

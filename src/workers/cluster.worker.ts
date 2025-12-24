@@ -1,4 +1,3 @@
-
 // WorkerScript v11 — Parallel Pair Scoring
 // Receives a range of pairs to score and sends back qualifying edges.
 
@@ -327,10 +326,14 @@ function pairwiseScore(aRaw: any, bRaw: any, opts: any) {
 
 // Convert a flat pair index k to indices (i, j)
 function getIndicesFromPairIndex(k: number, n: number) {
-    const i = n - 2 - Math.floor(Math.sqrt(-8 * k + 4 * n * (n - 1) - 7) / 2 - 0.5);
-    const j = k + i + 1 - Math.floor((n * (n - 1) - (n - i) * (n - i - 1)) / 2);
+    // This is a stable and correct formula to convert a single index `k`
+    // from a sequence of unique pairs (like from a triangular matrix)
+    // back to the original 2D indices `(i, j)`.
+    const i = Math.floor(n - 1.5 - Math.sqrt((n - 1.5) ** 2 - 2 * k));
+    const j = k - (n - 1) * i + Math.floor((i * (i + 1)) / 2) + i + 1;
     return { i, j };
 }
+
 
 /* -------------------------
    Worker message handling
@@ -355,10 +358,15 @@ self.onmessage = (ev) => {
     processedSinceLastPost++;
 
     if (processedSinceLastPost >= 20000) {
-      postMessage({ type: 'progress', processed: processedSinceLastPost });
+      self.postMessage({ type: 'progress', processed: processedSinceLastPost });
       processedSinceLastPost = 0;
     }
   }
 
-  postMessage({ type: 'done', edges: edges });
+  // Post any remaining progress
+  if(processedSinceLastPost > 0) {
+      self.postMessage({ type: 'progress', processed: processedSinceLastPost });
+  }
+
+  self.postMessage({ type: 'done', edges: edges });
 };
