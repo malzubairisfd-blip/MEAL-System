@@ -1,7 +1,6 @@
 
-// WorkerScript v10 — Resumable Cursor-based Clustering
-// Use as a web worker. Listens for messages: {type:'start', payload:{...}}, {type:'data', payload:{...}}, {type:'end'}, {type:'resume'}
-// Emits progress and final payload: postMessage({ type:'done', payload:{...} })
+// WorkerScript v11 — Parallel Pair Scoring
+// Receives a range of pairs to score and sends back qualifying edges.
 
 /* -------------------------
    Helpers & Normalizers
@@ -41,13 +40,6 @@ function normalizeChildrenField(val: any) {
   if (Array.isArray(val)) return val.map(x => String(x)).filter(Boolean);
   return String(val).split(/[;,|،]/).map(x => String(x).trim()).filter(Boolean);
 }
-
-function yieldToEventLoop() {
-  return new Promise(resolve => {
-    setTimeout(resolve, 0);
-  });
-}
-
 
 /* -------------------------
    String similarity primitives
@@ -114,22 +106,8 @@ function splitParts(name: any) {
   return tokens(name);
 }
 
-function compareNameComponents(aName: any, bName: any) {
-  // returns { partsA, partsB, partScores: [..], orderFree }
-  const A = splitParts(aName);
-  const B = splitParts(bName);
-  const partScores = [];
-  for (let i = 0; i < Math.max(A.length, B.length); i++) {
-    const pA = A[i] || "";
-    const pB = B[i] || "";
-    partScores.push(jaroWinkler(pA, pB));
-  }
-  const orderFree = nameOrderFreeScore(aName, bName);
-  return { partsA: A, partsB: B, partScores, orderFree };
-}
-
 /* -------------------------
-   Additional Rules
+   Additional Rules (from user prompt)
    ------------------------- */
 function applyAdditionalRules(a: any, b: any, opts: any) {
   const minPair = opts?.thresholds?.minPair ?? 0.62;
@@ -155,9 +133,7 @@ function applyAdditionalRules(a: any, b: any, opts: any) {
     }
   }
 
-  /* ----------------------------------------------------
-     RULE 6 — STRONG HOUSEHOLD + CHILDREN MATCH (CRITICAL)
-  ---------------------------------------------------- */
+  /* RULE 6 — STRONG HOUSEHOLD + CHILDREN MATCH (CRITICAL) */
   {
     const A_parts = splitParts(a.womanName_normalized);
     const B_parts = splitParts(b.womanName_normalized);
@@ -233,9 +209,7 @@ function applyAdditionalRules(a: any, b: any, opts: any) {
     }
   }
 
-  /* ============================================================
-     RULE — DOMINANT LINEAGE MATCH (WOMAN + HUSBAND)
-     ============================================================ */
+  /* RULE — DOMINANT LINEAGE MATCH (WOMAN + HUSBAND) */
   {
     if (A.length >= 3 && B.length >= 3 && HA.length >= 3 && HB.length >= 3) {
       const womanFatherOK = jw(A[1], B[1]) >= 0.93;
@@ -265,24 +239,12 @@ function applyAdditionalRules(a: any, b: any, opts: any) {
 function pairwiseScore(aRaw: any, bRaw: any, opts: any) {
   const optsDefaults = {
     finalScoreWeights: {
-      firstNameScore: 0.15,
-      familyNameScore: 0.25,
-      advancedNameScore: 0.12,
-      tokenReorderScore: 0.10,
-      husbandScore: 0.12,
-      idScore: 0.08,
-      phoneScore: 0.05,
-      childrenScore: 0.06,
-      locationScore: 0.04
+      firstNameScore: 0.15, familyNameScore: 0.25, advancedNameScore: 0.12,
+      tokenReorderScore: 0.10, husbandScore: 0.12, idScore: 0.08,
+      phoneScore: 0.05, childrenScore: 0.06, locationScore: 0.04
     },
-    thresholds: {
-      minPair: 0.62,
-      minInternal: 0.50,
-      blockChunkSize: 3000
-    },
-    rules: {
-      enablePolygamyRules: true
-    }
+    thresholds: { minPair: 0.62, minInternal: 0.50, blockChunkSize: 3000 },
+    rules: { enablePolygamyRules: true }
   };
   const o = Object.assign({}, optsDefaults, opts || {});
   o.finalScoreWeights = Object.assign({}, optsDefaults.finalScoreWeights, (opts && opts.finalScoreWeights) || {});
@@ -348,9 +310,8 @@ function pairwiseScore(aRaw: any, bRaw: any, opts: any) {
   const W = o.finalScoreWeights;
   let score = (W.firstNameScore || 0) * firstNameScore + (W.familyNameScore || 0) * familyNameScore +
               (W.advancedNameScore || 0) * advancedNameScore + (W.tokenReorderScore || 0) * tokenReorderScore +
-              (W.husbandScore || 0) * husbandScore + (W.idScore || 0) * idScore +
-              (W.phoneScore || 0) * phoneScoreVal + (W.childrenScore || 0) * childrenScore +
-              (W.locationScore || 0) * locationScore;
+              (W.husbandScore || 0) * husbandScore + (W.idScore || 0) * idScore + (W.phoneScore || 0) * phoneScoreVal +
+              (W.childrenScore || 0) * childrenScore + (W.locationScore || 0) * locationScore;
 
   const strongParts = [firstNameScore, familyNameScore, tokenReorderScore].filter(v => v >= 0.85).length;
   if (strongParts >= 2) score = Math.min(1, score + 0.04);
@@ -364,315 +325,40 @@ function pairwiseScore(aRaw: any, bRaw: any, opts: any) {
   return { score, breakdown, reasons };
 }
 
-/* --------------------------------------
-   Resumable Edge Building Logic
-   -------------------------------------- */
-async function buildEdges(rows: any, minScore = 0.62, opts: any, resumeState: any = null) {
-  const n = rows.length;
-  if (n <= 1) return { edges: [], finalState: null };
-  
-  const totalPairs = (n * (n - 1)) / 2;
-  const edges = resumeState?.edges || [];
-  let processed = resumeState?.processed || 0;
-  
-  let i = resumeState?.i || 0;
-  let j = resumeState?.j || i + 1;
-
-  for (; i < n; i++) {
-    for (; j < n; j++) {
-      const result = pairwiseScore(rows[i], rows[j], opts);
-      const score = result.score ?? 0;
-      if (score >= minScore) {
-        edges.push({ a: i, b: j, score, reasons: result.reasons || [] });
-      }
-      processed++;
-
-      if (processed % 5000 === 0) {
-        const progressState = { i, j: j + 1, edges, processed };
-        postMessage({
-          type: "save_progress",
-          key: progressKey,
-          value: progressState
-        });
-        postMessage({
-          type: "progress",
-          status: "building-edges",
-          progress: 10 + Math.round(40 * (processed / totalPairs)),
-          completed: processed,
-          total: totalPairs
-        });
-        await yieldToEventLoop();
-      }
-
-      if (processed % 1000000 === 0) {
-        postMessage({
-          type: "debug",
-          message: `Processed ${processed.toLocaleString()} / ${totalPairs.toLocaleString()}`
-        });
-      }
-    }
-    j = i + 2;
-  }
-  
-  postMessage({ type: "progress", status: "edges-built", progress: 50, completed: totalPairs, total: totalPairs });
-  postMessage({ type: 'save_progress', key: progressKey, value: null });
-  
-  edges.sort((x, y) => y.score - x.score);
-  return { edges, finalState: null };
-}
-
-
-class UF {
-  parent: any;
-  size: any;
-  members: any;
-  constructor(n: any) {
-    this.parent = Array.from({ length: n }, (_, i) => i);
-    this.size = Array(n).fill(1);
-    this.members = new Map();
-    for (let i = 0; i < n; i++) this.members.set(i, new Set([i]));
-  }
-  find(x: any) {
-    if (this.parent[x] === x) return x;
-    this.parent[x] = this.find(this.parent[x]);
-    return this.parent[x];
-  }
-  merge(a: any, b: any) {
-    a = this.find(a); b = this.find(b);
-    if (a === b) return a;
-    if (this.size[a] < this.size[b]) [a, b] = [b, a];
-    this.parent[b] = a;
-    this.size[a] += this.size[b];
-    const mb = this.members.get(b), ma = this.members.get(a);
-    for (const m of mb) ma.add(m);
-    this.members.delete(b);
-    return a;
-  }
-  rootMembers(x: any) {
-    return Array.from(this.members.get(this.find(x)) || []);
-  }
-}
-
-/* Split cluster so each piece <= 4 */
-function splitCluster(rowsSubset: any, minInternal = 0.50, opts: any) {
-    if (rowsSubset.length <= 1) return []; // Return empty if not a potential cluster
-    if (rowsSubset.length <= 4) {
-        const localEdges: any[] = [];
-        for (let i = 0; i < rowsSubset.length; i++) {
-            for (let j = i + 1; j < rowsSubset.length; j++) {
-                const r = pairwiseScore(rowsSubset[i], rowsSubset[j], opts);
-                if ((r.score || 0) >= minInternal) localEdges.push({ score: r.score, reasons: r.reasons || [], breakdown: r.breakdown });
-            }
-        }
-        const reasons = Array.from(new Set(localEdges.flatMap(e => e.reasons)));
-        const pairScores = localEdges.map(e => ({ finalScore: e.score, womanNameScore: e.breakdown.firstNameScore, husbandNameScore: e.breakdown.husbandScore }));
-        return [{ records: rowsSubset, reasons, pairScores }];
-    }
-
-    const localEdges: any[] = [];
-    for (let i = 0; i < rowsSubset.length; i++) {
-        for (let j = i + 1; j < rowsSubset.length; j++) {
-            const r = pairwiseScore(rowsSubset[i], rowsSubset[j], opts);
-            if ((r.score || 0) >= minInternal) localEdges.push({ a: i, b: j, score: r.score, reasons: r.reasons || [], breakdown: r.breakdown });
-        }
-    }
-    localEdges.sort((x, y) => y.score - x.score);
-
-    const uf = new UF(rowsSubset.length);
-    for (const e of localEdges) {
-        const ra = uf.find(e.a), rb = uf.find(e.b);
-        if (ra === rb) continue;
-        if (uf.size[ra] + uf.size[rb] <= 4) uf.merge(ra, rb);
-    }
-
-    const groups = new Map();
-    for (let i = 0; i < rowsSubset.length; i++) {
-        const r = uf.find(i);
-        if (!groups.has(r)) groups.set(r, []);
-        groups.get(r).push(i);
-    }
-
-    const result: any[] = [];
-    for (const idxs of groups.values()) {
-        if (idxs.length <= 1) continue; // Ignore single-record groups
-        const subset = idxs.map((i: any) => rowsSubset[i]);
-        const subEdges = localEdges.filter(e => idxs.includes(e.a) && idxs.includes(e.b));
-        const reasons = Array.from(new Set(subEdges.flatMap(e => e.reasons)));
-        const pairScores = subEdges.map(e => ({ finalScore: e.score, womanNameScore: e.breakdown.firstNameScore, husbandNameScore: e.breakdown.husbandScore }));
-
-        if (subset.length <= 4) {
-            result.push({ records: subset, reasons, pairScores });
-        } else {
-            result.push(...splitCluster(subset, Math.max(minInternal, 0.45), opts));
-        }
-    }
-    return result;
-}
-
-
-/* Main clustering pipeline */
-async function runClustering(rows: any, opts: any, resumeState: any) {
-  // ensure internal ids
-  rows.forEach((r: any, i: any) => r._internalId = r._internalId || 'row_' + i);
-
-  const minPair = opts?.thresholds?.minPair ?? 0.62;
-  const minInternal = opts?.thresholds?.minInternal ?? 0.50;
-
-  postMessage({ type: "progress", status: "blocking", progress: 5, completed: 0, total: rows.length });
-
-  const { edges } = await buildEdges(rows, minPair, opts, resumeState);
-
-  postMessage({ type: "progress", status: "edges-built", progress: 60, completed: edges.length, total: Math.max(1, rows.length) });
-
-  const uf = new UF(rows.length);
-  const finalized = new Set();
-  const finalClusters: any[] = [];
-  const edgesUsed: any[] = [];
-  const rootReasons = new Map();
-
-  for (let ei = 0; ei < edges.length; ei++) {
-    const e = edges[ei];
-    if (finalized.has(e.a) || finalized.has(e.b)) continue;
-    const ra = uf.find(e.a), rb = uf.find(e.b);
-    
-    const currentReasons = rootReasons.get(ra) || new Set();
-    (e.reasons || []).forEach((r: any) => currentReasons.add(r));
-    rootReasons.set(ra, currentReasons);
-
-    if (ra === rb) { edgesUsed.push(e); continue; }
-
-    const otherReasons = rootReasons.get(rb) || new Set();
-    (e.reasons || []).forEach((r: any) => otherReasons.add(r));
-    rootReasons.set(rb, otherReasons);
-
-    if (uf.size[ra] + uf.size[rb] <= 4) {
-      const mergedRoot = uf.merge(ra, rb);
-      const allReasons = new Set([...(rootReasons.get(ra) || []), ...(rootReasons.get(rb) || [])]);
-      rootReasons.set(mergedRoot, allReasons);
-      edgesUsed.push(e);
-      continue;
-    }
-    
-    const combinedIdx = Array.from(new Set([...uf.rootMembers(ra), ...uf.rootMembers(rb)]));
-    const combinedRows = combinedIdx.map(i => rows[i]);
-    const parts = splitCluster(combinedRows, minInternal, opts);
-
-    for (const p of parts) {
-       if (p.records.length <= 1) continue;
-       finalClusters.push(p);
-       p.records.forEach((r: any) => {
-           const originalIndex = rows.findIndex((row: any) => row._internalId === r._internalId);
-           if (originalIndex !== -1) finalized.add(originalIndex);
-       });
-    }
-    edgesUsed.push(e);
-    if (ei % 200 === 0) {
-        postMessage({ type: "progress", status: "merging-edges", progress: 60 + Math.round(35 * (ei / edges.length)), completed: ei + 1, total: edges.length });
-        await yieldToEventLoop();
-    }
-  }
-
-  // leftovers
-  const leftovers = new Map();
-  for (let i = 0; i < rows.length; i++) {
-    if (finalized.has(i)) continue;
-    const r = uf.find(i);
-    const arr = leftovers.get(r) || []; arr.push(i); leftovers.set(r, arr);
-  }
-  for (const [root, arr] of leftovers.entries()) {
-    if (arr.length <= 1) continue;
-    const subRows = arr.map((i: any) => rows[i]);
-    const parts = splitCluster(subRows, minInternal, opts);
-     for (const p of parts) {
-        if (p.records.length > 1) {
-            const allPartReasons = new Set([...p.reasons, ...(rootReasons.get(root) || [])]);
-            p.reasons = Array.from(allPartReasons);
-            finalClusters.push(p);
-        }
-    }
-  }
-
-  const clustersWithRecords = finalClusters
-    .map(c => ({
-        ...c,
-        records: c.records.map((r: any) => rows.find((row: any) => row._internalId === r._internalId))
-    }))
-    .filter(c => c.records.length > 1);
-
-  postMessage({ type: "progress", status: "annotating", progress: 95 });
-
-  postMessage({ type: 'save_progress', key: progressKey, value: null });
-
-  return { clusters: clustersWithRecords, edgesUsed, rows };
+// Convert a flat pair index k to indices (i, j)
+function getIndicesFromPairIndex(k: number, n: number) {
+    const i = n - 2 - Math.floor(Math.sqrt(-8 * k + 4 * n * (n - 1) - 7) / 2 - 0.5);
+    const j = k + i + 1 - Math.floor((n * (n - 1) - (n - i) * (n - i - 1)) / 2);
+    return { i, j };
 }
 
 /* -------------------------
    Worker message handling
    ------------------------- */
-let inbound: any[] = [];
-let mapping = {};
-let options = {};
-let resumeState: any = null;
-let progressKey = ''; // Holds the file-specific progress key
+self.onmessage = (ev) => {
+  const { rows, options, startPair, endPair } = ev.data;
+  const n = rows.length;
+  const minScore = options?.thresholds?.minPair ?? 0.62;
+  const edges = [];
+  let processedSinceLastPost = 0;
 
-function mapIncomingRowsToInternal(rowsChunk: any, mapping: any) {
-  return rowsChunk.map((originalRecord: any, i: any) => {
-        const mapped: any = {
-            ...originalRecord,
-            _internalId: "row_" + (inbound.length + i),
-            womanName: "", husbandName: "", nationalId: "", phone: "", village: "", subdistrict: "", children: [],
-        };
+  for (let k = startPair; k < endPair; k++) {
+    const { i, j } = getIndicesFromPairIndex(k, n);
+    
+    if (i >= n || j >= n) continue;
 
-        for (const key in mapping) {
-            if (key === 'cluster_id') continue;
-            
-            const col = mapping[key];
-            if (col && originalRecord[col] !== undefined) {
-                mapped[key] = originalRecord[col];
-            }
-        }
-        
-        mapped.children = normalizeChildrenField(mapped.children);
-        
-        mapped.womanName_normalized = normalizeArabicRaw(mapped.womanName);
-        mapped.husbandName_normalized = normalizeArabicRaw(mapped.husbandName);
-        mapped.village_normalized = normalizeArabicRaw(mapped.village);
-        mapped.subdistrict_normalized = normalizeArabicRaw(mapped.subdistrict);
-        mapped.children_normalized = mapped.children.map(normalizeArabicRaw);
+    const scoreResult = pairwiseScore(rows[i], rows[j], options);
+    if (scoreResult && scoreResult.score >= minScore) {
+      edges.push({ a: i, b: j, score: scoreResult.score, reasons: scoreResult.reasons || [] });
+    }
 
-        return mapped;
-    });
-}
+    processedSinceLastPost++;
 
-self.onmessage = function (ev: any) {
-  const msg = ev.data;
-  if (!msg || !msg.type) return;
-
-  if (msg.type === 'keep_alive' || msg.type === 'resume') {
-      return;
+    if (processedSinceLastPost >= 20000) {
+      postMessage({ type: 'progress', processed: processedSinceLastPost });
+      processedSinceLastPost = 0;
+    }
   }
 
-  if (msg.type === 'start') {
-    mapping = msg.payload.mapping || {};
-    options = msg.payload.options || {};
-    resumeState = msg.payload.resumeState || null;
-    progressKey = msg.payload.progressKey || '';
-    inbound = [];
-    postMessage({ type: 'progress', status: 'worker-ready', progress: 1 });
-  } else if (msg.type === 'data') {
-    const rows = Array.isArray(msg.payload.rows) ? msg.payload.rows : [];
-    const mapped = mapIncomingRowsToInternal(rows, mapping);
-    inbound.push(...mapped);
-    postMessage({ type: 'progress', status: 'receiving', progress: Math.min(5, 1 + Math.floor(inbound.length / 1000)), completed: inbound.length, total: msg.payload.total || undefined });
-  } else if (msg.type === 'end') {
-    setTimeout(async () => {
-      try {
-        postMessage({ type: 'progress', status: 'mapping-rows', progress: 5, completed: 0, total: inbound.length });
-        const result = await runClustering(inbound, options, resumeState);
-        postMessage({ type: 'done', payload: { rows: result.rows, clusters: result.clusters, edgesUsed: result.edgesUsed } });
-      } catch (err: any) {
-        postMessage({ type: 'error', error: String(err && err.message ? err.message : err) });
-      }
-    }, 50);
-  }
+  postMessage({ type: 'done', edges: edges });
 };
