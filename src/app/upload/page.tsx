@@ -16,8 +16,6 @@ import { useToast } from "@/hooks/use-toast";
 import type { RecordRow } from "@/lib/types";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { DSU } from "@/lib/dsu";
-import { openDB } from "@/lib/cache";
-
 
 type Mapping = {
   womanName: string; husbandName: string; nationalId: string; phone: string;
@@ -30,10 +28,37 @@ const SETTINGS_ENDPOINT = "/api/settings";
 
 type WorkerProgress = { status:string; progress:number; completed?:number; total?:number; }
 
+function normalizeChildrenField(val: any): string[] {
+  if (!val) return [];
+  if (Array.isArray(val)) return val.map(x => String(x)).filter(Boolean);
+  return String(val).split(/[;,|،]/).map(x => String(x).trim()).filter(Boolean);
+}
+
+function mapIncomingRowsToInternal(rowsChunk: any[], mapping: Mapping) {
+  return rowsChunk.map((originalRecord, i) => {
+        const mapped: Record<string, any> = { ...originalRecord };
+
+        for (const key in mapping) {
+            const fieldKey = key as keyof Mapping;
+            const col = mapping[fieldKey];
+            if (col && originalRecord[col] !== undefined) {
+                mapped[fieldKey] = originalRecord[col];
+            } else {
+                // Ensure the key exists even if not mapped
+                mapped[fieldKey] = "";
+            }
+        }
+        
+        mapped.children = normalizeChildrenField(mapped.children);
+        
+        return mapped as RecordRow;
+    });
+}
+
+
 export default function UploadPage(){
   const [columns, setColumns] = useState<string[]>([]);
   const [file, setFile] = useState<File|null>(null);
-  const [filePrepStatus, setFilePrepStatus] = useState('idle');
   const [mapping, setMapping] = useState<Mapping>({
     womanName: "", husbandName:"", nationalId:"", phone:"", village:"", subdistrict:"", children:"", beneficiaryId:""
   });
@@ -41,10 +66,9 @@ export default function UploadPage(){
   const [progressInfo, setProgressInfo] = useState<WorkerProgress>({ status:"idle", progress:0 });
   const [workerStatus, setWorkerStatus] = useState<string>("idle");
   const [clusters, setClusters] = useState<any[][]>([]);
+  const [fileReadProgress, setFileReadProgress] = useState(0);
   const [isMappingOpen, setIsMappingOpen] = useState(true);
   const rawRowsRef = useRef<any[]>([]);
-  
-  // New refs for multi-worker setup
   const workersRef = useRef<Worker[]>([]);
   const completedWorkersRef = useRef(0);
   const allEdgesRef = useRef<any[]>([]);
@@ -69,29 +93,22 @@ export default function UploadPage(){
     if(!f) return;
     setFile(f);
     setWorkerStatus('idle'); setProgressInfo({ status:'idle', progress:0 }); setClusters([]);
+    setFileReadProgress(0);
     setIsMappingOpen(true);
-    setFilePrepStatus('reading');
 
     const reader = new FileReader();
     reader.onprogress = (event) => {
       if (event.lengthComputable) {
-        const percentage = Math.round((event.loaded / event.total) * 100);
-         setProgressInfo({ status: 'reading-file', progress: percentage, completed: event.loaded, total: event.total });
+        const percentage = (event.loaded / event.total) * 100;
+        setFileReadProgress(percentage);
       }
     };
-    reader.onload = async (e) => {
-        setFilePrepStatus('processing');
+    reader.onload = (e) => {
         const buffer = e.target?.result;
         const wb = XLSX.read(buffer, { type: 'array', cellDates:true });
         const sheet = wb.Sheets[wb.SheetNames[0]];
         const json = XLSX.utils.sheet_to_json<any>(sheet, { defval: "" });
-        
-        toast({ title: "Preparation Step 1/2", description: "Assigning internal IDs to records..." });
-        json.forEach((row, index) => {
-            row._internalId = `row_${index}`;
-        });
-
-        rawRowsRef.current = json;
+        rawRowsRef.current = json; // Store raw rows
         setColumns(Object.keys(json[0] || {}));
         const storageKey = LOCAL_STORAGE_KEY_PREFIX + Object.keys(json[0]||{}).join(',');
         const saved = localStorage.getItem(storageKey);
@@ -100,23 +117,7 @@ export default function UploadPage(){
         } else {
           setMapping({ womanName:"", husbandName:"", nationalId:"", phone:"", village:"", subdistrict:"", children:"", beneficiaryId:"" });
         }
-        
-        // --- New Step: Save to IndexedDB ---
-        try {
-            const db = await openDB();
-            await new Promise<void>((resolve, reject) => {
-                const tx = db.transaction("rows", "readwrite");
-                tx.objectStore("rows").put(json, "all");
-                tx.oncomplete = () => resolve();
-                tx.onerror = () => reject(tx.error);
-            });
-            toast({ title: "Preparation Step 2/2", description: "File data with internal IDs has been saved locally for processing." });
-            setFilePrepStatus('done');
-        } catch (error) {
-            console.error("Failed to save rows to IndexedDB", error);
-            toast({ title: "Error Saving File", description: "Could not save file data locally.", variant: "destructive" });
-            setFilePrepStatus('idle');
-        }
+        setFileReadProgress(100);
     };
     reader.readAsArrayBuffer(f);
   }
@@ -127,20 +128,24 @@ export default function UploadPage(){
 
   const finalizeClustering = async () => {
     setWorkerStatus('merging-edges');
-    setProgressInfo({ status: 'merging-edges', progress: 80, completed: processedPairsRef.current, total: totalPairsRef.current });
-    
-    await new Promise(r => setTimeout(r, 50));
+    setProgressInfo({ status: 'merging-edges', progress: 95, completed: processedPairsRef.current, total: totalPairsRef.current });
 
+    await new Promise(r => setTimeout(r, 50)); // UI update tick
+    
     const edges = allEdgesRef.current;
     
+    // CRITICAL: Deterministic global sort
     edges.sort((a,b) => b.score - a.score || a.a - b.a || a.b - b.b);
     
+    const mappedRows = mapIncomingRowsToInternal(rawRowsRef.current, mapping);
+    mappedRows.forEach((row, i) => row._internalId = `row_${i}`);
+
     const dsu = new DSU();
-    rawRowsRef.current.forEach(r => dsu.make(r._internalId));
+    mappedRows.forEach(r => dsu.make(r._internalId!));
     
     for(const edge of edges) {
-        const idA = rawRowsRef.current[edge.a]?._internalId;
-        const idB = rawRowsRef.current[edge.b]?._internalId;
+        const idA = mappedRows[edge.a]?._internalId;
+        const idB = mappedRows[edge.b]?._internalId;
 
         if (!idA || !idB) continue;
         
@@ -151,11 +156,11 @@ export default function UploadPage(){
     const finalClusters: any[] = [];
     for (const members of groups.values()) {
       if (members.length > 1) {
-        const clusterRecords = members.map(id => rawRowsRef.current.find(r => r._internalId === id)).filter(Boolean);
+        const clusterRecords = members.map(id => mappedRows.find(r => r._internalId === id)).filter(Boolean);
         if (clusterRecords.length > 1) {
           finalClusters.push({ 
             records: clusterRecords,
-            reasons: []
+            reasons: [] // Reasons are derived later in the review page
           });
         }
       }
@@ -164,14 +169,14 @@ export default function UploadPage(){
     setClusters(finalClusters);
     
     setWorkerStatus('caching');
-    setProgressInfo({ status: 'caching', progress: 98, completed: processedPairsRef.current, total: totalPairsRef.current });
+    setProgressInfo({ status: 'caching', progress: 98 });
     
     try {
       const cacheId = 'cache-' + Date.now() + '-' + Math.random().toString(36).slice(2,9);
       sessionStorage.setItem('cacheId', cacheId);
       
       const dataToCache = {
-          rows: rawRowsRef.current,
+          rows: mappedRows,
           clusters: finalClusters,
           originalHeaders: columns,
       };
@@ -214,9 +219,12 @@ export default function UploadPage(){
       if(d.ok) settings = d.settings || {};
     } catch(_) {}
     
+    const mappedRows = mapIncomingRowsToInternal(rawRowsRef.current, mapping);
+
     const numCores = navigator.hardwareConcurrency || 4;
-    const n = rawRowsRef.current.length;
-    totalPairsRef.current = (n * (n - 1)) / 2;
+    const n = mappedRows.length;
+    const numPairs = (n * (n - 1)) / 2;
+    totalPairsRef.current = numPairs;
 
     if (totalPairsRef.current === 0) {
         toast({ title: "No pairs to compare", description: "Not enough data to perform clustering." });
@@ -224,14 +232,14 @@ export default function UploadPage(){
         return;
     }
 
-    const pairsPerWorker = Math.ceil(totalPairsRef.current / numCores);
+    const pairsPerWorker = Math.ceil(numPairs / numCores);
     
     for (let i = 0; i < numCores; i++) {
         const worker = new Worker(new URL('@/workers/cluster.worker.ts', import.meta.url));
         workersRef.current.push(worker);
 
         const startPair = i * pairsPerWorker;
-        const endPair = Math.min(startPair + pairsPerWorker, totalPairsRef.current);
+        const endPair = Math.min(startPair + pairsPerWorker, numPairs);
         
         if (startPair >= endPair) {
             completedWorkersRef.current++;
@@ -242,8 +250,7 @@ export default function UploadPage(){
         };
 
         worker.postMessage({
-            rows: rawRowsRef.current,
-            mapping,
+            rows: mappedRows,
             options: settings,
             startPair,
             endPair
@@ -251,16 +258,18 @@ export default function UploadPage(){
 
         worker.onmessage = (e) => {
             const { type, edges, processed } = e.data;
+
             if (type === 'progress') {
                 processedPairsRef.current += processed;
-                const percent = totalPairsRef.current > 0 ? Math.floor((processedPairsRef.current / totalPairsRef.current) * 80) + 10 : 10;
+                const percent = totalPairsRef.current > 0 ? Math.round((processedPairsRef.current / totalPairsRef.current) * 90) : 0;
                  setProgressInfo({
                     status: 'building-edges',
-                    progress: percent,
+                    progress: Math.min(90, 10 + percent),
                     completed: processedPairsRef.current,
                     total: totalPairsRef.current,
                 });
             } else if (type === 'done') {
+                processedPairsRef.current += processed; // Add final count
                 allEdgesRef.current.push(...edges);
                 completedWorkersRef.current++;
                 if (completedWorkersRef.current === workersRef.current.length) {
@@ -282,10 +291,6 @@ export default function UploadPage(){
     let statusText = s.replace(/-/g, ' ');
     statusText = statusText.charAt(0).toUpperCase() + statusText.slice(1);
     
-    if (s === 'reading-file' && progressInfo.total) {
-        return `Status: Reading file (${(progressInfo.completed!/1024/1024).toFixed(2)} / ${(progressInfo.total/1024/1024).toFixed(2)} MB)`;
-    }
-
     if (progressInfo.completed !== undefined && progressInfo.total) {
       return `Status: ${statusText} (${progressInfo.completed.toLocaleString()}/${progressInfo.total.toLocaleString()})`;
     }
@@ -308,10 +313,8 @@ export default function UploadPage(){
   const getButtonText = () => {
     switch (workerStatus) {
       case 'processing':
-      case 'blocking':
       case 'building-edges':
       case 'merging-edges':
-      case 'annotating':
         return 'Processing...';
       case 'caching':
         return 'Caching Results...';
@@ -369,14 +372,14 @@ export default function UploadPage(){
                   setClusters([]);
                   setWorkerStatus('idle');
                   setProgressInfo({ status: 'idle', progress: 0 });
-                  setFilePrepStatus('idle');
+                  setFileReadProgress(0);
                 }} variant="outline">Reset</Button>
             )}
           </div>
-          {(filePrepStatus === 'reading' || filePrepStatus === 'processing') && (
+          {file && fileReadProgress > 0 && fileReadProgress < 100 && (
             <div className="mt-4">
-              <Label>{filePrepStatus === 'reading' ? 'Reading File...' : 'Processing File...'}</Label>
-              <Progress value={progressInfo.progress} />
+              <Label>Reading File...</Label>
+              <Progress value={fileReadProgress} />
             </div>
           )}
         </CardContent>
@@ -405,13 +408,13 @@ export default function UploadPage(){
                   <Card key={field}>
                     <CardHeader className="p-4 flex flex-row items-center justify-between">
                         <div className="flex items-center gap-2">
-                            {mapping[field] ? <CheckCircle className="h-5 w-5 text-green-500" /> : <XCircle className="h-5 w-5 text-red-500" />}
+                            {mapping[field as keyof Mapping] ? <CheckCircle className="h-5 w-5 text-green-500" /> : <XCircle className="h-5 w-5 text-red-500" />}
                             <Label htmlFor={field} className="capitalize font-semibold text-base">{field.replace(/_/g,' ')}{REQUIRED_MAPPING_FIELDS.includes(field as keyof Mapping) && <span className="text-destructive">*</span>}</Label>
                         </div>
                     </CardHeader>
                     <CardContent className="p-0">
                       <ScrollArea className="h-48 border-t">
-                        <RadioGroup value={mapping[field]} onValueChange={(v)=> handleMappingChange(field as keyof Mapping, v)} className="p-4 grid grid-cols-2 gap-2">
+                        <RadioGroup value={mapping[field as keyof Mapping]} onValueChange={(v)=> handleMappingChange(field as keyof Mapping, v)} className="p-4 grid grid-cols-2 gap-2">
                           {columns.map(col => (
                             <div key={col} className="flex items-center space-x-2">
                               <RadioGroupItem value={col} id={`${field}-${col}`} />
