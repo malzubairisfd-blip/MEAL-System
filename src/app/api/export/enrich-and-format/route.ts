@@ -4,7 +4,7 @@ import ExcelJS from "exceljs";
 import { fullPairwiseBreakdown } from "@/lib/scoring-server";
 import type { AuditFinding } from "@/lib/auditEngine";
 import type { RecordRow } from "@/lib/types";
-import { generateArabicClusterSummary } from '@/lib/arabicClusterSummary';
+import { generateArabicClusterSummary, getDecisionAndNote } from '@/lib/arabicClusterSummary';
 import { calculateClusterConfidence } from '@/lib/clusterConfidence';
 
 
@@ -21,27 +21,6 @@ type EnrichedRecord = RecordRow & {
     'نتائج تحليل المجموعة'?: string;
     [key: string]: any;
 };
-
-function getDecisionAndNote(finalScorePct: number) {
-  let decision = "إحتمالية تكرار";
-  let expertNote = "قد يكون هنالك إحتمالية لوجود تكرار نتيجة لتطابق بعض اجزاء من الاسم للمستفيدة او الزوج. يوصى بالتحقق المكتبي من المجموعة.";
-
-  if (finalScorePct >= 85) {
-    decision = "تكرار مؤكد";
-    expertNote =
-      "يوجد تطابق شامل في الأسماء والنسب مع احتمالية عالية أن السجلات تعود لنفس المستفيد. يوصى بمراجعه السجلات وابقاء الحاله التي تحتوي على اكثر دقة وشمولية في البيانات وتصنيف الحالات الأخرى في المجموعه بانها تكرار/ازدواج.";
-  } else if (finalScorePct >= 70) {
-    decision = "اشتباه تكرار مؤكد";
-    expertNote =
-      "يوجد تشابه مرتفع في الأسماء والنسب مع احتمالية مرتفعة أن السجلات تعود لنفس المستفيد. يوصى بمراجعه السجلات وفي حال كان هنالك حالات تكرار يتم إبقاء الحاله التي تحتوي على اكثر دقة وشمولية في البيانات وتصنيف الحالات الأخرى في المجموعه بانها تكرار/ازدواج او يتم تعليق المجموعه للتحقق الميداني.";
-  } else if (finalScorePct >= 60) {
-    decision = "اشتباه تكرار";
-    expertNote =
-      "يوجد تشابه جزئي، وقد يكون ناتجًا عن تشابه أسماء شائع في المنطقة. يوصى بالتحقق المكتبي والميداني من المجموعة.";
-  }
-  return { decision, expertNote };
-}
-
 
 async function enrichData(cachedData: any): Promise<EnrichedRecord[]> {
     const { rows: allRecords, clusters } = cachedData;
@@ -646,20 +625,18 @@ function createDashboardReportSheet(wb: ExcelJS.Workbook, allRecords: RecordRow[
     const ws = wb.addWorksheet("Dashboard Report");
     ws.views = [{ rightToLeft: true }];
     
+    // Set column widths to approximate the visual layout
     ws.columns = [
         { width: 2 },  // A
-        { width: 18 }, // B
-        { width: 13 }, // C
-        { width: 18 }, // D
-        { width: 13 }, // E
-        { width: 18 }, // F
-        { width: 13 }, // G
-        { width: 18 }, // H
-        { width: 13 }, // I
+        { width: 20 }, // B
+        { width: 20 }, // C
+        { width: 2 },  // D
+        { width: 20 }, // E
+        { width: 20 }, // F
     ];
 
 
-    ws.mergeCells('B2:I2');
+    ws.mergeCells('B2:F2');
     const titleCell = ws.getCell('B2');
     titleCell.value = "Analysis Dashboard Report";
     titleCell.font = { name: 'Calibri', size: 24, bold: true, color: { argb: 'FF002060' } };
@@ -668,28 +645,27 @@ function createDashboardReportSheet(wb: ExcelJS.Workbook, allRecords: RecordRow[
 
     const kf = processedData.keyFigures;
     const keyFiguresData = [
-        { title: 'Team Leaders', value: kf.teamLeaders, cell: 'H4' },
-        { title: 'Surveyors', value: kf.surveyors, cell: 'F4' },
-        { title: 'Registration Days', value: kf.registrationDays, cell: 'D4' },
-        { title: 'Villages Targeted', value: kf.villages, cell: 'B4' },
+        { title: 'Team Leaders', value: kf.teamLeaders, cell: 'B4' },
+        { title: 'Surveyors', value: kf.surveyors, cell: 'C4' },
+        { title: 'Registration Days', value: kf.registrationDays, cell: 'E4' },
+        { title: 'Villages Targeted', value: kf.villages, cell: 'F4' },
     ];
     
     keyFiguresData.forEach(item => {
-        ws.mergeCells(`${item.cell}:${String.fromCharCode(item.cell.charCodeAt(0) + 1)}4`);
         const titleCell = ws.getCell(item.cell);
         titleCell.value = item.title;
         titleCell.font = { name: 'Calibri', size: 12, bold: true, color: { argb: 'FFFFFFFF' } };
         titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4F81BD' } };
         titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
 
-        ws.mergeCells(`${item.cell.replace('4', '5')}:${String.fromCharCode(item.cell.charCodeAt(0) + 1)}5`);
         const valueCell = ws.getCell(item.cell.replace('4', '5'));
         valueCell.value = item.value;
         valueCell.font = { name: 'Calibri', size: 20, bold: true, color: { argb: 'FF002060' } };
         valueCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDCE6F1' } };
         valueCell.alignment = { horizontal: 'center', vertical: 'middle' };
-        ws.getRow(5).height = 30;
     });
+    ws.getRow(5).height = 30;
+
 
     const addImage = (base64: string, tl: { col: number, row: number }, ext: { width: number, height: number }) => {
         if (!base64 || !base64.startsWith('data:image/png;base64,')) return;
@@ -703,32 +679,33 @@ function createDashboardReportSheet(wb: ExcelJS.Workbook, allRecords: RecordRow[
     };
     
     let currentRow = 7;
-    const chartHeight = 300;
-    const chartWidth = 450;
+    const rowGap = 1; // Number of empty rows between image rows
 
-    // First Row of Charts
+    // Row 1
     if (chartImages.byDayChart) {
-      addImage(chartImages.byDayChart, { col: 1, row: currentRow }, { width: chartWidth, height: chartHeight });
+      addImage(chartImages.byDayChart, { col: 1, row: currentRow }, { width: 347, height: 788 });
     }
     if (chartImages.byVillageChart) {
-      addImage(chartImages.byVillageChart, { col: 5, row: currentRow }, { width: chartWidth, height: chartHeight });
+      addImage(chartImages.byVillageChart, { col: 4, row: currentRow }, { width: 347, height: 788 });
     }
-    currentRow += 16; 
+    currentRow += Math.round(788 / 15) + rowGap; // Approximate row height based on pixels
 
-    // Second Row of Charts
+    // Row 2
     if (chartImages.womenDonut) {
-      addImage(chartImages.womenDonut, { col: 1, row: currentRow }, { width: chartWidth, height: chartHeight });
+      addImage(chartImages.womenDonut, { col: 1, row: currentRow }, { width: 347, height: 359 });
     }
     if (chartImages.genderVisual) {
-      addImage(chartImages.genderVisual, { col: 5, row: currentRow }, { width: chartWidth, height: chartHeight });
+      addImage(chartImages.genderVisual, { col: 4, row: currentRow }, { width: 347, height: 359 });
     }
-    currentRow += 16;
-    
-    // Third Row - Bubble Stats and Map
+    currentRow += Math.round(359 / 15) + rowGap;
+
+    // Row 3
     if (chartImages.bubbleStats) {
-        addImage(chartImages.bubbleStats, { col: 1, row: currentRow }, { width: chartWidth, height: chartHeight });
+        addImage(chartImages.bubbleStats, { col: 1, row: currentRow }, { width: 347, height: 749 });
     }
     if (chartImages.map) {
-        addImage(chartImages.map, { col: 5, row: currentRow }, { width: chartWidth, height: chartHeight });
+        addImage(chartImages.map, { col: 4, row: currentRow }, { width: 347, height: 749 });
     }
 }
+
+    
