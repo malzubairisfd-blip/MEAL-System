@@ -41,6 +41,7 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from '@/lib/utils';
 import type { Feature, FeatureCollection } from 'geojson';
 import { loadCachedResult } from '@/lib/cache';
+import { openDB } from 'idb';
 
 
 // Global Dashboard State
@@ -63,6 +64,18 @@ const WestAfricaMap = dynamic(() => import('@/components/Map'), {
 });
 
 const LOCAL_STORAGE_KEY_PREFIX = "beneficiary-report-mapping-";
+
+async function saveReportDataToCache(data: { chartImages: Record<string, string>, processedDataForReport: any }) {
+    const db = await openDB('beneficiary-insights-cache', 1);
+    const tx = db.transaction('results', 'readwrite');
+    const store = tx.objectStore('results');
+    const currentData = await store.get('FULL_RESULT');
+    if (currentData) {
+        const newData = { ...currentData, ...data };
+        await store.put(newData, 'FULL_RESULT');
+    }
+    await tx.done;
+}
 
 export default function ReportPage() {
   const { toast } = useToast();
@@ -210,9 +223,8 @@ export default function ReportPage() {
   }, [allRows, mapping]);
 
   const handleCaptureAndExport = async () => {
-    const cacheId = sessionStorage.getItem('cacheId');
-    if (!cacheId || !processedData) {
-        toast({ title: "Cannot Export", description: "Data is not ready or no cache ID found. Please process data first.", variant: "destructive" });
+    if (!processedData) {
+        toast({ title: "Cannot Export", description: "Data is not ready. Please complete mapping first.", variant: "destructive" });
         return;
     }
     
@@ -254,10 +266,9 @@ export default function ReportPage() {
             });
         }
 
-        await fetch('/api/cluster-cache', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ cacheId, chartImages: images, processedDataForReport: processedData }),
+        await saveReportDataToCache({
+            chartImages: images,
+            processedDataForReport: processedData
         });
 
         toast({ title: "Dashboard Cached", description: "Visuals have been saved. Proceeding to export page." });

@@ -159,11 +159,7 @@ function hierarchicalRecluster(records: RecordRow[]) {
         }
     });
 
-    // Add any remaining ungrouped records as individual clusters to ensure no data is lost
-    const leftovers = signatures.filter(sig => !processedIds.has(sig._internalId!));
-    leftovers.forEach(sig => finalClusters.push([sig.record]));
-
-    return finalClusters.filter(c => c.length > 0);
+    return finalClusters.filter(c => c.length > 1);
 }
 
 async function cacheFinalResult(result: any) {
@@ -294,7 +290,7 @@ export default function UploadPage(){
         const normal = currentClusters.filter(c => c.records.length <= 5);
 
         if (oversized.length === 0) {
-            currentClusters = normal;
+            currentClusters = normal.filter(c => c.records.length > 1); // Final filter for single-record clusters
             break;
         }
         
@@ -313,7 +309,7 @@ export default function UploadPage(){
             const subClusters = hierarchicalRecluster(cluster.records);
             
             subClusters.forEach(sub => {
-                if (sub.length > 0) {
+                if (sub.length > 1) { // Ensure sub-clusters are not single records
                     refinedNextPass.push({
                         records: sub,
                         reasons: cluster.reasons, // Carry over original reasons

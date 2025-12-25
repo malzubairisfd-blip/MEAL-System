@@ -65,7 +65,7 @@ function normalizeArabic(s: string): string {
 
 
 async function enrichData(cachedData: any): Promise<EnrichedRecord[]> {
-    const { rows: allRecords, clusters, originalHeaders } = cachedData;
+    const { rows: allRecords, clusters } = cachedData;
     if (!allRecords || !clusters) {
         throw new Error("Invalid cache: missing rows or clusters.");
     }
@@ -101,50 +101,46 @@ async function enrichData(cachedData: any): Promise<EnrichedRecord[]> {
 
         const { decision, expertNote } = getDecisionAndNote(finalScorePct);
 
-        clusterInfoMap.set(clusterId, { maxScore, maxBeneficiaryId, size: clusterRecords.length, decision, expertNote });
+        clusterInfoMap.set(clusterId, { maxScore, maxBeneficiaryId: maxBeneficiaryId || clusterId, size: clusterRecords.length, decision, expertNote });
     });
 
     allRecords.forEach((record: RecordRow) => {
-        let enriched: EnrichedRecord = { 
-            ...record,
-            womanName_normalized: normalizeArabic(record.womanName || ''),
-            husbandName_normalized: normalizeArabic(record.husbandName || ''),
-        };
-        
-        const recordClusterId = recordClusterMap.get(record._internalId!);
+        let newRecord: EnrichedRecord = {};
+        // First, copy all original fields
+        for (const key in record) {
+            newRecord[key] = record[key];
+        }
 
+        // Add normalized fields for sorting, but they won't be in the final sheet
+        newRecord.womanName_normalized = normalizeArabic(record.womanName || '');
+        newRecord.husbandName_normalized = normalizeArabic(record.husbandName || '');
+
+        const recordClusterId = recordClusterMap.get(record._internalId!);
         if (recordClusterId) {
             const clusterInfo = clusterInfoMap.get(recordClusterId)!;
+            
+            newRecord.ClusterID = recordClusterId;
+            newRecord.Generated_Cluster_ID = clusterInfo.maxBeneficiaryId;
+            newRecord.Cluster_Size = clusterInfo.size;
+            newRecord.Max_PairScore = clusterInfo.maxScore;
+            newRecord['تصنيف المجموعة المبدئي'] = clusterInfo.decision;
+            newRecord['نتائج تحليل المجموعة'] = clusterInfo.expertNote;
+
             const clusterRecords = clusters[recordClusterId - 1].records;
-            
             let totalPairScore = 0;
-            let totalNameScore = 0;
-            let totalHusbandScore = 0;
-            let totalIdScore = 0;
-            let totalPhoneScore = 0;
             let comparisonCount = 0;
-            
             if (clusterRecords.length > 1) {
                 for (let i = 0; i < clusterRecords.length; i++) {
                     if (clusterRecords[i]._internalId === record._internalId) continue;
-                    
                     const result = fullPairwiseBreakdown([record, clusterRecords[i]])[0];
                     if (result) {
                         totalPairScore += result.score;
-                        totalNameScore += result.breakdown.nameScore || 0;
-                        totalHusbandScore += result.breakdown.husbandScore || 0;
-                        totalIdScore += result.breakdown.idScore || 0;
-                        totalPhoneScore += result.breakdown.phoneScore || 0;
                         comparisonCount++;
                     }
                 }
             }
-           
             const avgPairScore = comparisonCount > 0 ? totalPairScore / comparisonCount : 0;
-            const avgNameScore = comparisonCount > 0 ? totalNameScore / comparisonCount : 0;
-            const avgHusbandScore = comparisonCount > 0 ? totalHusbandScore / comparisonCount : 0;
-            const avgIdScore = comparisonCount > 0 ? totalIdScore / comparisonCount : 0;
-            const avgPhoneScore = comparisonCount > 0 ? totalPhoneScore / comparisonCount : 0;
+            newRecord.pairScore = avgPairScore;
 
             const flag = (score: number) => {
                 if (score >= 0.9) return "m?";
@@ -153,27 +149,10 @@ async function enrichData(cachedData: any): Promise<EnrichedRecord[]> {
                 if (score > 0) return "?";
                 return null;
             };
-            
-            const generatedClusterId = clusterInfo.maxBeneficiaryId || recordClusterId;
-
-            enriched = {
-                ...enriched,
-                pairScore: avgPairScore,
-                nameScore: avgNameScore,
-                husbandScore: avgHusbandScore,
-                idScore: avgIdScore,
-                phoneScore: avgPhoneScore,
-                ClusterID: recordClusterId, // internal sequential ID
-                Generated_Cluster_ID: generatedClusterId,
-                Cluster_Size: clusterInfo.size,
-                Max_PairScore: clusterInfo.maxScore,
-                'تصنيف المجموعة المبدئي': clusterInfo.decision,
-                'نتائج تحليل المجموعة': clusterInfo.expertNote,
-                Flag: flag(avgPairScore),
-            };
+            newRecord.Flag = flag(avgPairScore);
         }
         
-        enrichedRecords.push(enriched);
+        enrichedRecords.push(newRecord);
     });
     
     return enrichedRecords;
@@ -193,7 +172,7 @@ function sortData(data: EnrichedRecord[]): EnrichedRecord[] {
             return clusterA - clusterB;
         }
         
-        return (String(a.beneficiaryId) || "").localeCompare(String(b.beneficiaryId) || "");
+        return String(a.beneficiaryId || '').localeCompare(String(b.beneficiaryId) || '');
     });
 }
 
@@ -256,21 +235,12 @@ function createEnrichedDataSheet(wb: ExcelJS.Workbook, data: EnrichedRecord[], o
     const ws = wb.addWorksheet("Enriched Data");
     ws.views = [{ rightToLeft: true }];
     
-    const allOriginalHeaders = new Set<string>(originalHeaders || []);
-    data.forEach(record => {
-      Object.keys(record).forEach(key => {
-         if (!key.startsWith('_') && key !== 'ClusterID' && key !== 'Generated_Cluster_ID') {
-           allOriginalHeaders.add(key);
-         }
-      });
-    });
-
     const enrichmentHeaders = [
-        "Generated_Cluster_ID", "Cluster_Size", "Flag", "pairScore", "Max_PairScore", "nameScore", "husbandScore", "idScore", "phoneScore", "تصنيف المجموعة المبدئي", "نتائج تحليل المجموعة"
+        "Generated_Cluster_ID", "Cluster_Size", "Flag", "Max_PairScore", "تصنيف المجموعة المبدئي", "نتائج تحليل المجموعة"
     ];
     
-    const headersToExclude = ['ClusterID', 'Generated_Cluster_ID', 'womanName_normalized', 'husbandName_normalized', 'pairScore', 'nameScore', 'husbandScore', 'idScore', 'phoneScore', 'Max_PairScore', 'Cluster_Size', 'Flag', 'تصنيف المجموعة المبدئي', 'نتائج تحليل المجموعة'];
-    const finalOriginalHeaders = Array.from(allOriginalHeaders).filter(h => !headersToExclude.includes(h) && !h.startsWith('_'));
+    // Ensure all original headers are present and filter out internal ones
+    const finalOriginalHeaders = originalHeaders.filter(h => !h.startsWith('_'));
     
     const finalHeaders = [ ...enrichmentHeaders, ...finalOriginalHeaders ];
     
@@ -288,11 +258,8 @@ function createEnrichedDataSheet(wb: ExcelJS.Workbook, data: EnrichedRecord[], o
     
     const dataForSheet = data.map(record => {
         const newRecord: any = {};
-        finalOriginalHeaders.forEach(header => {
+        finalHeaders.forEach(header => {
             newRecord[header] = record[header];
-        });
-        enrichmentHeaders.forEach(header => {
-             newRecord[header] = record[header as keyof EnrichedRecord];
         });
         return newRecord;
     });
@@ -593,7 +560,7 @@ function createClustersSheet(wb: ExcelJS.Workbook, clusters: {records: RecordRow
 }
     
 function createAuditSheet(wb: ExcelJS.Workbook, findings: AuditFinding[], clusters: {records: RecordRow[]}[]) {
-    const ws = wb.addWorksheet("نتائج التدقيق");
+    const ws = wb.addWorksheet("Audit Findings");
     ws.views = [{ rightToLeft: true }];
     
     const recordToClusterIdMap = new Map<string, number>();
@@ -728,7 +695,7 @@ function createAuditSheet(wb: ExcelJS.Workbook, findings: AuditFinding[], cluste
         const clusterIdB = b.clusterId === 'N/A' ? Infinity : b.clusterId;
         if (clusterIdA !== clusterIdB) return clusterIdA - clusterIdB;
 
-        return String(a.beneficiaryId || '').localeCompare(String(b.beneficiaryId || ''));
+        return String(a.beneficiaryId || '').localeCompare(String(b.beneficiaryId) || '');
     });
 
     // --- Add Rows to Sheet ---
@@ -838,8 +805,9 @@ function createDashboardReportSheet(wb: ExcelJS.Workbook, allRecords: RecordRow[
 
     chartOrder.forEach(chartKey => {
       if (chartImages[chartKey]) {
+        // Place the image in a single column layout
         addImage(chartImages[chartKey], 1, currentRow, 8.5, currentRow + chartHeight);
-        currentRow += chartHeight + 1; // Move to the next row for the next chart
+        currentRow += chartHeight + 1;
       }
     });
 }

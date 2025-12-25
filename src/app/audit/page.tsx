@@ -12,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { loadCachedResult } from "@/lib/cache";
+import { openDB } from 'idb';
 
 // Redefine AuditFinding here as it's used in this component's state
 export interface AuditFinding {
@@ -31,6 +32,18 @@ type Cluster = {
   reasons: string[];
 };
 
+async function saveAuditFindings(auditFindings: AuditFinding[]) {
+  const db = await openDB('beneficiary-insights-cache', 1);
+  const tx = db.transaction('results', 'readwrite');
+  const store = tx.objectStore('results');
+  const currentData = await store.get('FULL_RESULT');
+  if (currentData) {
+    currentData.auditFindings = auditFindings;
+    await store.put(currentData, 'FULL_RESULT');
+  }
+  await tx.done;
+}
+
 export default function AuditPage() {
   const [rows, setRows] = useState<RecordRow[]>([]);
   const [clusters, setClusters] = useState<Cluster[]>([]);
@@ -39,18 +52,17 @@ export default function AuditPage() {
   const { toast } = useToast();
   const router = useRouter();
 
-  const runAuditNow = useCallback(async () => {
-    if (clusters.length === 0) {
+  const runAuditNow = useCallback(async (clustersToAudit: Cluster[]) => {
+    if (clustersToAudit.length === 0) {
         toast({ title: "No Data", description: "No cluster data available to audit.", variant: "destructive" });
         return;
     }
     
     setLoading(prev => ({...prev, audit: true}));
     try {
-        // Send the actual cluster data to the API
         const res = await fetch("/api/audit", {
             method: "POST",
-            body: JSON.stringify({ clusters }), // Send clusters directly
+            body: JSON.stringify({ clusters: clustersToAudit }), // Send clusters directly
             headers: { "Content-Type": "application/json" }
         });
 
@@ -62,6 +74,7 @@ export default function AuditPage() {
         const data = await res.json();
         const newFindings = data.issues || [];
         setFindings(newFindings);
+        await saveAuditFindings(newFindings); // Cache the findings
 
         toast({ title: "Audit Complete", description: `${newFindings.length} potential issues found.` });
 
@@ -70,7 +83,7 @@ export default function AuditPage() {
     } finally {
         setLoading(prev => ({...prev, audit: false}));
     }
-  }, [toast, clusters]);
+  }, [toast]);
 
 
   useEffect(() => {
@@ -82,7 +95,7 @@ export default function AuditPage() {
         const loadedClusters = cachedResult.clusters || [];
         const auditFindings = cachedResult.auditFindings; 
 
-        setClusters(loadedClusters); // Store clusters in state
+        setClusters(loadedClusters);
 
         const clusteredRecords = loadedClusters.map((c: any) => c.records).flat();
         setRows(clusteredRecords);
@@ -93,8 +106,7 @@ export default function AuditPage() {
               toast({ title: "Loaded from Cache", description: `Loaded ${auditFindings.length} existing audit findings.` });
           } else {
               toast({ title: "Data Ready", description: `${clusteredRecords.length} records are ready for audit. Starting audit...` });
-              // We pass the loaded clusters directly to avoid state update delays
-              runAudit(loadedClusters);
+              runAuditNow(loadedClusters);
           }
         } else {
           toast({ title: "No Clustered Data", description: "No records were found in clusters to audit." });
@@ -105,33 +117,8 @@ export default function AuditPage() {
       setLoading(prev => ({...prev, data: false}));
     }
 
-    // Helper to run audit with fresh data
-    const runAudit = async (clustersToAudit: Cluster[]) => {
-      setLoading(prev => ({...prev, audit: true}));
-      try {
-        const res = await fetch("/api/audit", {
-            method: "POST",
-            body: JSON.stringify({ clusters: clustersToAudit }),
-            headers: { "Content-Type": "application/json" }
-        });
-
-        if (!res.ok) {
-           const errorData = await res.json();
-           throw new Error(errorData.error || "An error occurred during the audit.");
-        }
-        const data = await res.json();
-        const newFindings = data.issues || [];
-        setFindings(newFindings);
-        toast({ title: "Audit Complete", description: `${newFindings.length} potential issues found.` });
-      } catch (error: any) {
-        toast({ title: "Audit Error", description: error.message, variant: "destructive" });
-      } finally {
-        setLoading(prev => ({...prev, audit: false}));
-      }
-    };
-
     getData();
-  }, [toast]);
+  }, [toast, runAuditNow]);
 
 
 
@@ -228,7 +215,7 @@ export default function AuditPage() {
         </CardHeader>
         <CardContent>
           <div className="flex gap-4">
-            <Button onClick={runAuditNow} disabled={loading.audit || loading.data || rows.length === 0}>
+            <Button onClick={() => runAuditNow(clusters)} disabled={loading.audit || loading.data || rows.length === 0}>
               {loading.audit ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <AlertTriangle className="mr-2 h-4 w-4" />}
               {findings.length > 0 ? 'Re-run Audit' : 'Run Audit'}
             </Button>
