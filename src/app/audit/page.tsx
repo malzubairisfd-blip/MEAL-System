@@ -1,3 +1,4 @@
+
 "use client";
 import React from "react";
 import { useState, useEffect, useMemo, useCallback } from "react";
@@ -79,11 +80,11 @@ export default function AuditPage() {
   useEffect(() => {
     async function getData() {
       setLoading(prev => ({...prev, data: true}));
-      const result = await loadCachedResult();
+      const cachedResult = await loadCachedResult();
 
-      if (result.status === "READY") {
-        const clusters = result.data.clusters || [];
-        const auditFindings = result.data.auditFindings; // Assuming audit findings might be cached too
+      if (cachedResult && cachedResult.clusters) {
+        const clusters = cachedResult.clusters || [];
+        const auditFindings = cachedResult.auditFindings; // Assuming audit findings might be cached too
 
         const clusteredRecords = clusters.map((c: any) => c.records).flat();
         setRows(clusteredRecords);
