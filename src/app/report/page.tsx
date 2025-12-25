@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
@@ -75,6 +74,8 @@ export default function ReportPage() {
   const [isExporting, setIsExporting] = useState(false);
   
   // Map State
+  const [admin1Data, setAdmin1Data] = useState<FeatureCollection | null>(null);
+  const [admin2Data, setAdmin2Data] = useState<FeatureCollection | null>(null);
   const [admin3Data, setAdmin3Data] = useState<FeatureCollection | null>(null);
   const [selectedFeatures, setSelectedFeatures] = useState<Feature[]>([]);
 
@@ -88,7 +89,9 @@ export default function ReportPage() {
 
   // Load geojson data
   useEffect(() => {
-    fetch('/data/yemen_admin3.geojson').then(res => res.json()).then(data => setAdmin3Data(data));
+    fetch('/data/yemen_admin1.geojson').then(res => res.json()).then(setAdmin1Data);
+    fetch('/data/yemen_admin2.geojson').then(res => res.json()).then(setAdmin2Data);
+    fetch('/data/yemen_admin3.geojson').then(res => res.json()).then(setAdmin3Data);
   }, []);
 
   // Fetch cached data on initial render
@@ -208,20 +211,38 @@ export default function ReportPage() {
 
   // AUTO-SELECT MAP FEATURES
   useEffect(() => {
-    if (!admin3Data || allRows.length === 0 || !mapping['Subdistrict']) {
-      setSelectedFeatures([]);
-      return;
+    if (!admin3Data || allRows.length === 0 || !mapping['Government'] || !mapping['District'] || !mapping['Subdistrict']) {
+        setSelectedFeatures([]);
+        return;
     }
-    
-    const subdistrictsInData = new Set(allRows.map(r => r[mapping['Subdistrict']]).filter(Boolean));
-    
-    if (subdistrictsInData.size > 0) {
-      const matchedFeatures = admin3Data.features.filter(feature => 
-        feature.properties?.ADM3_AR && subdistrictsInData.has(feature.properties.ADM3_AR)
-      );
-      setSelectedFeatures(matchedFeatures);
+
+    // Create a set of unique 'gov-dist-subdist' strings from the data for efficient lookup
+    const dataLocations = new Set(
+        allRows.map(row => {
+            const gov = row[mapping['Government']];
+            const dist = row[mapping['District']];
+            const sub = row[mapping['Subdistrict']];
+            if (gov && dist && sub) {
+                return `${String(gov).trim()}-${String(dist).trim()}-${String(sub).trim()}`;
+            }
+            return null;
+        }).filter(Boolean)
+    );
+
+    if (dataLocations.size > 0) {
+        const matchedFeatures = admin3Data.features.filter(feature => {
+            const adm1 = feature.properties?.ADM1_AR;
+            const adm2 = feature.properties?.ADM2_AR;
+            const adm3 = feature.properties?.ADM3_AR;
+            if (adm1 && adm2 && adm3) {
+                const featureLocationKey = `${String(adm1).trim()}-${String(adm2).trim()}-${String(adm3).trim()}`;
+                return dataLocations.has(featureLocationKey);
+            }
+            return false;
+        });
+        setSelectedFeatures(matchedFeatures);
     } else {
-      setSelectedFeatures([]);
+        setSelectedFeatures([]);
     }
 
   }, [allRows, admin3Data, mapping]);
