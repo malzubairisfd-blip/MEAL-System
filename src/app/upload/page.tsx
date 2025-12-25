@@ -57,7 +57,11 @@ function mapIncomingRowsToInternal(rowsChunk: any[], mapping: Mapping) {
     });
 }
 
-function hierarchicalRecluster(records: RecordRow[]) {
+function hierarchicalRecluster(records: RecordRow[]): RecordRow[][] {
+    if (!records || records.length <= 5) {
+        return records.length > 1 ? [records] : [];
+    }
+
     const normalizeArabic = (s: string) => {
         if (!s) return "";
         return s.normalize("NFKC").replace(/[^\p{L}\p{N}\s]/gu, "").replace(/\s+/g, " ").trim().toLowerCase();
@@ -73,7 +77,6 @@ function hierarchicalRecluster(records: RecordRow[]) {
         const lastName = womanTokens[womanTokens.length - 1] || "";
 
         return {
-            _internalId: rec._internalId,
             record: rec,
             womanTokens,
             coreSignature: `${first} ${father} ${grandfather}`.trim(),
@@ -83,31 +86,31 @@ function hierarchicalRecluster(records: RecordRow[]) {
         };
     };
 
-    let processedIds = new Set<string>();
-    let finalClusters: RecordRow[][] = [];
+    let processedRecords = new Set<RecordRow>();
+    let subClusters: RecordRow[][] = [];
 
     const signatures = records.map(getSignature);
 
     // Rule 1: Exact Dominant Full Match
     const exactMatchGroups = new Map<string, RecordRow[]>();
     signatures.forEach(sig => {
-        if (processedIds.has(sig._internalId!)) return;
-
+        if (processedRecords.has(sig.record)) return;
         const key = sig.normalizedFullName || sig.fullSignature;
+        if (!key) return; // Skip if no valid key
         if (!exactMatchGroups.has(key)) exactMatchGroups.set(key, []);
         exactMatchGroups.get(key)!.push(sig.record);
     });
 
     exactMatchGroups.forEach(group => {
         if (group.length > 1) {
-            finalClusters.push(group);
-            group.forEach(r => processedIds.add(r._internalId!));
+            subClusters.push(group);
+            group.forEach(r => processedRecords.add(r));
         }
     });
 
     // Rule 2: Shared Surname + Partial Lineage
-    const remainingSignatures = signatures.filter(sig => !processedIds.has(sig._internalId!));
-    const surnameGroups = new Map<string, typeof remainingSignatures>();
+    const remainingSignatures = signatures.filter(sig => !processedRecords.has(sig.record));
+    const surnameGroups = new Map<string, (typeof signatures)[0][]>();
     remainingSignatures.forEach(sig => {
         if (sig.surname) {
             if (!surnameGroups.has(sig.surname)) surnameGroups.set(sig.surname, []);
@@ -119,10 +122,13 @@ function hierarchicalRecluster(records: RecordRow[]) {
         if (group.length > 1) {
             while (group.length > 0) {
                 const current = group.shift()!;
+                if (processedRecords.has(current.record)) continue;
                 const matches = [current];
 
                 for (let i = group.length - 1; i >= 0; i--) {
                     const other = group[i];
+                    if (processedRecords.has(other.record)) continue;
+                    
                     const lineageTokensA = current.womanTokens.slice(1, 4);
                     const lineageTokensB = other.womanTokens.slice(1, 4);
                     let sharedTokens = 0;
@@ -136,31 +142,25 @@ function hierarchicalRecluster(records: RecordRow[]) {
                     }
                 }
                 if (matches.length > 1) {
-                    finalClusters.push(matches.map(m => m.record));
-                    matches.forEach(m => processedIds.add(m._internalId!));
+                    subClusters.push(matches.map(m => m.record));
+                    matches.forEach(m => processedRecords.add(m.record));
                 }
             }
         }
     });
     
-    // Rule 3: Core 3 + Same Tribe
-    const finalRemainingSigs = signatures.filter(sig => !processedIds.has(sig._internalId!));
-    const tribeGroups = new Map<string, typeof finalRemainingSigs>();
-    finalRemainingSigs.forEach(sig => {
-        const tribeKey = sig.coreSignature;
-        if (!tribeGroups.has(tribeKey)) tribeGroups.set(tribeKey, []);
-        tribeGroups.get(tribeKey)!.push(sig);
-    });
-
-    tribeGroups.forEach(group => {
-        if (group.length > 1) {
-            finalClusters.push(group.map(g => g.record));
-            group.forEach(g => processedIds.add(g._internalId!));
+    // Any remaining records not clustered yet become their own "cluster" of 1
+    // to be handled by the outer loop (which will discard them).
+    signatures.forEach(sig => {
+        if (!processedRecords.has(sig.record)) {
+            subClusters.push([sig.record]);
+            processedRecords.add(sig.record);
         }
     });
 
-    return finalClusters.filter(c => c.length > 1);
+    return subClusters;
 }
+
 
 async function cacheFinalResult(result: any) {
   const db = await openDB('beneficiary-insights-cache', 1, {
@@ -274,11 +274,11 @@ export default function UploadPage(){
     let currentClusters: any[] = [];
     for (const members of groups.values()) {
       if (members.length > 1) {
-        const clusterRecords = members.map(id => mappedRows.find(r => r._internalId === id)).filter(Boolean);
+        const clusterRecords = members.map(id => mappedRows.find(r => r._internalId === id)).filter(Boolean) as RecordRow[];
         if (clusterRecords.length > 1) {
           currentClusters.push({ 
             records: clusterRecords,
-            reasons: []
+            reasons: [] // Reasons are not used in this flow
           });
         }
       }
@@ -287,10 +287,11 @@ export default function UploadPage(){
     let pass = 1;
     while (true) {
         const oversized = currentClusters.filter(c => c.records.length > 5);
-        const normal = currentClusters.filter(c => c.records.length <= 5);
+        const normalSized = currentClusters.filter(c => c.records.length <= 5);
 
         if (oversized.length === 0) {
-            currentClusters = normal.filter(c => c.records.length > 1); // Final filter for single-record clusters
+            // Final filter for any single-record clusters that might have been produced
+            currentClusters = normalSized.filter(c => c.records.length > 1);
             break;
         }
         
@@ -302,26 +303,25 @@ export default function UploadPage(){
             total: oversized.length
         });
         
-        let refinedNextPass: any[] = [...normal];
+        let nextPassClusters: any[] = [...normalSized];
         
         for (let i = 0; i < oversized.length; i++) {
-            const cluster = oversized[i];
-            const subClusters = hierarchicalRecluster(cluster.records);
+            const clusterToSplit = oversized[i];
+            const subClusters = hierarchicalRecluster(clusterToSplit.records);
             
+            // Add the results of the split to the next pass
             subClusters.forEach(sub => {
-                if (sub.length > 1) { // Ensure sub-clusters are not single records
-                    refinedNextPass.push({
-                        records: sub,
-                        reasons: cluster.reasons, // Carry over original reasons
-                        parentCluster: i + 1
-                    });
-                }
+                nextPassClusters.push({
+                    records: sub,
+                    reasons: clusterToSplit.reasons, // Carry over original reasons if any
+                });
             });
             
-            setProgressInfo(prev => ({ ...prev, completed: i + 1 }));
+            setProgressInfo(prev => ({ ...prev, completed: (prev.completed ?? 0) + 1 }));
             await new Promise(r => setTimeout(r, 10)); // UI tick
         }
-        currentClusters = refinedNextPass;
+        
+        currentClusters = nextPassClusters;
         pass++;
     }
 
