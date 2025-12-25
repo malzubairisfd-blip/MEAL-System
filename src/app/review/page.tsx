@@ -13,6 +13,7 @@ import { generateArabicClusterSummary, getDecisionAndNote } from "@/lib/arabicCl
 import { calculateClusterConfidence } from "@/lib/clusterConfidence";
 import { useTranslation } from "@/hooks/use-translation";
 import { DecisionPieChart } from "@/components/DecisionPieChart";
+import { loadCachedResult } from "@/lib/cache";
 
 
 type Cluster = {
@@ -100,43 +101,28 @@ export default function ReviewPage() {
 
 
   useEffect(() => {
-    async function loadData() {
+    async function getData() {
       setLoading(true);
-      try {
-          const cacheId = sessionStorage.getItem('cacheId');
-          if (!cacheId) {
-            toast({ title: t('review.toasts.noData.title'), description: t('review.toasts.noData.description'), variant: "destructive" });
-            setLoading(false);
-            return;
-          }
+      const result = await loadCachedResult();
 
-          const res = await fetch(`/api/cluster-cache?id=${cacheId}`);
-          if (!res.ok) throw new Error(t('review.toasts.loadError'));
-          
-          const data = await res.json();
-          const clusters = data.clusters || [];
-          
-          if (clusters) {
-              setAllClusters(clusters);
-
-              if (clusters.length === 0) {
-                  toast({ title: t('review.toasts.noClustersFound.title'), description: t('review.toasts.noClustersFound.description'), variant: "default" });
-              } else {
-                  toast({ title: t('review.toasts.clustersLoaded.title'), description: t('review.toasts.clustersLoaded.description', {'clusters.length': clusters.length}), variant: "default" });
-                  handleCalculateScores(clusters);
-              }
-          } else {
-               toast({ title: t('review.toasts.loadErrorFromServer.title'), description: t('review.toasts.loadErrorFromServer.description'), variant: "destructive" });
-          }
-      } catch (error: any) {
-        toast({ title: "Error", description: error.message, variant: "destructive" });
-      } finally {
-        setLoading(false);
+      if (result.status === "READY") {
+        const clusters = result.data.clusters || [];
+        setAllClusters(clusters);
+        if (clusters.length > 0) {
+          toast({ title: t('review.toasts.clustersLoaded.title'), description: t('review.toasts.clustersLoaded.description', {'clusters.length': clusters.length}), variant: "default" });
+          handleCalculateScores(clusters);
+        } else {
+          toast({ title: t('review.toasts.noClustersFound.title'), description: t('review.toasts.noClustersFound.description'), variant: "default" });
+        }
+      } else if (result.status === "NO_DATA") {
+        toast({ title: t('review.toasts.noData.title'), description: t('review.toasts.noData.description'), variant: "destructive" });
+      } else if (result.status === "ERROR") {
+        toast({ title: "Error", description: "Could not load data from cache.", variant: "destructive" });
       }
+      setLoading(false);
     }
-    loadData();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [toast, t]);
+    getData();
+  }, [toast, t, handleCalculateScores]);
 
 
   useEffect(() => {

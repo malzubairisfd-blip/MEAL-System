@@ -16,7 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 import type { RecordRow } from "@/lib/types";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { DSU } from "@/lib/dsu";
-import { computePairScore } from "@/lib/scoringClient";
+import { openDB } from "idb";
 
 
 type Mapping = {
@@ -159,11 +159,25 @@ function hierarchicalRecluster(records: RecordRow[]) {
         }
     });
 
-    // Add any remaining ungrouped records as individual clusters
+    // Add any remaining ungrouped records as individual clusters to ensure no data is lost
     const leftovers = signatures.filter(sig => !processedIds.has(sig._internalId!));
     leftovers.forEach(sig => finalClusters.push([sig.record]));
 
     return finalClusters.filter(c => c.length > 0);
+}
+
+async function cacheFinalResult(result: any) {
+  const db = await openDB('beneficiary-insights-cache', 1, {
+    upgrade(db) {
+      if (!db.objectStoreNames.contains('results')) {
+        db.createObjectStore('results');
+      }
+    }
+  });
+
+  const tx = db.transaction('results', 'readwrite');
+  await tx.objectStore('results').put(result, 'FULL_RESULT');
+  await tx.done;
 }
 
 
@@ -245,7 +259,6 @@ export default function UploadPage(){
     
     const edges = allEdgesRef.current;
     
-    // CRITICAL: Deterministic global sort
     edges.sort((a,b) => b.score - a.score || a.a - b.a || a.b - b.b);
     
     const mappedRows = mapIncomingRowsToInternal(rawRowsRef.current, mapping);
@@ -257,39 +270,51 @@ export default function UploadPage(){
     for(const edge of edges) {
         const idA = mappedRows[edge.a]?._internalId;
         const idB = mappedRows[edge.b]?._internalId;
-
         if (!idA || !idB) continue;
-        
         dsu.union(idA, idB);
     }
     
     const groups = dsu.getGroups();
-    let initialClusters: any[] = [];
+    let currentClusters: any[] = [];
     for (const members of groups.values()) {
       if (members.length > 1) {
         const clusterRecords = members.map(id => mappedRows.find(r => r._internalId === id)).filter(Boolean);
         if (clusterRecords.length > 1) {
-          initialClusters.push({ 
+          currentClusters.push({ 
             records: clusterRecords,
-            reasons: [] // Reasons are derived later in the review page
+            reasons: []
           });
         }
       }
     }
     
-    const oversized = initialClusters.filter(c => c.records.length > 5);
-    const normal = initialClusters.filter(c => c.records.length <= 5);
-    let finalClusters = [...normal];
+    let pass = 1;
+    while (true) {
+        const oversized = currentClusters.filter(c => c.records.length > 5);
+        const normal = currentClusters.filter(c => c.records.length <= 5);
 
-    if (oversized.length > 0) {
+        if (oversized.length === 0) {
+            currentClusters = normal;
+            break;
+        }
+        
         setWorkerStatus('re-clustering');
+        setProgressInfo({
+            status: `re-clustering pass ${pass}`,
+            progress: 95,
+            completed: 0,
+            total: oversized.length
+        });
+        
+        let refinedNextPass: any[] = [...normal];
+        
         for (let i = 0; i < oversized.length; i++) {
             const cluster = oversized[i];
             const subClusters = hierarchicalRecluster(cluster.records);
             
             subClusters.forEach(sub => {
-                if (sub.length > 1) { // Only add if it's still a cluster
-                    finalClusters.push({
+                if (sub.length > 0) {
+                    refinedNextPass.push({
                         records: sub,
                         reasons: cluster.reasons, // Carry over original reasons
                         parentCluster: i + 1
@@ -297,18 +322,15 @@ export default function UploadPage(){
                 }
             });
             
-            setProgressInfo({
-                status: 're-clustering',
-                progress: 95 + Math.round(5 * ((i + 1) / oversized.length)),
-                completed: i + 1,
-                total: oversized.length
-            });
-            await new Promise(r => setTimeout(r, 20)); // Allow UI to update
+            setProgressInfo(prev => ({ ...prev, completed: i + 1 }));
+            await new Promise(r => setTimeout(r, 10)); // UI tick
         }
+        currentClusters = refinedNextPass;
+        pass++;
     }
 
 
-    setClusters(finalClusters);
+    setClusters(currentClusters);
     
     setWorkerStatus('caching');
     setProgressInfo({ status: 'caching', progress: 98 });
@@ -319,20 +341,16 @@ export default function UploadPage(){
       
       const dataToCache = {
           rows: mappedRows,
-          clusters: finalClusters,
+          clusters: currentClusters,
           originalHeaders: columns,
       };
 
-      await fetch('/api/cluster-cache', { 
-          method:'POST', 
-          headers:{'Content-Type':'application/json'}, 
-          body: JSON.stringify({ cacheId, ...dataToCache }) 
-      });
+      await cacheFinalResult(dataToCache);
 
       sessionStorage.setItem('cacheTimestamp', Date.now().toString());
       setWorkerStatus('done');
       setProgressInfo({ status: 'done', progress: 100 });
-      toast({ title: "Clustering complete", description: `Found ` + finalClusters.length + ` clusters.` });
+      toast({ title: "Clustering complete", description: `Found ` + currentClusters.length + ` clusters.` });
     } catch(err:any){
       setWorkerStatus('error');
       toast({ title: "Failed to cache results", description: String(err), variant:"destructive" });
@@ -594,7 +612,7 @@ export default function UploadPage(){
           <CardContent>
             <div className="space-y-4">
               <Button onClick={startClustering} disabled={workerStatus !== 'idle' && workerStatus !== 'done' && workerStatus !== 'error'}>
-                {(workerStatus === 'processing' || workerStatus === 'caching' || workerStatus === 'building-edges' || workerStatus === 'merging-edges' || workerStatus === 're-clustering') ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                {(workerStatus === 'processing' || workerStatus === 'caching' || workerStatus === 'building-edges' || workerStatus === 'merging-edges' || workerStatus.startsWith('re-clustering')) ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 {getButtonText()}
               </Button>
 

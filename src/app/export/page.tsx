@@ -9,6 +9,8 @@ import { useToast } from "@/hooks/use-toast";
 import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import Link from "next/link";
+import { loadCachedResult } from "@/lib/cache";
+import { toPng } from 'html-to-image';
 
 
 type DownloadVersion = {
@@ -43,30 +45,18 @@ export default function ExportPage() {
     const { toast } = useToast();
 
     // Data State
-    const [downloadHistory, setDownloadHistory] = useState<DownloadVersion[]>([]);
+    const [downloadHistory, setDownloadHistory] useState<DownloadVersion[]>([]);
     const [recordCount, setRecordCount] = useState(0);
     const [clusterCount, setClusterCount] = useState(0);
     
     useEffect(() => {
         const checkCache = async () => {
             setInitialLoading(true);
-            const cacheId = sessionStorage.getItem('cacheId');
-            if (!cacheId) {
-                setIsReady(false);
-                setInitialLoading(false);
-                toast({ title: "No Data Found", description: "Please start from the upload page to generate data for export.", variant: "destructive" });
-                return;
-            }
+            const result = await loadCachedResult();
             
-            try {
-                const res = await fetch(`/api/cluster-cache?id=${cacheId}`);
-                if (!res.ok) {
-                    throw new Error('Failed to fetch cached data. Please try the upload process again.');
-                }
-                const responseData = await res.json();
-                
-                const rows = responseData.rows || [];
-                const clusters = responseData.clusters || [];
+            if (result.status === 'READY') {
+                const rows = result.data.rows || [];
+                const clusters = result.data.clusters || [];
                 
                 setRecordCount(rows.length);
                 setClusterCount(clusters.length);
@@ -77,13 +67,11 @@ export default function ExportPage() {
                      toast({ title: "No Records Found", description: "The cached data is empty. Please re-upload your file.", variant: "destructive" });
                      setIsReady(false);
                 }
-
-            } catch (error: any) {
+            } else {
                 setIsReady(false);
-                toast({ title: "Error Loading Data", description: error.message, variant: "destructive" });
-            } finally {
-                setInitialLoading(false);
+                toast({ title: "No Data Found", description: "Please start from the upload page to generate data for export.", variant: "destructive" });
             }
+            setInitialLoading(false);
         };
         checkCache();
     }, [toast]);
@@ -137,7 +125,6 @@ export default function ExportPage() {
             setDownloadHistory(prev => [newVersion, ...prev]);
             toast({ title: "Report Ready", description: `${newVersion.fileName} has been added to the download panel.` });
             
-            // Automatically trigger download
             handleDirectDownload(blob, newVersion.fileName);
             
             clearSim();
@@ -172,10 +159,6 @@ export default function ExportPage() {
 
     const handleDeleteVersion = (id: string) => {
         setDownloadHistory(prev => prev.filter(v => v.id !== id));
-    };
-
-    const StatusIndicator = ({ done }: { done: boolean }) => {
-        return done ? <CheckCircle className="h-6 w-6 text-green-500" /> : <XCircle className="h-6 w-6 text-muted-foreground" />;
     };
 
     return (

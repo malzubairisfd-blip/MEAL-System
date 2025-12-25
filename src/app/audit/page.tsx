@@ -10,6 +10,7 @@ import { AlertTriangle, ShieldCheck, Loader2, ChevronLeft, ArrowRight, UserX, Us
 import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { loadCachedResult } from "@/lib/cache";
 
 // Redefine AuditFinding here as it's used in this component's state
 export interface AuditFinding {
@@ -55,11 +56,15 @@ export default function AuditPage() {
         const newFindings = data.issues || [];
         setFindings(newFindings);
         
-        await fetch('/api/cluster-cache', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ cacheId, auditFindings: newFindings })
-        });
+        // This server-side cache is no longer the primary source.
+        // We might want to remove this or keep it for backup/logging.
+        // For now, let's assume it might still be useful for some other purpose,
+        // but the main app flow doesn't depend on it.
+        // await fetch('/api/cluster-cache', {
+        //     method: 'POST',
+        //     headers: { 'Content-Type': 'application/json' },
+        //     body: JSON.stringify({ cacheId, auditFindings: newFindings })
+        // });
 
         toast({ title: "Audit Complete", description: `${newFindings.length} potential issues found.` });
 
@@ -72,47 +77,34 @@ export default function AuditPage() {
 
 
   useEffect(() => {
-    async function loadData() {
+    async function getData() {
       setLoading(prev => ({...prev, data: true}));
-      try {
-          const cacheId = sessionStorage.getItem('cacheId');
-          if (!cacheId) {
-            toast({ title: "No Data", description: "No clustered records found to audit. Please run clustering first.", variant: "destructive" });
-            setLoading(prev => ({...prev, data: false}));
-            return;
-          }
-          
-          const res = await fetch(`/api/cluster-cache?id=${cacheId}`);
-          if (!res.ok) throw new Error("Failed to load data from server cache");
+      const result = await loadCachedResult();
 
-          const responseData = await res.json();
-          const clusters = responseData.clusters;
-          const auditFindings = responseData.auditFindings;
-          
-          if (clusters) {
-              const clusteredRecords = clusters.map((c: any) => c.records).flat();
-              setRows(clusteredRecords);
-              if (clusteredRecords.length > 0) {
-                 if (auditFindings) {
-                    setFindings(auditFindings);
-                    toast({ title: "Loaded from Cache", description: `Loaded ${auditFindings.length} existing audit findings.` });
-                } else {
-                    toast({ title: "Data Ready", description: `${clusteredRecords.length} records are ready for audit. Starting audit...` });
-                    runAuditNow();
-                }
-              } else {
-                toast({ title: "No Clustered Data", description: "No records were found in clusters to audit." });
-              }
+      if (result.status === "READY") {
+        const clusters = result.data.clusters || [];
+        const auditFindings = result.data.auditFindings; // Assuming audit findings might be cached too
+
+        const clusteredRecords = clusters.map((c: any) => c.records).flat();
+        setRows(clusteredRecords);
+
+        if (clusteredRecords.length > 0) {
+           if (auditFindings) {
+              setFindings(auditFindings);
+              toast({ title: "Loaded from Cache", description: `Loaded ${auditFindings.length} existing audit findings.` });
           } else {
-              toast({ title: "Error", description: "Failed to load cluster data from server cache.", variant: "destructive" });
+              toast({ title: "Data Ready", description: `${clusteredRecords.length} records are ready for audit. Starting audit...` });
+              runAuditNow();
           }
-      } catch (error: any) {
-          toast({ title: "Error", description: error.message || "Could not fetch or parse cluster data.", variant: "destructive" });
-      } finally {
-          setLoading(prev => ({...prev, data: false}));
+        } else {
+          toast({ title: "No Clustered Data", description: "No records were found in clusters to audit." });
+        }
+      } else {
+        toast({ title: "No Data", description: "No clustered records found to audit. Please run clustering first.", variant: "destructive" });
       }
+      setLoading(prev => ({...prev, data: false}));
     }
-    loadData();
+    getData();
   }, [toast, runAuditNow]);
 
 
