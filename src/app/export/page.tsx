@@ -45,7 +45,7 @@ export default function ExportPage() {
     const { toast } = useToast();
 
     // Data State
-    const [downloadHistory, setDownloadHistory] useState<DownloadVersion[]>([]);
+    const [downloadHistory, setDownloadHistory] = useState<DownloadVersion[]>([]);
     const [recordCount, setRecordCount] = useState(0);
     const [clusterCount, setClusterCount] = useState(0);
     
@@ -54,9 +54,9 @@ export default function ExportPage() {
             setInitialLoading(true);
             const result = await loadCachedResult();
             
-            if (result.status === 'READY') {
-                const rows = result.data.rows || [];
-                const clusters = result.data.clusters || [];
+            if (result) {
+                const rows = result.rows || [];
+                const clusters = result.clusters || [];
                 
                 setRecordCount(rows.length);
                 setClusterCount(clusters.length);
