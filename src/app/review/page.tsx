@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
@@ -39,8 +40,8 @@ export default function ReviewPage() {
   const [itemsPerPage, setItemsPerPage] = useState(9);
 
   const handleCalculateScores = useCallback(async (clustersToScore: Cluster[]) => {
-    if (calculating || clustersToScore.length === 0 || clustersToScore.every(c => c.confidence !== undefined)) {
-        return;
+    if (clustersToScore.length === 0 || clustersToScore.every(c => c.confidence !== undefined)) {
+        return; // Don't run if no clusters or if all are already scored
     }
     setCalculating(true);
     toast({ title: t('review.toasts.calculatingScores.title'), description: t('review.toasts.calculatingScores.description', {'clustersToScore.length': clustersToScore.length}) });
@@ -82,22 +83,12 @@ export default function ReviewPage() {
             }
         }));
 
-        setAllClusters(prev => {
-            const newClusters = [...prev];
-            updatedClusters.forEach(uc => {
-                const index = newClusters.findIndex(c => c.records.map(r => r._internalId).sort().join('-') === uc.records.map(r => r._internalId).sort().join('-'));
-                if (index !== -1) {
-                    newClusters[index] = uc;
-                }
-            });
-            return newClusters;
-        });
-
+        setAllClusters(updatedClusters);
         toast({ title: t('review.toasts.calculationComplete.title'), description: t('review.toasts.calculationComplete.description') });
     } finally {
         setCalculating(false);
     }
-  }, [toast, t, calculating]);
+  }, [toast, t]);
 
 
   useEffect(() => {
@@ -105,24 +96,26 @@ export default function ReviewPage() {
       setLoading(true);
       const result = await loadCachedResult();
 
-      if (result.status === "READY") {
-        const clusters = result.data.clusters || [];
+      if (result) {
+        const clusters = result.clusters || [];
         setAllClusters(clusters);
-        if (clusters.length > 0) {
-          toast({ title: t('review.toasts.clustersLoaded.title'), description: t('review.toasts.clustersLoaded.description', {'clusters.length': clusters.length}), variant: "default" });
-          handleCalculateScores(clusters);
-        } else {
+        if (clusters.length === 0) {
           toast({ title: t('review.toasts.noClustersFound.title'), description: t('review.toasts.noClustersFound.description'), variant: "default" });
         }
-      } else if (result.status === "NO_DATA") {
+      } else {
         toast({ title: t('review.toasts.noData.title'), description: t('review.toasts.noData.description'), variant: "destructive" });
-      } else if (result.status === "ERROR") {
-        toast({ title: "Error", description: "Could not load data from cache.", variant: "destructive" });
       }
       setLoading(false);
     }
     getData();
-  }, [toast, t, handleCalculateScores]);
+  }, [toast, t]);
+
+  // Separate useEffect to trigger score calculation only when clusters are loaded
+  useEffect(() => {
+    if (!loading && allClusters.length > 0) {
+      handleCalculateScores(allClusters);
+    }
+  }, [loading, allClusters, handleCalculateScores]);
 
 
   useEffect(() => {
@@ -363,3 +356,5 @@ function ClusterCard({ cluster, clusterNumber, onInspect }: { cluster: Cluster, 
     </Card>
   );
 }
+
+    
