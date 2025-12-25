@@ -74,8 +74,6 @@ export default function ReportPage() {
   const [isExporting, setIsExporting] = useState(false);
   
   // Map State
-  const [admin1Data, setAdmin1Data] = useState<FeatureCollection | null>(null);
-  const [admin2Data, setAdmin2Data] = useState<FeatureCollection | null>(null);
   const [admin3Data, setAdmin3Data] = useState<FeatureCollection | null>(null);
   const [selectedFeatures, setSelectedFeatures] = useState<Feature[]>([]);
 
@@ -89,8 +87,6 @@ export default function ReportPage() {
 
   // Load geojson data
   useEffect(() => {
-    fetch('/data/yemen_admin1.geojson').then(res => res.json()).then(setAdmin1Data);
-    fetch('/data/yemen_admin2.geojson').then(res => res.json()).then(setAdmin2Data);
     fetch('/data/yemen_admin3.geojson').then(res => res.json()).then(setAdmin3Data);
   }, []);
 

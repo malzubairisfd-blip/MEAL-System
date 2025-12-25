@@ -43,53 +43,56 @@ export default function WestAfricaMap() {
 
     }
   }, [setMapInstance]);
-
-  const createLayer = (
-    data: FeatureCollection | null, 
-    baseStyle: L.PathOptions, 
-    selectedStyle: L.PathOptions,
-    nameProperty: string
-  ) => {
-    if (!mapRef.current || !data) return null;
-
-    const selectedPcodes = new Set(selectedFeatures.map(f => f.properties?.ADM3_PCODE));
-    
-    const layer = L.geoJSON(data, {
-      style: (feature?: Feature) => {
-        if (feature && selectedPcodes.has(feature.properties?.[nameProperty.replace('_AR', '_PCODE')])) {
-          return selectedStyle;
-        }
-        return baseStyle;
-      },
-    });
-    return layer.addTo(mapRef.current);
-  };
   
   useEffect(() => {
-    if (!mapRef.current) return;
-    
+    if (!mapRef.current || !admin1 || !admin2 || !admin3) return;
+
+    // Clear existing layers
     if (admin1LayerRef.current) mapRef.current.removeLayer(admin1LayerRef.current);
-    admin1LayerRef.current = createLayer(admin1, { color: "#4a5568", weight: 2, opacity: 0.8, fillOpacity: 0.1 }, {}, 'ADM1_AR');
-
     if (admin2LayerRef.current) mapRef.current.removeLayer(admin2LayerRef.current);
-    admin2LayerRef.current = createLayer(admin2, { color: "#718096", weight: 1.5, opacity: 0.7, fillOpacity: 0.1 }, {}, 'ADM2_AR');
-
     if (admin3LayerRef.current) mapRef.current.removeLayer(admin3LayerRef.current);
-    admin3LayerRef.current = createLayer(
-        admin3, 
-        { color: "#A0AEC0", weight: 1, opacity: 0.6, fillOpacity: 0.1 }, 
-        { color: '#d97706', weight: 3, opacity: 1, fillColor: '#fde047', fillOpacity: 0.5 },
-        'ADM3_AR'
-    );
-    
-    if (selectedFeatures.length > 0) {
-        const selectedGroup = L.featureGroup(selectedFeatures.map(f => L.geoJSON(f)));
-        mapRef.current.fitBounds(selectedGroup.getBounds());
+
+    // Get P-codes of selected features for efficient lookup
+    const selectedPcodes = new Set(selectedFeatures.map(f => f.properties?.ADM3_PCODE));
+
+    // Draw base layers
+    admin1LayerRef.current = L.geoJSON(admin1, { style: { color: "#4a5568", weight: 2, opacity: 0.8, fillOpacity: 0.1 } }).addTo(mapRef.current);
+    admin2LayerRef.current = L.geoJSON(admin2, { style: { color: "#718096", weight: 1.5, opacity: 0.7, fillOpacity: 0.1 } }).addTo(mapRef.current);
+
+    // Draw Admin3 layer with conditional styling and labels
+    const highlightedLayers: L.Layer[] = [];
+    admin3LayerRef.current = L.geoJSON(admin3, {
+      style: (feature) => {
+        if (feature && selectedPcodes.has(feature.properties.ADM3_PCODE)) {
+          return { color: '#d97706', weight: 3, opacity: 1, fillColor: '#fde047', fillOpacity: 0.5 };
+        }
+        return { color: "#A0AEC0", weight: 1, opacity: 0.6, fillOpacity: 0.1 };
+      },
+      onEachFeature: (feature, layer) => {
+        if (feature && selectedPcodes.has(feature.properties.ADM3_PCODE)) {
+          highlightedLayers.push(layer);
+          const label = feature.properties.ADM3_AR;
+          if (label) {
+            layer.bindTooltip(label, {
+              permanent: true,
+              direction: 'center',
+              className: 'admin-label' // Custom class for styling
+            });
+          }
+        }
+      }
+    }).addTo(mapRef.current);
+
+    // Zoom to highlighted features
+    if (highlightedLayers.length > 0) {
+      const group = L.featureGroup(highlightedLayers);
+      mapRef.current.fitBounds(group.getBounds(), { padding: [30, 30] });
     } else {
-        mapRef.current.setView([15.55, 48.52], 6);
+      // Reset view if no features are selected
+      mapRef.current.setView([15.55, 48.52], 6);
     }
 
-  }, [admin1, admin2, admin3, selectedFeatures, mapRef.current]);
+  }, [admin1, admin2, admin3, selectedFeatures]);
 
 
   return (
