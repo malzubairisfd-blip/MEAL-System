@@ -1,3 +1,4 @@
+
 // app/(app)/upload/page.tsx
 "use client";
 
@@ -153,12 +154,13 @@ function hierarchicalRecluster(records: RecordRow[]): RecordRow[][] {
     // to be handled by the outer loop (which will discard them).
     signatures.forEach(sig => {
         if (!processedRecords.has(sig.record)) {
-            subClusters.push([sig.record]);
+            // Do not create clusters of 1 record
+            // subClusters.push([sig.record]);
             processedRecords.add(sig.record);
         }
     });
 
-    return subClusters;
+    return subClusters.filter(sc => sc.length > 1);
 }
 
 
@@ -278,19 +280,20 @@ export default function UploadPage(){
         if (clusterRecords.length > 1) {
           currentClusters.push({ 
             records: clusterRecords,
-            reasons: [] // Reasons are not used in this flow
+            reasons: [], // Reasons are not used in this flow
+            refinePass: 0,
           });
         }
       }
     }
     
+    const MAX_RECLUSTER_PASSES = 10;
     let pass = 1;
     while (true) {
-        const oversized = currentClusters.filter(c => c.records.length > 5);
-        const normalSized = currentClusters.filter(c => c.records.length <= 5);
+        const oversized = currentClusters.filter(c => c.records.length > 5 && c.refinePass < MAX_RECLUSTER_PASSES);
+        const normalSized = currentClusters.filter(c => c.records.length <= 5 || c.refinePass >= MAX_RECLUSTER_PASSES);
 
         if (oversized.length === 0) {
-            // Final filter for any single-record clusters that might have been produced
             currentClusters = normalSized.filter(c => c.records.length > 1);
             break;
         }
@@ -309,11 +312,11 @@ export default function UploadPage(){
             const clusterToSplit = oversized[i];
             const subClusters = hierarchicalRecluster(clusterToSplit.records);
             
-            // Add the results of the split to the next pass
             subClusters.forEach(sub => {
                 nextPassClusters.push({
                     records: sub,
-                    reasons: clusterToSplit.reasons, // Carry over original reasons if any
+                    reasons: clusterToSplit.reasons,
+                    refinePass: clusterToSplit.refinePass + 1,
                 });
             });
             
@@ -323,6 +326,11 @@ export default function UploadPage(){
         
         currentClusters = nextPassClusters;
         pass++;
+        
+        if (pass > MAX_RECLUSTER_PASSES * 2) { // Additional safety break
+            console.warn("Exceeded maximum total passes, breaking re-cluster loop.");
+            break;
+        }
     }
 
 
