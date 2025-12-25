@@ -1,8 +1,5 @@
 
 import { NextResponse } from 'next/server';
-import fs from 'fs/promises';
-import path from 'path';
-import os from 'os';
 import ExcelJS from "exceljs";
 import { fullPairwiseBreakdown } from "@/lib/scoring-server";
 import type { AuditFinding } from "@/lib/auditEngine";
@@ -10,8 +7,6 @@ import type { RecordRow } from "@/lib/types";
 import { generateArabicClusterSummary } from '@/lib/arabicClusterSummary';
 import { calculateClusterConfidence } from '@/lib/clusterConfidence';
 
-
-const getTmpDir = () => path.join(os.tmpdir(), 'beneficiary-insights-cache');
 
 type EnrichedRecord = RecordRow & {
     ClusterID?: number | null; // Internal sequential ID
@@ -120,7 +115,6 @@ async function enrichData(cachedData: any): Promise<EnrichedRecord[]> {
 
         if (recordClusterId) {
             const clusterInfo = clusterInfoMap.get(recordClusterId)!;
-            
             const clusterRecords = clusters[recordClusterId - 1].records;
             
             let totalPairScore = 0;
@@ -159,6 +153,8 @@ async function enrichData(cachedData: any): Promise<EnrichedRecord[]> {
                 if (score > 0) return "?";
                 return null;
             };
+            
+            const generatedClusterId = clusterInfo.maxBeneficiaryId || recordClusterId;
 
             enriched = {
                 ...enriched,
@@ -168,7 +164,7 @@ async function enrichData(cachedData: any): Promise<EnrichedRecord[]> {
                 idScore: avgIdScore,
                 phoneScore: avgPhoneScore,
                 ClusterID: recordClusterId, // internal sequential ID
-                Generated_Cluster_ID: clusterInfo.maxBeneficiaryId || recordClusterId,
+                Generated_Cluster_ID: generatedClusterId,
                 Cluster_Size: clusterInfo.size,
                 Max_PairScore: clusterInfo.maxScore,
                 'تصنيف المجموعة المبدئي': clusterInfo.decision,
@@ -269,18 +265,10 @@ function createEnrichedDataSheet(wb: ExcelJS.Workbook, data: EnrichedRecord[], o
       });
     });
 
-    // Check if a 'cluster_id' column already exists in the original data.
-    const hasOriginalClusterId = originalHeaders.some(h => h.toLowerCase() === 'cluster_id');
-
-    let enrichmentHeaders = [
-        "Cluster_Size", "Flag", "pairScore", "Max_PairScore", "nameScore", "husbandScore", "idScore", "phoneScore", "تصنيف المجموعة المبدئي", "نتائج تحليل المجموعة"
+    const enrichmentHeaders = [
+        "Generated_Cluster_ID", "Cluster_Size", "Flag", "pairScore", "Max_PairScore", "nameScore", "husbandScore", "idScore", "phoneScore", "تصنيف المجموعة المبدئي", "نتائج تحليل المجموعة"
     ];
     
-    // Use Generated_Cluster_ID if the original file has cluster_id, otherwise use Cluster_ID
-    const clusterIdColumnName = "Generated_Cluster_ID";
-    enrichmentHeaders.unshift(clusterIdColumnName);
-
-
     const headersToExclude = ['ClusterID', 'Generated_Cluster_ID', 'womanName_normalized', 'husbandName_normalized', 'pairScore', 'nameScore', 'husbandScore', 'idScore', 'phoneScore', 'Max_PairScore', 'Cluster_Size', 'Flag', 'تصنيف المجموعة المبدئي', 'نتائج تحليل المجموعة'];
     const finalOriginalHeaders = Array.from(allOriginalHeaders).filter(h => !headersToExclude.includes(h) && !h.startsWith('_'));
     
@@ -298,14 +286,11 @@ function createEnrichedDataSheet(wb: ExcelJS.Workbook, data: EnrichedRecord[], o
         cell.alignment = { horizontal: 'center' };
     });
     
-    // Map data correctly for writing rows
     const dataForSheet = data.map(record => {
         const newRecord: any = {};
-        // First, copy all original properties
         finalOriginalHeaders.forEach(header => {
             newRecord[header] = record[header];
         });
-        // Then, add the enrichment properties
         enrichmentHeaders.forEach(header => {
              newRecord[header] = record[header as keyof EnrichedRecord];
         });
@@ -341,7 +326,7 @@ function createEnrichedDataSheet(wb: ExcelJS.Workbook, data: EnrichedRecord[], o
     let lastClusterId: number | string | null = null;
     for (let i = 2; i <= ws.rowCount; i++) {
         const row = ws.getRow(i);
-        const cid = row.getCell(clusterIdColumnName).value;
+        const cid = row.getCell("Generated_Cluster_ID").value;
         if (cid !== null && cid !== lastClusterId && lastClusterId !== null) {
             row.eachCell({ includeEmpty: true }, cell => {
                 cell.border = { ...cell.border, top: { style: 'thick', color: { argb: 'FF002060' } } };
@@ -786,7 +771,6 @@ function createDashboardReportSheet(wb: ExcelJS.Workbook, allRecords: RecordRow[
     const ws = wb.addWorksheet("Dashboard Report");
     ws.views = [{ rightToLeft: true }];
     
-    // Define column widths roughly based on the image proportions
     ws.columns = [
         { width: 2 },  // A
         { width: 18 }, // B
@@ -847,22 +831,15 @@ function createDashboardReportSheet(wb: ExcelJS.Workbook, allRecords: RecordRow[
         });
     };
     
-    // Add images in a two-column grid layout
     let currentRow = 6;
-    const chartHeight = 20; // 20 rows per chart
-    
-    // Column 1
-    addImage(chartImages.byDayChart, 1, currentRow, 4.5, currentRow + chartHeight);
-    currentRow += chartHeight + 1;
-    addImage(chartImages.genderVisual, 1, currentRow, 4.5, currentRow + chartHeight);
-    currentRow += chartHeight + 1;
-    addImage(chartImages.bubbleStats, 1, currentRow, 4.5, currentRow + chartHeight);
+    const chartHeight = 20;
 
-    // Column 2
-    currentRow = 6; // Reset for second column
-    addImage(chartImages.byVillageChart, 5, currentRow, 8.5, currentRow + chartHeight);
-    currentRow += chartHeight + 1;
-    addImage(chartImages.womenDonut, 5, currentRow, 8.5, currentRow + chartHeight);
-    currentRow += chartHeight + 1;
-    addImage(chartImages.map, 5, currentRow, 8.5, currentRow + chartHeight);
+    const chartOrder = ['byDayChart', 'byVillageChart', 'genderVisual', 'womenDonut', 'bubbleStats', 'map'];
+
+    chartOrder.forEach(chartKey => {
+      if (chartImages[chartKey]) {
+        addImage(chartImages[chartKey], 1, currentRow, 8.5, currentRow + chartHeight);
+        currentRow += chartHeight + 1; // Move to the next row for the next chart
+      }
+    });
 }
