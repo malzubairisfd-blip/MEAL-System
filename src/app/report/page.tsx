@@ -40,6 +40,7 @@ import { Check, PlusCircle } from 'lucide-react';
 import { Badge } from "@/components/ui/badge";
 import { cn } from '@/lib/utils';
 import type { Feature, FeatureCollection } from 'geojson';
+import { loadCachedResult } from '@/lib/cache';
 
 
 // Global Dashboard State
@@ -96,20 +97,10 @@ export default function ReportPage() {
   // Fetch cached data on initial render
   useEffect(() => {
     const loadData = async () => {
-        const cacheId = sessionStorage.getItem('cacheId');
-        if (!cacheId) {
-            toast({ title: "No Data", description: "Please upload data first.", variant: "destructive" });
-            setLoadingState("ERROR");
-            return;
-        }
-
-        try {
-            const res = await fetch(`/api/cluster-cache?id=${cacheId}`);
-            if (!res.ok) {
-                throw new Error('Failed to fetch cached data. Please try the upload process again.');
-            }
-            const data = await res.json();
-            
+        setLoadingState('LOADING');
+        const data = await loadCachedResult();
+        
+        if (data && data.rows) {
             setAllRows(data.rows || []);
             if (data.rows && data.rows.length > 0) {
                 const fileColumns = data.originalHeaders || Object.keys(data.rows[0]);
@@ -135,8 +126,8 @@ export default function ReportPage() {
                  toast({title: "No Records", description: "The cached data contains no records.", variant: "destructive"});
             }
             setLoadingState("READY");
-        } catch (error: any) {
-             toast({ title: "Error loading data", description: error.message, variant: "destructive" });
+        } else {
+             toast({ title: "Could not load data. Please start by uploading a file.", description: "No valid data was found in the cache.", variant: "destructive" });
              setLoadingState("ERROR");
         }
     };
