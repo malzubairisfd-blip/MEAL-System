@@ -26,25 +26,31 @@ type GroupedFinding = {
   issues: { type: string; description: string; severity: "high" | "medium" | "low" }[];
 };
 
+type Cluster = {
+  records: RecordRow[];
+  reasons: string[];
+};
+
 export default function AuditPage() {
   const [rows, setRows] = useState<RecordRow[]>([]);
+  const [clusters, setClusters] = useState<Cluster[]>([]);
   const [findings, setFindings] = useState<AuditFinding[]>([]);
   const [loading, setLoading] = useState({ data: true, audit: false });
   const { toast } = useToast();
   const router = useRouter();
 
-    const runAuditNow = useCallback(async () => {
-    const cacheId = sessionStorage.getItem('cacheId');
-    if (!cacheId) {
-        toast({ title: "No Data", description: "Cache ID not found. Please re-upload data.", variant: "destructive" });
+  const runAuditNow = useCallback(async () => {
+    if (clusters.length === 0) {
+        toast({ title: "No Data", description: "No cluster data available to audit.", variant: "destructive" });
         return;
     }
     
     setLoading(prev => ({...prev, audit: true}));
     try {
+        // Send the actual cluster data to the API
         const res = await fetch("/api/audit", {
             method: "POST",
-            body: JSON.stringify({ cacheId }),
+            body: JSON.stringify({ clusters }), // Send clusters directly
             headers: { "Content-Type": "application/json" }
         });
 
@@ -56,16 +62,6 @@ export default function AuditPage() {
         const data = await res.json();
         const newFindings = data.issues || [];
         setFindings(newFindings);
-        
-        // This server-side cache is no longer the primary source.
-        // We might want to remove this or keep it for backup/logging.
-        // For now, let's assume it might still be useful for some other purpose,
-        // but the main app flow doesn't depend on it.
-        // await fetch('/api/cluster-cache', {
-        //     method: 'POST',
-        //     headers: { 'Content-Type': 'application/json' },
-        //     body: JSON.stringify({ cacheId, auditFindings: newFindings })
-        // });
 
         toast({ title: "Audit Complete", description: `${newFindings.length} potential issues found.` });
 
@@ -74,7 +70,7 @@ export default function AuditPage() {
     } finally {
         setLoading(prev => ({...prev, audit: false}));
     }
-  }, [toast]);
+  }, [toast, clusters]);
 
 
   useEffect(() => {
@@ -83,10 +79,12 @@ export default function AuditPage() {
       const cachedResult = await loadCachedResult();
 
       if (cachedResult && cachedResult.clusters) {
-        const clusters = cachedResult.clusters || [];
-        const auditFindings = cachedResult.auditFindings; // Assuming audit findings might be cached too
+        const loadedClusters = cachedResult.clusters || [];
+        const auditFindings = cachedResult.auditFindings; 
 
-        const clusteredRecords = clusters.map((c: any) => c.records).flat();
+        setClusters(loadedClusters); // Store clusters in state
+
+        const clusteredRecords = loadedClusters.map((c: any) => c.records).flat();
         setRows(clusteredRecords);
 
         if (clusteredRecords.length > 0) {
@@ -95,7 +93,8 @@ export default function AuditPage() {
               toast({ title: "Loaded from Cache", description: `Loaded ${auditFindings.length} existing audit findings.` });
           } else {
               toast({ title: "Data Ready", description: `${clusteredRecords.length} records are ready for audit. Starting audit...` });
-              runAuditNow();
+              // We pass the loaded clusters directly to avoid state update delays
+              runAudit(loadedClusters);
           }
         } else {
           toast({ title: "No Clustered Data", description: "No records were found in clusters to audit." });
@@ -105,8 +104,34 @@ export default function AuditPage() {
       }
       setLoading(prev => ({...prev, data: false}));
     }
+
+    // Helper to run audit with fresh data
+    const runAudit = async (clustersToAudit: Cluster[]) => {
+      setLoading(prev => ({...prev, audit: true}));
+      try {
+        const res = await fetch("/api/audit", {
+            method: "POST",
+            body: JSON.stringify({ clusters: clustersToAudit }),
+            headers: { "Content-Type": "application/json" }
+        });
+
+        if (!res.ok) {
+           const errorData = await res.json();
+           throw new Error(errorData.error || "An error occurred during the audit.");
+        }
+        const data = await res.json();
+        const newFindings = data.issues || [];
+        setFindings(newFindings);
+        toast({ title: "Audit Complete", description: `${newFindings.length} potential issues found.` });
+      } catch (error: any) {
+        toast({ title: "Audit Error", description: error.message, variant: "destructive" });
+      } finally {
+        setLoading(prev => ({...prev, audit: false}));
+      }
+    };
+
     getData();
-  }, [toast, runAuditNow]);
+  }, [toast]);
 
 
 

@@ -1,14 +1,8 @@
 
 
 import { NextResponse } from "next/server";
-import fs from 'fs/promises';
-import path from 'path';
-import os from 'os';
 
 export const runtime = "nodejs"; // prevent edge runtime
-
-// Gets the temporary directory for the cache.
-const getTmpDir = () => path.join(os.tmpdir(), 'beneficiary-insights-cache');
 
 /* -------------------------------------------------------------
    SAFE JSON PARSER 
@@ -199,30 +193,14 @@ export async function POST(req: Request) {
   try {
     const body = await safeParse(req);
 
-    if (!body.cacheId) {
-      return jsonError("Missing cacheId.", 400);
-    }
-    
-    let cached: any;
-    try {
-        const cacheDir = getTmpDir();
-        const filePath = path.join(cacheDir, `${body.cacheId}.json`);
-        const fileContent = await fs.readFile(filePath, 'utf-8');
-        cached = JSON.parse(fileContent);
-    } catch(e: any) {
-        if (e.code === 'ENOENT') {
-            return jsonError(`Cache file not found for ID: ${body.cacheId}. Please re-run the clustering process.`, 404);
-        }
-        return jsonError(`Cache file is invalid or could not be read. Error: ${e.message}`, 500);
-    }
+    // The API now receives the clusters directly in the body
+    const clusters = body.clusters;
 
-    const clusters = cached.clusters;
-
-    if (!clusters) return jsonError("Cache corrupted: clusters missing from data.", 500);
+    if (!clusters || !Array.isArray(clusters)) {
+      return jsonError("Missing or invalid 'clusters' array in request body.", 400);
+    }
 
     const issues: any[] = [];
-    const potentialDuplicates: any[] = [];
-
     const threshold = typeof body.threshold === "number" ? body.threshold : 0.6;
 
     /* ---------------------------------------------------------
@@ -230,7 +208,6 @@ export async function POST(req: Request) {
     --------------------------------------------------------- */
     for (let ci = 0; ci < clusters.length; ci++) {
       const clusterObject = clusters[ci];
-      // FIX: The audit logic was expecting an array of records, but the cache stores an object with a 'records' property.
       const members = clusterObject.records;
       if (!Array.isArray(members) || members.length < 2) continue;
 
