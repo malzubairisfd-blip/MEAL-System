@@ -17,6 +17,10 @@ type EnrichedRecord = RecordRow & {
     pairScore?: number;
     nameScore?: number;
     husbandScore?: number;
+    childrenScore?: number;
+    phoneScore?: number;
+    idScore?: number;
+    locationScore?: number;
     'تصنيف المجموعة المبدئي'?: string;
     'نتائج تحليل المجموعة'?: string;
     [key: string]: any;
@@ -99,11 +103,17 @@ async function enrichData(cachedData: any): Promise<EnrichedRecord[]> {
 
             const pairs = pairwiseCache.get(clusterId) || [];
             const relatedPairs = pairs.filter(p => p.a._internalId === record._internalId || p.b._internalId === record._internalId);
-            const avgPairScore = avg(relatedPairs.map(p => p.score));
             
-            newRecord.pairScore = avgPairScore;
+            newRecord.pairScore = avg(relatedPairs.map(p => p.score));
+            newRecord.nameScore = avg(relatedPairs.map(p => p.breakdown.nameScore || 0));
+            newRecord.husbandScore = avg(relatedPairs.map(p => p.breakdown.husbandScore || 0));
+            newRecord.childrenScore = avg(relatedPairs.map(p => p.breakdown.childrenScore || 0));
+            newRecord.phoneScore = avg(relatedPairs.map(p => p.breakdown.phoneScore || 0));
+            newRecord.idScore = avg(relatedPairs.map(p => p.breakdown.idScore || 0));
+            newRecord.locationScore = avg(relatedPairs.map(p => p.breakdown.locationScore || 0));
+
             const flag = (score: number) => score >= 0.9 ? "m?" : score >= 0.8 ? "m" : score >= 0.7 ? "??" : score > 0 ? "?" : null;
-            newRecord.Flag = flag(avgPairScore);
+            newRecord.Flag = flag(newRecord.pairScore);
         }
         
         enrichedRecords.push(newRecord);
@@ -191,7 +201,9 @@ function createEnrichedDataSheet(wb: ExcelJS.Workbook, data: EnrichedRecord[], o
     ws.views = [{ rightToLeft: true }];
     
     const enrichmentHeaders = [
-        "Generated_Cluster_ID", "Cluster_Size", "Flag", "Max_PairScore", "تصنيف المجموعة المبدئي", "نتائج تحليل المجموعة"
+        "Generated_Cluster_ID", "Cluster_Size", "Flag", "Max_PairScore",
+        "pairScore", "nameScore", "husbandScore", "childrenScore", "phoneScore", "idScore", "locationScore",
+        "تصنيف المجموعة المبدئي", "نتائج تحليل المجموعة"
     ];
     
     const finalOriginalHeaders = originalHeaders.filter(h => !h.startsWith('_'));
@@ -213,7 +225,12 @@ function createEnrichedDataSheet(wb: ExcelJS.Workbook, data: EnrichedRecord[], o
     const dataForSheet = data.map(record => {
         const newRecord: any = {};
         finalHeaders.forEach(header => {
-            newRecord[header] = record[header];
+            const value = record[header];
+             if (typeof value === 'number') {
+                newRecord[header] = parseFloat(value.toFixed(3));
+            } else {
+                newRecord[header] = value;
+            }
         });
         return newRecord;
     });
@@ -238,9 +255,11 @@ function createEnrichedDataSheet(wb: ExcelJS.Workbook, data: EnrichedRecord[], o
             if (fillColor) {
                 const fill = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: fillColor } };
                  row.eachCell({ includeEmpty: false }, (cell) => {
-                    cell.fill = fill;
-                    if (score >= 0.9) {
-                        cell.font = { ...cell.font, bold: true, color: { argb: 'FFFFFFFF' } };
+                    if (Number(cell.address.replace(/[A-Z]/g, '')) === rowNumber) {
+                        cell.fill = fill;
+                         if (score >= 0.9) {
+                            cell.font = { ...cell.font, bold: true, color: { argb: 'FFFFFFFF' } };
+                        }
                     }
                 });
             }
@@ -249,7 +268,9 @@ function createEnrichedDataSheet(wb: ExcelJS.Workbook, data: EnrichedRecord[], o
         const cid = rowData.Generated_Cluster_ID;
         if (cid !== null && cid !== lastClusterId && lastClusterId !== null) {
             row.eachCell({ includeEmpty: false }, (cell) => {
-               cell.border = { ...cell.border, top: { style: 'thick', color: { argb: 'FF002060' } } };
+               if (Number(cell.address.replace(/[A-Z]/g, '')) === rowNumber) {
+                    cell.border = { ...cell.border, top: { style: 'thick', color: { argb: 'FF002060' } } };
+               }
             });
         }
         lastClusterId = cid;
