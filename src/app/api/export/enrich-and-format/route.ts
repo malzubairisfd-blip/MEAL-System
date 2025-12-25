@@ -237,16 +237,20 @@ function createEnrichedDataSheet(wb: ExcelJS.Workbook, data: EnrichedRecord[], o
 
             if (fillColor) {
                 const fill = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: fillColor } };
-                row.fill = fill;
-                 if (score >= 0.9) {
-                    row.font = { ...row.font, bold: true, color: { argb: 'FFFFFFFF' } };
-                 }
+                 row.eachCell({ includeEmpty: false }, (cell) => {
+                    cell.fill = fill;
+                    if (score >= 0.9) {
+                        cell.font = { ...cell.font, bold: true, color: { argb: 'FFFFFFFF' } };
+                    }
+                });
             }
         }
         
         const cid = rowData.Generated_Cluster_ID;
         if (cid !== null && cid !== lastClusterId && lastClusterId !== null) {
-            row.border = { ...row.border, top: { style: 'thick', color: { argb: 'FF002060' } } };
+            row.eachCell({ includeEmpty: false }, (cell) => {
+               cell.border = { ...cell.border, top: { style: 'thick', color: { argb: 'FF002060' } } };
+            });
         }
         lastClusterId = cid;
     });
@@ -688,7 +692,7 @@ function createDashboardReportSheet(wb: ExcelJS.Workbook, allRecords: RecordRow[
     if (chartImages.byVillageChart) {
       addImage(chartImages.byVillageChart, { col: 4, row: currentRow }, { width: 347, height: 788 });
     }
-    currentRow += Math.round(788 / 15) + rowGap; // Approximate row height based on pixels
+    currentRow += Math.round(788 / 15) + rowGap;
 
     // Row 2
     if (chartImages.womenDonut) {
@@ -707,5 +711,3 @@ function createDashboardReportSheet(wb: ExcelJS.Workbook, allRecords: RecordRow[
         addImage(chartImages.map, { col: 4, row: currentRow }, { width: 347, height: 749 });
     }
 }
-
-    
