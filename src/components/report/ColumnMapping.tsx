@@ -8,6 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { CheckCircle, XCircle } from "lucide-react";
 
 export const MAPPING_FIELDS = [
+  "Government", "District", "Subdistrict",
   "Team Leaders", "Surveyor", "Registration days", "Village targeted", 
   "Household registered", "Household Gender", "Dislocated household", 
   "Household having dislocated guest", "Beneficiaries registered", 

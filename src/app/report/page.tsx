@@ -17,28 +17,12 @@ import {
 } from "@/components/ui/collapsible";
 import { Card, CardHeader, CardContent, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Loader2, ChevronsUpDown, FileDown, Upload, Microscope, ClipboardList, Camera } from "lucide-react";
+import { Loader2, ChevronsUpDown, Camera, Upload, Microscope, ClipboardList } from "lucide-react";
 import { ColumnMapping, MAPPING_FIELDS } from '@/components/report/ColumnMapping';
 import { KeyFigures } from '@/components/report/KeyFigures';
 import { BeneficiariesByVillageChart, BeneficiariesByDayChart, WomenAndChildrenDonut } from '@/components/report/TableBarCharts';
 import { GenderVisual } from '@/components/report/GenderVisual';
 import { BubbleStats } from '@/components/report/BubbleStats';
-import {
-    Popover,
-    PopoverContent,
-    PopoverTrigger,
-} from "@/components/ui/popover";
-import {
-    Command,
-    CommandEmpty,
-    CommandGroup,
-    CommandInput,
-    CommandItem,
-    CommandList,
-} from "@/components/ui/command";
-import { Check, PlusCircle } from 'lucide-react';
-import { Badge } from "@/components/ui/badge";
-import { cn } from '@/lib/utils';
 import type { Feature, FeatureCollection } from 'geojson';
 import { loadCachedResult } from '@/lib/cache';
 import { openDB } from 'idb';
@@ -60,7 +44,7 @@ export const useDashboard = () => React.useContext(DashboardContext);
 // Dynamically import the map component
 const WestAfricaMap = dynamic(() => import('@/components/Map'), {
   ssr: false,
-  loading: () => <p>Loading map...</p>,
+  loading: () => <div className="h-full w-full flex items-center justify-center bg-muted"><p>Loading map...</p></div>,
 });
 
 const LOCAL_STORAGE_KEY_PREFIX = "beneficiary-report-mapping-";
@@ -221,6 +205,26 @@ export default function ReportPage() {
       setProcessedData(data);
     }
   }, [allRows, mapping]);
+
+  // AUTO-SELECT MAP FEATURES
+  useEffect(() => {
+    if (!admin3Data || allRows.length === 0 || !mapping['Subdistrict']) {
+      setSelectedFeatures([]);
+      return;
+    }
+    
+    const subdistrictsInData = new Set(allRows.map(r => r[mapping['Subdistrict']]).filter(Boolean));
+    
+    if (subdistrictsInData.size > 0) {
+      const matchedFeatures = admin3Data.features.filter(feature => 
+        feature.properties?.ADM3_AR && subdistrictsInData.has(feature.properties.ADM3_AR)
+      );
+      setSelectedFeatures(matchedFeatures);
+    } else {
+      setSelectedFeatures([]);
+    }
+
+  }, [allRows, admin3Data, mapping]);
 
   const handleCaptureAndExport = async () => {
     if (!processedData) {
@@ -390,90 +394,12 @@ export default function ReportPage() {
                         <CardHeader className="flex flex-row items-center justify-between cursor-pointer">
                             <div>
                                 <CardTitle>Geospatial View</CardTitle>
-                                <CardDescription>Interactive map of administrative boundaries.</CardDescription>
+                                <CardDescription>Map of subdistricts present in your data.</CardDescription>
                             </div>
                             <Button variant="ghost" size="sm"><ChevronsUpDown className="h-4 w-4" /></Button>
                         </CardHeader>
                     </CollapsibleTrigger>
                     <CollapsibleContent className="p-6 pt-0 space-y-4">
-                         {admin3Data && (
-                            <div className="flex items-center gap-4">
-                                <Popover>
-                                    <PopoverTrigger asChild>
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="w-full justify-start"
-                                        >
-                                            <PlusCircle className="mr-2 h-4 w-4" />
-                                            Select Regions
-                                            {selectedFeatures.length > 0 && (
-                                                <>
-                                                    <div className="mx-2 h-4 w-px bg-muted-foreground" />
-                                                    <div className="space-x-1">
-                                                        {selectedFeatures.length > 2 ? (
-                                                            <Badge
-                                                                variant="secondary"
-                                                                className="rounded-sm px-1 font-normal"
-                                                            >
-                                                                {selectedFeatures.length} selected
-                                                            </Badge>
-                                                        ) : (
-                                                            selectedFeatures.map((feature) => (
-                                                                <Badge
-                                                                    key={feature.properties?.ADM3_AR}
-                                                                    variant="secondary"
-                                                                    className="rounded-sm px-1 font-normal"
-                                                                >
-                                                                    {feature.properties?.ADM3_AR}
-                                                                </Badge>
-                                                            ))
-                                                        )}
-                                                    </div>
-                                                </>
-                                            )}
-                                        </Button>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-[300px] p-0" align="start">
-                                        <Command>
-                                            <CommandInput placeholder="Search regions..." />
-                                            <CommandList>
-                                                <CommandEmpty>No results found.</CommandEmpty>
-                                                <CommandGroup>
-                                                    {admin3Data.features.map((feature) => {
-                                                        const isSelected = selectedFeatures.some(sf => sf.properties?.ADM3_PCODE === feature.properties?.ADM3_PCODE);
-                                                        return (
-                                                            <CommandItem
-                                                                key={feature.properties?.ADM3_PCODE}
-                                                                onSelect={() => {
-                                                                    if (isSelected) {
-                                                                        setSelectedFeatures(selectedFeatures.filter(sf => sf.properties?.ADM3_PCODE !== feature.properties?.ADM3_PCODE));
-                                                                    } else {
-                                                                        setSelectedFeatures([...selectedFeatures, feature]);
-                                                                    }
-                                                                }}
-                                                            >
-                                                                <div
-                                                                    className={cn(
-                                                                        "mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary",
-                                                                        isSelected
-                                                                            ? "bg-primary text-primary-foreground"
-                                                                            : "opacity-50 [&_svg]:invisible"
-                                                                    )}
-                                                                >
-                                                                    <Check className={cn("h-4 w-4")} />
-                                                                </div>
-                                                                <span>{feature.properties?.ADM3_AR}</span>
-                                                            </CommandItem>
-                                                        );
-                                                    })}
-                                                </CommandGroup>
-                                            </CommandList>
-                                        </Command>
-                                    </PopoverContent>
-                                </Popover>
-                            </div>
-                        )}
                         <div className="h-[600px] w-full rounded-md border" id="map-container">
                             <WestAfricaMap />
                         </div>
