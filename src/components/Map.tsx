@@ -64,9 +64,9 @@ export default function WestAfricaMap() {
     admin3LayerRef.current = L.geoJSON(admin3, {
       style: (feature) => {
         if (feature && selectedPcodes.has(feature.properties.ADM3_PCODE)) {
-          return { color: '#d97706', weight: 3, opacity: 1, fillColor: '#fde047', fillOpacity: 0.5 };
+          return { color: '#fefefe', weight: 3, opacity: 1, fillColor: '#005999', fillOpacity: 0.6 };
         }
-        return { color: "#A0AEC0", weight: 1, opacity: 0.6, fillOpacity: 0.1 };
+        return { color: "#787878", weight: 1, opacity: 0.6, fillColor: '#eeeeef', fillOpacity: 0.5 };
       },
       onEachFeature: (feature, layer) => {
         if (feature && selectedPcodes.has(feature.properties.ADM3_PCODE)) {
