@@ -69,26 +69,6 @@ function normalizeArabic(s: string): string {
 }
 
 
-async function getCachedData(cacheId: string) {
-    const cacheDir = getTmpDir();
-    const filePath = path.join(cacheDir, `${cacheId}.json`);
-
-    try {
-        const fileContent = await fs.readFile(filePath, 'utf-8');
-        const parsed = JSON.parse(fileContent);
-        if (!parsed.rows || !parsed.clusters) {
-            throw new Error("Cache corrupted: rows or clusters missing.");
-        }
-        return parsed;
-    } catch (e: any) {
-        if (e.code === 'ENOENT') {
-             throw new Error(`Cache file not found for ID: ${cacheId}. Please re-upload your file.`);
-        }
-        throw new Error(`Cache not found or expired. Please re-upload your file. Details: ${e.message}`);
-    }
-}
-
-
 async function enrichData(cachedData: any): Promise<EnrichedRecord[]> {
     const { rows: allRecords, clusters, originalHeaders } = cachedData;
     if (!allRecords || !clusters) {
@@ -244,13 +224,12 @@ function createFormattedWorkbook(data: EnrichedRecord[], cachedData: any): Excel
 // ===============================================
 export async function POST(req: Request) {
     try {
-        const { cacheId } = await req.json();
+        const { cachedData } = await req.json();
 
-        if (!cacheId) {
-            return NextResponse.json({ error: "Cache ID is required." }, { status: 400 });
+        if (!cachedData) {
+            return NextResponse.json({ error: "Cached data is required." }, { status: 400 });
         }
-        const cachedData = await getCachedData(cacheId);
-
+        
         let enrichedData = await enrichData(cachedData);
         
         let sortedData = sortData(enrichedData);
@@ -298,7 +277,7 @@ function createEnrichedDataSheet(wb: ExcelJS.Workbook, data: EnrichedRecord[], o
     ];
     
     // Use Generated_Cluster_ID if the original file has cluster_id, otherwise use Cluster_ID
-    const clusterIdColumnName = hasOriginalClusterId ? "Generated_Cluster_ID" : "Cluster_ID";
+    const clusterIdColumnName = "Generated_Cluster_ID";
     enrichmentHeaders.unshift(clusterIdColumnName);
 
 
@@ -321,12 +300,15 @@ function createEnrichedDataSheet(wb: ExcelJS.Workbook, data: EnrichedRecord[], o
     
     // Map data correctly for writing rows
     const dataForSheet = data.map(record => {
-        const newRecord: any = { ...record };
-        if (hasOriginalClusterId) {
-            newRecord['Generated_Cluster_ID'] = record.Generated_Cluster_ID;
-        } else {
-            newRecord['Cluster_ID'] = record.Generated_Cluster_ID;
-        }
+        const newRecord: any = {};
+        // First, copy all original properties
+        finalOriginalHeaders.forEach(header => {
+            newRecord[header] = record[header];
+        });
+        // Then, add the enrichment properties
+        enrichmentHeaders.forEach(header => {
+             newRecord[header] = record[header as keyof EnrichedRecord];
+        });
         return newRecord;
     });
 

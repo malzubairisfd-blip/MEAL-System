@@ -99,13 +99,13 @@ export default function ExportPage() {
         const clearSim = runSimulatedProgress();
 
         try {
-            const cacheId = sessionStorage.getItem('cacheId');
-            if (!cacheId) throw new Error("Cached data not available.");
+            const cachedData = await loadCachedResult();
+            if (!cachedData) throw new Error("Cached data not available.");
 
             const res = await fetch('/api/export/enrich-and-format', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ cacheId }),
+                body: JSON.stringify({ cachedData }), // Send the full data object
             });
 
             if (!res.ok) {
