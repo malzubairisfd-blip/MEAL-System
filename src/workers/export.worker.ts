@@ -17,7 +17,7 @@ function safePostMessage(message: any) {
   try {
     structuredClone(message);
     postMessage(message);
-  } catch (e) {
+  } catch {
     postMessage({
       type: 'error',
       data: 'Worker message serialization failed'
@@ -93,20 +93,24 @@ async function enrichData(cachedData: any): Promise<{ enrichedRecords: EnrichedR
     // This function will now mainly focus on preparing data for the sheet generation.
     // However, if scores are missing, it can act as a fallback.
     const enrichedClusters = clusters.map((clusterObj: any) => {
-        if (clusterObj.confidence !== undefined) {
-            return clusterObj; // Already enriched
-        }
-        // Fallback calculation if data is from an older version
         const pairs = [];
         for (let i = 0; i < clusterObj.records.length; i++) {
             for (let j = i + 1; j < clusterObj.records.length; j++) {
                 pairs.push(similarityScoreDetailed(clusterObj.records[i], clusterObj.records[j]));
             }
         }
+        
         const womanScores = pairs.map(p => p.breakdown.nameScore || 0);
         const husbandScores = pairs.map(p => p.breakdown.husbandScore || 0);
         const avgWoman = avg(womanScores);
         const avgHusband = avg(husbandScores);
+        
+        // Calculate maxBeneficiaryId for the cluster
+        const maxBeneficiaryId = clusterObj.records.reduce((max: number, record: RecordRow) => {
+            const currentId = Number(record.beneficiaryId);
+            return !isNaN(currentId) && currentId > max ? currentId : max;
+        }, 0);
+        
         return {
             ...clusterObj,
             avgWomanNameScore: avgWoman,
@@ -114,6 +118,7 @@ async function enrichData(cachedData: any): Promise<{ enrichedRecords: EnrichedR
             confidence: calculateClusterConfidence(avgWoman, avgHusband),
             Max_PairScore: Math.max(...pairs.map(p => p.score), 0),
             size: clusterObj.records.length,
+            maxBeneficiaryId: maxBeneficiaryId,
         }
     });
 
@@ -128,10 +133,12 @@ async function enrichData(cachedData: any): Promise<{ enrichedRecords: EnrichedR
         const cluster = recordToCluster.get(record._internalId!);
         if (cluster) {
              const { decision, expertNote } = getDecisionAndNote(cluster.confidence || 0);
+             const isMaster = Number(record.beneficiaryId) === cluster.maxBeneficiaryId;
             return {
                 ...record,
                 ClusterID: enrichedClusters.indexOf(cluster) + 1,
                 Generated_Cluster_ID: cluster.maxBeneficiaryId || enrichedClusters.indexOf(cluster) + 1,
+                Flag: isMaster ? 'Master Record' : 'Duplicate',
                 Cluster_Size: cluster.size,
                 Max_PairScore: cluster.Max_PairScore,
                 'تصنيف المجموعة المبدئي': decision,
@@ -139,7 +146,6 @@ async function enrichData(cachedData: any): Promise<{ enrichedRecords: EnrichedR
                 pairScore: cluster.avgFinalScore,
                 nameScore: cluster.avgWomanNameScore,
                 husbandScore: cluster.avgHusbandNameScore,
-                 // Other scores can be added here if needed in the sheet
             };
         }
         return record;
@@ -201,7 +207,7 @@ function createEnrichedDataSheet(wb: ExcelJS.Workbook, data: EnrichedRecord[], o
     ws.views = [{ rightToLeft: true }];
     
     const enrichmentHeaders = [
-        "Generated_Cluster_ID", "Cluster_Size", "Max_PairScore",
+        "Generated_Cluster_ID", "Cluster_Size", "Flag", "Max_PairScore",
         "pairScore", "nameScore", "husbandScore",
         "تصنيف المجموعة المبدئي", "نتائج تحليل المجموعة"
     ];
