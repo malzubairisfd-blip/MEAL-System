@@ -178,7 +178,7 @@ function createFormattedWorkbook(data: EnrichedRecord[], cachedData: any, enrich
     }
     createClustersSheet(wb, enrichedClusters);
     if (chartImages && processedDataForReport) {
-        createDashboardReportSheet(wb, allRecords, enrichedClusters, auditFindings || [], chartImages, processedDataForReport);
+        createDashboardReportSheet(wb, chartImages, processedDataForReport);
     }
 
     return wb;
@@ -678,7 +678,7 @@ function createAuditSheet(wb: ExcelJS.Workbook, findings: AuditFinding[], cluste
         row.alignment = { vertical: 'middle', wrapText: true };
     });
 }
-function createDashboardReportSheet(wb: ExcelJS.Workbook, allRecords: RecordRow[], clusters: {records: RecordRow[]}[], auditFindings: AuditFinding[], chartImages: Record<string, string>, processedData: any) {
+function createDashboardReportSheet(wb: ExcelJS.Workbook, chartImages: Record<string, string>, processedData: any) {
     const ws = wb.addWorksheet("Dashboard Report");
     ws.views = [{ rightToLeft: true }];
     

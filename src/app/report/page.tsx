@@ -25,6 +25,7 @@ import { BubbleStats } from '@/components/report/BubbleStats';
 import type { Feature, FeatureCollection } from 'geojson';
 import { loadCachedResult } from '@/lib/cache';
 import { openDB } from 'idb';
+import type L from 'leaflet';
 
 
 // Global Dashboard State
@@ -286,7 +287,7 @@ export default function ReportPage() {
         }
         
         if (mapInstance) {
-            const leafletImage = require('leaflet-image');
+            const leafletImage = (await import('leaflet-image')).default;
             const miniCharts = miniChartLayerRef.current;
 
             images['map'] = await new Promise((resolve, reject) => {
