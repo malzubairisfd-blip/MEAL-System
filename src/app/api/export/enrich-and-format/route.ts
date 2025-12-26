@@ -326,7 +326,13 @@ function createSummarySheet(wb: ExcelJS.Workbook, allRecords: RecordRow[], clust
     const decisionCounts = { 'تكرار مؤكد': 0, 'اشتباه تكرار مؤكد': 0, 'اشتباه تكرار': 0, 'إحتمالية تكرار': 0 };
 
     clusters.forEach(clusterObj => {
-        const confidence = (clusterObj as any).confidence ?? calculateClusterConfidence((clusterObj as any).avgWomanNameScore, (clusterObj as any).avgHusbandNameScore);
+        const pairs = fullPairwiseBreakdown(clusterObj.records);
+        const womanScores = pairs.map((p: any) => p.breakdown.nameScore || 0);
+        const husbandScores = pairs.map((p: any) => p.breakdown.husbandScore || 0);
+        const avgWomanNameScore = womanScores.reduce((a: number, b: number) => a + b, 0) / (womanScores.length || 1);
+        const avgHusbandNameScore = husbandScores.reduce((a: number, b: number) => a + b, 0) / (husbandScores.length || 1);
+
+        const confidence = calculateClusterConfidence(avgWomanNameScore, avgHusbandNameScore);
         const { decision } = getDecisionAndNote(confidence);
         if (decision in decisionCounts) {
             decisionCounts[decision as keyof typeof decisionCounts]++;
@@ -655,7 +661,7 @@ function createDashboardReportSheet(wb: ExcelJS.Workbook, allRecords: RecordRow[
         { width: 2 },  // A
         { width: 20 }, // B
         { width: 20 }, // C
-        { width: 2 },  // D
+        { width: 16 },  // D
         { width: 20 }, // E
         { width: 20 }, // F
     ];

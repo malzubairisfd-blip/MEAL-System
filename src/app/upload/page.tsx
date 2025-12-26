@@ -265,22 +265,37 @@ export default function UploadPage(){
     const dsu = new DSU();
     mappedRows.forEach(r => dsu.make(r._internalId!));
     
+    const edgeReasons = new Map<string, Set<string>>();
+
     for(const edge of edges) {
         const idA = mappedRows[edge.a]?._internalId;
         const idB = mappedRows[edge.b]?._internalId;
         if (!idA || !idB) continue;
+
+        const rootA = dsu.find(idA);
+        const rootB = dsu.find(idB);
+
         dsu.union(idA, idB);
+        const newRoot = dsu.find(idA);
+
+        const reasonsA = edgeReasons.get(rootA) || new Set();
+        const reasonsB = edgeReasons.get(rootB) || new Set();
+        const combinedReasons = new Set([...reasonsA, ...reasonsB, ...(edge.reasons || [])]);
+
+        edgeReasons.set(newRoot, combinedReasons);
+        if (rootA !== newRoot) edgeReasons.delete(rootA);
+        if (rootB !== newRoot) edgeReasons.delete(rootB);
     }
     
     const groups = dsu.getGroups();
     let currentClusters: any[] = [];
-    for (const members of groups.values()) {
+    for (const [root, members] of groups.entries()) {
       if (members.length > 1) {
         const clusterRecords = members.map(id => mappedRows.find(r => r._internalId === id)).filter(Boolean) as RecordRow[];
         if (clusterRecords.length > 1) {
           currentClusters.push({ 
             records: clusterRecords,
-            reasons: [], // Reasons are not used in this flow
+            reasons: Array.from(edgeReasons.get(root) || []),
             refinePass: 0,
           });
         }
