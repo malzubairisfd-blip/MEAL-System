@@ -200,6 +200,10 @@
       "loadErrorFromServer": {
         "title": "Error",
         "description": "Failed to load cluster data from server cache."
+      },
+      "noScores": {
+        "title": "Scores Not Calculated",
+        "description": "Scores were not pre-calculated. Re-run clustering for better performance."
       }
     }
   },
@@ -263,16 +267,17 @@
       "clustersFound": "{clusterCount} Clusters Found",
       "description": "This will generate a single Excel file with multiple sheets: Enriched Data, Review Summary, Cluster Details, and Audit Findings.",
       "button": "Generate and Download Report",
-      "buttonGenerating": "Generating...",
-      "enableMessage": "Please complete the upload and clustering steps first to enable report generation."
+      "buttonGenerating": "Generating..."
     },
     "status": {
       "title": "Generation Status",
-      "enriching": "Enriching data with cluster info...",
-      "sorting": "Sorting records for the report...",
-      "sheets": "Creating main data sheet...",
-      "audit": "Creating audit findings sheet...",
-      "summary": "Creating summary and cluster sheets...",
+      "starting": "Starting export process...",
+      "enriching": "Enriching data...",
+      "sorting": "Sorting records...",
+      "sheets": "Creating data sheets...",
+      "summary": "Creating summary sheets...",
+      "audit": "Creating audit sheets...",
+      "dashboard": "Creating dashboard sheet...",
       "done": "Done",
       "idle": "Real-time generation status will appear here once you start the process."
     },

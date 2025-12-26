@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { FileDown, Loader2, XCircle, CheckCircle, Database, Users, Upload, Microscope, ClipboardList, BarChartHorizontal } from "lucide-react";
@@ -10,7 +10,6 @@ import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import Link from "next/link";
 import { loadCachedResult } from "@/lib/cache";
-import { toPng } from 'html-to-image';
 import { useTranslation } from "@/hooks/use-translation";
 
 
@@ -26,25 +25,17 @@ type GenerationStep = "enriching" | "sorting" | "sheets" | "audit" | "summary" |
 const allSteps: GenerationStep[] = ["enriching", "sorting", "sheets", "audit", "summary"];
 
 export default function ExportPage() {
-    const { t } = useTranslation();
+    const { t, language } = useTranslation();
     const [initialLoading, setInitialLoading] = useState(true);
     const [isReady, setIsReady] = useState(false);
     const [loading, setLoading] = useState(false);
     const [progress, setProgress] = useState(0);
-    const [completedSteps, setCompletedSteps] = useState<Set<GenerationStep>>(new Set());
+    const [currentStep, setCurrentStep] = useState<string>('');
+
     const [downloadHistory, setDownloadHistory] = useState<DownloadVersion[]>([]);
     const [recordCount, setRecordCount] = useState(0);
     const [clusterCount, setClusterCount] = useState(0);
     const { toast } = useToast();
-
-    const stepDescriptions: Record<GenerationStep, string> = {
-        enriching: t('export.status.enriching'),
-        sorting: t('export.status.sorting'),
-        sheets: t('export.status.sheets'),
-        audit: t('export.status.audit'),
-        summary: t('export.status.summary'),
-        done: t('export.status.done')
-    };
 
     useEffect(() => {
         const checkCache = async () => {
@@ -73,72 +64,57 @@ export default function ExportPage() {
         checkCache();
     }, [toast, t]);
     
-    const runSimulatedProgress = () => {
-        setLoading(true);
-        setCompletedSteps(new Set());
-        setProgress(0);
-
-        let stepIndex = 0;
-        const interval = setInterval(() => {
-            if (stepIndex < allSteps.length) {
-                setCompletedSteps(prev => new Set(prev).add(allSteps[stepIndex]));
-                setProgress((prev) => prev + (100 / (allSteps.length + 1)));
-                stepIndex++;
-            } else {
-                clearInterval(interval);
-            }
-        }, 800);
-
-        return () => clearInterval(interval);
-    }
     
     const handleGenerateAndDownload = async () => {
-        const clearSim = runSimulatedProgress();
+        setLoading(true);
+        setProgress(0);
+        setCurrentStep(t('export.status.starting'));
 
         try {
             const cachedData = await loadCachedResult();
             if (!cachedData) throw new Error("Cached data not available.");
 
-            const res = await fetch('/api/export/enrich-and-format', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ cachedData }),
-            });
+            const worker = new Worker(new URL('@/workers/export.worker.ts', import.meta.url));
 
-            if (!res.ok) {
-                const errorData = await res.json();
-                throw new Error(errorData.error || `Report generation failed on the server.`);
-            }
+            worker.onmessage = (event) => {
+                const { type, data, progress: p, step } = event.data;
 
-            const blob = await res.blob();
-            const now = new Date();
-            const newVersion: DownloadVersion = {
-                id: `v-${now.getTime()}`,
-                fileName: `beneficiary-report-v${downloadHistory.length + 1}.xlsx`,
-                version: downloadHistory.length + 1,
-                createdAt: now.toLocaleString(),
-                blob,
+                if (type === 'progress') {
+                    setProgress(p);
+                    setCurrentStep(t(`export.status.${step}`) || step);
+                } else if (type === 'done') {
+                    const blob = new Blob([data], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+                    const now = new Date();
+                    const newVersion: DownloadVersion = {
+                        id: `v-${now.getTime()}`,
+                        fileName: `beneficiary-report-v${downloadHistory.length + 1}.xlsx`,
+                        version: downloadHistory.length + 1,
+                        createdAt: now.toLocaleString(),
+                        blob,
+                    };
+                    setDownloadHistory(prev => [newVersion, ...prev]);
+                    toast({ title: t('export.toasts.reportReadyTitle'), description: t('export.toasts.reportReadyDescription', { newVersion: newVersion.fileName }) });
+                    
+                    handleDirectDownload(blob, newVersion.fileName);
+                    
+                    setLoading(false);
+                    worker.terminate();
+                } else if (type === 'error') {
+                    throw new Error(data);
+                }
             };
-            setDownloadHistory(prev => [newVersion, ...prev]);
-            toast({ title: t('export.toasts.reportReadyTitle'), description: t('export.toasts.reportReadyDescription', { newVersion: newVersion.fileName }) });
-            
-            handleDirectDownload(blob, newVersion.fileName);
-            
-            clearSim();
-            setCompletedSteps(new Set(allSteps));
-            setProgress(100);
-            setTimeout(() => {
-                setLoading(false);
-                setProgress(0);
-                setCompletedSteps(new Set());
-            }, 2000);
+
+            worker.onerror = (e) => {
+                 toast({ title: t('export.toasts.generationFailed'), description: e.message, variant: "destructive" });
+                 setLoading(false);
+                 worker.terminate();
+            };
+
+            worker.postMessage({ cachedData });
 
         } catch (error: any) {
             toast({ title: t('export.toasts.generationFailed'), description: error.message, variant: "destructive" });
-             clearSim();
-             setLoading(false);
-             setProgress(0);
-             setCompletedSteps(new Set());
+            setLoading(false);
         }
     };
     
@@ -167,11 +143,11 @@ export default function ExportPage() {
                             <CardTitle>{t('export.title')}</CardTitle>
                             <CardDescription>{t('export.description')}</CardDescription>
                         </div>
-                        <div className="flex flex-wrap gap-2">
-                            <Button variant="outline" asChild><Link href="/upload"><Upload className="mr-2"/>{t('sidebar.upload')}</Link></Button>
-                            <Button variant="outline" asChild><Link href="/review"><Microscope className="mr-2"/>{t('sidebar.review')}</Link></Button>
-                            <Button variant="outline" asChild><Link href="/audit"><ClipboardList className="mr-2"/>{t('sidebar.audit')}</Link></Button>
-                            <Button variant="outline" asChild><Link href="/report"><BarChartHorizontal className="mr-2"/>{t('sidebar.report')}</Link></Button>
+                         <div className="flex flex-wrap gap-2">
+                            <Button variant="outline" asChild><Link href="/upload"><Upload className={language === 'ar' ? 'ml-2' : 'mr-2'}/>{t('sidebar.upload')}</Link></Button>
+                            <Button variant="outline" asChild><Link href="/review"><Microscope className={language === 'ar' ? 'ml-2' : 'mr-2'}/>{t('sidebar.review')}</Link></Button>
+                            <Button variant="outline" asChild><Link href="/audit"><ClipboardList className={language === 'ar' ? 'ml-2' : 'mr-2'}/>{t('sidebar.audit')}</Link></Button>
+                            <Button variant="outline" asChild><Link href="/report"><BarChartHorizontal className={language === 'ar' ? 'ml-2' : 'mr-2'}/>{t('sidebar.report')}</Link></Button>
                         </div>
                     </div>
                 </CardHeader>
@@ -212,24 +188,14 @@ export default function ExportPage() {
                     <div className="grid md:grid-cols-2 gap-6">
                         <Card>
                             <CardHeader><CardTitle>{t('export.status.title')}</CardTitle></CardHeader>
-                            <CardContent className="space-y-4">
-                               {
-                                 loading ? (
+                             <CardContent className="space-y-4">
+                               { loading ? (
                                     <div className="space-y-3 pt-2">
                                         <Progress value={progress} />
-                                        {allSteps.map(step => (
-                                             <div key={step} className="flex items-center justify-between text-sm">
-                                                <span>{stepDescriptions[step]}</span>
-                                                {completedSteps.has(step) ? (
-                                                    <CheckCircle className="h-5 w-5 text-green-500" />
-                                                ) : (
-                                                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                                                )}
-                                             </div>
-                                        ))}
+                                        <p className="text-sm text-muted-foreground text-center">{currentStep}</p>
                                     </div>
                                 ) : (
-                                  <p className="text-sm text-muted-foreground">
+                                  <p className="text-sm text-muted-foreground text-center">
                                       {t('export.status.idle')}
                                   </p>
                                 )
