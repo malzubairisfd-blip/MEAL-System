@@ -5,7 +5,7 @@ import ExcelJS from "exceljs";
 import type { AuditFinding } from "@/lib/auditEngine";
 import type { RecordRow } from "@/lib/types";
 import { generateArabicClusterSummary, getDecisionAndNote } from '@/lib/arabicClusterSummary';
-import { similarityScoreDetailed } from "@/lib/scoring-server";
+import { similarityScoreDetailed, fullPairwiseBreakdown } from "@/lib/scoring-server";
 import { calculateClusterConfidence } from "@/lib/clusterConfidence";
 
 
