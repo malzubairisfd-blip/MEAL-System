@@ -238,7 +238,7 @@ export default function AuditPage() {
             <Card>
                 <CardHeader>
                     <CardTitle>{t('audit.summary.title')}</CardTitle>
-                    <CardDescription>{t('audit.summary.description')}</CardHeader>
+                    <CardDescription>{t('audit.summary.description')}</CardDescription>
                 </CardHeader>
                 <CardContent className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                     {summaryCards.map(card => (
