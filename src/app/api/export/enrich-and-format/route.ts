@@ -450,9 +450,12 @@ function createClustersSheet(wb: ExcelJS.Workbook, clusters: {records: RecordRow
 
         recordsForSheet.forEach((record, recordIndex) => {
              const childrenText = Array.isArray(record.children) ? record.children.join(', ') : record.children || '';
+             const relatedPairs = pairs.filter(p => p.a._internalId === record._internalId || p.b._internalId === record._internalId);
+             const avgScore = relatedPairs.length > 0 ? relatedPairs.reduce((sum, p) => sum + p.score, 0) / relatedPairs.length : 0;
              
              let rowData: any = {
                 BeneficiaryID: record.beneficiaryId,
+                Score: parseFloat(avgScore.toFixed(3)),
                 WomanName: record.womanName,
                 HusbandName: record.husbandName,
                 NationalID: record.nationalId,
@@ -525,7 +528,7 @@ function createAuditSheet(wb: ExcelJS.Workbook, findings: AuditFinding[], cluste
     
     const headerRow = ws.getRow(1);
     headerRow.eachCell((cell) => {
-      cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
+      cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
       cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFC00000" } };
       cell.alignment = { horizontal: "center" };
     });
@@ -738,3 +741,5 @@ function createDashboardReportSheet(wb: ExcelJS.Workbook, allRecords: RecordRow[
         addImage(chartImages.map, { col: 4, row: currentRow }, { width: 347, height: 749 });
     }
 }
+
+    

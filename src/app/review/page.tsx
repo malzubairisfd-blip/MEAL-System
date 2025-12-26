@@ -69,7 +69,8 @@ export default function ReviewPage() {
 
                 const avgWomanNameScore = womanNameScores.reduce((a: number, b: number) => a + b, 0) / womanNameScores.length;
                 const avgHusbandNameScore = husbandNameScores.reduce((a: number, b: number) => a + b, 0) / husbandNameScores.length;
-                const avgFinalScore = (avgWomanNameScore + avgHusbandNameScore) / 2;
+                const avgFinalScore = pairs.reduce((a:number, p:any) => a + (p.score || 0), 0) / pairs.length;
+
 
                 return {
                     ...cluster,
@@ -356,5 +357,7 @@ function ClusterCard({ cluster, clusterNumber, onInspect }: { cluster: Cluster, 
     </Card>
   );
 }
+
+    
 
     
