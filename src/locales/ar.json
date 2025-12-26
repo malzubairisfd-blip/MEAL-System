@@ -136,7 +136,7 @@
   },
   "review": {
     "title": "مراجعة المجموعات",
-    "description": "افحص وحلل مجموعات التكرار المحتملة من آخر عملية معالجة. تم العثور على {'filteredClusters.length'} من {'allClusters.length'} مجموعات.",
+    "description": "افحص وحلل مجموعات التكرار المحتملة من آخر عملية معالجة. تم العثور على {filteredClusters} من {allClusters} مجموعات.",
     "buttons": {
       "backToUpload": "العودة إلى الرفع",
       "recalculate": "إعادة حساب الدرجات",
@@ -171,7 +171,7 @@
     "toasts": {
       "calculatingScores": {
         "title": "جاري حساب الدرجات",
-        "description": "جاري جلب وحساب متوسط الدرجات لـ {clustersToScore.length} مجموعات..."
+        "description": "جاري جلب وحساب متوسط الدرجات لـ {clustersToScore} مجموعات..."
       },
       "calculationComplete": {
         "title": "اكتمل الحساب",
@@ -188,7 +188,7 @@
       },
       "clustersLoaded": {
         "title": "تم تحميل المجموعات",
-        "description": "تم تحميل {clusters.length} مجموعات للمراجعة."
+        "description": "تم تحميل {clusters} مجموعات للمراجعة."
       },
       "loadErrorFromServer": {
         "title": "خطأ",
@@ -199,7 +199,7 @@
   "audit": {
     "title": "تدقيق سلامة البيانات",
     "description": "قم بتشغيل مجموعة من القواعد على سجلاتك المجمعة لتحديد المشكلات المحتملة مثل التكرارات والعلاقات غير الصالحة.",
-    "readyMessage": "جاهز لتدقيق {rows.length} سجلات.",
+    "readyMessage": "جاهز لتدقيق {rows} سجلات.",
     "buttons": {
       "backToReview": "العودة إلى المراجعة",
       "runAudit": "إجراء التدقيق",
@@ -214,7 +214,7 @@
     },
     "findings": {
       "title": "نتائج التدقيق",
-      "description": "{findings.length} مشكلة إجمالية تم العثور عليها عبر {groupedFindings.length} سجلات فريدة."
+      "description": "{findings} مشكلة إجمالية تم العثور عليها عبر {groupedFindings} سجلات فريدة."
     },
     "findingTypes": {
       "WOMAN_MULTIPLE_HUSBANDS": "زوجة لديها عدة أزواج",
@@ -232,17 +232,17 @@
     "identifiedIssues": "المشكلات المحددة:",
     "readyToAudit": {
       "title": "جاهز للتدقيق",
-      "description": "انقر على \"إجراء التدقيق\" للتحقق من {rows.length} سجلات مجمعة بحثًا عن مشكلات."
+      "description": "انقر على \"إجراء التدقيق\" للتحقق من {rows} سجلات مجمعة بحثًا عن مشكلات."
     },
     "toasts": {
       "noData": "لم يتم العثور على معرف ذاكرة التخزين المؤقت. يرجى إعادة رفع البيانات.",
       "auditComplete": "اكتمل التدقيق",
-      "issuesFound": "{newFindings.length} مشكلات محتملة تم العثور عليها.",
+      "issuesFound": "{newFindings} مشكلات محتملة تم العثور عليها.",
       "auditError": "خطأ في التدقيق",
       "noClusteredData": "لم يتم العثور على سجلات في المجموعات لتدقيقها.",
       "loadedFromCache": {
         "title": "تم التحميل من ذاكرة التخزين المؤقت",
-        "description": "تم تحميل {auditFindings.length} نتائج تدقيق موجودة."
+        "description": "تم تحميل {auditFindings} نتائج تدقيق موجودة."
        }
     }
   },
@@ -284,7 +284,7 @@
       "fetchError": "فشل جلب البيانات المخزنة مؤقتًا. يرجى محاولة عملية الرفع مرة أخرى.",
       "noRecords": "البيانات المخزنة مؤقتًا فارغة. يرجى إعادة رفع ملفك.",
       "generationFailed": "فشل الإنشاء",
-      "reportReady": "{newVersion.fileName} تمت إضافته إلى لوحة التنزيل.",
+      "reportReady": "{newVersion} تمت إضافته إلى لوحة التنزيل.",
       "downloadStarted": "جاري تنزيل {fileName}"
     }
   },

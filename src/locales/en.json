@@ -136,7 +136,7 @@
   },
   "review": {
     "title": "Cluster Review",
-    "description": "Inspect and analyze potential duplicate clusters from the last processing run. Found {'filteredClusters.length'} of {'allClusters.length'} clusters.",
+    "description": "Inspect and analyze potential duplicate clusters from the last processing run. Found {filteredClusters} of {allClusters} clusters.",
     "buttons": {
       "backToUpload": "Back to Upload",
       "recalculate": "Recalculate Scores",
@@ -171,7 +171,7 @@
     "toasts": {
       "calculatingScores": {
         "title": "Calculating Scores",
-        "description": "Fetching and averaging scores for {clustersToScore.length} clusters..."
+        "description": "Fetching and averaging scores for {clustersToScore} clusters..."
       },
       "calculationComplete": {
         "title": "Calculations Complete",
@@ -188,7 +188,7 @@
       },
       "clustersLoaded": {
         "title": "Clusters Loaded",
-        "description": "Loaded {clusters.length} clusters for review."
+        "description": "Loaded {clusters} clusters for review."
       },
       "loadErrorFromServer": {
         "title": "Error",
@@ -199,7 +199,7 @@
   "audit": {
     "title": "Data Integrity Audit",
     "description": "Run a set of rules against your clustered records to identify potential issues like duplicates and invalid relationships.",
-    "readyMessage": "Ready to audit {rows.length} records.",
+    "readyMessage": "Ready to audit {rows} records.",
     "buttons": {
       "backToReview": "Back to Review",
       "runAudit": "Run Audit",
@@ -214,7 +214,7 @@
     },
     "findings": {
       "title": "Audit Findings",
-      "description": "{findings.length} total issues found across {groupedFindings.length} unique records."
+      "description": "{findings} total issues found across {groupedFindings} unique records."
     },
     "findingTypes": {
       "WOMAN_MULTIPLE_HUSBANDS": "Multiple Husbands",
@@ -232,17 +232,17 @@
     "identifiedIssues": "Identified Issues:",
     "readyToAudit": {
       "title": "Ready to Audit",
-      "description": "Click \"Run Audit\" to check the {rows.length} clustered records for issues."
+      "description": "Click \"Run Audit\" to check the {rows} clustered records for issues."
     },
     "toasts": {
       "noData": "Cache ID not found. Please re-upload data.",
       "auditComplete": "Audit Complete",
-      "issuesFound": "{newFindings.length} potential issues found.",
+      "issuesFound": "{newFindings} potential issues found.",
       "auditError": "Audit Error",
       "noClusteredData": "No records were found in clusters to audit.",
       "loadedFromCache": {
         "title": "Loaded from Cache",
-        "description": "Loaded {auditFindings.length} existing audit findings."
+        "description": "Loaded {auditFindings} existing audit findings."
        }
     }
   },
@@ -284,7 +284,7 @@
       "fetchError": "Failed to fetch cached data. Please try the upload process again.",
       "noRecords": "The cached data is empty. Please re-upload your file.",
       "generationFailed": "Generation Failed",
-      "reportReady": "{newVersion.fileName} has been added to the download panel.",
+      "reportReady": "{newVersion} has been added to the download panel.",
       "downloadStarted": "Downloading {fileName}"
     }
   },

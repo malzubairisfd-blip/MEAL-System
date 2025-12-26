@@ -44,7 +44,7 @@ export default function ReviewPage() {
         return; // Don't run if no clusters or if all are already scored
     }
     setCalculating(true);
-    toast({ title: t('review.toasts.calculatingScores.title'), description: t('review.toasts.calculatingScores.description', {'clustersToScore.length': clustersToScore.length}) });
+    toast({ title: t('review.toasts.calculatingScores.title'), description: t('review.toasts.calculatingScores.description', { clustersToScore: clustersToScore.length }) });
 
     try {
         const updatedClusters = await Promise.all(clustersToScore.map(async (cluster) => {
