@@ -14,6 +14,7 @@ import { useRouter } from "next/navigation";
 import { loadCachedResult } from "@/lib/cache";
 import { openDB } from 'idb';
 import { useTranslation } from "@/hooks/use-translation";
+import { runClientSideAudit } from "@/lib/auditEngine";
 
 
 // Redefine AuditFinding here as it's used in this component's state
@@ -63,19 +64,9 @@ export default function AuditPage() {
     
     setLoading(prev => ({...prev, audit: true}));
     try {
-        const res = await fetch("/api/audit", {
-            method: "POST",
-            body: JSON.stringify({ clusters: clustersToAudit }), // Send clusters directly
-            headers: { "Content-Type": "application/json" }
-        });
-
-        if (!res.ok) {
-           const errorData = await res.json();
-           throw new Error(errorData.error || "An error occurred during the audit.");
-        }
-
-        const data = await res.json();
-        const newFindings = data.issues || [];
+        // This now runs on the client-side
+        const newFindings = await runClientSideAudit(clustersToAudit);
+        
         setFindings(newFindings);
         await saveAuditFindings(newFindings); // Cache the findings
 

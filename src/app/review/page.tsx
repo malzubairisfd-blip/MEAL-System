@@ -11,7 +11,6 @@ import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
 import { PairwiseModal } from "@/components/PairwiseModal";
 import { generateArabicClusterSummary, getDecisionAndNote } from "@/lib/arabicClusterSummary";
-import { calculateClusterConfidence } from "@/lib/clusterConfidence";
 import { useTranslation } from "@/hooks/use-translation";
 import { DecisionPieChart } from "@/components/DecisionPieChart";
 import { loadCachedResult } from "@/lib/cache";
@@ -32,74 +31,26 @@ export default function ReviewPage() {
   const [filteredClusters, setFilteredClusters] = useState<Cluster[]>([]);
   const [selectedCluster, setSelectedCluster] = useState<RecordRow[] | null>(null);
   const [loading, setLoading] = useState(true);
-  const [calculating, setCalculating] = useState(false);
   const [search, setSearch] = useState("");
   const { toast } = useToast();
 
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(9);
 
-  const handleCalculateScores = useCallback(async (clustersToScore: Cluster[]) => {
-    if (clustersToScore.length === 0 || clustersToScore.every(c => c.confidence !== undefined)) {
-        return; // Don't run if no clusters or if all are already scored
-    }
-    setCalculating(true);
-    toast({ title: t('review.toasts.calculatingScores.title'), description: t('review.toasts.calculatingScores.description', { clustersToScore: clustersToScore.length }) });
-
-    try {
-        const updatedClusters = await Promise.all(clustersToScore.map(async (cluster) => {
-            if (cluster.confidence !== undefined) return cluster;
-            try {
-                const res = await fetch("/api/pairwise", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ cluster: cluster.records }),
-                });
-                if (!res.ok) return cluster;
-                const data = await res.json();
-                const pairs = data.pairs || [];
-
-                if (pairs.length === 0) {
-                    const confidence = calculateClusterConfidence(0, 0);
-                    return { ...cluster, avgWomanNameScore: 0, avgHusbandNameScore: 0, avgFinalScore: 0, confidence };
-                }
-
-                const womanNameScores = pairs.map((p: any) => p.breakdown.nameScore || 0);
-                const husbandNameScores = pairs.map((p: any) => p.breakdown.husbandScore || 0);
-
-                const avgWomanNameScore = womanNameScores.reduce((a: number, b: number) => a + b, 0) / womanNameScores.length;
-                const avgHusbandNameScore = husbandNameScores.reduce((a: number, b: number) => a + b, 0) / husbandNameScores.length;
-                const avgFinalScore = pairs.reduce((a:number, p:any) => a + (p.score || 0), 0) / pairs.length;
-
-
-                return {
-                    ...cluster,
-                    avgWomanNameScore,
-                    avgHusbandNameScore,
-                    avgFinalScore,
-                    confidence: calculateClusterConfidence(avgWomanNameScore, avgHusbandNameScore),
-                };
-            } catch (error) {
-                return cluster; // Return original cluster on error
-            }
-        }));
-
-        setAllClusters(updatedClusters);
-        toast({ title: t('review.toasts.calculationComplete.title'), description: t('review.toasts.calculationComplete.description') });
-    } finally {
-        setCalculating(false);
-    }
-  }, [toast, t]);
-
-
   useEffect(() => {
     async function getData() {
       setLoading(true);
       const result = await loadCachedResult();
 
-      if (result) {
+      if (result && result.clusters) {
         const clusters = result.clusters || [];
         setAllClusters(clusters);
+
+        // Check if scores are pre-calculated
+        if (clusters.length > 0 && clusters[0].confidence === undefined) {
+             toast({ title: t('review.toasts.noScores.title'), description: t('review.toasts.noScores.description'), variant: 'destructive'});
+        }
+
         if (clusters.length === 0) {
           toast({ title: t('review.toasts.noClustersFound.title'), description: t('review.toasts.noClustersFound.description'), variant: "default" });
         }
@@ -110,13 +61,6 @@ export default function ReviewPage() {
     }
     getData();
   }, [toast, t]);
-
-  // Separate useEffect to trigger score calculation only when clusters are loaded
-  useEffect(() => {
-    if (!loading && allClusters.length > 0) {
-      handleCalculateScores(allClusters);
-    }
-  }, [loading, allClusters, handleCalculateScores]);
 
 
   useEffect(() => {
@@ -141,7 +85,7 @@ export default function ReviewPage() {
   }, [search, allClusters]);
   
   const decisionChartData = useMemo(() => {
-    if (allClusters.length === 0 || allClusters.some(c => c.confidence === undefined)) {
+    if (loading || allClusters.length === 0 || allClusters.some(c => c.confidence === undefined)) {
       return [];
     }
 
@@ -163,7 +107,7 @@ export default function ReviewPage() {
       name: decision,
       value: count,
     }));
-  }, [allClusters]);
+  }, [allClusters, loading]);
 
 
   const handleInspect = (clusterRecords: RecordRow[]) => {
@@ -199,10 +143,6 @@ export default function ReviewPage() {
                         {t('review.buttons.backToUpload')}
                     </Link>
                 </Button>
-                 <Button onClick={() => handleCalculateScores(allClusters)} disabled={calculating}>
-                    {calculating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Calculator className="mr-2 h-4 w-4" />}
-                    {t('review.buttons.recalculate')}
-                 </Button>
                 <Button asChild>
                     <Link href="/audit">
                         {t('review.buttons.goToAudit')}
@@ -232,7 +172,7 @@ export default function ReviewPage() {
                       <PieChart className="h-4 w-4 text-muted-foreground" />
                   </CardHeader>
                   <CardContent className="p-0 h-48">
-                      {loading || calculating ? (
+                      {loading ? (
                            <div className="flex items-center justify-center h-full text-muted-foreground">
                                 <Loader2 className="h-6 w-6 animate-spin" />
                            </div>
@@ -266,7 +206,7 @@ export default function ReviewPage() {
               {totalPages > 1 && (
                 <div className="flex justify-center items-center gap-4 mt-6">
                   <Button variant="outline" onClick={() => paginate(currentPage - 1)} disabled={currentPage === 1}>
-                    <ChevronLeft className="h-4 w-4 mr-2" />
+                    <ChevronLeft className="mr-2 h-4 w-4" />
                     {t('review.previous')}
                   </Button>
                   <span className="text-sm text-muted-foreground">
@@ -302,7 +242,7 @@ export default function ReviewPage() {
 function ClusterCard({ cluster, clusterNumber, onInspect }: { cluster: Cluster, clusterNumber: number, onInspect: () => void }) {
   const { t } = useTranslation();
   const summaryHtml = generateArabicClusterSummary(cluster, cluster.records);
-  const confidenceScore = cluster.confidence !== undefined ? cluster.confidence : calculateClusterConfidence(cluster.avgWomanNameScore, cluster.avgHusbandNameScore);
+  const confidenceScore = cluster.confidence !== undefined ? Math.round(cluster.confidence) : 0;
 
   const getScoreColor = (score?: number) => {
     if (score === undefined) return "text-gray-500";
@@ -357,7 +297,3 @@ function ClusterCard({ cluster, clusterNumber, onInspect }: { cluster: Cluster, 
     </Card>
   );
 }
-
-    
-
-    

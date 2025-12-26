@@ -1,8 +1,6 @@
 
 // src/lib/auditEngine.ts
-import { similarityScoreDetailed } from "./fuzzyCluster";
 import type { RecordRow } from "./types";
-
 
 export interface AuditFinding {
   type: string;
@@ -11,162 +9,134 @@ export interface AuditFinding {
   records: RecordRow[];
 }
 
-/* -----------------------------------------
-   CHECK FOR FORBIDDEN RELATIONSHIPS
------------------------------------------- */
-function isForbiddenRelation(name1: string, name2: string) {
-  if (!name1 || !name2) return false;
-  const n1 = name1.split(" ");
-  const n2 = name2.split(" ");
-
-  // To be siblings or first cousins, they must have at least 3 names (first, father, grandfather)
-  if (n1.length < 3 || n2.length < 3) return false;
-
-  // Same father and grandfather = siblings
-  if (n1[1] && n1[1] === n2[1] && n1[2] && n1[2] === n2[2]) {
-    return true;
+/* -------------------------------------------------------------
+   SAFE JSON PARSER 
+------------------------------------------------------------- */
+async function safeParse(req: Request) {
+  try {
+    return await req.json();
+  } catch {
+    throw new Error("Invalid JSON — request body is not valid JSON.");
   }
-
-  // Same grandfather and great-grandfather = first cousins
-  if (n1.length > 3 && n2.length > 3) {
-    if (n1[2] && n1[2] === n2[2] && n1[3] && n1[3] === n2[3]) {
-      return true;
-    }
-  }
-  
-  return false;
 }
 
-/* -----------------------------------------
-   MAIN AUDIT FUNCTION
------------------------------------------- */
-export function runAudit(records: RecordRow[]): AuditFinding[] {
-  const findings: AuditFinding[] = [];
+/* -------------------------------------------------------------
+   BASIC NORMALIZATION HELPERS
+------------------------------------------------------------- */
+function safeString(x: any) {
+  return x === null || x === undefined ? "" : String(x);
+}
 
-  // INDEXES
-  const byWoman = new Map<string, RecordRow[]>();
-  const byHusband = new Map<string, RecordRow[]>();
-  const byNationalId = new Map<string, RecordRow[]>();
-  const byPhone = new Map<string, RecordRow[]>();
+function digitsOnly(x: any) {
+  return safeString(x).replace(/\D/g, "");
+}
 
-  // INDEXING
-  for (const r of records) {
-    const w = r.womanName?.trim();
-    const h = r.husbandName?.trim();
-    const id = String(r.nationalId || "").trim();
-    const ph = String(r.phone || "").trim();
+function normalizeArabic(s: string): string {
+  if (!s) return "";
+  s = s.normalize("NFKC");
+  s = s.replace(/يحيي/g, "يحي");
+  s = s.replace(/يحيى/g, "يحي");
+  s = s.replace(/عبد /g, "عبد");
+  s = s.replace(/[ًٌٍََُِّْـء]/g, "");
+  s = s.replace(/[أإآ]/g, "ا");
+  s = s.replace(/ى/g, "ي");
+  s = s.replace(/ؤ/g, "و");
+  s = s.replace(/ئ/g, "ي");
+  s = s.replace(/ة/g, "ه");
+  s = s.replace(/[^ء-ي0-9 ]/g, " ");
+  s = s.replace(/\s+/g, " ").trim();
+  return s.toLowerCase();
+}
 
-    if (w) {
-        if (!byWoman.has(w)) byWoman.set(w, []);
-        byWoman.get(w)!.push(r);
-    }
-    if (h) {
-        if (!byHusband.has(h)) byHusband.set(h, []);
-        byHusband.get(h)!.push(r);
-    }
-    if (id) {
-        if (!byNationalId.has(id)) byNationalId.set(id, []);
-        byNationalId.get(id)!.push(r);
-    }
-    if (ph) {
-        if (!byPhone.has(ph)) byPhone.set(ph, []);
-        byPhone.get(ph)!.push(r);
-    }
-  }
+function tokens(s: string) {
+  const n = normalizeArabic(s || "");
+  if (!n) return [];
+  return n.split(" ").filter(Boolean);
+}
 
-  // 1. WOMAN DUPLICATES
-  for (const [name, list] of byWoman) {
-    if (list.length > 1) {
-      findings.push({
-        type: "Duplicate Woman",
-        severity: "high",
-        description: `${name} appears multiple times`,
-        records: list,
-      });
-    }
-  }
 
-  // 2. HUSBAND DUPLICATES (multi wives)
-  for (const [name, list] of byHusband) {
-    if (list.length > 4) {
-      findings.push({
-        type: "Husband has more than 4 wives",
-        severity: "high",
-        description: `${name} has ${list.length} wives`,
-        records: list,
-      });
-    }
-  }
+/* -------------------------------------------------------------
+   MAIN CLIENT-SIDE AUDIT FUNCTION
+------------------------------------------------------------- */
+export async function runClientSideAudit(clusters: {records: RecordRow[]}[], threshold = 0.6): Promise<AuditFinding[]> {
+    const issues: AuditFinding[] = [];
 
-  // 3. ILLEGAL MARRIAGES (siblings, forbidden relations)
-  for (const [hname, women] of byHusband) {
-    if (women.length > 1) {
-      for (let i = 0; i < women.length; i++) {
-        for (let j = i + 1; j < women.length; j++) {
-          if (isForbiddenRelation(women[i].womanName, women[j].womanName)) {
-            findings.push({
-              type: "Forbidden Marriage",
-              severity: "high",
-              description: `${hname} is married to forbidden relatives`,
-              records: [women[i], women[j]],
-            });
-          }
+    for (const clusterObject of clusters) {
+      const members = clusterObject.records;
+      if (!Array.isArray(members) || members.length < 2) continue;
+
+      // 1. DUPLICATE NATIONAL IDs
+      const nationalIds = members.map((m: any) => safeString(m.nationalId).trim());
+      const uniqueIds = new Set(nationalIds.filter(Boolean));
+      if (uniqueIds.size < nationalIds.filter(Boolean).length) {
+        issues.push({ type: "DUPLICATE_ID", severity: 'high', description: `Duplicate National ID found in a cluster.`, records: members });
+      }
+
+      // 2. DUPLICATE woman+husband
+      const pairs = members.map((m: any) =>
+        `${normalizeArabic(safeString(m.womanName))}|${normalizeArabic(safeString(m.husbandName))}`
+      );
+      if (new Set(pairs).size < pairs.length) {
+        issues.push({ type: "DUPLICATE_COUPLE", severity: 'high', description: `Exact duplicate Woman+Husband name pair found.`, records: members });
+      }
+
+      // 3. Woman with multiple husbands
+      const byWoman = new Map<string, Set<string>>();
+      for (const m of members) {
+        const w = normalizeArabic(safeString(m.womanName).trim());
+        const h = normalizeArabic(safeString(m.husbandName).trim());
+        if (!byWoman.has(w)) byWoman.set(w, new Set());
+        byWoman.get(w)!.add(h);
+      }
+      for (const [w, hs] of byWoman.entries()) {
+        if (hs.size > 1) {
+          issues.push({
+            type: "WOMAN_MULTIPLE_HUSBANDS",
+            severity: 'high',
+            description: `Woman '${w}' appears to be registered with multiple husbands: ${[...hs].join(', ')}.`,
+            records: members.filter(m => normalizeArabic(safeString(m.womanName)) === w)
+          });
+        }
+      }
+
+      // 4. Husband with >4 wives
+      const byHusband = new Map<string, Set<string>>();
+      for (const m of members) {
+        const h = normalizeArabic(safeString(m.husbandName).trim());
+        const w = normalizeArabic(safeString(m.womanName).trim());
+        if (!byHusband.has(h)) byHusband.set(h, new Set());
+        byHusband.get(h)!.add(w);
+      }
+      for (const [h, ws] of byHusband.entries()) {
+        if (ws.size > 4) {
+          issues.push({
+            type: "HUSBAND_TOO_MANY_WIVES",
+            severity: 'medium',
+            description: `Husband '${h}' is registered with ${ws.size} wives, which exceeds the limit of 4.`,
+            records: members.filter(m => normalizeArabic(safeString(m.husbandName)) === h)
+          });
+        }
+      }
+
+      // 5. Woman with multiple IDs
+      const womanIDs = new Map<string, Set<string>>();
+      for (const m of members) {
+        const w = normalizeArabic(safeString(m.womanName).trim());
+        const id = safeString(m.nationalId).trim();
+        if (!womanIDs.has(w)) womanIDs.set(w, new Set());
+        if (id) womanIDs.get(w)!.add(id);
+      }
+      for (const [w, ids] of womanIDs.entries()) {
+        if (ids.size > 1) {
+          issues.push({
+            type: "MULTIPLE_NATIONAL_IDS",
+            severity: 'high',
+            description: `Woman '${w}' is associated with multiple National IDs: ${[...ids].join(', ')}.`,
+            records: members.filter(m => normalizeArabic(safeString(m.womanName)) === w)
+          });
         }
       }
     }
-  }
 
-  // 4. NATIONAL ID DUPLICATES
-  for (const [id, list] of byNationalId) {
-    if (list.length > 1) {
-      findings.push({
-        type: "Duplicate National ID",
-        severity: "high",
-        description: `National ID ${id} appears multiple times`,
-        records: list,
-      });
-    }
-  }
-
-  // 5. PHONE DUPLICATES
-  for (const [ph, list] of byPhone) {
-    if (list.length > 1) {
-      findings.push({
-        type: "Phone Number Reused",
-        severity: "medium",
-        description: `Phone number ${ph} appears multiple times`,
-        records: list,
-      });
-    }
-  }
-
-  // 6. SIMILAR NAME CONFLICTS (potential duplicates)
-  const seenPairs = new Set<string>();
-  for (let i = 0; i < records.length; i++) {
-    for (let j = i + 1; j < records.length; j++) {
-      const a = records[i];
-      const b = records[j];
-      
-      const key = [a._internalId, b._internalId].sort().join('|');
-      if(seenPairs.has(key)) continue;
-      seenPairs.add(key);
-
-      // Ensure children are arrays before calling similarity score
-      const recordA_safe = { ...a, children: Array.isArray(a.children) ? a.children : (typeof a.children === 'string' ? a.children.split(/[;,،|]/) : []) };
-      const recordB_safe = { ...b, children: Array.isArray(b.children) ? b.children : (typeof b.children === 'string' ? b.children.split(/[;,،|]/) : []) };
-
-      const sim = similarityScoreDetailed(recordA_safe as RecordRow, recordB_safe as RecordRow);
-
-      if (sim.score > 0.85) {
-        findings.push({
-          type: "Potential Duplicate",
-          severity: "medium",
-          description: `High similarity between ${a.womanName} and ${b.womanName}`,
-          records: [a, b],
-        });
-      }
-    }
-  }
-
-  return findings;
+    return issues;
 }

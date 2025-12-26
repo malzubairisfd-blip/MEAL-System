@@ -1,3 +1,4 @@
+
 // app/(app)/upload/page.tsx
 "use client";
 
@@ -18,6 +19,8 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { DSU } from "@/lib/dsu";
 import { openDB } from "idb";
 import { useTranslation } from "@/hooks/use-translation";
+import { similarityScoreDetailed } from "@/lib/scoring-server";
+import { calculateClusterConfidence } from "@/lib/clusterConfidence";
 
 
 type Mapping = {
@@ -155,7 +158,6 @@ function hierarchicalRecluster(records: RecordRow[]): RecordRow[][] {
     signatures.forEach(sig => {
         if (!processedRecords.has(sig.record)) {
             // Do not create clusters of 1 record
-            // subClusters.push([sig.record]);
             processedRecords.add(sig.record);
         }
     });
@@ -249,6 +251,62 @@ export default function UploadPage(){
   function handleMappingChange(field:keyof Mapping, value:string){
     setMapping(m => ({ ...m, [field]: value }));
   }
+  
+  const enrichAndCacheResults = async (finalClusters: any[], mappedRows: RecordRow[], columns: string[]) => {
+    setWorkerStatus('caching');
+    setProgressInfo({ status: 'caching', progress: 98 });
+    
+    const enrichedClusters = finalClusters.map(cluster => {
+        const pairs = [];
+        for (let i = 0; i < cluster.records.length; i++) {
+            for (let j = i + 1; j < cluster.records.length; j++) {
+                pairs.push(similarityScoreDetailed(cluster.records[i], cluster.records[j]));
+            }
+        }
+        
+        const avg = (arr: number[]) => arr.length > 0 ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+        const nameScores = pairs.map(p => p.breakdown.nameScore || 0);
+        const husbandScores = pairs.map(p => p.breakdown.husbandScore || 0);
+        const finalScores = pairs.map(p => p.score || 0);
+
+        const avgWomanNameScore = avg(nameScores);
+        const avgHusbandNameScore = avg(husbandScores);
+        const avgFinalScore = avg(finalScores);
+        const confidence = calculateClusterConfidence(avgWomanNameScore, avgHusbandNameScore);
+        
+        return {
+            ...cluster,
+            avgWomanNameScore,
+            avgHusbandNameScore,
+            avgFinalScore,
+            confidence,
+            Max_PairScore: Math.max(...finalScores, 0),
+            size: cluster.records.length
+        };
+    });
+
+    try {
+      const cacheId = 'cache-' + Date.now() + '-' + Math.random().toString(36).slice(2,9);
+      sessionStorage.setItem('cacheId', cacheId);
+      
+      const dataToCache = {
+          rows: mappedRows,
+          clusters: enrichedClusters,
+          originalHeaders: columns,
+      };
+
+      await cacheFinalResult(dataToCache);
+
+      sessionStorage.setItem('cacheTimestamp', Date.now().toString());
+      setWorkerStatus('done');
+      setProgressInfo({ status: 'done', progress: 100 });
+      toast({ title: t('upload.toasts.clusteringComplete.title'), description: t('upload.toasts.clusteringComplete.description', { count: enrichedClusters.length }) });
+    } catch(err:any){
+      setWorkerStatus('error');
+      toast({ title: t('upload.toasts.cacheError.title'), description: String(err), variant:"destructive" });
+    }
+  };
+
 
   const finalizeClustering = async () => {
     setWorkerStatus('merging-edges');
@@ -348,33 +406,10 @@ export default function UploadPage(){
             break;
         }
     }
-
-
+    
     setClusters(currentClusters);
-    
-    setWorkerStatus('caching');
-    setProgressInfo({ status: 'caching', progress: 98 });
-    
-    try {
-      const cacheId = 'cache-' + Date.now() + '-' + Math.random().toString(36).slice(2,9);
-      sessionStorage.setItem('cacheId', cacheId);
-      
-      const dataToCache = {
-          rows: mappedRows,
-          clusters: currentClusters,
-          originalHeaders: columns,
-      };
+    await enrichAndCacheResults(currentClusters, mappedRows, columns);
 
-      await cacheFinalResult(dataToCache);
-
-      sessionStorage.setItem('cacheTimestamp', Date.now().toString());
-      setWorkerStatus('done');
-      setProgressInfo({ status: 'done', progress: 100 });
-      toast({ title: t('upload.toasts.clusteringComplete.title'), description: t('upload.toasts.clusteringComplete.description', { count: currentClusters.length }) });
-    } catch(err:any){
-      setWorkerStatus('error');
-      toast({ title: t('upload.toasts.cacheError.title'), description: String(err), variant:"destructive" });
-    }
   };
 
 
