@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import Link from "next/link";
 import { loadCachedResult } from "@/lib/cache";
 import { toPng } from 'html-to-image';
+import { useTranslation } from "@/hooks/use-translation";
 
 
 type DownloadVersion = {
@@ -24,31 +25,27 @@ type DownloadVersion = {
 type GenerationStep = "enriching" | "sorting" | "sheets" | "audit" | "summary" | "done";
 const allSteps: GenerationStep[] = ["enriching", "sorting", "sheets", "audit", "summary"];
 
-const stepDescriptions: Record<GenerationStep, string> = {
-    enriching: "Enriching data with cluster info...",
-    sorting: "Sorting records for the report...",
-    sheets: "Creating main data sheet...",
-    audit: "Creating audit findings sheet...",
-    summary: "Creating summary and cluster sheets...",
-    done: "Done"
-};
-
-
 export default function ExportPage() {
-    // Component State
+    const { t } = useTranslation();
     const [initialLoading, setInitialLoading] = useState(true);
     const [isReady, setIsReady] = useState(false);
     const [loading, setLoading] = useState(false);
     const [progress, setProgress] = useState(0);
     const [completedSteps, setCompletedSteps] = useState<Set<GenerationStep>>(new Set());
-
-    const { toast } = useToast();
-
-    // Data State
     const [downloadHistory, setDownloadHistory] = useState<DownloadVersion[]>([]);
     const [recordCount, setRecordCount] = useState(0);
     const [clusterCount, setClusterCount] = useState(0);
-    
+    const { toast } = useToast();
+
+    const stepDescriptions: Record<GenerationStep, string> = {
+        enriching: t('export.status.enriching'),
+        sorting: t('export.status.sorting'),
+        sheets: t('export.status.sheets'),
+        audit: t('export.status.audit'),
+        summary: t('export.status.summary'),
+        done: t('export.status.done')
+    };
+
     useEffect(() => {
         const checkCache = async () => {
             setInitialLoading(true);
@@ -64,17 +61,17 @@ export default function ExportPage() {
                 if (rows.length > 0) {
                     setIsReady(true);
                 } else {
-                     toast({ title: "No Records Found", description: "The cached data is empty. Please re-upload your file.", variant: "destructive" });
+                     toast({ title: t('export.toasts.noRecords'), description: t('export.toasts.noRecords'), variant: "destructive" });
                      setIsReady(false);
                 }
             } else {
                 setIsReady(false);
-                toast({ title: "No Data Found", description: "Please start from the upload page to generate data for export.", variant: "destructive" });
+                toast({ title: t('export.toasts.noData'), description: t('export.toasts.noData'), variant: "destructive" });
             }
             setInitialLoading(false);
         };
         checkCache();
-    }, [toast]);
+    }, [toast, t]);
     
     const runSimulatedProgress = () => {
         setLoading(true);
@@ -90,7 +87,7 @@ export default function ExportPage() {
             } else {
                 clearInterval(interval);
             }
-        }, 800); // Simulate each step taking time
+        }, 800);
 
         return () => clearInterval(interval);
     }
@@ -105,7 +102,7 @@ export default function ExportPage() {
             const res = await fetch('/api/export/enrich-and-format', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ cachedData }), // Send the full data object
+                body: JSON.stringify({ cachedData }),
             });
 
             if (!res.ok) {
@@ -123,7 +120,7 @@ export default function ExportPage() {
                 blob,
             };
             setDownloadHistory(prev => [newVersion, ...prev]);
-            toast({ title: "Report Ready", description: `${newVersion.fileName} has been added to the download panel.` });
+            toast({ title: t('export.toasts.reportReadyTitle'), description: t('export.toasts.reportReadyDescription', { newVersion: newVersion.fileName }) });
             
             handleDirectDownload(blob, newVersion.fileName);
             
@@ -137,7 +134,7 @@ export default function ExportPage() {
             }, 2000);
 
         } catch (error: any) {
-            toast({ title: "Generation Failed", description: error.message, variant: "destructive" });
+            toast({ title: t('export.toasts.generationFailed'), description: error.message, variant: "destructive" });
              clearSim();
              setLoading(false);
              setProgress(0);
@@ -154,7 +151,7 @@ export default function ExportPage() {
         a.click();
         a.remove();
         window.URL.revokeObjectURL(url);
-        toast({ title: "Download Started", description: `Downloading ${fileName}` });
+        toast({ title: t('export.toasts.downloadStartedTitle'), description: t('export.toasts.downloadStartedDescription', { fileName: fileName }) });
     };
 
     const handleDeleteVersion = (id: string) => {
@@ -167,16 +164,14 @@ export default function ExportPage() {
                 <CardHeader>
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                         <div>
-                            <CardTitle>Advanced Export Workflow</CardTitle>
-                            <CardDescription>
-                                Generate and download your comprehensive beneficiary analysis report in a single step.
-                            </CardDescription>
+                            <CardTitle>{t('export.title')}</CardTitle>
+                            <CardDescription>{t('export.description')}</CardDescription>
                         </div>
                         <div className="flex flex-wrap gap-2">
-                            <Button variant="outline" asChild><Link href="/upload"><Upload className="mr-2"/>To Upload</Link></Button>
-                            <Button variant="outline" asChild><Link href="/review"><Microscope className="mr-2"/>To Review</Link></Button>
-                            <Button variant="outline" asChild><Link href="/audit"><ClipboardList className="mr-2"/>To Audit</Link></Button>
-                            <Button variant="outline" asChild><Link href="/report"><BarChartHorizontal className="mr-2"/>To Report</Link></Button>
+                            <Button variant="outline" asChild><Link href="/upload"><Upload className="mr-2"/>{t('sidebar.upload')}</Link></Button>
+                            <Button variant="outline" asChild><Link href="/review"><Microscope className="mr-2"/>{t('sidebar.review')}</Link></Button>
+                            <Button variant="outline" asChild><Link href="/audit"><ClipboardList className="mr-2"/>{t('sidebar.audit')}</Link></Button>
+                            <Button variant="outline" asChild><Link href="/report"><BarChartHorizontal className="mr-2"/>{t('sidebar.report')}</Link></Button>
                         </div>
                     </div>
                 </CardHeader>
@@ -184,40 +179,39 @@ export default function ExportPage() {
                      {initialLoading ? (
                         <div className="flex flex-col items-center justify-center h-40 gap-2 text-muted-foreground">
                             <Loader2 className="h-8 w-8 animate-spin" />
-                            <p>Loading data from cache...</p>
+                            <p>{t('export.initialLoading')}</p>
                         </div>
                     ) : (
                          <Card className="bg-primary/10 border-primary">
                             <CardHeader>
-                                <CardTitle>Generate and Download Report</CardTitle>
+                                <CardTitle>{t('export.generateAndDownload.title')}</CardTitle>
                             </CardHeader>
                             <CardContent>
                                 <div className="flex flex-wrap items-center gap-6 mb-4">
                                      <div className="flex items-center gap-3 text-lg font-medium">
                                         <Users className="h-6 w-6 text-primary" />
-                                        <span>{recordCount.toLocaleString()} Records Loaded</span>
+                                        <span>{t('export.generateAndDownload.recordsLoaded', { recordCount: recordCount.toLocaleString() })}</span>
                                     </div>
                                     <div className="flex items-center gap-3 text-lg font-medium">
                                         <Database className="h-6 w-6 text-primary" />
-                                        <span>{clusterCount.toLocaleString()} Clusters Found</span>
+                                        <span>{t('export.generateAndDownload.clustersFound', { clusterCount: clusterCount.toLocaleString() })}</span>
                                     </div>
                                 </div>
                                 <p className="text-sm text-muted-foreground mb-4">
-                                    This will generate a single Excel file with multiple sheets: Enriched Data, Review Summary, Cluster Details, and Audit Findings.
+                                    {t('export.generateAndDownload.description')}
                                 </p>
                                 <Button onClick={handleGenerateAndDownload} disabled={loading || !isReady} size="lg">
                                     {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
-                                    {loading ? 'Generating...' : 'Generate and Download Report'}
+                                    {loading ? t('export.generateAndDownload.buttonGenerating') : t('export.generateAndDownload.button')}
                                 </Button>
-                                {!isReady && <p className="text-xs text-destructive mt-2">Please complete the upload and clustering steps first to enable report generation.</p>}
+                                {!isReady && <p className="text-xs text-destructive mt-2">{t('export.generateAndDownload.enableMessage')}</p>}
                             </CardContent>
                         </Card>
                     )}
                     
-                    {/* Status & History Section */}
                     <div className="grid md:grid-cols-2 gap-6">
                         <Card>
-                            <CardHeader><CardTitle>Generation Status</CardTitle></CardHeader>
+                            <CardHeader><CardTitle>{t('export.status.title')}</CardTitle></CardHeader>
                             <CardContent className="space-y-4">
                                {
                                  loading ? (
@@ -236,25 +230,25 @@ export default function ExportPage() {
                                     </div>
                                 ) : (
                                   <p className="text-sm text-muted-foreground">
-                                      Real-time generation status will appear here once you start the process.
+                                      {t('export.status.idle')}
                                   </p>
                                 )
                                }
                             </CardContent>
                         </Card>
                          <Card>
-                            <CardHeader><CardTitle>Download Panel</CardTitle></CardHeader>
+                            <CardHeader><CardTitle>{t('export.downloadPanel.title')}</CardTitle></CardHeader>
                             <CardContent>
                                 {downloadHistory.length === 0 ? (
-                                    <p className="text-sm text-muted-foreground text-center py-4">Generated reports will appear here.</p>
+                                    <p className="text-sm text-muted-foreground text-center py-4">{t('export.downloadPanel.empty')}</p>
                                 ) : (
                                     <Table>
                                         <TableHeader>
                                             <TableRow>
-                                                <TableHead>File Name</TableHead>
-                                                <TableHead>Version</TableHead>
-                                                <TableHead>Created</TableHead>
-                                                <TableHead className="text-right">Actions</TableHead>
+                                                <TableHead>{t('export.downloadPanel.fileName')}</TableHead>
+                                                <TableHead>{t('export.downloadPanel.version')}</TableHead>
+                                                <TableHead>{t('export.downloadPanel.created')}</TableHead>
+                                                <TableHead className="text-right">{t('export.downloadPanel.actions')}</TableHead>
                                             </TableRow>
                                         </TableHeader>
                                         <TableBody>
@@ -264,8 +258,8 @@ export default function ExportPage() {
                                                     <TableCell>{v.version}</TableCell>
                                                     <TableCell>{v.createdAt}</TableCell>
                                                     <TableCell className="text-right space-x-2">
-                                                        <Button variant="outline" size="sm" onClick={() => handleDirectDownload(v.blob, v.fileName)}>Download</Button>
-                                                        <Button variant="destructive" size="sm" onClick={() => handleDeleteVersion(v.id)}>Delete</Button>
+                                                        <Button variant="outline" size="sm" onClick={() => handleDirectDownload(v.blob, v.fileName)}>{t('export.downloadPanel.download')}</Button>
+                                                        <Button variant="destructive" size="sm" onClick={() => handleDeleteVersion(v.id)}>{t('export.downloadPanel.delete')}</Button>
                                                     </TableCell>
                                                 </TableRow>
                                             ))}

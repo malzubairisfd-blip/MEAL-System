@@ -1,3 +1,4 @@
+
 {
   "sidebar": {
     "dashboard": "لوحة التحكم",
@@ -41,6 +42,10 @@
       "report": {
         "description": "تصور نتائج التجميع والتدقيق في لوحة تحكم تفاعلية مع الرسوم البيانية والأرقام الرئيسية.",
         "button": "عرض التقرير"
+      },
+      "export": {
+        "description": "تصدير البيانات المخصبة وتفاصيل الكتلة ونتائج التدقيق في تقرير Excel شامل.",
+        "button": "اذهب إلى التصدير"
       }
     }
   },
@@ -71,6 +76,7 @@
       "caching": "جاري تخزين النتائج...",
       "building-edges": "جاري المعالجة...",
       "merging-edges": "جاري المعالجة...",
+      "re-clustering": "تنقيح المجموعات...",
       "annotating": "جاري المعالجة...",
       "done": "اكتمل التجميع!",
       "error": "خطأ! حاول مرة أخرى؟",
@@ -100,8 +106,9 @@
       "receiving": "جاري استقبال البيانات",
       "mapping-rows": "جاري ربط الصفوف",
       "blocking": "جاري إنشاء الكتل",
-      "building-edges": "جاري بناء الروابط",
-      "merging-edges": "جاري دمج الروابط",
+      "building_edges": "جاري بناء الروابط",
+      "merging_edges": "جاري دمج الروابط",
+      "re_clustering_pass": "جاري التنقيح {pass}",
       "annotating": "وضع اللمسات الأخيرة",
       "caching": "تخزين النتائج",
       "done": "اكتمل",
@@ -284,8 +291,97 @@
       "fetchError": "فشل جلب البيانات المخزنة مؤقتًا. يرجى محاولة عملية الرفع مرة أخرى.",
       "noRecords": "البيانات المخزنة مؤقتًا فارغة. يرجى إعادة رفع ملفك.",
       "generationFailed": "فشل الإنشاء",
-      "reportReady": "{newVersion} تمت إضافته إلى لوحة التنزيل.",
-      "downloadStarted": "جاري تنزيل {fileName}"
+      "reportReadyTitle": "التقرير جاهز",
+      "reportReadyDescription": "{newVersion} تمت إضافته إلى لوحة التنزيل.",
+      "downloadStartedTitle": "بدأ التنزيل",
+      "downloadStartedDescription": "جاري تنزيل {fileName}"
+    }
+  },
+  "report": {
+    "title": "لوحة تحكم التقرير",
+    "description": "تصور بياناتك وانتقل إلى أقسام أخرى. استخدم الزر أدناه لالتقاط هذا العرض لتصدير Excel النهائي الخاص بك.",
+    "buttons": {
+      "captureAndExport": "التقاط والذهاب إلى التصدير",
+      "capturing": "جاري الالتقاط..."
+    },
+    "mapping": {
+      "title": "الربط",
+      "description": "اربط أعمدة بياناتك بالحقول المطلوبة للتقرير."
+    },
+    "keyFigures": {
+      "title": "الأرقام الرئيسية",
+      "description": "إحصائيات الخط الأول من بياناتك.",
+      "teamLeaders": "إجمالي قادة الفرق",
+      "surveyors": "إجمالي المساحين",
+      "registrationDays": "إجمالي أيام التسجيل",
+      "villages": "إجمالي القرى المستهدفة"
+    },
+    "charts": {
+      "title": "الجداول والرسوم البيانية",
+      "description": "تفصيلات مفصلة لبيانات المستفيدين.",
+      "byDay": "المستفيدون حسب يوم التسجيل",
+      "byVillage": "المستفيدون حسب القرية",
+      "day": "اليوم",
+      "village": "القرية",
+      "beneficiaries": "المستفيدون",
+      "womenAndChildren": "النساء والأطفال",
+      "womenAndChildrenDescription": "توزيع الأمهات والنساء الحوامل.",
+      "maleChildren": "الأطفال الذكور",
+      "femaleChildren": "الأطفال الإناث",
+      "ofTotal": "من الإجمالي"
+    },
+    "bubbles": {
+      "hhRegistered": "أسر مسجلة",
+      "maleHH": "أسر يرأسها ذكور",
+      "femaleHH": "أسر ترأسها إناث",
+      "dislocatedHH": "أسر نازحة",
+      "hhWithGuest": "أسر لديها ضيف نازح",
+      "beneficiaries": "المستفيدون",
+      "pregnantWoman": "امرأة حامل",
+      "lactatingMother": "مرضعة / أم لطفل أقل من 5 سنوات",
+      "handicappedWoman": "امرأة معاقة",
+      "womanWithHandicappedChild": "امرأة لديها طفل معاق",
+      "dislocatedWoman": "امرأة نازحة"
+    },
+    "womenStats": {
+      "pregnant": "حامل",
+      "mother": "أم لطفل أقل من 5 سنوات",
+      "handicappedChild": "طفل معاق"
+    },
+    "map": {
+      "title": "عرض جغرافي",
+      "description": "خريطة للمناطق الفرعية الموجودة في بياناتك."
+    },
+    "loading": "جاري تحميل بيانات التقرير...",
+    "toasts": {
+      "loadError": {
+        "title": "تعذر تحميل البيانات. يرجى البدء برفع ملف.",
+        "description": "لم يتم العثور على بيانات صالحة في ذاكرة التخزين المؤقت."
+      },
+      "noRecords": {
+        "title": "لا توجد سجلات",
+        "description": "البيانات المخزنة مؤقتًا لا تحتوي على سجلات."
+      },
+      "cannotExport": {
+        "title": "لا يمكن التصدير",
+        "description": "البيانات ليست جاهزة. يرجى إكمال الربط أولاً."
+      },
+      "preparingExport": {
+        "title": "جاري تحضير التصدير",
+        "description": "جاري التقاط مكونات لوحة التحكم كصور..."
+      },
+      "captureFailed": {
+        "title": "فشل الالتقاط",
+        "description": "تعذر التقاط مكون {key}."
+      },
+      "dashboardCached": {
+        "title": "تم تخزين لوحة التحكم مؤقتًا",
+        "description": "تم حفظ المرئيات. جارٍ المتابعة إلى صفحة التصدير."
+      },
+      "exportError": {
+        "title": "خطأ في التصدير",
+        "description": "حدث خطأ أثناء تحضير التصدير: {message}"
+      }
     }
   },
   "settings": {

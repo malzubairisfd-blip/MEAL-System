@@ -1,3 +1,4 @@
+
 {
   "sidebar": {
     "dashboard": "Dashboard",
@@ -41,6 +42,10 @@
       "report": {
         "description": "Visualize your clustering and audit results in an interactive dashboard with charts and key figures.",
         "button": "View Report"
+      },
+      "export": {
+        "description": "Export the enriched data, cluster details, and audit findings into a comprehensive Excel report.",
+        "button": "Go to Export"
       }
     }
   },
@@ -71,6 +76,7 @@
       "caching": "Caching Results...",
       "building-edges": "Processing...",
       "merging-edges": "Processing...",
+      "re-clustering": "Refining Clusters...",
       "annotating": "Processing...",
       "done": "Clustering Done!",
       "error": "Error! Retry?",
@@ -100,8 +106,9 @@
       "receiving": "Receiving data",
       "mapping-rows": "Mapping rows",
       "blocking": "Creating blocks",
-      "building-edges": "Building edges",
-      "merging-edges": "Merging edges",
+      "building_edges": "Building edges",
+      "merging_edges": "Merging edges",
+      "re_clustering_pass": "Refining pass {pass}",
       "annotating": "Finalizing",
       "caching": "Caching results",
       "done": "Done",
@@ -124,7 +131,7 @@
         "title": "Failed to cache results"
       },
       "workerError": {
-        "title": "Worker error"
+        "title": "Worker Error"
       },
       "workerStartError": {
         "title": "Unable to start worker"
@@ -284,8 +291,97 @@
       "fetchError": "Failed to fetch cached data. Please try the upload process again.",
       "noRecords": "The cached data is empty. Please re-upload your file.",
       "generationFailed": "Generation Failed",
-      "reportReady": "{newVersion} has been added to the download panel.",
-      "downloadStarted": "Downloading {fileName}"
+      "reportReadyTitle": "Report Ready",
+      "reportReadyDescription": "{newVersion} has been added to the download panel.",
+      "downloadStartedTitle": "Download Started",
+      "downloadStartedDescription": "Downloading {fileName}"
+    }
+  },
+  "report": {
+    "title": "Report Dashboard",
+    "description": "Visualize your data and navigate to other sections. Use the button below to capture this view for your final Excel export.",
+    "buttons": {
+      "captureAndExport": "Capture and Go to Export",
+      "capturing": "Capturing..."
+    },
+    "mapping": {
+      "title": "Mapping",
+      "description": "Map your data columns to the fields required for the report."
+    },
+    "keyFigures": {
+      "title": "Key Figures",
+      "description": "Top-line statistics from your data.",
+      "teamLeaders": "Total Team Leaders",
+      "surveyors": "Total Surveyors",
+      "registrationDays": "Total Registration Days",
+      "villages": "Total Villages Targeted"
+    },
+    "charts": {
+      "title": "Tables and Charts",
+      "description": "Detailed breakdowns of beneficiary data.",
+      "byDay": "Beneficiaries by Registration Day",
+      "byVillage": "Beneficiaries by Village",
+      "day": "Day",
+      "village": "Village",
+      "beneficiaries": "Beneficiaries",
+      "womenAndChildren": "Women & Children",
+      "womenAndChildrenDescription": "Distribution of mothers and pregnant women.",
+      "maleChildren": "Male Children",
+      "femaleChildren": "Female Children",
+      "ofTotal": "of Total"
+    },
+    "bubbles": {
+      "hhRegistered": "HH Registered",
+      "maleHH": "Male HH",
+      "femaleHH": "Female HH",
+      "dislocatedHH": "Dislocated HH",
+      "hhWithGuest": "HH with Guest",
+      "beneficiaries": "Beneficiaries",
+      "pregnantWoman": "Pregnant Woman",
+      "lactatingMother": "Lactating/Mother <5",
+      "handicappedWoman": "Handicapped Woman",
+      "womanWithHandicappedChild": "Woman w/ Handicapped Child",
+      "dislocatedWoman": "Dislocated Woman"
+    },
+    "womenStats": {
+      "pregnant": "Pregnant",
+      "mother": "Mother <5",
+      "handicappedChild": "Handicapped Child"
+    },
+    "map": {
+      "title": "Geospatial View",
+      "description": "Map of subdistricts present in your data."
+    },
+    "loading": "Loading Report Data...",
+    "toasts": {
+      "loadError": {
+        "title": "Could not load data. Please start by uploading a file.",
+        "description": "No valid data was found in the cache."
+      },
+      "noRecords": {
+        "title": "No Records",
+        "description": "The cached data contains no records."
+      },
+      "cannotExport": {
+        "title": "Cannot Export",
+        "description": "Data is not ready. Please complete mapping first."
+      },
+      "preparingExport": {
+        "title": "Preparing Export",
+        "description": "Capturing dashboard components as images..."
+      },
+      "captureFailed": {
+        "title": "Capture Failed",
+        "description": "Could not capture the {key} component."
+      },
+      "dashboardCached": {
+        "title": "Dashboard Cached",
+        "description": "Visuals have been saved. Proceeding to export page."
+      },
+      "exportError": {
+        "title": "Export Error",
+        "description": "An error occurred while preparing the export: {message}"
+      }
     }
   },
   "settings": {

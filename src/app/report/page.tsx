@@ -26,6 +26,7 @@ import type { Feature, FeatureCollection } from 'geojson';
 import { loadCachedResult } from '@/lib/cache';
 import { openDB } from 'idb';
 import type L from 'leaflet';
+import { useTranslation } from "@/hooks/use-translation";
 
 
 // Global Dashboard State
@@ -43,7 +44,6 @@ export const DashboardContext = React.createContext<{
 
 export const useDashboard = () => React.useContext(DashboardContext);
 
-// Dynamically import the map component
 const WestAfricaMap = dynamic(() => import('@/components/Map'), {
   ssr: false,
   loading: () => <div className="h-full w-full flex items-center justify-center bg-muted"><p>Loading map...</p></div>,
@@ -64,12 +64,12 @@ async function saveReportDataToCache(data: { chartImages: Record<string, string>
 }
 
 export default function ReportPage() {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const router = useRouter();
   const [mapInstance, setMapInstance] = useState<L.Map | null>(null);
   const miniChartLayerRef = useRef<L.LayerGroup | null>(null);
 
-  // Data and Mapping State
   const [loadingState, setLoadingState] = useState<'LOADING' | 'READY' | 'ERROR'>('LOADING');
   const [columns, setColumns] = useState<string[]>([]);
   const [allRows, setAllRows] = useState<RecordRow[]>([]);
@@ -77,12 +77,9 @@ export default function ReportPage() {
   const [processedData, setProcessedData] = useState<any>(null);
   const [isExporting, setIsExporting] = useState(false);
   
-  // Map State
   const [admin3Data, setAdmin3Data] = useState<FeatureCollection | null>(null);
   const [selectedFeatures, setSelectedFeatures] = useState<Feature[]>([]);
 
-
-  // Refs for capturing components
   const byVillageChartRef = useRef<HTMLDivElement>(null);
   const byDayChartRef = useRef<HTMLDivElement>(null);
   const womenDonutRef = useRef<HTMLDivElement>(null);
@@ -90,13 +87,10 @@ export default function ReportPage() {
   const bubbleStatsRef = useRef<HTMLDivElement>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
 
-
-  // Load geojson data
   useEffect(() => {
     fetch('/data/yemen_admin3.geojson').then(res => res.json()).then(setAdmin3Data);
   }, []);
 
-  // Fetch cached data on initial render
   useEffect(() => {
     const loadData = async () => {
         setLoadingState('LOADING');
@@ -125,17 +119,17 @@ export default function ReportPage() {
                 }
                 setMapping(initialMapping);
             } else {
-                 toast({title: "No Records", description: "The cached data contains no records.", variant: "destructive"});
+                 toast({title: t('report.toasts.noRecords.title'), description: t('report.toasts.noRecords.description'), variant: "destructive"});
             }
             setLoadingState("READY");
         } else {
-             toast({ title: "Could not load data. Please start by uploading a file.", description: "No valid data was found in the cache.", variant: "destructive" });
+             toast({ title: t('report.toasts.loadError.title'), description: t('report.toasts.loadError.description'), variant: "destructive" });
              setLoadingState("ERROR");
         }
     };
 
     loadData();
-  }, [toast]);
+  }, [toast, t]);
   
   const handleMappingChange = useCallback((newMapping: Record<string, string>) => {
     setMapping(newMapping);
@@ -146,7 +140,6 @@ export default function ReportPage() {
   }, [columns]);
 
 
-  // Process data whenever mapping or rows change
   useEffect(() => {
     if (allRows.length > 0 && MAPPING_FIELDS.every(field => mapping[field])) {
       const getUnique = (field: string) => new Set(allRows.map(r => r[mapping[field]]).filter(Boolean)).size;
@@ -183,9 +176,9 @@ export default function ReportPage() {
           beneficiariesByVillage: Object.entries(benefByVillage).map(([name, value]) => ({name, value})),
           beneficiariesByDay: Object.entries(benefByDay).map(([name, value]) => ({name, value})),
           womenStats: [
-            { name: 'Pregnant', value: getSum('Pregnant woman') },
-            { name: 'Mother <5', value: getSum('Mothers having a child under 5 years old') },
-            { name: 'Handicapped Child', value: getSum('Women have handicapped children from 5 to 17 years old') },
+            { name: t('report.womenStats.pregnant'), value: getSum('Pregnant woman') },
+            { name: t('report.womenStats.mother'), value: getSum('Mothers having a child under 5 years old') },
+            { name: t('report.womenStats.handicappedChild'), value: getSum('Women have handicapped children from 5 to 17 years old') },
           ],
           gender: {
             male: maleChildren,
@@ -194,24 +187,23 @@ export default function ReportPage() {
           },
         },
         bubbles: [
-          { label: 'HH Registered', value: getUnique('Household registered'), icon: 'home' as const },
-          { label: 'Male HH', value: allRows.filter(r => Number(r[mapping['Household Gender']]) === 1).length, icon: 'male' as const },
-          { label: 'Female HH', value: allRows.filter(r => Number(r[mapping['Household Gender']]) === 2).length, icon: 'female' as const },
-          { label: 'Dislocated HH', value: getSum('Dislocated household'), icon: 'move' as const },
-          { label: 'HH with Guest', value: getSum('Household having dislocated guest'), icon: 'users' as const },
-          { label: 'Beneficiaries', value: getUnique('Beneficiaries registered'), icon: 'group' as const },
-          { label: 'Pregnant Woman', value: getSum('Pregnant woman'), icon: 'pregnant' as const },
-          { label: 'Lactating/Mother <5', value: getSum('Mothers having a child under 5 years old'), icon: 'lactating' as const },
-          { label: 'Handicapped Woman', value: getSum('Handicapped Woman'), icon: 'handicapped' as const },
-          { label: 'Woman w/ Handicapped Child', value: getSum('Women have handicapped children from 5 to 17 years old'), icon: 'child' as const },
-          { label: 'Dislocated Woman', value: getSum('Dislocated Woman'), icon: 'move' as const },
+          { label: t('report.bubbles.hhRegistered'), value: getUnique('Household registered'), icon: 'home' as const },
+          { label: t('report.bubbles.maleHH'), value: allRows.filter(r => Number(r[mapping['Household Gender']]) === 1).length, icon: 'male' as const },
+          { label: t('report.bubbles.femaleHH'), value: allRows.filter(r => Number(r[mapping['Household Gender']]) === 2).length, icon: 'female' as const },
+          { label: t('report.bubbles.dislocatedHH'), value: getSum('Dislocated household'), icon: 'move' as const },
+          { label: t('report.bubbles.hhWithGuest'), value: getSum('Household having dislocated guest'), icon: 'users' as const },
+          { label: t('report.bubbles.beneficiaries'), value: getUnique('Beneficiaries registered'), icon: 'group' as const },
+          { label: t('report.bubbles.pregnantWoman'), value: getSum('Pregnant woman'), icon: 'pregnant' as const },
+          { label: t('report.bubbles.lactatingMother'), value: getSum('Mothers having a child under 5 years old'), icon: 'lactating' as const },
+          { label: t('report.bubbles.handicappedWoman'), value: getSum('Handicapped Woman'), icon: 'handicapped' as const },
+          { label: t('report.bubbles.womanWithHandicappedChild'), value: getSum('Women have handicapped children from 5 to 17 years old'), icon: 'child' as const },
+          { label: t('report.bubbles.dislocatedWoman'), value: getSum('Dislocated Woman'), icon: 'move' as const },
         ]
       };
       setProcessedData(data);
     }
-  }, [allRows, mapping]);
+  }, [allRows, mapping, t]);
 
-  // AUTO-SELECT MAP FEATURES & ADD BENEFICIARY COUNTS
   useEffect(() => {
     if (!admin3Data || allRows.length === 0 || !mapping['Government'] || !mapping['District'] || !mapping['Subdistrict']) {
         setSelectedFeatures([]);
@@ -237,7 +229,6 @@ export default function ReportPage() {
             if (adm1 && adm2 && adm3) {
                 const featureLocationKey = `${String(adm1).trim()}-${String(adm2).trim()}-${String(adm3).trim()}`;
                 if (dataLocations.has(featureLocationKey)) {
-                    // Enrich the feature with the beneficiary count
                     return {
                         ...feature,
                         properties: {
@@ -259,12 +250,12 @@ export default function ReportPage() {
 
   const handleCaptureAndExport = async () => {
     if (!processedData) {
-        toast({ title: "Cannot Export", description: "Data is not ready. Please complete mapping first.", variant: "destructive" });
+        toast({ title: t('report.toasts.cannotExport.title'), description: t('report.toasts.cannotExport.description'), variant: "destructive" });
         return;
     }
     
     setIsExporting(true);
-    toast({ title: "Preparing Export", description: "Capturing dashboard components as images..." });
+    toast({ title: t('report.toasts.preparingExport.title'), description: t('report.toasts.preparingExport.description') });
     
     try {
         const refs = {
@@ -284,7 +275,7 @@ export default function ReportPage() {
                     images[key] = await toPng(ref.current, { cacheBust: true, pixelRatio: 2, style: { background: 'white' } });
                 } catch (e) {
                     console.error(`Failed to capture ${key}`, e);
-                    toast({ title: `Capture Failed`, description: `Could not capture the ${key} component.`, variant: "destructive" });
+                    toast({ title: t('report.toasts.captureFailed.title', { key: key }), description: t('report.toasts.captureFailed.description', { key: key }), variant: "destructive" });
                 }
             }
         }
@@ -294,23 +285,23 @@ export default function ReportPage() {
             processedDataForReport: processedData
         });
 
-        toast({ title: "Dashboard Cached", description: "Visuals have been saved. Proceeding to export page." });
+        toast({ title: t('report.toasts.dashboardCached.title'), description: t('report.toasts.dashboardCached.description') });
         router.push('/export');
 
     } catch (error: any) {
         console.error("Export preparation failed:", error);
-        toast({ title: "Export Error", description: `An error occurred while preparing the export: ${error.message}`, variant: "destructive" });
+        toast({ title: t('report.toasts.exportError.title'), description: t('report.toasts.exportError.description', { message: error.message }), variant: "destructive" });
     } finally {
         setIsExporting(false);
     }
   };
   
     if (loadingState === 'LOADING') {
-        return <div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin" /> <span className="ml-2">Loading Report Data...</span></div>;
+        return <div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin" /> <span className="ml-2">{t('report.loading')}</span></div>;
     }
     
     if(loadingState === 'ERROR') {
-        return <div className="flex items-center justify-center h-64"><p>Could not load data. Please start by uploading a file.</p></div>;
+        return <div className="flex items-center justify-center h-64"><p>{t('report.toasts.loadError.description')}</p></div>;
     }
 
   return (
@@ -318,18 +309,16 @@ export default function ReportPage() {
       <div className="space-y-6">
         <Card>
           <CardHeader>
-            <CardTitle>Report Dashboard</CardTitle>
-            <CardDescription>
-              Visualize your data and navigate to other sections. Use the button below to capture this view for your final Excel export.
-            </CardDescription>
+            <CardTitle>{t('report.title')}</CardTitle>
+            <CardDescription>{t('report.description')}</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-2">
-            <Button variant="outline" asChild><Link href="/upload"><Upload className="mr-2"/>To Upload</Link></Button>
-            <Button variant="outline" asChild><Link href="/review"><Microscope className="mr-2"/>To Review</Link></Button>
-            <Button variant="outline" asChild><Link href="/audit"><ClipboardList className="mr-2"/>To Audit</Link></Button>
+            <Button variant="outline" asChild><Link href="/upload"><Upload className="mr-2"/>{t('sidebar.upload')}</Link></Button>
+            <Button variant="outline" asChild><Link href="/review"><Microscope className="mr-2"/>{t('sidebar.review')}</Link></Button>
+            <Button variant="outline" asChild><Link href="/audit"><ClipboardList className="mr-2"/>{t('sidebar.audit')}</Link></Button>
             <Button onClick={handleCaptureAndExport} disabled={isExporting}>
               {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Camera className="mr-2 h-4 w-4" />}
-              {isExporting ? 'Capturing...' : 'Capture and Go to Export'}
+              {isExporting ? t('report.buttons.capturing') : t('report.buttons.captureAndExport')}
             </Button>
           </CardContent>
         </Card>
@@ -339,8 +328,8 @@ export default function ReportPage() {
             <CollapsibleTrigger asChild>
                 <CardHeader className="flex flex-row items-center justify-between cursor-pointer">
                     <div>
-                        <CardTitle>Mapping</CardTitle>
-                        <CardDescription>Map your data columns to the fields required for the report.</CardDescription>
+                        <CardTitle>{t('report.mapping.title')}</CardTitle>
+                        <CardDescription>{t('report.mapping.description')}</CardDescription>
                     </div>
                     <Button variant="ghost" size="sm"><ChevronsUpDown className="h-4 w-4" /></Button>
                 </CardHeader>
@@ -358,8 +347,8 @@ export default function ReportPage() {
                 <CollapsibleTrigger asChild>
                     <CardHeader className="flex flex-row items-center justify-between cursor-pointer">
                         <div>
-                            <CardTitle>Key Figures</CardTitle>
-                            <CardDescription>Top-line statistics from your data.</CardDescription>
+                            <CardTitle>{t('report.keyFigures.title')}</CardTitle>
+                            <CardDescription>{t('report.keyFigures.description')}</CardDescription>
                         </div>
                         <Button variant="ghost" size="sm"><ChevronsUpDown className="h-4 w-4" /></Button>
                     </CardHeader>
@@ -377,8 +366,8 @@ export default function ReportPage() {
                 <CollapsibleTrigger asChild>
                     <CardHeader className="flex flex-row items-center justify-between cursor-pointer">
                         <div>
-                            <CardTitle>Tables and Charts</CardTitle>
-                            <CardDescription>Detailed breakdowns of beneficiary data.</CardDescription>
+                            <CardTitle>{t('report.charts.title')}</CardTitle>
+                            <CardDescription>{t('report.charts.description')}</CardDescription>
                         </div>
                         <Button variant="ghost" size="sm"><ChevronsUpDown className="h-4 w-4" /></Button>
                     </CardHeader>
@@ -412,8 +401,8 @@ export default function ReportPage() {
                     <CollapsibleTrigger asChild>
                         <CardHeader className="flex flex-row items-center justify-between cursor-pointer">
                             <div>
-                                <CardTitle>Geospatial View</CardTitle>
-                                <CardDescription>Map of subdistricts present in your data.</CardDescription>
+                                <CardTitle>{t('report.map.title')}</CardTitle>
+                                <CardDescription>{t('report.map.description')}</CardDescription>
                             </div>
                             <Button variant="ghost" size="sm"><ChevronsUpDown className="h-4 w-4" /></Button>
                         </CardHeader>
