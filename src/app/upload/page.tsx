@@ -319,11 +319,11 @@ export default function UploadPage(){
     
     const mappedRows = mapIncomingRowsToInternal(rawRowsRef.current, mapping);
     
-    // Stable ID generation
-    const textEncoder = new TextEncoder();
+    // Stable ID generation using crypto API for determinism
     for (const row of mappedRows) {
         const raw = `${row.beneficiaryId}|${row.womanName}|${row.husbandName}|${row.nationalId}|${row.phone}`;
-        const data = textEncoder.encode(raw);
+        const encoder = new TextEncoder();
+        const data = encoder.encode(raw);
         const buffer = await crypto.subtle.digest('SHA-1', data);
         const hashArray = Array.from(new Uint8Array(buffer));
         row._internalId = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
@@ -334,7 +334,7 @@ export default function UploadPage(){
     
     const edgeReasons = new Map<string, Set<string>>();
 
-    const MERGE_THRESHOLD = 0.72;
+    const MERGE_THRESHOLD = 0.50;
     let weakEdgeCount = 0;
 
     for (const edge of edges) {
