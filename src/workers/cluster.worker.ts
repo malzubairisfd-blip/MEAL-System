@@ -1,6 +1,25 @@
 // WorkerScript v12 — Parallel Pair Scoring with Mapped Data
 // Receives a range of pairs to score and sends back qualifying edges.
 
+/**
+ * Safely posts a message from the worker, ensuring the payload is serializable.
+ * This prevents "DataCloneError" for non-transferable objects like Error instances.
+ * @param {any} message - The message to send to the main thread.
+ */
+function safePostMessage(message: any) {
+  try {
+    // The most robust way to ensure an object is serializable is to round-trip it through JSON.
+    postMessage(JSON.parse(JSON.stringify(message)));
+  } catch (e) {
+    // If serialization fails, send a specific error message back.
+    postMessage({
+      type: 'error',
+      data: 'Worker serialization failed: ' + (e instanceof Error ? e.message : String(e))
+    });
+  }
+}
+
+
 /* -------------------------
    Helpers & Normalizers
    ------------------------- */
@@ -428,14 +447,14 @@ self.onmessage = (ev) => {
 
       processed++;
       if (processed > 0 && processed % 20000 === 0) {
-        self.postMessage({ type: 'progress', processed });
+        safePostMessage({ type: 'progress', processed });
         processed = 0; // Reset after posting
       }
     }
     
-    self.postMessage({ type: 'done', edges: edges, processed });
+    safePostMessage({ type: 'done', edges: edges, processed });
 
   } catch (error: any) {
-      self.postMessage({ type: 'error', error: { message: error.message, stack: error.stack } });
+      safePostMessage({ type: 'error', data: error instanceof Error ? error.message : String(error) });
   }
 };

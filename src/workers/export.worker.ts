@@ -8,6 +8,23 @@ import { generateArabicClusterSummary, getDecisionAndNote } from '@/lib/arabicCl
 import { similarityScoreDetailed, fullPairwiseBreakdown } from "@/lib/scoring-server";
 import { calculateClusterConfidence } from "@/lib/clusterConfidence";
 
+/**
+ * Safely posts a message from the worker, ensuring the payload is serializable.
+ * This prevents "DataCloneError" for non-transferable objects like Error instances.
+ * @param {any} message - The message to send to the main thread.
+ */
+function safePostMessage(message: any) {
+  try {
+    // The most robust way to ensure an object is serializable is to round-trip it through JSON.
+    postMessage(JSON.parse(JSON.stringify(message)));
+  } catch (e) {
+    // If serialization fails, send a specific error message back.
+    postMessage({
+      type: 'error',
+      data: 'Worker serialization failed: ' + (e instanceof Error ? e.message : String(e))
+    });
+  }
+}
 
 type EnrichedRecord = RecordRow & {
     ClusterID?: number | null; // Internal sequential ID
@@ -35,28 +52,26 @@ self.onmessage = async (event) => {
             throw new Error("Cached data is required for export.");
         }
         
-        postProgress('enriching', 10);
+        safePostMessage({ type: 'progress', step: 'enriching', progress: 10 });
         const { enrichedRecords, enrichedClusters } = await enrichData(cachedData);
         
-        postProgress('sorting', 30);
+        safePostMessage({ type: 'progress', step: 'sorting', progress: 30 });
         const sortedData = sortData(enrichedRecords);
         
-        postProgress('sheets', 50);
+        safePostMessage({ type: 'progress', step: 'sheets', progress: 50 });
         const wb = createFormattedWorkbook(sortedData, cachedData, enrichedClusters);
 
         const buffer = await wb.xlsx.writeBuffer();
         
-        postProgress('done', 100);
+        safePostMessage({ type: 'progress', step: 'done', progress: 100 });
+        // Buffers are transferable, so we can send them directly.
+        // The `safePostMessage` is a good safety net anyway.
         self.postMessage({ type: 'done', data: buffer }, [buffer as any]);
         
     } catch (error: any) {
-        self.postMessage({ type: 'error', data: error instanceof Error ? error.message : String(error) });
+        safePostMessage({ type: 'error', data: error instanceof Error ? error.message : String(error) });
     }
 };
-
-function postProgress(step: string, progress: number) {
-    self.postMessage({ type: 'progress', step, progress });
-}
 
 
 async function enrichData(cachedData: any): Promise<{ enrichedRecords: EnrichedRecord[], enrichedClusters: any[] }> {
@@ -148,20 +163,20 @@ function createFormattedWorkbook(data: EnrichedRecord[], cachedData: any, enrich
     const wb = new ExcelJS.Workbook();
     wb.creator = "Beneficiary Insights";
     
-    postProgress('sheets', 60);
+    safePostMessage({ type: 'progress', step: 'sheets', progress: 60 });
     createEnrichedDataSheet(wb, data, originalHeaders);
     
-    postProgress('summary', 75);
+    safePostMessage({ type: 'progress', step: 'summary', progress: 75 });
     createSummarySheet(wb, allRecords, enrichedClusters, auditFindings || []);
     
     if (auditFindings && auditFindings.length > 0) {
-        postProgress('audit', 85);
+        safePostMessage({ type: 'progress', step: 'audit', progress: 85 });
         createAuditSheet(wb, auditFindings, enrichedClusters);
     }
     createClustersSheet(wb, enrichedClusters);
     
     if (chartImages && processedDataForReport) {
-        postProgress('dashboard', 95);
+        safePostMessage({ type: 'progress', step: 'dashboard', progress: 95 });
         createDashboardReportSheet(wb, chartImages, processedDataForReport, self);
     }
 

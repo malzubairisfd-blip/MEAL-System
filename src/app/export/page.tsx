@@ -31,6 +31,7 @@ export default function ExportPage() {
     const [loading, setLoading] = useState(false);
     const [progress, setProgress] = useState(0);
     const [currentStep, setCurrentStep] = useState<string>('');
+    const [error, setError] = useState<string | null>(null);
 
     const [downloadHistory, setDownloadHistory] = useState<DownloadVersion[]>([]);
     const [recordCount, setRecordCount] = useState(0);
@@ -68,6 +69,7 @@ export default function ExportPage() {
     const handleGenerateAndDownload = async () => {
         setLoading(true);
         setProgress(0);
+        setError(null);
         setCurrentStep(t('export.status.starting'));
 
         try {
@@ -102,6 +104,7 @@ export default function ExportPage() {
                 } else if (type === 'error') {
                     console.error('Worker error:', data);
                     toast({ title: t('export.toasts.generationFailed'), description: data, variant: "destructive" });
+                    setError(data);
                     setLoading(false);
                     worker.terminate();
                 }
@@ -196,6 +199,11 @@ export default function ExportPage() {
                                     <div className="space-y-3 pt-2">
                                         <Progress value={progress} />
                                         <p className="text-sm text-muted-foreground text-center">{currentStep}</p>
+                                    </div>
+                                ) : error ? (
+                                    <div className="text-center text-destructive-foreground bg-destructive p-4 rounded-md">
+                                        <p className="font-bold">Error during export:</p>
+                                        <p className="text-sm">{error}</p>
                                     </div>
                                 ) : (
                                   <p className="text-sm text-muted-foreground text-center">
