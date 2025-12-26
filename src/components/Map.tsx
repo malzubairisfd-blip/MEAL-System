@@ -157,7 +157,7 @@ export default function WestAfricaMap() {
         });
 
         const marker = L.marker(center, { icon: pieIcon });
-        marker.bindTooltip(`Beneficiaries: ${value} (${percentage.toFixed(1)}%)`);
+        marker.bindTooltip(`Beneficiaries: ${value.toLocaleString()} (${percentage.toFixed(1)}%)`);
         layer.addLayer(marker);
     });
 
