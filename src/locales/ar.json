@@ -306,7 +306,28 @@
     },
     "mapping": {
       "title": "الربط",
-      "description": "اربط أعمدة بياناتك بالحقول المطلوبة للتقرير."
+      "description": "اربط أعمدة بياناتك بالحقول المطلوبة للتقرير.",
+      "fields": {
+        "government": "المحافظة",
+        "district": "المديرية",
+        "subdistrict": "العزلة",
+        "teamLeaders": "قادة الفرق",
+        "surveyor": "المساح",
+        "registrationDays": "أيام التسجيل",
+        "villageTargeted": "القرية المستهدفة",
+        "householdRegistered": "الأسر المسجلة",
+        "householdGender": "جنس رب الأسرة",
+        "dislocatedHousehold": "أسرة نازحة",
+        "householdWithGuest": "أسرة لديها ضيف نازح",
+        "beneficiariesRegistered": "المستفيدون المسجلون",
+        "pregnantWoman": "امرأة حامل",
+        "lactatingMother": "أم مرضعة (طفل أقل من 5 سنوات)",
+        "womanWithHandicappedChild": "امرأة لديها أطفال معاقون (5-17 سنة)",
+        "handicappedWoman": "امرأة معاقة",
+        "dislocatedWoman": "امرأة نازحة",
+        "maleChildren": "الأطفال الذكور",
+        "femaleChildren": "الأطفال الإناث"
+      }
     },
     "keyFigures": {
       "title": "الأرقام الرئيسية",
@@ -479,5 +500,3 @@
     }
   }
 }
-
-    

@@ -306,7 +306,28 @@
     },
     "mapping": {
       "title": "Mapping",
-      "description": "Map your data columns to the fields required for the report."
+      "description": "Map your data columns to the fields required for the report.",
+      "fields": {
+        "government": "Government",
+        "district": "District",
+        "subdistrict": "Subdistrict",
+        "teamLeaders": "Team Leaders",
+        "surveyor": "Surveyor",
+        "registrationDays": "Registration days",
+        "villageTargeted": "Village targeted",
+        "householdRegistered": "Household registered",
+        "householdGender": "Household Gender",
+        "dislocatedHousehold": "Dislocated household",
+        "householdWithGuest": "Household having dislocated guest",
+        "beneficiariesRegistered": "Beneficiaries registered",
+        "pregnantWoman": "Pregnant woman",
+        "lactatingMother": "Mothers having a child under 5 years old",
+        "womanWithHandicappedChild": "Women have handicapped children from 5 to 17 years old",
+        "handicappedWoman": "Handicapped Woman",
+        "dislocatedWoman": "Dislocated Woman",
+        "maleChildren": "Male Children",
+        "femaleChildren": "Female Children"
+      }
     },
     "keyFigures": {
       "title": "Key Figures",
@@ -479,5 +500,3 @@
     }
   }
 }
-
-    

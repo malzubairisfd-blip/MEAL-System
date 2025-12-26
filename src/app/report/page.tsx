@@ -17,7 +17,7 @@ import {
 import { Card, CardHeader, CardContent, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Loader2, ChevronsUpDown, Camera, Upload, Microscope, ClipboardList } from "lucide-react";
-import { ColumnMapping, MAPPING_FIELDS } from '@/components/report/ColumnMapping';
+import { ColumnMapping, MAPPING_FIELDS_KEYS } from '@/components/report/ColumnMapping';
 import { KeyFigures } from '@/components/report/KeyFigures';
 import { BeneficiariesByVillageChart, BeneficiariesByDayChart, WomenAndChildrenDonut } from '@/components/report/TableBarCharts';
 import { GenderVisual } from '@/components/report/GenderVisual';
@@ -64,7 +64,7 @@ async function saveReportDataToCache(data: { chartImages: Record<string, string>
 }
 
 export default function ReportPage() {
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const { toast } = useToast();
   const router = useRouter();
   const [mapInstance, setMapInstance] = useState<L.Map | null>(null);
@@ -104,7 +104,7 @@ export default function ReportPage() {
                 
                 const storageKey = LOCAL_STORAGE_KEY_PREFIX + fileColumns.join(',');
                 const saved = localStorage.getItem(storageKey);
-                const initialMapping = MAPPING_FIELDS.reduce((acc, field) => {
+                const initialMapping = MAPPING_FIELDS_KEYS.reduce((acc, field) => {
                     acc[field] = "";
                     return acc;
                 }, {} as Record<string, string>);
@@ -112,7 +112,7 @@ export default function ReportPage() {
                 if (saved) {
                     try {
                         const savedMapping = JSON.parse(saved);
-                        for(const field of MAPPING_FIELDS) {
+                        for(const field of MAPPING_FIELDS_KEYS) {
                             initialMapping[field] = savedMapping[field] || "";
                         }
                     } catch {}
@@ -141,12 +141,12 @@ export default function ReportPage() {
 
 
   useEffect(() => {
-    if (allRows.length > 0 && MAPPING_FIELDS.every(field => mapping[field])) {
+    if (allRows.length > 0 && MAPPING_FIELDS_KEYS.every(field => mapping[field])) {
       const getUnique = (field: string) => new Set(allRows.map(r => r[mapping[field]]).filter(Boolean)).size;
       const getSum = (field: string) => allRows.reduce((acc, r) => acc + (Number(r[mapping[field]]) || 0), 0);
       
       const benefByVillage = allRows.reduce((acc, r) => {
-        const village = r[mapping['Village targeted']];
+        const village = r[mapping['villageTargeted']];
         if (village) {
             acc[village] = (acc[village] || 0) + 1;
         }
@@ -154,7 +154,7 @@ export default function ReportPage() {
       }, {} as Record<string, number>);
 
       const benefByDay = allRows.reduce((acc, r) => {
-        const day = r[mapping['Registration days']];
+        const day = r[mapping['registrationDays']];
         if(day) {
             const date = new Date(day).toLocaleDateString();
             acc[date] = (acc[date] || 0) + 1;
@@ -162,23 +162,23 @@ export default function ReportPage() {
         return acc;
       }, {} as Record<string, number>);
       
-      const maleChildren = getSum('Male Children');
-      const femaleChildren = getSum('Female Children');
+      const maleChildren = getSum('maleChildren');
+      const femaleChildren = getSum('femaleChildren');
 
       const data = {
         keyFigures: {
-          teamLeaders: getUnique('Team Leaders'),
-          surveyors: getUnique('Surveyor'),
-          registrationDays: getUnique('Registration days'),
-          villages: getUnique('Village targeted'),
+          teamLeaders: getUnique('teamLeaders'),
+          surveyors: getUnique('surveyor'),
+          registrationDays: getUnique('registrationDays'),
+          villages: getUnique('villageTargeted'),
         },
         charts: {
           beneficiariesByVillage: Object.entries(benefByVillage).map(([name, value]) => ({name, value})),
           beneficiariesByDay: Object.entries(benefByDay).map(([name, value]) => ({name, value})),
           womenStats: [
-            { name: t('report.womenStats.pregnant'), value: getSum('Pregnant woman') },
-            { name: t('report.womenStats.mother'), value: getSum('Mothers having a child under 5 years old') },
-            { name: t('report.womenStats.handicappedChild'), value: getSum('Women have handicapped children from 5 to 17 years old') },
+            { name: t('report.womenStats.pregnant'), value: getSum('pregnantWoman') },
+            { name: t('report.womenStats.mother'), value: getSum('lactatingMother') },
+            { name: t('report.womenStats.handicappedChild'), value: getSum('womanWithHandicappedChild') },
           ],
           gender: {
             male: maleChildren,
@@ -187,17 +187,17 @@ export default function ReportPage() {
           },
         },
         bubbles: [
-          { label: t('report.bubbles.hhRegistered'), value: getUnique('Household registered'), icon: 'home' as const },
-          { label: t('report.bubbles.maleHH'), value: allRows.filter(r => Number(r[mapping['Household Gender']]) === 1).length, icon: 'male' as const },
-          { label: t('report.bubbles.femaleHH'), value: allRows.filter(r => Number(r[mapping['Household Gender']]) === 2).length, icon: 'female' as const },
-          { label: t('report.bubbles.dislocatedHH'), value: getSum('Dislocated household'), icon: 'move' as const },
-          { label: t('report.bubbles.hhWithGuest'), value: getSum('Household having dislocated guest'), icon: 'users' as const },
-          { label: t('report.bubbles.beneficiaries'), value: getUnique('Beneficiaries registered'), icon: 'group' as const },
-          { label: t('report.bubbles.pregnantWoman'), value: getSum('Pregnant woman'), icon: 'pregnant' as const },
-          { label: t('report.bubbles.lactatingMother'), value: getSum('Mothers having a child under 5 years old'), icon: 'lactating' as const },
-          { label: t('report.bubbles.handicappedWoman'), value: getSum('Handicapped Woman'), icon: 'handicapped' as const },
-          { label: t('report.bubbles.womanWithHandicappedChild'), value: getSum('Women have handicapped children from 5 to 17 years old'), icon: 'child' as const },
-          { label: t('report.bubbles.dislocatedWoman'), value: getSum('Dislocated Woman'), icon: 'move' as const },
+          { label: t('report.bubbles.hhRegistered'), value: getUnique('householdRegistered'), icon: 'home' as const },
+          { label: t('report.bubbles.maleHH'), value: allRows.filter(r => Number(r[mapping['householdGender']]) === 1).length, icon: 'male' as const },
+          { label: t('report.bubbles.femaleHH'), value: allRows.filter(r => Number(r[mapping['householdGender']]) === 2).length, icon: 'female' as const },
+          { label: t('report.bubbles.dislocatedHH'), value: getSum('dislocatedHousehold'), icon: 'move' as const },
+          { label: t('report.bubbles.hhWithGuest'), value: getSum('householdWithGuest'), icon: 'users' as const },
+          { label: t('report.bubbles.beneficiaries'), value: getUnique('beneficiariesRegistered'), icon: 'group' as const },
+          { label: t('report.bubbles.pregnantWoman'), value: getSum('pregnantWoman'), icon: 'pregnant' as const },
+          { label: t('report.bubbles.lactatingMother'), value: getSum('lactatingMother'), icon: 'lactating' as const },
+          { label: t('report.bubbles.handicappedWoman'), value: getSum('handicappedWoman'), icon: 'handicapped' as const },
+          { label: t('report.bubbles.womanWithHandicappedChild'), value: getSum('womanWithHandicappedChild'), icon: 'child' as const },
+          { label: t('report.bubbles.dislocatedWoman'), value: getSum('dislocatedWoman'), icon: 'move' as const },
         ]
       };
       setProcessedData(data);
@@ -205,16 +205,16 @@ export default function ReportPage() {
   }, [allRows, mapping, t]);
 
   useEffect(() => {
-    if (!admin3Data || allRows.length === 0 || !mapping['Government'] || !mapping['District'] || !mapping['Subdistrict']) {
+    if (!admin3Data || allRows.length === 0 || !mapping['government'] || !mapping['district'] || !mapping['subdistrict']) {
         setSelectedFeatures([]);
         return;
     }
 
     const dataLocations = new Map<string, number>();
     allRows.forEach(row => {
-        const gov = row[mapping['Government']];
-        const dist = row[mapping['District']];
-        const sub = row[mapping['Subdistrict']];
+        const gov = row[mapping['government']];
+        const dist = row[mapping['district']];
+        const sub = row[mapping['subdistrict']];
         if (gov && dist && sub) {
             const key = `${String(gov).trim()}-${String(dist).trim()}-${String(sub).trim()}`;
             dataLocations.set(key, (dataLocations.get(key) || 0) + 1);
@@ -325,11 +325,11 @@ export default function ReportPage() {
             <CardDescription>{t('report.description')}</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-2">
-            <Button variant="outline" asChild><Link href="/upload"><Upload className="mr-2"/>{t('sidebar.upload')}</Link></Button>
-            <Button variant="outline" asChild><Link href="/review"><Microscope className="mr-2"/>{t('sidebar.review')}</Link></Button>
-            <Button variant="outline" asChild><Link href="/audit"><ClipboardList className="mr-2"/>{t('sidebar.audit')}</Link></Button>
+            <Button variant="outline" asChild><Link href="/upload"><Upload className={language === 'ar' ? 'ml-2' : 'mr-2'}/>{t('sidebar.upload')}</Link></Button>
+            <Button variant="outline" asChild><Link href="/review"><Microscope className={language === 'ar' ? 'ml-2' : 'mr-2'}/>{t('sidebar.review')}</Link></Button>
+            <Button variant="outline" asChild><Link href="/audit"><ClipboardList className={language === 'ar' ? 'ml-2' : 'mr-2'}/>{t('sidebar.audit')}</Link></Button>
             <Button onClick={handleCaptureAndExport} disabled={isExporting}>
-              {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Camera className="mr-2 h-4 w-4" />}
+              {isExporting ? <Loader2 className={language === 'ar' ? 'ml-2 h-4 w-4 animate-spin' : 'mr-2 h-4 w-4 animate-spin'} /> : <Camera className={language === 'ar' ? 'ml-2 h-4 w-4' : 'mr-2 h-4 w-4'} />}
               {isExporting ? t('report.buttons.capturing') : t('report.buttons.captureAndExport')}
             </Button>
           </CardContent>
