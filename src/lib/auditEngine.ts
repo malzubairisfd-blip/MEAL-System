@@ -10,17 +10,6 @@ export interface AuditFinding {
 }
 
 /* -------------------------------------------------------------
-   SAFE JSON PARSER 
-------------------------------------------------------------- */
-async function safeParse(req: Request) {
-  try {
-    return await req.json();
-  } catch {
-    throw new Error("Invalid JSON — request body is not valid JSON.");
-  }
-}
-
-/* -------------------------------------------------------------
    BASIC NORMALIZATION HELPERS
 ------------------------------------------------------------- */
 function safeString(x: any) {
@@ -54,6 +43,138 @@ function tokens(s: string) {
   return n.split(" ").filter(Boolean);
 }
 
+/* -------------------------------------------------------------
+   SIMPLE JARO–WINKLER FOR AUDIT
+------------------------------------------------------------- */
+function jaroWinkler(a: string, b: string) {
+  a = safeString(a);
+  b = safeString(b);
+  if (!a || !b) return 0;
+
+  const la = a.length, lb = b.length;
+  const dist = Math.floor(Math.max(la, lb) / 2) - 1;
+
+  const aMatches = new Array(la).fill(false);
+  const bMatches = new Array(lb).fill(false);
+
+  let matches = 0;
+
+  for (let i = 0; i < la; i++) {
+    const start = Math.max(0, i - dist);
+    const end = Math.min(i + dist + 1, lb);
+
+    for (let j = start; j < end; j++) {
+      if (bMatches[j]) continue;
+      if (a[i] !== b[j]) continue;
+      aMatches[i] = true;
+      bMatches[j] = true;
+      matches++;
+      break;
+    }
+  }
+
+  if (matches === 0) return 0;
+
+  let k = 0;
+  let trans = 0;
+
+  for (let i = 0; i < la; i++) {
+    if (!aMatches[i]) continue;
+    while (!bMatches[k]) k++;
+    if (a[i] !== b[k]) trans++;
+    k++;
+  }
+
+  trans /= 2;
+
+  const m = matches;
+  const jaro = (m / la + m / lb + (m - trans) / m) / 3;
+
+  // prefix
+  let prefix = 0;
+  const maxPrefix = 4;
+
+  for (let i = 0; i < Math.min(maxPrefix, la, lb); i++) {
+    if (a[i] === b[i]) prefix++;
+    else break;
+  }
+
+  return jaro + prefix * 0.1 * (1 - jaro);
+}
+
+/* -------------------------------------------------------------
+   TOKEN JACCARD FOR NAME ORDER FREE MATCHING
+------------------------------------------------------------- */
+function tokenJaccard(aTokens: string[], bTokens: string[]) {
+  if (!aTokens.length && !bTokens.length) return 0;
+
+  const A = new Set(aTokens);
+  const B = new Set(bTokens);
+
+  let inter = 0;
+  for (const t of A) if (B.has(t)) inter++;
+
+  return inter / (new Set([...A, ...B]).size || 1);
+}
+
+function nameOrderFree(a: string, b: string) {
+  const tA = tokens(a);
+  const tB = tokens(b);
+  if (!tA.length || !tB.length) return 0;
+
+  const jacc = tokenJaccard(tA, tB);
+  const sortedA = tA.slice().sort().join(" ");
+  const sortedB = tB.slice().sort().join(" ");
+
+  const jw = jaroWinkler(sortedA, sortedB);
+
+  return 0.7 * jacc + 0.3 * jw;
+}
+
+/* -------------------------------------------------------------
+   LIGHTWEIGHT PAIRWISE SCORING FOR AUDIT POTENTIAL DUPLICATES
+------------------------------------------------------------- */
+function auditSimilarity(a: any, b: any) {
+  const wA = normalizeArabic(a.womanName || "");
+  const wB = normalizeArabic(b.womanName || "");
+  const hA = normalizeArabic(a.husbandName || "");
+  const hB = normalizeArabic(b.husbandName || "");
+  const idA = safeString(a.nationalId || "");
+  const idB = safeString(b.nationalId || "");
+  const pA = digitsOnly(a.phone || "");
+  const pB = digitsOnly(b.phone || "");
+
+  const wTokenScore = nameOrderFree(wA, wB);
+  const wFirst = tokens(wA)[0] || "";
+  const wSecond = tokens(wB)[0] || "";
+
+  const firstScore = jaroWinkler(wFirst, wSecond);
+  const husbandScore = Math.max(
+    tokenJaccard(tokens(hA), tokens(hB)),
+    jaroWinkler(hA, hB)
+  );
+
+  const idScore =
+    idA && idB ? (idA === idB ? 1 : idA.slice(-5) === idB.slice(-5) ? 0.75 : 0) : 0;
+
+  const phoneScore =
+    pA && pB
+      ? pA === pB
+        ? 1
+        : pA.slice(-6) === pB.slice(-6)
+        ? 0.85
+        : 0
+      : 0;
+
+  const score =
+    0.35 * wTokenScore +
+    0.25 * firstScore +
+    0.20 * husbandScore +
+    0.10 * idScore +
+    0.10 * phoneScore;
+
+  return Math.min(1, Math.max(0, score));
+}
 
 /* -------------------------------------------------------------
    MAIN CLIENT-SIDE AUDIT FUNCTION
@@ -134,6 +255,21 @@ export async function runClientSideAudit(clusters: {records: RecordRow[]}[], thr
             description: `Woman '${w}' is associated with multiple National IDs: ${[...ids].join(', ')}.`,
             records: members.filter(m => normalizeArabic(safeString(m.womanName)) === w)
           });
+        }
+      }
+      
+      // 6. Check for high similarity using auditSimilarity
+      for (let i = 0; i < members.length; i++) {
+        for (let j = i + 1; j < members.length; j++) {
+            const score = auditSimilarity(members[i], members[j]);
+            if (score > threshold) {
+                 issues.push({
+                    type: "HIGH_SIMILARITY",
+                    severity: 'medium',
+                    description: `High similarity score (${score.toFixed(2)}) found between records.`,
+                    records: [members[i], members[j]]
+                });
+            }
         }
       }
     }
