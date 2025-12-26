@@ -1,4 +1,3 @@
-
 // app/(app)/upload/page.tsx
 "use client";
 
@@ -319,7 +318,16 @@ export default function UploadPage(){
     edges.sort((a,b) => b.score - a.score || a.a - b.a || a.b - b.b);
     
     const mappedRows = mapIncomingRowsToInternal(rawRowsRef.current, mapping);
-    mappedRows.forEach((row, i) => row._internalId = `row_${i}`);
+    
+    // Stable ID generation
+    const textEncoder = new TextEncoder();
+    for (const row of mappedRows) {
+        const raw = `${row.beneficiaryId}|${row.womanName}|${row.husbandName}|${row.nationalId}|${row.phone}`;
+        const data = textEncoder.encode(raw);
+        const buffer = await crypto.subtle.digest('SHA-1', data);
+        const hashArray = Array.from(new Uint8Array(buffer));
+        row._internalId = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    }
 
     const dsu = new DSU();
     mappedRows.forEach(r => dsu.make(r._internalId!));
@@ -364,6 +372,11 @@ export default function UploadPage(){
     const MAX_RECLUSTER_PASSES = 10;
     let pass = 1;
     while (true) {
+        // Stable cluster order before reclustering
+        currentClusters.sort((a, b) =>
+            a.records[0]._internalId.localeCompare(b.records[0]._internalId)
+        );
+
         const oversized = currentClusters.filter(c => c.records.length > 5 && c.refinePass < MAX_RECLUSTER_PASSES);
         const normalSized = currentClusters.filter(c => c.records.length <= 5 || c.refinePass >= MAX_RECLUSTER_PASSES);
 
@@ -435,6 +448,13 @@ export default function UploadPage(){
     } catch(_) {}
     
     const mappedRows = mapIncomingRowsToInternal(rawRowsRef.current, mapping);
+
+    // Sort records before worker dispatch
+    mappedRows.sort((a, b) =>
+        String(a.beneficiaryId || "").localeCompare(
+            String(b.beneficiaryId || "")
+        )
+    );
 
     const numCores = navigator.hardwareConcurrency || 4;
     const n = mappedRows.length;

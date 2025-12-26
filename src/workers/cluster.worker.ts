@@ -386,14 +386,16 @@ function pairwiseScore(aRaw: any, bRaw: any, opts: any) {
   locationScore = Math.min(0.5, locationScore);
 
   const W = o.finalScoreWeights;
-  let score = (W.firstNameScore || 0) * firstNameScore + (W.familyNameScore || 0) * familyNameScore +
+  let rawScore = (W.firstNameScore || 0) * firstNameScore + (W.familyNameScore || 0) * familyNameScore +
               (W.advancedNameScore || 0) * advancedNameScore + (W.tokenReorderScore || 0) * tokenReorderScore +
               (W.husbandScore || 0) * husbandScore + (W.idScore || 0) * idScore + (W.phoneScore || 0) * phoneScoreVal +
               (W.childrenScore || 0) * childrenScore + (W.locationScore || 0) * locationScore;
 
   const strongParts = [firstNameScore, familyNameScore, tokenReorderScore].filter(v => v >= 0.85).length;
-  if (strongParts >= 2) score = Math.min(1, score + 0.04);
-  score = Math.max(0, Math.min(1, score));
+  if (strongParts >= 2) rawScore = Math.min(1, rawScore + 0.04);
+  rawScore = Math.max(0, Math.min(1, rawScore));
+
+  const score = Number(rawScore.toFixed(6));
 
   const breakdown = { firstNameScore, familyNameScore, advancedNameScore, tokenReorderScore, husbandScore, idScore, phoneScore: phoneScoreVal, childrenScore, locationScore };
   
