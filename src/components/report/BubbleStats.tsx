@@ -40,7 +40,7 @@ export function BubbleStats({ data }: { data: { label: string; value: number; ic
       <CardContent className="p-6">
         <div className="flex flex-wrap items-center justify-center gap-4">
           {data.map(item => (
-            <div key={item.label} className="flex flex-col items-center gap-2">
+            <div key={`${item.label}-${item.value}`} className="flex flex-col items-center gap-2">
               <div className={`relative w-24 h-24 rounded-full flex items-center justify-center text-center p-2 ${colorMap[item.icon] || colorMap.default}`}>
                 {iconMap[item.icon]}
                 <div className="absolute bottom-1 right-1 bg-white text-black text-xs font-bold rounded-full h-6 w-6 flex items-center justify-center">{item.value}</div>
