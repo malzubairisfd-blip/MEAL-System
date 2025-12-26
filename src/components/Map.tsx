@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useEffect, useRef, useState } from "react";
@@ -7,6 +6,27 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { useDashboard } from "@/app/report/page";
 import type { Feature, FeatureCollection } from 'geojson';
+
+// Helper function to create an SVG pie chart
+const createPieChartIcon = (percentage: number, size: number) => {
+    const r = 20; // radius of the circle
+    const circumference = 2 * Math.PI * r;
+    const arcLength = (percentage / 100) * circumference;
+
+    const x = r + Math.sin(2 * Math.PI * (percentage / 100)) * r;
+    const y = r - Math.cos(2 * Math.PI * (percentage / 100)) * r;
+    const largeArcFlag = percentage > 50 ? 1 : 0;
+
+    const pathData = `M ${r},${r} L ${r},0 A ${r},${r} 0 ${largeArcFlag},1 ${x},${y} z`;
+
+    return `
+        <svg width="${size}" height="${size}" viewBox="0 0 ${2*r} ${2*r}" style="transform: scale(${size / 40}); transform-origin: center;">
+            <circle cx="${r}" cy="${r}" r="${r}" fill="#e5e7eb" />
+            <path d="${pathData}" fill="#16a34a" />
+        </svg>
+    `;
+};
+
 
 export default function WestAfricaMap() {
   const mapRef = useRef<L.Map | null>(null);
@@ -16,6 +36,7 @@ export default function WestAfricaMap() {
   const admin1LayerRef = useRef<L.GeoJSON | null>(null);
   const admin2LayerRef = useRef<L.GeoJSON | null>(null);
   const admin3LayerRef = useRef<L.GeoJSON | null>(null);
+  const miniChartLayerRef = useRef<L.LayerGroup | null>(null);
 
   const [admin1, setAdmin1] = useState<FeatureCollection | null>(null);
   const [admin2, setAdmin2] = useState<FeatureCollection | null>(null);
@@ -41,6 +62,10 @@ export default function WestAfricaMap() {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
       }).addTo(map);
 
+      // Initialize the layer group for mini charts
+      if (!miniChartLayerRef.current) {
+        miniChartLayerRef.current = L.layerGroup().addTo(mapRef.current);
+      }
     }
   }, [setMapInstance]);
   
@@ -94,6 +119,49 @@ export default function WestAfricaMap() {
 
   }, [admin1, admin2, admin3, selectedFeatures]);
 
+  // Effect to draw mini charts
+  useEffect(() => {
+    if (!mapRef.current || !miniChartLayerRef.current) return;
+    
+    const layer = miniChartLayerRef.current;
+    layer.clearLayers();
+
+    if (!selectedFeatures || selectedFeatures.length === 0) return;
+
+    // 1. Calculate grand total of beneficiaries across all selected subdistricts
+    const grandTotal = selectedFeatures.reduce(
+        (sum: number, f: any) => sum + Number(f.properties?.total_beneficiaries ?? 0), 0
+    );
+
+    if (grandTotal === 0) return;
+
+    // 2. Create one pie chart marker per selected subdistrict
+    selectedFeatures.forEach((feature: any) => {
+        const value = Number(feature.properties?.total_beneficiaries ?? 0);
+        if (value <= 0) return;
+
+        const bounds = L.geoJSON(feature).getBounds();
+        if (!bounds.isValid()) return;
+
+        const center = bounds.getCenter();
+        const percentage = (value / grandTotal) * 100;
+        
+        // Scale icon size based on value, with min and max
+        const iconSize = Math.max(30, Math.min(80, value / 10)); 
+
+        const pieIcon = L.divIcon({
+            html: createPieChartIcon(percentage, iconSize),
+            className: 'leaflet-pie-icon', // Use a class for potential styling
+            iconSize: [iconSize, iconSize],
+            iconAnchor: [iconSize / 2, iconSize / 2]
+        });
+
+        const marker = L.marker(center, { icon: pieIcon });
+        marker.bindTooltip(`Beneficiaries: ${value} (${percentage.toFixed(1)}%)`);
+        layer.addLayer(marker);
+    });
+
+  }, [selectedFeatures]);
 
   return (
     <div

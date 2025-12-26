@@ -205,37 +205,45 @@ export default function ReportPage() {
     }
   }, [allRows, mapping]);
 
-  // AUTO-SELECT MAP FEATURES
+  // AUTO-SELECT MAP FEATURES & ADD BENEFICIARY COUNTS
   useEffect(() => {
     if (!admin3Data || allRows.length === 0 || !mapping['Government'] || !mapping['District'] || !mapping['Subdistrict']) {
         setSelectedFeatures([]);
         return;
     }
 
-    // Create a set of unique 'gov-dist-subdist' strings from the data for efficient lookup
-    const dataLocations = new Set(
-        allRows.map(row => {
-            const gov = row[mapping['Government']];
-            const dist = row[mapping['District']];
-            const sub = row[mapping['Subdistrict']];
-            if (gov && dist && sub) {
-                return `${String(gov).trim()}-${String(dist).trim()}-${String(sub).trim()}`;
-            }
-            return null;
-        }).filter(Boolean)
-    );
+    const dataLocations = new Map<string, number>();
+    allRows.forEach(row => {
+        const gov = row[mapping['Government']];
+        const dist = row[mapping['District']];
+        const sub = row[mapping['Subdistrict']];
+        if (gov && dist && sub) {
+            const key = `${String(gov).trim()}-${String(dist).trim()}-${String(sub).trim()}`;
+            dataLocations.set(key, (dataLocations.get(key) || 0) + 1);
+        }
+    });
 
     if (dataLocations.size > 0) {
-        const matchedFeatures = admin3Data.features.filter(feature => {
+        const matchedFeatures = admin3Data.features.map(feature => {
             const adm1 = feature.properties?.ADM1_AR;
             const adm2 = feature.properties?.ADM2_AR;
             const adm3 = feature.properties?.ADM3_AR;
             if (adm1 && adm2 && adm3) {
                 const featureLocationKey = `${String(adm1).trim()}-${String(adm2).trim()}-${String(adm3).trim()}`;
-                return dataLocations.has(featureLocationKey);
+                if (dataLocations.has(featureLocationKey)) {
+                    // Enrich the feature with the beneficiary count
+                    return {
+                        ...feature,
+                        properties: {
+                            ...feature.properties,
+                            total_beneficiaries: dataLocations.get(featureLocationKey) || 0,
+                        },
+                    };
+                }
             }
-            return false;
-        });
+            return null;
+        }).filter((f): f is Feature => f !== null);
+        
         setSelectedFeatures(matchedFeatures);
     } else {
         setSelectedFeatures([]);
