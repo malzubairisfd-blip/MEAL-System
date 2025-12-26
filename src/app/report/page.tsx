@@ -258,13 +258,17 @@ export default function ReportPage() {
     toast({ title: t('report.toasts.preparingExport.title'), description: t('report.toasts.preparingExport.description') });
     
     try {
+        const mapElement = mapContainerRef.current;
+        if (!mapElement) {
+            throw new Error("Map container not found");
+        }
+        
         const refs = {
             byVillageChart: byVillageChartRef,
             byDayChart: byDayChartRef,
             womenDonut: womenDonutRef,
             genderVisual: genderVisualRef,
             bubbleStats: bubbleStatsRef,
-            map: mapContainerRef,
         };
         
         const images: Record<string, string> = {};
@@ -278,6 +282,14 @@ export default function ReportPage() {
                     toast({ title: t('report.toasts.captureFailed.title', { key: key }), description: t('report.toasts.captureFailed.description', { key: key }), variant: "destructive" });
                 }
             }
+        }
+
+        // Capture map separately
+        try {
+            images['map'] = await toPng(mapElement, { cacheBust: true, pixelRatio: 2 });
+        } catch (e) {
+            console.error(`Failed to capture map`, e);
+            toast({ title: t('report.toasts.captureFailed.title', { key: 'map' }), description: t('report.toasts.captureFailed.description', { key: 'map' }), variant: "destructive" });
         }
         
         await saveReportDataToCache({
@@ -421,3 +433,5 @@ export default function ReportPage() {
     </DashboardContext.Provider>
   );
 }
+
+    

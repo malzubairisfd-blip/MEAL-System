@@ -7,6 +7,7 @@ import ReactECharts from 'echarts-for-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { useTranslation } from '@/hooks/use-translation';
 
 interface ChartData {
   name: string;
@@ -18,6 +19,7 @@ interface ChartProps {
 }
 
 const TableWithBarChart = ({ title, data, dataKeyLabel }: { title: string; data: ChartData[]; dataKeyLabel: string }) => {
+  const { t } = useTranslation();
   const sortedData = [...data].sort((a, b) => b.value - a.value);
 
   const option = {
@@ -44,7 +46,7 @@ const TableWithBarChart = ({ title, data, dataKeyLabel }: { title: string; data:
             <TableHeader>
               <TableRow>
                 <TableHead>{dataKeyLabel}</TableHead>
-                <TableHead className="text-right">Beneficiaries</TableHead>
+                <TableHead className="text-right">{t('report.charts.beneficiaries')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -65,20 +67,23 @@ const TableWithBarChart = ({ title, data, dataKeyLabel }: { title: string; data:
   );
 };
 
-export const BeneficiariesByVillageChart = ({ data }: ChartProps) => (
-  <TableWithBarChart title="Beneficiaries by Village" data={data} dataKeyLabel="Village" />
-);
+export const BeneficiariesByVillageChart = ({ data }: ChartProps) => {
+  const { t } = useTranslation();
+  return <TableWithBarChart title={t('report.charts.byVillage')} data={data} dataKeyLabel={t('report.charts.village')} />
+};
 
-export const BeneficiariesByDayChart = ({ data }: ChartProps) => (
-  <TableWithBarChart title="Beneficiaries by Registration Day" data={data} dataKeyLabel="Day" />
-);
+export const BeneficiariesByDayChart = ({ data }: ChartProps) => {
+  const { t } = useTranslation();
+  return <TableWithBarChart title={t('report.charts.byDay')} data={data} dataKeyLabel={t('report.charts.day')} />
+};
 
 export const WomenAndChildrenDonut = ({ data }: ChartProps) => {
+    const { t } = useTranslation();
     const option = {
       tooltip: { trigger: 'item' },
       legend: { top: '5%', left: 'center' },
       series: [{
-        name: 'Women & Children Stats',
+        name: t('report.charts.womenAndChildren'),
         type: 'pie',
         radius: ['40%', '70%'],
         avoidLabelOverlap: false,
@@ -92,8 +97,8 @@ export const WomenAndChildrenDonut = ({ data }: ChartProps) => {
     return (
         <Card>
             <CardHeader>
-                <CardTitle>Women & Children</CardTitle>
-                <CardDescription>Distribution of mothers and pregnant women.</CardDescription>
+                <CardTitle>{t('report.charts.womenAndChildren')}</CardTitle>
+                <CardDescription>{t('report.charts.womenAndChildrenDescription')}</CardDescription>
             </CardHeader>
             <CardContent className="h-72">
                  <ReactECharts option={option} style={{ height: '100%', width: '100%' }}/>
@@ -101,3 +106,5 @@ export const WomenAndChildrenDonut = ({ data }: ChartProps) => {
         </Card>
     );
 };
+
+    

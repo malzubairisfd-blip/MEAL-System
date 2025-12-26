@@ -3,6 +3,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Users, User, CalendarDays, Home } from 'lucide-react';
+import { useTranslation } from "@/hooks/use-translation";
 
 interface KeyFiguresProps {
   data: {
@@ -26,14 +27,17 @@ const StatCard = ({ title, value, icon }: { title: string; value: number | strin
 );
 
 export function KeyFigures({ data }: KeyFiguresProps) {
+  const { t } = useTranslation();
   return (
     <CardContent>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Total Team Leaders" value={data.teamLeaders} icon={<Users className="h-4 w-4 text-muted-foreground" />} />
-        <StatCard title="Total Surveyors" value={data.surveyors} icon={<User className="h-4 w-4 text-muted-foreground" />} />
-        <StatCard title="Total Registration Days" value={data.registrationDays} icon={<CalendarDays className="h-4 w-4 text-muted-foreground" />} />
-        <StatCard title="Total Villages Targeted" value={data.villages} icon={<Home className="h-4 w-4 text-muted-foreground" />} />
+        <StatCard title={t('report.keyFigures.teamLeaders')} value={data.teamLeaders} icon={<Users className="h-4 w-4 text-muted-foreground" />} />
+        <StatCard title={t('report.keyFigures.surveyors')} value={data.surveyors} icon={<User className="h-4 w-4 text-muted-foreground" />} />
+        <StatCard title={t('report.keyFigures.registrationDays')} value={data.registrationDays} icon={<CalendarDays className="h-4 w-4 text-muted-foreground" />} />
+        <StatCard title={t('report.keyFigures.villages')} value={data.villages} icon={<Home className="h-4 w-4 text-muted-foreground" />} />
       </div>
     </CardContent>
   );
 }
+
+    
