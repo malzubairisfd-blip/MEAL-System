@@ -1,3 +1,4 @@
+
 // src/workers/export.worker.ts
 // This worker is responsible for generating the Excel file on the client-side.
 
@@ -89,9 +90,6 @@ async function enrichData(cachedData: any): Promise<{ enrichedRecords: EnrichedR
     }
     const avg = (arr: number[]) => arr.length > 0 ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
 
-    // The clusters should already be enriched from the upload step.
-    // This function will now mainly focus on preparing data for the sheet generation.
-    // However, if scores are missing, it can act as a fallback.
     const enrichedClusters = clusters.map((clusterObj: any) => {
         const pairs = [];
         for (let i = 0; i < clusterObj.records.length; i++) {
@@ -102,10 +100,12 @@ async function enrichData(cachedData: any): Promise<{ enrichedRecords: EnrichedR
         
         const womanScores = pairs.map(p => p.breakdown.nameScore || 0);
         const husbandScores = pairs.map(p => p.breakdown.husbandScore || 0);
+        const finalScores = pairs.map(p => p.score || 0);
+        
         const avgWoman = avg(womanScores);
         const avgHusband = avg(husbandScores);
+        const avgFinal = avg(finalScores);
         
-        // Calculate maxBeneficiaryId for the cluster
         const maxBeneficiaryId = clusterObj.records.reduce((max: number, record: RecordRow) => {
             const currentId = Number(record.beneficiaryId);
             return !isNaN(currentId) && currentId > max ? currentId : max;
@@ -115,11 +115,12 @@ async function enrichData(cachedData: any): Promise<{ enrichedRecords: EnrichedR
             ...clusterObj,
             avgWomanNameScore: avgWoman,
             avgHusbandNameScore: avgHusband,
+            avgFinalScore: avgFinal,
             confidence: calculateClusterConfidence(avgWoman, avgHusband),
-            Max_PairScore: Math.max(...pairs.map(p => p.score), 0),
+            Max_PairScore: Math.max(...finalScores, 0),
             size: clusterObj.records.length,
-            maxBeneficiaryId: maxBeneficiaryId,
-        }
+            generatedClusterId: maxBeneficiaryId || (clusters.indexOf(clusterObj) + 1),
+        };
     });
 
     const recordToCluster = new Map<string, any>();
@@ -132,13 +133,19 @@ async function enrichData(cachedData: any): Promise<{ enrichedRecords: EnrichedR
     const enrichedRecords: EnrichedRecord[] = allRecords.map((record: RecordRow) => {
         const cluster = recordToCluster.get(record._internalId!);
         if (cluster) {
-             const { decision, expertNote } = getDecisionAndNote(cluster.confidence || 0);
-             const isMaster = Number(record.beneficiaryId) === cluster.maxBeneficiaryId;
+            const { decision, expertNote } = getDecisionAndNote(cluster.confidence || 0);
+            
+            const score = cluster.avgFinalScore * 100;
+            let flag = '?';
+            if (score >= 90) flag = 'm?';
+            else if (score >= 80) flag = 'm';
+            else if (score >= 70) flag = '??';
+            
             return {
                 ...record,
                 ClusterID: enrichedClusters.indexOf(cluster) + 1,
-                Generated_Cluster_ID: cluster.maxBeneficiaryId || enrichedClusters.indexOf(cluster) + 1,
-                Flag: isMaster ? 'Master Record' : 'Duplicate',
+                Generated_Cluster_ID: cluster.generatedClusterId,
+                Flag: flag,
                 Cluster_Size: cluster.size,
                 Max_PairScore: cluster.Max_PairScore,
                 'تصنيف المجموعة المبدئي': decision,

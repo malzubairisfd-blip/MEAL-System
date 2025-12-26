@@ -67,19 +67,21 @@ async function saveReportDataToCache(data: { chartImages: Record<string, string>
 
 const normalizeArabic = (s: string | null | undefined): string => {
     if (!s) return "";
-    return String(s)
-        .normalize("NFKC")
-        .replace(/يحيي|يحيى/g, "يحي")
-        .replace(/عبد /g, "عبد")
-        .replace(/[ًٌٍََُِّْـء]/g, "")
-        .replace(/[أإآ]/g, "ا")
-        .replace(/ى/g, "ي")
-        .replace(/ؤ/g, "و")
-        .replace(/ئ/g, "ي")
-        .replace(/ة/g, "ه")
-        .replace(/[^ء-ي0-9\s]/g, "")
-        .replace(/\s+/g, " ")
-        .trim();
+    let str = String(s);
+    str = str.normalize("NFKC");
+    str = str.replace(/يحيي/g, "يحي");
+    str = str.replace(/يحيى/g, "يحي");
+    str = str.replace(/عبد /g, "عبد");
+    str = str.replace(/[ًٌٍََُِّْـء]/g, "");
+    str = str.replace(/[أإآ]/g, "ا");
+    str = str.replace(/ى/g, "ي");
+    str = str.replace(/ؤ/g, "و");
+    str = str.replace(/ئ/g, "ي");
+    str = str.replace(/ة/g, "ه");
+    str = str.replace(/گ/g, "ك");
+    str = str.replace(/[^ء-ي0-9a-zA-Z\s]/g, " ");
+    str = str.replace(/\s+/g, " ").trim();
+    return str.toLowerCase();
 };
 
 
