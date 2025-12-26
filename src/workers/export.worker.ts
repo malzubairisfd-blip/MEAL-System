@@ -9,19 +9,18 @@ import { similarityScoreDetailed, fullPairwiseBreakdown } from "@/lib/scoring-se
 import { calculateClusterConfidence } from "@/lib/clusterConfidence";
 
 /**
- * Safely posts a message from the worker, ensuring the payload is serializable.
- * This prevents "DataCloneError" for non-transferable objects like Error instances.
+ * Safely posts a message from the worker, using structuredClone to verify serializability.
+ * This prevents "DataCloneError" for non-transferable objects.
  * @param {any} message - The message to send to the main thread.
  */
 function safePostMessage(message: any) {
   try {
-    // The most robust way to ensure an object is serializable is to round-trip it through JSON.
-    postMessage(JSON.parse(JSON.stringify(message)));
+    structuredClone(message);
+    postMessage(message);
   } catch (e) {
-    // If serialization fails, send a specific error message back.
     postMessage({
       type: 'error',
-      data: 'Worker serialization failed: ' + (e instanceof Error ? e.message : String(e))
+      data: 'Worker message serialization failed'
     });
   }
 }
@@ -62,11 +61,20 @@ self.onmessage = async (event) => {
         const wb = createFormattedWorkbook(sortedData, cachedData, enrichedClusters);
 
         const buffer = await wb.xlsx.writeBuffer();
-        
+
+        // ExcelJS may return Uint8Array in some builds
+        const arrayBuffer =
+        buffer instanceof ArrayBuffer
+            ? buffer
+            : buffer.buffer;
+
         safePostMessage({ type: 'progress', step: 'done', progress: 100 });
-        // Buffers are transferable, so we can send them directly.
-        // The `safePostMessage` is a good safety net anyway.
-        self.postMessage({ type: 'done', data: buffer }, [buffer as any]);
+
+        // Send ONLY the transferable ArrayBuffer
+        self.postMessage(
+        { type: 'done', data: arrayBuffer },
+        [arrayBuffer]
+        );
         
     } catch (error: any) {
         safePostMessage({ type: 'error', data: error instanceof Error ? error.message : String(error) });
@@ -154,7 +162,7 @@ function sortData(data: EnrichedRecord[]): EnrichedRecord[] {
             return clusterA - clusterB;
         }
         
-        return String(a.beneficiaryId || '').localeCompare(String(b.beneficiaryId) || '');
+        return String(a.beneficiaryId || '').localeCompare(String(b.beneficiaryId || ''));
     });
 }
 
@@ -420,7 +428,7 @@ function createClustersSheet(wb: ExcelJS.Workbook, clusters: any[]) {
             .replace(/<[^>]*>?/gm, '')
             .trim();
 
-        const recordsForSheet = [...clusterRecords].sort((a,b) => (String(a.beneficiaryId) || '').localeCompare(String(b.beneficiaryId) || ''));
+        const recordsForSheet = [...clusterRecords].sort((a,b) => String(a.beneficiaryId || '').localeCompare(String(b.beneficiaryId || '')));
 
         const startRow = currentRowIndex;
         const endRow = startRow + recordsForSheet.length - 1;
@@ -626,7 +634,7 @@ function createAuditSheet(wb: ExcelJS.Workbook, findings: AuditFinding[], cluste
         const clusterIdB = b.clusterId === 'N/A' ? Infinity : b.clusterId;
         if (clusterIdA !== clusterIdB) return clusterIdA - clusterIdB;
 
-        return String(a.beneficiaryId || '').localeCompare(String(b.beneficiaryId) || '');
+        return String(a.beneficiaryId || '').localeCompare(String(b.beneficiaryId || ''));
     });
 
     let lastClusterId: string | number | null = null;
