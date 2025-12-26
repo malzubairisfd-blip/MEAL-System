@@ -88,6 +88,8 @@ export default function ReportPage() {
   const womenDonutRef = useRef<HTMLDivElement>(null);
   const genderVisualRef = useRef<HTMLDivElement>(null);
   const bubbleStatsRef = useRef<HTMLDivElement>(null);
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+
 
   // Load geojson data
   useEffect(() => {
@@ -271,6 +273,7 @@ export default function ReportPage() {
             womenDonut: womenDonutRef,
             genderVisual: genderVisualRef,
             bubbleStats: bubbleStatsRef,
+            map: mapContainerRef,
         };
         
         const images: Record<string, string> = {};
@@ -286,25 +289,6 @@ export default function ReportPage() {
             }
         }
         
-        if (mapInstance) {
-            const leafletImage = (await import('leaflet-image')).default;
-            const miniCharts = miniChartLayerRef.current;
-
-            images['map'] = await new Promise((resolve, reject) => {
-                if (miniCharts) mapInstance.removeLayer(miniCharts);
-
-                leafletImage(mapInstance, (err: any, canvas: HTMLCanvasElement) => {
-                    if (miniCharts) miniCharts.addTo(mapInstance);
-
-                    if (err) {
-                        reject(new Error("Failed to capture map image."));
-                        return;
-                    }
-                    resolve(canvas.toDataURL());
-                });
-            });
-        }
-
         await saveReportDataToCache({
             chartImages: images,
             processedDataForReport: processedData
@@ -435,7 +419,7 @@ export default function ReportPage() {
                         </CardHeader>
                     </CollapsibleTrigger>
                     <CollapsibleContent className="p-6 pt-0 space-y-4">
-                        <div className="h-[600px] w-full rounded-md border" id="map-container">
+                        <div ref={mapContainerRef} className="h-[600px] w-full rounded-md border" id="map-container">
                             <WestAfricaMap />
                         </div>
                     </CollapsibleContent>
