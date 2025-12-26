@@ -20,7 +20,7 @@ const createPieChartIcon = (percentage: number, size: number) => {
     const pathData = `M ${r},${r} L ${r},0 A ${r},${r} 0 ${largeArcFlag},1 ${x},${y} z`;
 
     return `
-        <svg width="${size}" height="${size}" viewBox="0 0 ${2*r} ${2*r}" style="transform: scale(${size / 40}); transform-origin: center;">
+        <svg width="${size}" height="${size}" viewBox="0 0 ${2*r} ${2*r}" style="transform-origin: center;">
             <circle cx="${r}" cy="${r}" r="${r}" fill="#e5e7eb" />
             <path d="${pathData}" fill="#16a34a" />
         </svg>
@@ -31,12 +31,11 @@ const createPieChartIcon = (percentage: number, size: number) => {
 export default function WestAfricaMap() {
   const mapRef = useRef<L.Map | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const { setMapInstance, selectedFeatures } = useDashboard();
+  const { setMapInstance, selectedFeatures, miniChartLayerRef } = useDashboard();
   
   const admin1LayerRef = useRef<L.GeoJSON | null>(null);
   const admin2LayerRef = useRef<L.GeoJSON | null>(null);
   const admin3LayerRef = useRef<L.GeoJSON | null>(null);
-  const miniChartLayerRef = useRef<L.LayerGroup | null>(null);
 
   const [admin1, setAdmin1] = useState<FeatureCollection | null>(null);
   const [admin2, setAdmin2] = useState<FeatureCollection | null>(null);
@@ -67,7 +66,7 @@ export default function WestAfricaMap() {
         miniChartLayerRef.current = L.layerGroup().addTo(mapRef.current);
       }
     }
-  }, [setMapInstance]);
+  }, [setMapInstance, miniChartLayerRef]);
   
   useEffect(() => {
     if (!mapRef.current || !admin1 || !admin2 || !admin3) return;
@@ -157,7 +156,7 @@ export default function WestAfricaMap() {
         });
 
         const marker = L.marker(center, { icon: pieIcon });
-        marker.bindTooltip(`Beneficiaries: ${value.toLocaleString()} (${percentage.toFixed(1)}%)`);
+        marker.bindTooltip(`Beneficiaries: ${value.toLocaleString()}`);
         layer.addLayer(marker);
     });
 

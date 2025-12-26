@@ -32,10 +32,12 @@ export const DashboardContext = React.createContext<{
   mapInstance: L.Map | null;
   setMapInstance: React.Dispatch<React.SetStateAction<L.Map | null>>;
   selectedFeatures: Feature[];
+  miniChartLayerRef: React.RefObject<L.LayerGroup | null>;
 }>({
   mapInstance: null,
   setMapInstance: () => {},
   selectedFeatures: [],
+  miniChartLayerRef: React.createRef(),
 });
 
 export const useDashboard = () => React.useContext(DashboardContext);
@@ -64,6 +66,7 @@ export default function ReportPage() {
   const { toast } = useToast();
   const router = useRouter();
   const [mapInstance, setMapInstance] = useState<L.Map | null>(null);
+  const miniChartLayerRef = useRef<L.LayerGroup | null>(null);
 
   // Data and Mapping State
   const [loadingState, setLoadingState] = useState<'LOADING' | 'READY' | 'ERROR'>('LOADING');
@@ -283,9 +286,15 @@ export default function ReportPage() {
         }
         
         if (mapInstance) {
+            const leafletImage = require('leaflet-image');
+            const miniCharts = miniChartLayerRef.current;
+
             images['map'] = await new Promise((resolve, reject) => {
-                const leafletImage = require('leaflet-image');
+                if (miniCharts) mapInstance.removeLayer(miniCharts);
+
                 leafletImage(mapInstance, (err: any, canvas: HTMLCanvasElement) => {
+                    if (miniCharts) miniCharts.addTo(mapInstance);
+
                     if (err) {
                         reject(new Error("Failed to capture map image."));
                         return;
@@ -320,7 +329,7 @@ export default function ReportPage() {
     }
 
   return (
-    <DashboardContext.Provider value={{ mapInstance, setMapInstance, selectedFeatures }}>
+    <DashboardContext.Provider value={{ mapInstance, setMapInstance, selectedFeatures, miniChartLayerRef }}>
       <div className="space-y-6">
         <Card>
           <CardHeader>
