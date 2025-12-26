@@ -160,7 +160,7 @@ export default function WestAfricaMap() {
         layer.addLayer(marker);
     });
 
-  }, [selectedFeatures]);
+  }, [selectedFeatures, miniChartLayerRef]);
 
   return (
     <div

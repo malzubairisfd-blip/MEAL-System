@@ -8,6 +8,8 @@ import { useToast } from "@/hooks/use-toast";
 import type { RecordRow } from '@/lib/types';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { leafletImage as leafletImage } from 'leaflet-image';
+
 
 import {
     Collapsible,
@@ -62,6 +64,16 @@ async function saveReportDataToCache(data: { chartImages: Record<string, string>
     }
     await tx.done;
 }
+
+const normalizeLocationName = (name: string | null | undefined): string => {
+    if (!name) return "";
+    return String(name)
+        .toLowerCase()
+        .replace(/^(al|el|ad)-/, '') // Remove common prefixes
+        .replace(/[^a-z0-9]/g, '')   // Remove all non-alphanumeric characters
+        .trim();
+};
+
 
 export default function ReportPage() {
   const { t, language } = useTranslation();
@@ -212,22 +224,22 @@ export default function ReportPage() {
 
     const dataLocations = new Map<string, number>();
     allRows.forEach(row => {
-        const gov = row[mapping['government']];
-        const dist = row[mapping['district']];
-        const sub = row[mapping['subdistrict']];
+        const gov = normalizeLocationName(row[mapping['government']]);
+        const dist = normalizeLocationName(row[mapping['district']]);
+        const sub = normalizeLocationName(row[mapping['subdistrict']]);
         if (gov && dist && sub) {
-            const key = `${String(gov).trim()}-${String(dist).trim()}-${String(sub).trim()}`;
+            const key = `${gov}-${dist}-${sub}`;
             dataLocations.set(key, (dataLocations.get(key) || 0) + 1);
         }
     });
-
+    
     if (dataLocations.size > 0) {
         const matchedFeatures = admin3Data.features.map(feature => {
-            const adm1 = feature.properties?.ADM1_AR;
-            const adm2 = feature.properties?.ADM2_AR;
-            const adm3 = feature.properties?.ADM3_AR;
+            const adm1 = normalizeLocationName(feature.properties?.ADM1_AR);
+            const adm2 = normalizeLocationName(feature.properties?.ADM2_AR);
+            const adm3 = normalizeLocationName(feature.properties?.ADM3_AR);
             if (adm1 && adm2 && adm3) {
-                const featureLocationKey = `${String(adm1).trim()}-${String(adm2).trim()}-${String(adm3).trim()}`;
+                const featureLocationKey = `${adm1}-${adm2}-${adm3}`;
                 if (dataLocations.has(featureLocationKey)) {
                     return {
                         ...feature,
@@ -249,7 +261,7 @@ export default function ReportPage() {
   }, [allRows, admin3Data, mapping]);
 
   const handleCaptureAndExport = async () => {
-    if (!processedData) {
+    if (!processedData || !mapInstance) {
         toast({ title: t('report.toasts.cannotExport.title'), description: t('report.toasts.cannotExport.description'), variant: "destructive" });
         return;
     }
@@ -258,14 +270,9 @@ export default function ReportPage() {
     toast({ title: t('report.toasts.preparingExport.title'), description: t('report.toasts.preparingExport.description') });
     
     try {
-        const mapElement = mapContainerRef.current;
-        if (!mapElement) {
-            throw new Error("Map container not found");
-        }
-        
         const refs = {
-            byVillageChart: byVillageChartRef,
             byDayChart: byDayChartRef,
+            byVillageChart: byVillageChartRef,
             womenDonut: womenDonutRef,
             genderVisual: genderVisualRef,
             bubbleStats: bubbleStatsRef,
@@ -283,15 +290,18 @@ export default function ReportPage() {
                 }
             }
         }
-
-        // Capture map separately
-        try {
-            images['map'] = await toPng(mapElement, { cacheBust: true, pixelRatio: 2 });
-        } catch (e) {
-            console.error(`Failed to capture map`, e);
-            toast({ title: t('report.toasts.captureFailed.title', { key: 'map' }), description: t('report.toasts.captureFailed.description', { key: 'map' }), variant: "destructive" });
-        }
         
+        // Capture map using html-to-image
+        const mapElement = mapContainerRef.current;
+        if (mapElement) {
+             try {
+                 images['map'] = await toPng(mapElement, { cacheBust: true, pixelRatio: 2 });
+             } catch (e) {
+                 console.error(`Failed to capture map`, e);
+                 toast({ title: t('report.toasts.captureFailed.title', { key: 'map' }), description: t('report.toasts.captureFailed.description', { key: 'map' }), variant: "destructive" });
+             }
+        }
+
         await saveReportDataToCache({
             chartImages: images,
             processedDataForReport: processedData
