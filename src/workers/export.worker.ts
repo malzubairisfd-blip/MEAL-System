@@ -47,7 +47,7 @@ self.onmessage = async (event) => {
         const buffer = await wb.xlsx.writeBuffer();
         
         postProgress('done', 100);
-        self.postMessage({ type: 'done', data: buffer }, [buffer]);
+        self.postMessage({ type: 'done', data: buffer }, [buffer as any]);
         
     } catch (error: any) {
         self.postMessage({ type: 'error', data: error.message });
