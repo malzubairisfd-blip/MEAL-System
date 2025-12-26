@@ -334,7 +334,20 @@ export default function UploadPage(){
     
     const edgeReasons = new Map<string, Set<string>>();
 
+    const MERGE_THRESHOLD = 0.72;
+    let weakEdgeCount = 0;
+
+    for (const edge of edges) {
+      if (edge.score < MERGE_THRESHOLD) {
+        weakEdgeCount++;
+        continue;
+      }
+    }
+    console.log("Weak edges skipped:", weakEdgeCount);
+    
     for(const edge of edges) {
+        if (edge.score < MERGE_THRESHOLD) continue;
+
         const idA = mappedRows[edge.a]?._internalId;
         const idB = mappedRows[edge.b]?._internalId;
         if (!idA || !idB) continue;
