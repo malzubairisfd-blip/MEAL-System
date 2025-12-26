@@ -65,13 +65,36 @@ async function saveReportDataToCache(data: { chartImages: Record<string, string>
     await tx.done;
 }
 
+const normalizeArabic = (s: string | null | undefined): string => {
+    if (!s) return "";
+    return String(s)
+        .normalize("NFKC")
+        .replace(/يحيي|يحيى/g, "يحي")
+        .replace(/عبد /g, "عبد")
+        .replace(/[ًٌٍََُِّْـء]/g, "")
+        .replace(/[أإآ]/g, "ا")
+        .replace(/ى/g, "ي")
+        .replace(/ؤ/g, "و")
+        .replace(/ئ/g, "ي")
+        .replace(/ة/g, "ه")
+        .replace(/[^ء-ي0-9\s]/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
+};
+
+
 const normalizeLocationName = (name: string | null | undefined): string => {
     if (!name) return "";
-    return String(name)
+    const arabicNormalized = normalizeArabic(name);
+    const englishNormalized = String(name)
         .toLowerCase()
-        .replace(/^(al|el|ad)-/, '') // Remove common prefixes
-        .replace(/[^a-z0-9]/g, '')   // Remove all non-alphanumeric characters
+        .replace(/^(al|el|ad|ad-)/, '') 
+        .replace(/[^a-z0-9\s]/g, '')
         .trim();
+    
+    // Return the version that seems more relevant or combine them
+    // For simplicity, we assume if it contains Arabic characters, it's Arabic.
+    return arabicNormalized.match(/[\u0600-\u06FF]/) ? arabicNormalized : englishNormalized;
 };
 
 
