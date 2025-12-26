@@ -100,7 +100,10 @@ export default function ExportPage() {
                     setLoading(false);
                     worker.terminate();
                 } else if (type === 'error') {
-                    throw new Error(data);
+                    console.error('Worker error:', data);
+                    toast({ title: t('export.toasts.generationFailed'), description: data, variant: "destructive" });
+                    setLoading(false);
+                    worker.terminate();
                 }
             };
 

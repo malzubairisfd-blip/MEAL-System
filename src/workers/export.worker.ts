@@ -50,7 +50,7 @@ self.onmessage = async (event) => {
         self.postMessage({ type: 'done', data: buffer }, [buffer as any]);
         
     } catch (error: any) {
-        self.postMessage({ type: 'error', data: error.message });
+        self.postMessage({ type: 'error', data: error instanceof Error ? error.message : String(error) });
     }
 };
 
