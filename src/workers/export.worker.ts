@@ -36,8 +36,8 @@ type EnrichedRecord = RecordRow & {
     nameScore?: number;
     husbandScore?: number;
     childrenScore?: number;
-    phoneScore?: number;
     idScore?: number;
+    phoneScore?: number;
     locationScore?: number;
     'تصنيف المجموعة المبدئي'?: string;
     'نتائج تحليل المجموعة'?: string;
@@ -88,43 +88,24 @@ async function enrichData(cachedData: any): Promise<{ enrichedRecords: EnrichedR
     if (!allRecords || !clusters) {
         throw new Error("Invalid cache: missing rows or clusters.");
     }
-    const avg = (arr: number[]) => arr.length > 0 ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
 
     const enrichedClusters = clusters.map((clusterObj: any) => {
-        const pairs = [];
-        for (let i = 0; i < clusterObj.records.length; i++) {
-            for (let j = i + 1; j < clusterObj.records.length; j++) {
-                pairs.push(similarityScoreDetailed(clusterObj.records[i], clusterObj.records[j]));
-            }
-        }
-        
-        const womanScores = pairs.map(p => p.breakdown.nameScore || 0);
-        const husbandScores = pairs.map(p => p.breakdown.husbandScore || 0);
-        const finalScores = pairs.map(p => p.score || 0);
-        
-        const avgWoman = avg(womanScores);
-        const avgHusband = avg(husbandScores);
-        const avgFinal = avg(finalScores);
-        
-        const maxBeneficiaryId = clusterObj.records.reduce((max: number, record: RecordRow) => {
-            const currentId = Number(record.beneficiaryId);
-            return !isNaN(currentId) && currentId > max ? currentId : max;
-        }, 0);
-        
+        const pairs = clusterObj.pairScores || [];
+        const finalScores = pairs.map((p: any) => p.score || 0);
+
         return {
             ...clusterObj,
-            avgWomanNameScore: avgWoman,
-            avgHusbandNameScore: avgHusband,
-            avgFinalScore: avgFinal,
-            confidence: calculateClusterConfidence(avgWoman, avgHusband),
             Max_PairScore: Math.max(...finalScores, 0),
             size: clusterObj.records.length,
-            generatedClusterId: maxBeneficiaryId || (clusters.indexOf(clusterObj) + 1),
+            generatedClusterId: clusterObj.records.reduce((max: number, record: RecordRow) => {
+                const currentId = Number(record.beneficiaryId);
+                return !isNaN(currentId) && currentId > max ? currentId : max;
+            }, 0) || (clusters.indexOf(clusterObj) + 1),
         };
     });
 
     const recordToCluster = new Map<string, any>();
-    enrichedClusters.forEach((c: any, idx: number) => {
+    enrichedClusters.forEach((c: any) => {
         c.records.forEach((r: RecordRow) => {
             recordToCluster.set(r._internalId!, c);
         });
@@ -153,6 +134,10 @@ async function enrichData(cachedData: any): Promise<{ enrichedRecords: EnrichedR
                 pairScore: cluster.avgFinalScore,
                 nameScore: cluster.avgWomanNameScore,
                 husbandScore: cluster.avgHusbandNameScore,
+                childrenScore: cluster.pairScores.reduce((a: number, c: any) => a + (c.breakdown.childrenScore || 0), 0) / cluster.pairScores.length,
+                idScore: cluster.pairScores.reduce((a: number, c: any) => a + (c.breakdown.idScore || 0), 0) / cluster.pairScores.length,
+                phoneScore: cluster.pairScores.reduce((a: number, c: any) => a + (c.breakdown.phoneScore || 0), 0) / cluster.pairScores.length,
+                locationScore: cluster.pairScores.reduce((a: number, c: any) => a + (c.breakdown.locationScore || 0), 0) / cluster.pairScores.length,
             };
         }
         return record;
@@ -215,7 +200,7 @@ function createEnrichedDataSheet(wb: ExcelJS.Workbook, data: EnrichedRecord[], o
     
     const enrichmentHeaders = [
         "Generated_Cluster_ID", "Cluster_Size", "Flag", "Max_PairScore",
-        "pairScore", "nameScore", "husbandScore",
+        "pairScore", "nameScore", "husbandScore", "childrenScore", "idScore", "phoneScore", "locationScore",
         "تصنيف المجموعة المبدئي", "نتائج تحليل المجموعة"
     ];
     

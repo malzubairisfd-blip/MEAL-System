@@ -34,6 +34,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { registerServiceWorker } from "@/lib/registerSW";
 import { setupWakeLockListener } from "@/lib/wakeLock";
 import { cacheFinalResult } from "@/lib/cache";
+import { computePairScore } from "@/lib/scoringClient";
+import { calculateClusterConfidence } from "@/lib/clusterConfidence";
 
 type Mapping = {
   womanName: string;
@@ -158,13 +160,52 @@ export default function UploadPage() {
         setProgressInfo({ status: "caching", progress: 98 });
         
         try {
-          await cacheFinalResult(msg.payload, columns);
-          setClusters(msg.payload.clusters || []);
+          const resultPayload = msg.payload || {};
+          const rawClusters = resultPayload.clusters || [];
+
+           // --- Pre-calculate all scores before caching ---
+          const avg = (arr: number[]) => arr.length > 0 ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+          
+          const enrichedClusters = rawClusters.map((clusterObj: any) => {
+            const pairs = [];
+            for (let i = 0; i < clusterObj.records.length; i++) {
+                for (let j = i + 1; j < clusterObj.records.length; j++) {
+                    pairs.push(computePairScore(clusterObj.records[i], clusterObj.records[j], {}));
+                }
+            }
+            
+            const womanScores = pairs.map(p => p.breakdown.firstNameScore || 0);
+            const husbandScores = pairs.map(p => p.breakdown.husbandScore || 0);
+            const finalScores = pairs.map(p => p.score || 0);
+            
+            const avgWoman = avg(womanScores);
+            const avgHusband = avg(husbandScores);
+            const avgFinal = avg(finalScores);
+            
+            return {
+                ...clusterObj,
+                avgWomanNameScore: avgWoman,
+                avgHusbandNameScore: avgHusband,
+                avgFinalScore: avgFinal,
+                confidence: calculateClusterConfidence(avgWoman, avgHusband),
+                pairScores: pairs.map(p => ({
+                    score: p.score,
+                    breakdown: p.breakdown
+                }))
+            };
+          });
+
+          // Update payload with enriched clusters
+          resultPayload.clusters = enrichedClusters;
+          setClusters(enrichedClusters);
+
+          await cacheFinalResult(resultPayload, columns);
+
           setWorkerStatus("done");
           setProgressInfo({ status: "done", progress: 100 });
           toast({
             title: t("upload.toasts.clusteringComplete.title"),
-            description: t("upload.toasts.clusteringComplete.description", { count: msg.payload.clusters.length }),
+            description: t("upload.toasts.clusteringComplete.description", { count: enrichedClusters.length }),
           });
         } catch (err: any) {
           setWorkerStatus("error");
@@ -547,8 +588,3 @@ export default function UploadPage() {
               {t("upload.buttons.goToReview")} <ChevronRight className="ml-2 h-4 w-4" />
             </Button>
           </CardContent>
-        </Card>
-      )}
-    </div>
-  );
-}
