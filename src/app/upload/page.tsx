@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useEffect, useState, useRef, useCallback, useMemo } from "react";
@@ -33,7 +34,7 @@ import { useTranslation } from "@/hooks/use-translation";
 import { Skeleton } from "@/components/ui/skeleton";
 import { registerServiceWorker } from "@/lib/registerSW";
 import { setupWakeLockListener } from "@/lib/wakeLock";
-import { cacheFinalResult } from "@/lib/cache";
+import { cacheRawData, cacheFinalResult } from "@/lib/cache";
 
 type Mapping = {
   womanName: string;
@@ -68,7 +69,6 @@ const REQUIRED_MAPPING_FIELDS: (keyof Mapping)[] = [
 ];
 
 const LOCAL_STORAGE_KEY_PREFIX = "beneficiary-mapping-";
-const PROGRESS_KEY_PREFIX = "progress-";
 const CHUNK_SIZE = 2000;
 
 type WorkerProgress = {
@@ -112,6 +112,7 @@ export default function UploadPage() {
 
   const [columns, setColumns] = useState<string[]>([]);
   const [file, setFile] = useState<File | null>(null);
+  const [isDataCached, setIsDataCached] = useState(false);
   const [mapping, setMapping] = useState<Mapping>({
     womanName: "", husbandName: "", nationalId: "", phone: "",
     village: "", subdistrict: "", children: "", beneficiaryId: "",
@@ -145,11 +146,6 @@ export default function UploadPage() {
       const msg = ev.data;
       if (!msg?.type) return;
 
-      if (msg.type === "save_progress") {
-        msg.value ? localStorage.setItem(msg.key, JSON.stringify(msg.value)) : localStorage.removeItem(msg.key);
-        return;
-      }
-
       if (msg.type === "progress") {
         setWorkerStatus(msg.status);
         setProgressInfo(msg);
@@ -173,7 +169,7 @@ export default function UploadPage() {
         if (!msg?.type) return;
 
         if (msg.type === 'progress') {
-            setProgressInfo(prev => ({ ...prev, progress: 96 + (msg.progress / 100) * 2 })); // Scale scoring progress to 96-98%
+            setProgressInfo(prev => ({ ...prev, progress: 96 + (msg.progress / 100) * 2 }));
             return;
         }
 
@@ -183,7 +179,7 @@ export default function UploadPage() {
                 setClusters(enrichedClusters);
                 setWorkerStatus("caching");
                 setProgressInfo({ status: "caching", progress: 98 });
-                await cacheFinalResult({ clusters: enrichedClusters, rows: rawRowsRef.current }, columns);
+                await cacheFinalResult({ clusters: enrichedClusters });
                 setWorkerStatus("done");
                 setProgressInfo({ status: "done", progress: 100 });
                 toast({
@@ -206,7 +202,7 @@ export default function UploadPage() {
       cleanupWakeLock();
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [columns, t, toast]);
+  }, [t, toast]);
 
   useEffect(() => {
     if (columns.length === 0) return;
@@ -244,6 +240,7 @@ export default function UploadPage() {
     if (timerRef.current) clearInterval(timerRef.current);
     setFileReadProgress(0);
     setIsMappingOpen(true);
+    setIsDataCached(false);
 
     const reader = new FileReader();
     reader.onprogress = (event) => {
@@ -252,32 +249,50 @@ export default function UploadPage() {
         setFileReadProgress(percentage);
       }
     };
-    reader.onload = (ev) => {
-      const buffer = ev.target?.result;
-      const wb = XLSX.read(buffer, { type: "array", cellDates: true });
-      const sheet = wb.Sheets[wb.SheetNames[0]];
-      const json = XLSX.utils.sheet_to_json<any>(sheet, { defval: "" });
-      rawRowsRef.current = json;
-      const fileColumns = Object.keys(json[0] || {});
-      setColumns(fileColumns);
-      const storageKey = LOCAL_STORAGE_KEY_PREFIX + fileColumns.join(",");
-      const saved = localStorage.getItem(storageKey);
-      if (saved) {
-        try { setMapping(JSON.parse(saved)); } catch {}
-      } else {
-        setMapping({ womanName: "", husbandName: "", nationalId: "", phone: "", village: "", subdistrict: "", children: "", beneficiaryId: "" });
+    reader.onload = async (ev) => {
+      try {
+        const buffer = ev.target?.result;
+        const wb = XLSX.read(buffer, { type: "array", cellDates: true });
+        const sheet = wb.Sheets[wb.SheetNames[0]];
+        const json = XLSX.utils.sheet_to_json<any>(sheet, { defval: "" });
+        
+        // --- Generate internalId immediately ---
+        const rowsWithId = json.map((row, index) => ({
+          ...row,
+          _internalId: `row_${Date.now()}_${index}`
+        }));
+        rawRowsRef.current = rowsWithId;
+        
+        const fileColumns = Object.keys(json[0] || {});
+        setColumns(fileColumns);
+        
+        // --- Cache to IndexedDB before enabling clustering ---
+        await cacheRawData({ rows: rowsWithId, originalHeaders: fileColumns });
+        setIsDataCached(true);
+        toast({ title: "Data Ready", description: "Internal IDs generated and data cached. You can now run clustering." });
+
+        const storageKey = LOCAL_STORAGE_KEY_PREFIX + fileColumns.join(",");
+        const saved = localStorage.getItem(storageKey);
+        if (saved) {
+          try { setMapping(JSON.parse(saved)); } catch {}
+        } else {
+          setMapping({ womanName: "", husbandName: "", nationalId: "", phone: "", village: "", subdistrict: "", children: "", beneficiaryId: "" });
+        }
+        setFileReadProgress(100);
+      } catch (err: any) {
+        toast({ title: "Error processing file", description: err.message, variant: "destructive"});
+        resetAll();
       }
-      setFileReadProgress(100);
     };
     reader.readAsArrayBuffer(f);
-  }, []);
+  }, [toast]);
 
   const handleMappingChange = useCallback((field: keyof Mapping, value: string) => {
     setMapping((m) => ({ ...m, [field]: value }));
   }, []);
 
   const startClustering = useCallback(async () => {
-    if (!clusterWorkerRef.current) {
+    if (!clusterWorkerRef.current || !scoringWorkerRef.current) {
       toast({ title: t("upload.toasts.workerNotReady") });
       return;
     }
@@ -289,29 +304,12 @@ export default function UploadPage() {
       toast({ title: t("upload.toasts.mappingIncomplete"), variant: "destructive" });
       return;
     }
-    if (!file) {
-      toast({ title: "No file selected." });
-      return;
-    }
 
     setIsMappingOpen(false);
     setWorkerStatus("processing");
     setProgressInfo({ status: "processing", progress: 1 });
     setTimeInfo({ elapsed: 0 });
     startTimeRef.current = Date.now();
-
-    const fileKey = `${file.name}-${file.size}-${file.lastModified}`;
-    const progressKey = `${PROGRESS_KEY_PREFIX}${fileKey}`;
-    const savedProgressRaw = localStorage.getItem(progressKey);
-    let resumeState = null;
-    if (savedProgressRaw) {
-      try {
-        resumeState = JSON.parse(savedProgressRaw);
-        if (resumeState) {
-          toast({ title: "Resuming Process", description: "Found saved progress for this file and will resume clustering." });
-        }
-      } catch {}
-    }
 
     let settings = {};
     try {
@@ -322,7 +320,7 @@ export default function UploadPage() {
 
     clusterWorkerRef.current!.postMessage({
       type: "start",
-      payload: { mapping, options: settings, resumeState: resumeState, progressKey: progressKey },
+      payload: { mapping, options: settings },
     });
 
     for (let i = 0; i < rawRowsRef.current.length; i += CHUNK_SIZE) {
@@ -331,7 +329,7 @@ export default function UploadPage() {
       await new Promise((r) => setTimeout(r, 8));
     }
     clusterWorkerRef.current!.postMessage({ type: "end" });
-  }, [file, isMappingComplete, mapping, toast, t]);
+  }, [isMappingComplete, mapping, toast, t]);
 
   const resetAll = useCallback(() => {
     setFile(null);
@@ -343,6 +341,7 @@ export default function UploadPage() {
     setFileReadProgress(0);
     setTimeInfo({ elapsed: 0 });
     if (timerRef.current) clearInterval(timerRef.current);
+    setIsDataCached(false);
   }, []);
 
   const formatTime = useCallback((seconds: number) => {
@@ -488,7 +487,7 @@ export default function UploadPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              <Button onClick={startClustering} disabled={!isMappingComplete || (workerStatus !== "idle" && workerStatus !== "done" && workerStatus !== "error")}>
+              <Button onClick={startClustering} disabled={!isMappingComplete || !isDataCached || (workerStatus !== "idle" && workerStatus !== "done" && workerStatus !== "error")}>
                 {(workerStatus !== "idle" && workerStatus !== "done" && workerStatus !== "error") ? (<Loader2 className="mr-2 h-4 w-4 animate-spin" />) : null}
                 {getButtonText()}
               </Button>

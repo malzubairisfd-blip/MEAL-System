@@ -5,12 +5,12 @@ import type { AuditFinding } from './auditEngine';
 
 const DB_NAME = 'beneficiary-insights-cache';
 const DB_VERSION = 1;
+const STORE_NAME = 'results';
+const FULL_RESULT_KEY = 'FULL_RESULT';
 
-// Define a type for the full result structure
 interface FullResult {
   rows: RecordRow[];
-  clusters: any[]; // Consider defining a proper type for clusters
-  edgesUsed: any[];
+  clusters: any[]; 
   originalHeaders: string[];
   auditFindings?: AuditFinding[];
   chartImages?: Record<string, string>;
@@ -21,30 +21,57 @@ interface FullResult {
 async function getDb(): Promise<IDBPDatabase> {
   return openDB(DB_NAME, DB_VERSION, {
     upgrade(db) {
-      if (!db.objectStoreNames.contains('results')) {
-        db.createObjectStore('results');
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME);
       }
     },
   });
 }
 
-export async function cacheFinalResult(payload: any, originalHeaders: string[]): Promise<void> {
+/**
+ * Caches the initial raw data immediately after upload and ID generation.
+ * This overwrites any existing data.
+ */
+export async function cacheRawData(payload: { rows: RecordRow[], originalHeaders: string[] }): Promise<void> {
     const db = await getDb();
     const resultToCache: FullResult = {
         rows: payload.rows || [],
-        clusters: payload.clusters || [],
-        edgesUsed: payload.edgesUsed || [],
-        originalHeaders: originalHeaders
+        originalHeaders: payload.originalHeaders || [],
+        clusters: [], // Initialize clusters as empty
     };
-    const tx = db.transaction('results', 'readwrite');
-    await tx.objectStore('results').put(resultToCache, 'FULL_RESULT');
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    await tx.objectStore(STORE_NAME).put(resultToCache, FULL_RESULT_KEY);
     await tx.done;
 }
+
+/**
+ * Updates the cached result with final cluster information.
+ * This assumes raw data has already been cached.
+ */
+export async function cacheFinalResult(payload: { clusters: any[] }): Promise<void> {
+    const db = await getDb();
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    const currentData = await store.get(FULL_RESULT_KEY) as FullResult | undefined;
+
+    if (!currentData) {
+        throw new Error("Cannot cache final results because raw data was not found. Please re-upload the file.");
+    }
+    
+    const updatedData: FullResult = {
+        ...currentData,
+        clusters: payload.clusters || [],
+    };
+    
+    await store.put(updatedData, FULL_RESULT_KEY);
+    await tx.done;
+}
+
 
 export async function loadCachedResult(): Promise<FullResult | null> {
   try {
     const db = await getDb();
-    const result = await db.transaction('results').objectStore('results').get('FULL_RESULT');
+    const result = await db.transaction(STORE_NAME).objectStore(STORE_NAME).get(FULL_RESULT_KEY);
     return result as FullResult | null;
   } catch (error) {
      console.error("Failed to load cached result:", error);
