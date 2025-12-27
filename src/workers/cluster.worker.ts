@@ -289,20 +289,7 @@ function pairwiseScore(aRaw: any, bRaw: any, opts: any) {
   b.village_normalized = bRaw.village_normalized || normalizeArabicRaw(b.village);
   a.children_normalized = aRaw.children_normalized || (Array.isArray(a.children) ? a.children : normalizeChildrenField(a.children)).map(normalizeArabicRaw);
   b.children_normalized = bRaw.children_normalized || (Array.isArray(b.children) ? b.children : normalizeChildrenField(b.children)).map(normalizeArabicRaw);
-  if (a.nationalId && b.nationalId && a.nationalId === b.nationalId) {
-    return { score: 0.99, breakdown: { reason: "EXACT_ID" }, reasons: ["EXACT_ID"] };
-  }
-  const husbandJW = jaroWinkler(a.husbandName_normalized, b.husbandName_normalized);
-  const aParts = aRaw._parts || splitPartsFromNormalized(a.womanName_normalized), bParts = bRaw._parts || splitPartsFromNormalized(b.womanName_normalized);
-  const aFather = aParts[1] || "", bFather = bParts[1] || "";
-  const aGrand = aParts[2] || "", bGrand = bParts[2] || "";
-  if (o.rules.enablePolygamyRules && husbandJW >= 0.95 && jaroWinkler(aFather, bFather) >= 0.93 && jaroWinkler(aGrand, bGrand) >= 0.90) {
-    return { score: 0.97, breakdown: { reason: "POLYGAMY_STRONG" }, reasons: ["POLYGAMY_PATTERN"] };
-  }
-  const ruleResult = applyAdditionalRules(Object.assign({}, a, aRaw), Object.assign({}, b, bRaw), o);
-  if (ruleResult) {
-    return { score: Math.min(1, ruleResult.score), breakdown: { reason: "ADDITIONAL_RULE", boostedTo: ruleResult.score }, reasons: ruleResult.reasons };
-  }
+
   const A = aRaw._parts || splitPartsFromNormalized(a.womanName_normalized), B = bRaw._parts || splitPartsFromNormalized(b.womanName_normalized);
   const firstA = A[0] || "", firstB = B[0] || "";
   const famA = A.slice(1).join(" "), famB = B.slice(1).join(" ");
@@ -323,6 +310,28 @@ function pairwiseScore(aRaw: any, bRaw: any, opts: any) {
   if (a.village_normalized && b.village_normalized && a.village_normalized === b.village_normalized) locationScore += 0.4;
   if (a.subdistrict_normalized && b.subdistrict_normalized && a.subdistrict_normalized === b.subdistrict_normalized) locationScore += 0.25;
   locationScore = Math.min(0.5, locationScore);
+
+  const breakdown = {
+    firstNameScore, familyNameScore, advancedNameScore, tokenReorderScore,
+    husbandScore, idScore, phoneScore: phoneScoreVal, childrenScore, locationScore
+  };
+
+  const ruleResult = applyAdditionalRules(Object.assign({}, a, aRaw), Object.assign({}, b, bRaw), o);
+  if (ruleResult) {
+    return { score: Math.min(1, ruleResult.score), breakdown, reasons: ruleResult.reasons };
+  }
+  
+  if (a.nationalId && b.nationalId && a.nationalId === b.nationalId) {
+    return { score: 0.99, breakdown, reasons: ["EXACT_ID"] };
+  }
+  const husbandJW = jaroWinkler(a.husbandName_normalized, b.husbandName_normalized);
+  const aParts = aRaw._parts || splitPartsFromNormalized(a.womanName_normalized), bParts = bRaw._parts || splitPartsFromNormalized(b.womanName_normalized);
+  const aFather = aParts[1] || "", bFather = bParts[1] || "";
+  const aGrand = aParts[2] || "", bGrand = bParts[2] || "";
+  if (o.rules.enablePolygamyRules && husbandJW >= 0.95 && jaroWinkler(aFather, bFather) >= 0.93 && jaroWinkler(aGrand, bGrand) >= 0.90) {
+    return { score: 0.97, breakdown, reasons: ["POLYGAMY_PATTERN"] };
+  }
+
   const W = o.finalScoreWeights;
   let score = (W.firstNameScore || 0) * firstNameScore + (W.familyNameScore || 0) * familyNameScore +
               (W.advancedNameScore || 0) * advancedNameScore + (W.tokenReorderScore || 0) * tokenReorderScore +
@@ -332,7 +341,7 @@ function pairwiseScore(aRaw: any, bRaw: any, opts: any) {
   const strongParts = [firstNameScore, familyNameScore, tokenReorderScore].filter((v: any) => v >= 0.85).length;
   if (strongParts >= 2) score = Math.min(1, score + 0.04);
   score = Math.max(0, Math.min(1, score));
-  const breakdown = { firstNameScore, familyNameScore, advancedNameScore, tokenReorderScore, husbandScore, idScore, phoneScore: phoneScoreVal, childrenScore, locationScore };
+  
   const reasons: any[] = [];
   if (tokenReorderScore > 0.85) reasons.push("TOKEN_REORDER");
   return { score, breakdown, reasons };
