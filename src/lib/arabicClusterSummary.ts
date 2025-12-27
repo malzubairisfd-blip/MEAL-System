@@ -70,11 +70,10 @@ export function generateArabicClusterSummary(
   /* --------------------------------------------------
      2️⃣ PAIRWISE SIMILARITY SCORE ANALYSIS
   -------------------------------------------------- */
-  const avgWoman = cluster.avgWomanNameScore || 0;
-  const avgHusband = cluster.avgHusbandNameScore || 0;
-  
-  const confidenceScore = cluster.confidenceScore || 0;
-  const finalScorePct = Math.round((cluster.avgFinalScore || 0) * 100);
+  const avgWoman = Number.isFinite(cluster.avgWomanNameScore) ? Math.round(cluster.avgWomanNameScore * 100) : 0;
+  const avgHusband = Number.isFinite(cluster.avgHusbandNameScore) ? Math.round(cluster.avgHusbandNameScore * 100) : 0;
+  const avgFinal = Number.isFinite(cluster.avgFinalScore) ? Math.round(cluster.avgFinalScore * 100) : 0;
+  const confidenceScore = Number.isFinite(cluster.confidenceScore) ? Math.round(cluster.confidenceScore * 100) : 0;
 
 
   /* --------------------------------------------------
@@ -86,7 +85,7 @@ export function generateArabicClusterSummary(
   /* --------------------------------------------------
      4️⃣ FINAL ARABIC SUMMARY (HTML SAFE)
   -------------------------------------------------- */
-  const summaryHtml = `النتيجة العامة:<br>تم تجميع <strong>${size}</strong> سجلات يُحتمل أنها تمثل نفس المستفيد أو نفس الأسرة.<br><br>مستوى الثقة: <strong style="${getScoreColor(confidenceScore)}">${confidenceScore}%</strong><br><br>تحليل درجات التشابه:<br>• متوسط تشابه اسم المرأة: <strong style="${getScoreColor(avgWoman * 100)}">${Math.round(avgWoman * 100)}%</strong><br>• متوسط تشابه اسم الزوج: <strong style="${getScoreColor(avgHusband * 100)}">${Math.round(avgHusband * 100)}%</strong><br>• الدرجة النهائية للتشابه: <strong style="${getScoreColor(finalScorePct)}">${finalScorePct}%</strong><br><br>أسباب التجميع:<br>${explanations.map(e => `• ${e}`).join("<br>") || "• تحليل التشابه العام"}<br><br>تقييم خبير:<br>${expertNote}<br><br>القرار النهائي: ${decision}`;
+  const summaryHtml = `النتيجة العامة:<br>تم تجميع <strong>${size}</strong> سجلات يُحتمل أنها تمثل نفس المستفيد أو نفس الأسرة.<br><br>مستوى الثقة: <strong style="${getScoreColor(confidenceScore)}">${confidenceScore}%</strong><br><br>تحليل درجات التشابه:<br>• متوسط تشابه اسم المرأة: <strong style="${getScoreColor(avgWoman)}">${avgWoman}%</strong><br>• متوسط تشابه اسم الزوج: <strong style="${getScoreColor(avgHusband)}">${avgHusband}%</strong><br>• الدرجة النهائية للتشابه: <strong style="${getScoreColor(avgFinal)}">${avgFinal}%</strong><br><br>أسباب التجميع:<br>${explanations.map(e => `• ${e}`).join("<br>") || "• تحليل التشابه العام"}<br><br>تقييم خبير:<br>${expertNote}<br><br>القرار النهائي: ${decision}`;
 
   return summaryHtml;
 }

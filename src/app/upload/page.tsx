@@ -237,11 +237,10 @@ export default function UploadPage() {
               pairScores.map((p) => p.finalScore)
             );
 
-            const confidenceScore = calculateClusterConfidence(
-              avgWomanNameScore,
-              avgHusbandNameScore,
-              avgFinalScore
-            );
+            const confidenceScore =
+              avgFinalScore !== null
+                ? Math.round(avgFinalScore)
+                : 0;
 
             /* ---------------- RECORD LEVEL SCORES ---------------- */
 
