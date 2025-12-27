@@ -41,8 +41,10 @@ import { calculateClusterConfidence } from "@/lib/clusterConfidence";
 /* Helpers (SAFE, NO NaN)                                              */
 /* ------------------------------------------------------------------ */
 
-const safeAvg = (arr: number[]) =>
-  arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null;
+const safeAvg = (arr: (number | null)[]) => {
+    const validArr = arr.filter(n => typeof n === 'number') as number[];
+    return validArr.length ? validArr.reduce((a, b) => a + b, 0) / validArr.length : null;
+}
 
 /* ------------------------------------------------------------------ */
 
@@ -236,11 +238,8 @@ export default function UploadPage() {
             const avgFinalScore = safeAvg(
               pairScores.map((p) => p.finalScore)
             );
-
-            const confidenceScore =
-              avgFinalScore !== null
-                ? avgFinalScore
-                : 0;
+            
+            const confidenceScore = avgFinalScore !== null ? avgFinalScore : 0;
 
             /* ---------------- RECORD LEVEL SCORES ---------------- */
 
