@@ -6,7 +6,7 @@
 /* -------------------------
    Helpers & Normalizers
    ------------------------- */
-function normalizeArabicRaw(s) {
+function normalizeArabicRaw(s:any) {
   if (!s) return "";
   try { s = String(s); } catch { s = "";}
   s = s.normalize("NFKC");
@@ -25,18 +25,18 @@ function normalizeArabicRaw(s) {
   return s.toLowerCase();
 }
 
-function tokens(s) {
+function tokens(s:any) {
   const n = normalizeArabicRaw(s || "");
   if (!n) return [];
   return n.split(/\s+/).filter(Boolean);
 }
 
-function digitsOnly(s) {
+function digitsOnly(s:any) {
   if (s === null || s === undefined) return "";
   return String(s).replace(/\D/g, "");
 }
 
-function normalizeChildrenField(val) {
+function normalizeChildrenField(val:any) {
   if (!val) return [];
   if (Array.isArray(val)) return val.map(x => String(x)).filter(Boolean);
   return String(val).split(/[;,|،]/).map(x => String(x).trim()).filter(Boolean);
@@ -45,7 +45,7 @@ function normalizeChildrenField(val) {
 /* -------------------------
    String similarity primitives
    ------------------------- */
-function jaroWinkler(a, b) {
+function jaroWinkler(a:any, b:any) {
   a = String(a || ""); b = String(b || "");
   if (!a || !b) return 0;
   const la = a.length, lb = b.length;
@@ -78,7 +78,7 @@ function jaroWinkler(a, b) {
   return jaro + prefix * 0.1 * (1 - jaro);
 }
 
-function tokenJaccard(aTokens, bTokens) {
+function tokenJaccard(aTokens:any, bTokens:any) {
   if (!aTokens.length && !bTokens.length) return 0;
   const A = new Set(aTokens), B = new Set(bTokens);
   let inter = 0;
@@ -87,7 +87,7 @@ function tokenJaccard(aTokens, bTokens) {
   return uni === 0 ? 0 : inter / uni;
 }
 
-function nameOrderFreeScore(aName, bName) {
+function nameOrderFreeScore(aName:any, bName:any) {
   const aT = tokens(aName), bT = tokens(bName);
   if (!aT.length || !bT.length) return 0;
   const A = new Set(aT), B = new Set(bT);
@@ -99,12 +99,12 @@ function nameOrderFreeScore(aName, bName) {
   return 0.7 * jacc + 0.3 * sj;
 }
 
-function splitParts(name) {
+function splitParts(name:any) {
   if (!name) return [];
   return tokens(name);
 }
 
-function applyAdditionalRules(a, b, opts) {
+function applyAdditionalRules(a:any, b:any, opts:any) {
   const minPair = opts?.thresholds?.minPair ?? 0.62;
   const jw = jaroWinkler;
 
@@ -112,7 +112,7 @@ function applyAdditionalRules(a, b, opts) {
   const B = splitParts(b.womanName_normalized || "");
   const HA = splitParts(a.husbandName_normalized || "");
   const HB = splitParts(b.husbandName_normalized || "");
-  const reasons = [];
+  const reasons:any = [];
 
   // RULE 0: strong token match (80%+ tokens overlap)
   {
@@ -153,10 +153,10 @@ function applyAdditionalRules(a, b, opts) {
   }
 
   // Helper thresholds
-  const s93 = (x, y) => jw(x || "", y || "") >= 0.93;
-  const s95 = (x, y) => jw(x || "", y || "") >= 0.95;
+  const s93 = (x:any, y:any) => jw(x || "", y || "") >= 0.93;
+  const s95 = (x:any, y:any) => jw(x || "", y || "") >= 0.95;
 
-  const getPart = (arr, idx) => (arr && arr.length > idx) ? arr[idx] : "";
+  const getPart = (arr:any, idx:any) => (arr && arr.length > idx) ? arr[idx] : "";
 
   const F1 = getPart(A, 0), Fa1 = getPart(A, 1), G1 = getPart(A, 2), L1 = getPart(A, 3);
   const F2 = getPart(B, 0), Fa2 = getPart(B, 1), G2 = getPart(B, 2), L2 = getPart(B, 3);
@@ -267,7 +267,7 @@ function applyAdditionalRules(a, b, opts) {
       jw(A[A.length - 1], B[B.length - 1]) >= 0.90;
 
     const lineageOverlap =
-      A.filter(x => B.some(y => jw(x, y) >= 0.93)).length >= 3;
+      A.filter((x:any) => B.some((y:any) => jw(x, y) >= 0.93)).length >= 3;
 
     if (husbandSame && familySame && lineageOverlap) {
       return {
@@ -280,7 +280,7 @@ function applyAdditionalRules(a, b, opts) {
   return null;
 }
 
-export function computePairScore(aRaw, bRaw, opts) {
+export function computePairScore(aRaw:any, bRaw:any, opts:any) {
   const optsDefaults = {
     finalScoreWeights: {
       firstNameScore: 0.15,
@@ -307,7 +307,7 @@ export function computePairScore(aRaw, bRaw, opts) {
   o.thresholds = Object.assign({}, optsDefaults.thresholds, (opts && opts.thresholds) || {});
   o.rules = Object.assign({}, optsDefaults.rules, (opts && opts.rules) || {});
 
-  const a = {
+  const a:any = {
     womanName: aRaw.womanName || "",
     husbandName: aRaw.husbandName || "",
     nationalId: String(aRaw.nationalId || aRaw.id || ""),
@@ -316,7 +316,7 @@ export function computePairScore(aRaw, bRaw, opts) {
     subdistrict: aRaw.subdistrict || "",
     children: aRaw.children || []
   };
-  const b = {
+  const b:any = {
     womanName: bRaw.womanName || "",
     husbandName: bRaw.husbandName || "",
     nationalId: String(bRaw.nationalId || bRaw.id || ""),
@@ -359,7 +359,7 @@ export function computePairScore(aRaw, bRaw, opts) {
   const firstNameScore = jaroWinkler(firstA, firstB);
   const familyNameScore = jaroWinkler(famA, famB);
   const advancedNameScore = (() => {
-    const root = s => splitParts(s).map(t => t.slice(0, 3)).join(" ");
+    const root = (s:any) => splitParts(s).map((t:any) => t.slice(0, 3)).join(" ");
     const rA = root(a.womanName_normalized), rB = root(b.womanName_normalized);
     if (!rA || !rB) return 0;
     const jwroot = jaroWinkler(rA, rB);

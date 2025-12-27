@@ -75,6 +75,18 @@ function tokenJaccard(aTokens: any, bTokens: any) {
   return uni === 0 ? 0 : inter / uni;
 }
 
+function nameOrderFreeScore(aName:any, bName:any) {
+  const aT = splitPartsFromNormalized(aName), bT = splitPartsFromNormalized(bName);
+  if (!aT.length || !bT.length) return 0;
+  const A = new Set(aT), B = new Set(bT);
+  let inter = 0; for (const t of A) if (B.has(t)) inter++;
+  const union = new Set([...A, ...B]).size;
+  const jacc = union === 0 ? 0 : inter / union;
+  const aSorted = aT.slice().sort().join(" "), bSorted = bT.slice().sort().join(" ");
+  const sj = jaroWinkler(aSorted, bSorted);
+  return 0.7 * jacc + 0.3 * sj;
+}
+
 function nameOrderFreeScoreFromParts(aParts: any, bParts: any) {
   if (!aParts.length || !bParts.length) return 0;
   const A = new Set(aParts), B = new Set(bParts);
@@ -182,6 +194,56 @@ function applyAdditionalRules(a: any, b: any, opts: any) {
       }
     }
   }
+  // ✅ Rule 8 — Administrative placeholder override
+  {
+    const investigationWords = [
+      "تحت", "التحقيق", "مراجعة", "قيد", "موقوف",
+      "غير", "مكتمل", "التحقق", "مراجعه"
+    ];
+
+    const hasInvestigation =
+      investigationWords.some(w => A.includes(w)) ||
+      investigationWords.some(w => B.includes(w)) ||
+      investigationWords.some(w => HA.includes(w)) ||
+      investigationWords.some(w => HB.includes(w));
+
+    if (
+      hasInvestigation &&
+      jw(A[0], B[0]) >= 0.95 && // woman first name
+      jw(A[A.length - 1], B[B.length - 1]) >= 0.90 && // woman family
+      nameOrderFreeScore(
+        a.husbandName_normalized,
+        b.husbandName_normalized
+      ) >= 0.93
+    ) {
+      return {
+        score: minPair + 0.25,
+        reasons: ["INVESTIGATION_PLACEHOLDER"]
+      };
+    }
+  }
+
+  // ✅ Rule 9 — Polygamy household with shared lineage
+  {
+    const husbandSame =
+      nameOrderFreeScore(
+        a.husbandName_normalized,
+        b.husbandName_normalized
+      ) >= 0.80;
+
+    const familySame =
+      jw(A[A.length - 1], B[B.length - 1]) >= 0.90;
+
+    const lineageOverlap =
+      A.filter((x:any) => B.some((y:any) => jw(x, y) >= 0.93)).length >= 3;
+
+    if (husbandSame && familySame && lineageOverlap) {
+      return {
+        score: minPair + 0.30,
+        reasons: ["POLYGAMY_SHARED_HOUSEHOLD"]
+      };
+    }
+  }
   return null;
 }
 
@@ -211,11 +273,11 @@ function pairwiseScore(aRaw: any, bRaw: any, opts: any) {
   o.finalScoreWeights = Object.assign({}, optsDefaults.finalScoreWeights, (opts && opts.finalScoreWeights) || {});
   o.thresholds = Object.assign({}, optsDefaults.thresholds, (opts && opts.thresholds) || {});
   o.rules = Object.assign({}, optsDefaults.rules, (opts && opts.rules) || {});
-  const a = {
+  const a:any = {
     womanName: aRaw.womanName || "", husbandName: aRaw.husbandName || "", nationalId: String(aRaw.nationalId || aRaw.id || ""),
     phone: digitsOnly(aRaw.phone || ""), village: aRaw.village || "", subdistrict: aRaw.subdistrict || "", children: aRaw.children || []
   };
-  const b = {
+  const b:any = {
     womanName: bRaw.womanName || "", husbandName: bRaw.husbandName || "", nationalId: String(bRaw.nationalId || bRaw.id || ""),
     phone: digitsOnly(bRaw.phone || ""), village: bRaw.village || "", subdistrict: bRaw.subdistrict || "", children: bRaw.children || []
   };
@@ -276,7 +338,7 @@ function pairwiseScore(aRaw: any, bRaw: any, opts: any) {
   return { score, breakdown, reasons };
 }
 
-async function buildEdges(rows: any, minScore = 0.62, opts = {}, resumeState = null) {
+async function buildEdges(rows: any, minScore = 0.62, opts = {}, resumeState:any = null) {
   const n = rows.length;
   if (n <= 1) return { edges: [], finalState: null };
   const totalPairs = (n * (n - 1)) / 2;
@@ -390,7 +452,7 @@ function splitCluster(rowsSubset: any, minInternal = 0.50, opts = {}) {
   return result;
 }
 
-async function runClustering(rows: any, opts = {}, resumeState = null) {
+async function runClustering(rows: any, opts:any = {}, resumeState:any = null) {
   rows.forEach((r: any, i: any) => r._internalId = r._internalId || 'row_' + i);
   const minPair = opts?.thresholds?.minPair ?? 0.62;
   const minInternal = opts?.thresholds?.minInternal ?? 0.50;
@@ -467,9 +529,9 @@ async function runClustering(rows: any, opts = {}, resumeState = null) {
 }
 
 let inbound: any[] = [];
-let mapping = {};
-let options = {};
-let resumeState = null;
+let mapping:any = {};
+let options:any = {};
+let resumeState:any = null;
 let progressKey = '';
 
 function mapIncomingRowsToInternal(rowsChunk: any, mapping: any) {
