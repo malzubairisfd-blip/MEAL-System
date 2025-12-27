@@ -16,7 +16,9 @@ const requestWakeLock = async () => {
       });
       console.log('Screen Wake Lock is active');
     } catch (err: any) {
-      console.error(`${err.name}, ${err.message}`);
+      // Use console.log instead of console.error to avoid scary error overlays.
+      // This is often due to permissions policy in iframes.
+      console.log(`Could not acquire wake lock: ${err.name}, ${err.message}`);
     }
   }
 };
