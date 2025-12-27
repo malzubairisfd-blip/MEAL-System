@@ -460,7 +460,6 @@ function splitCluster(rowsSubset: any, minInternal = 0.50, opts = {}) {
 }
 
 async function runClustering(rows: any, opts:any = {}, resumeState:any = null) {
-  rows.forEach((r: any, i: any) => r._internalId = r._internalId || 'row_' + i);
   const minPair = opts?.thresholds?.minPair ?? 0.62;
   const minInternal = opts?.thresholds?.minInternal ?? 0.50;
   postMessage({ type: "progress", status: "blocking", progress: 5, completed: 0, total: rows.length });
@@ -545,7 +544,6 @@ function mapIncomingRowsToInternal(rowsChunk: any, mapping: any) {
   return rowsChunk.map((originalRecord: any, i: any) => {
     const mapped: any = {
       ...originalRecord,
-      _internalId: "row_" + (inbound.length + i),
       womanName: "", husbandName: "", nationalId: "", phone: "", village: "", subdistrict: "", children: [],
     };
     for (const key in mapping) {

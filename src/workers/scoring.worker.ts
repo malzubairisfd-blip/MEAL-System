@@ -1,10 +1,9 @@
 // src/workers/scoring.worker.ts
 import { computePairScore } from '@/lib/scoringClient';
-import { calculateClusterConfidence } from '@/lib/clusterConfidence';
 
 const safeAvg = (arr: (number | null)[]) => {
     const validArr = arr.filter(n => typeof n === 'number' && isFinite(n)) as number[];
-    return validArr.length ? validArr.reduce((a, b) => a + b, 0) / validArr.length : null;
+    return validArr.length ? validArr.reduce((a, b) => a + b, 0) / validArr.length : 0;
 }
 
 self.onmessage = (event) => {
@@ -27,7 +26,7 @@ self.onmessage = (event) => {
                     avgHusbandNameScore: 0,
                     avgFinalScore: 0,
                     confidenceScore: 0,
-                    clusterSize: records.length,
+                    clusterSize: records ? records.length : 0,
                 };
             }
 
@@ -39,31 +38,24 @@ self.onmessage = (event) => {
                     pairScores.push({
                         aId: records[i]._internalId,
                         bId: records[j]._internalId,
-                        finalScore: p.score,
-                        womanNameScore: p.breakdown.firstNameScore,
-                        husbandNameScore: p.breakdown.husbandScore,
-                        childrenScore: p.breakdown.childrenScore,
-                        idScore: p.breakdown.idScore,
-                        phoneScore: p.breakdown.phoneScore,
-                        locationScore: p.breakdown.locationScore,
+                        score: p.score,
+                        ...p.breakdown
                     });
                 }
             }
 
-            const avgWomanNameScore = safeAvg(pairScores.map(p => p.womanNameScore));
-            const avgHusbandNameScore = safeAvg(pairScores.map(p => p.husbandNameScore));
+            const avgWomanNameScore = safeAvg(pairScores.map(p => p.firstNameScore));
+            const avgHusbandNameScore = safeAvg(pairScores.map(p => p.husbandScore));
             
-            // This is the confidence score based on the overall similarity of pairs.
-            const confidenceScore = safeAvg(pairScores.map(p => p.finalScore));
+            const confidenceScore = safeAvg(pairScores.map(p => p.score));
             
-            // This is a simpler average of the two main name components for display.
             const avgFinalScore = safeAvg([avgWomanNameScore, avgHusbandNameScore]);
 
             
             const perRecord: Record<string, any> = {};
             records.forEach((r: any) => {
               perRecord[r._internalId] = {
-                womanNameScore: [], husbandNameScore: [], childrenScore: [],
+                nameScore: [], husbandScore: [], childrenScore: [],
                 idScore: [], phoneScore: [], locationScore: [],
               };
             });
@@ -72,8 +64,9 @@ self.onmessage = (event) => {
               const A = perRecord[p.aId];
               const B = perRecord[p.bId];
               if (!A || !B) return;
-              A.womanNameScore.push(p.womanNameScore); B.womanNameScore.push(p.womanNameScore);
-              A.husbandNameScore.push(p.husbandNameScore); B.husbandNameScore.push(p.husbandNameScore);
+              // Note: using firstNameScore from breakdown for the per-record "nameScore"
+              A.nameScore.push(p.firstNameScore); B.nameScore.push(p.firstNameScore);
+              A.husbandScore.push(p.husbandScore); B.husbandScore.push(p.husbandScore);
               A.childrenScore.push(p.childrenScore); B.childrenScore.push(p.childrenScore);
               A.idScore.push(p.idScore); B.idScore.push(p.idScore);
               A.phoneScore.push(p.phoneScore); B.phoneScore.push(p.phoneScore);
@@ -82,8 +75,8 @@ self.onmessage = (event) => {
             
             const enrichedRecords = records.map((r: any) => ({
               ...r,
-              womanNameScore: safeAvg(perRecord[r._internalId].womanNameScore),
-              husbandNameScore: safeAvg(perRecord[r._internalId].husbandNameScore),
+              nameScore: safeAvg(perRecord[r._internalId].nameScore),
+              husbandScore: safeAvg(perRecord[r._internalId].husbandScore),
               childrenScore: safeAvg(perRecord[r._internalId].childrenScore),
               idScore: safeAvg(perRecord[r._internalId].idScore),
               phoneScore: safeAvg(perRecord[r._internalId].phoneScore),
