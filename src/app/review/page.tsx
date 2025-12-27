@@ -6,7 +6,7 @@ import type { RecordRow } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { Loader2, Search, ChevronLeft, AlertTriangle, ChevronRight, PieChart } from "lucide-react";
+import { Loader2, Search, ChevronLeft, AlertTriangle, ChevronRight, PieChart, Microscope } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
 import { PairwiseModal } from "@/components/PairwiseModal";
