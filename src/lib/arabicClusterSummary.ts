@@ -1,7 +1,4 @@
 // src/lib/arabicClusterSummary.ts
-
-import { calculateClusterConfidence } from "./clusterConfidence";
-
 const getScoreColor = (score?: number) => {
     if (score === undefined) return "color: #4B5563"; // gray-600
     if (score >= 90) return "color: #DC2626"; // red-600
@@ -30,7 +27,6 @@ export function getDecisionAndNote(confidenceScore: number) {
   return { decision, expertNote };
 }
 
-
 export function generateArabicClusterSummary(
   cluster: any,
   rows: any[]
@@ -40,63 +36,34 @@ export function generateArabicClusterSummary(
 
   const explanations: string[] = [];
 
-  /* --------------------------------------------------
-     1️⃣ REASON ANALYSIS (UNCHANGED + CLEANED)
-  -------------------------------------------------- */
   if (reasons.includes("DUPLICATED_HUSBAND_LINEAGE")) {
     explanations.push(
       "تشابه قوي في أسماء الأزواج (الاسم، اسم الأب، واسم الجد) مع اختلافات إملائية طفيفة."
     );
   }
-
   if (reasons.includes("WOMAN_LINEAGE_MATCH")) {
     explanations.push(
       "تشابه واضح في نسب المرأة (الأب، الجد، واسم العائلة) مع اختلاف بسيط في الاسم الأول."
     );
   }
-
   if (reasons.includes("TOKEN_REORDER")) {
     explanations.push(
       "اختلاف في ترتيب أجزاء الاسم أو تكرار بعض الأجزاء نتيجة أخطاء إدخال البيانات."
     );
   }
-
   if (reasons.includes("POLYGAMY_PATTERN")) {
     explanations.push(
       "نمط تعدد زوجات محتمل مع احتمال تسجيل الأسرة أكثر من مرة."
     );
   }
 
-  /* --------------------------------------------------
-     2️⃣ PAIRWISE SIMILARITY SCORE ANALYSIS
-  -------------------------------------------------- */
-  const avgWoman =
-    Number.isFinite(cluster.avgWomanNameScore)
-      ? Math.round(cluster.avgWomanNameScore * 100)
-      : 0;
+  const avgWoman = Number.isFinite(cluster.avgWomanNameScore) ? Math.round(cluster.avgWomanNameScore * 100) : 0;
+  const avgHusband = Number.isFinite(cluster.avgHusbandNameScore) ? Math.round(cluster.avgHusbandNameScore * 100) : 0;
+  const avgFinal = Number.isFinite(cluster.avgFinalScore) ? Math.round(cluster.avgFinalScore * 100) : 0;
+  const confidenceScore = cluster.confidenceScore || 0;
 
-  const avgHusband =
-    Number.isFinite(cluster.avgHusbandNameScore)
-      ? Math.round(cluster.avgHusbandNameScore * 100)
-      : 0;
-
-  const avgFinal =
-    Number.isFinite(cluster.avgFinalScore)
-      ? Math.round(cluster.avgFinalScore * 100)
-      : 0;
-  
-  const confidenceScore = Number.isFinite(cluster.confidenceScore) ? Math.round(cluster.confidenceScore * 100) : 0;
-
-
-  /* --------------------------------------------------
-     3️⃣ EXPERT EVALUATION (HUMAN-LIKE DECISION)
-  -------------------------------------------------- */
   const { decision, expertNote } = getDecisionAndNote(confidenceScore);
 
-
-  /* --------------------------------------------------
-     4️⃣ FINAL ARABIC SUMMARY (HTML SAFE)
-  -------------------------------------------------- */
   const summaryHtml = `النتيجة العامة:<br>تم تجميع <strong>${size}</strong> سجلات يُحتمل أنها تمثل نفس المستفيد أو نفس الأسرة.<br><br>مستوى الثقة: <strong style="${getScoreColor(confidenceScore)}">${confidenceScore}%</strong><br><br>تحليل درجات التشابه:<br>• متوسط تشابه اسم المرأة: <strong style="${getScoreColor(avgWoman)}">${avgWoman}%</strong><br>• متوسط تشابه اسم الزوج: <strong style="${getScoreColor(avgHusband)}">${avgHusband}%</strong><br>• الدرجة النهائية للتشابه: <strong style="${getScoreColor(avgFinal)}">${avgFinal}%</strong><br><br>أسباب التجميع:<br>${explanations.map(e => `• ${e}`).join("<br>") || "• تحليل التشابه العام"}<br><br>تقييم خبير:<br>${expertNote}<br><br>القرار النهائي: ${decision}`;
 
   return summaryHtml;

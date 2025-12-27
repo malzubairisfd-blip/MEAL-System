@@ -404,25 +404,20 @@ class UF {
 
 function splitCluster(rowsSubset: any, minInternal = 0.50, opts = {}) {
   if (!rowsSubset || rowsSubset.length <= 1) return [];
-  if (rowsSubset.length <= 4) {
-    const localEdges: any[] = [];
-    for (let i = 0; i < rowsSubset.length; i++) {
-      for (let j = i + 1; j < rowsSubset.length; j++) {
-        const r = pairwiseScore(rowsSubset[i], rowsSubset[j], opts);
-        if ((r.score || 0) >= minInternal) localEdges.push({ score: r.score, reasons: r.reasons || [], breakdown: r.breakdown });
-      }
-    }
-    const reasons = Array.from(new Set(localEdges.flatMap(e => e.reasons)));
-    const pairScores = localEdges.map(e => ({ finalScore: e.score, womanNameScore: e.breakdown.firstNameScore, husbandNameScore: e.breakdown.husbandScore }));
-    return [{ records: rowsSubset, reasons, pairScores }];
-  }
+  
   const localEdges: any[] = [];
   for (let i = 0; i < rowsSubset.length; i++) {
     for (let j = i + 1; j < rowsSubset.length; j++) {
       const r = pairwiseScore(rowsSubset[i], rowsSubset[j], opts);
-      if ((r.score || 0) >= minInternal) localEdges.push({ a: i, b: j, score: r.score, reasons: r.reasons || [], breakdown: r.breakdown });
+      if ((r.score || 0) >= minInternal) localEdges.push({ a: i, b: j, ...r });
     }
   }
+  
+  if (rowsSubset.length <= 4) {
+    const reasons = Array.from(new Set(localEdges.flatMap(e => e.reasons || [])));
+    return [{ records: rowsSubset, reasons, pairScores: localEdges }];
+  }
+
   localEdges.sort((x: any, y: any) => y.score - x.score);
   const uf = new UF(rowsSubset.length);
   for (const e of localEdges) {
@@ -430,22 +425,25 @@ function splitCluster(rowsSubset: any, minInternal = 0.50, opts = {}) {
     if (ra === rb) continue;
     if (uf.size[ra] + uf.size[rb] <= 4) uf.merge(ra, rb);
   }
+  
   const groups = new Map();
   for (let i = 0; i < rowsSubset.length; i++) {
     const r = uf.find(i);
     if (!groups.has(r)) groups.set(r, []);
     groups.get(r).push(i);
   }
+  
   const result: any[] = [];
   for (const idxs of groups.values()) {
     if (idxs.length <= 1) continue;
     const subset = idxs.map((i: any) => rowsSubset[i]);
     const subEdges = localEdges.filter(e => idxs.includes(e.a) && idxs.includes(e.b));
-    const reasons = Array.from(new Set(subEdges.flatMap(e => e.reasons)));
-    const pairScores = subEdges.map(e => ({ finalScore: e.score, womanNameScore: e.breakdown.firstNameScore, husbandNameScore: e.breakdown.husbandNameScore }));
+    const reasons = Array.from(new Set(subEdges.flatMap(e => e.reasons || [])));
+    
     if (subset.length <= 4) {
-      result.push({ records: subset, reasons, pairScores });
+      result.push({ records: subset, reasons, pairScores: subEdges });
     } else {
+      // Recursive call with a slightly lower threshold to encourage splitting
       result.push(...splitCluster(subset, Math.max(minInternal, 0.45), opts));
     }
   }

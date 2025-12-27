@@ -34,19 +34,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { registerServiceWorker } from "@/lib/registerSW";
 import { setupWakeLockListener } from "@/lib/wakeLock";
 import { cacheFinalResult } from "@/lib/cache";
-import { computePairScore } from "@/lib/scoringClient";
-import { calculateClusterConfidence } from "@/lib/clusterConfidence";
-
-/* ------------------------------------------------------------------ */
-/* Helpers (SAFE, NO NaN)                                              */
-/* ------------------------------------------------------------------ */
-
-const safeAvg = (arr: (number | null)[]) => {
-    const validArr = arr.filter(n => typeof n === 'number') as number[];
-    return validArr.length ? validArr.reduce((a, b) => a + b, 0) / validArr.length : null;
-}
-
-/* ------------------------------------------------------------------ */
 
 type Mapping = {
   womanName: string;
@@ -93,8 +80,6 @@ type WorkerProgress = {
 
 type TimeInfo = { elapsed: number; remaining?: number };
 
-/* ------------------------------------------------------------------ */
-
 const SummaryCard = ({
   icon,
   title,
@@ -120,10 +105,6 @@ const SummaryCard = ({
   </Card>
 );
 
-/* ================================================================== */
-/* MAIN COMPONENT                                                      */
-/* ================================================================== */
-
 export default function UploadPage() {
   const { t, isLoading: isTranslationLoading } = useTranslation();
   const { toast } = useToast();
@@ -132,26 +113,12 @@ export default function UploadPage() {
   const [columns, setColumns] = useState<string[]>([]);
   const [file, setFile] = useState<File | null>(null);
   const [mapping, setMapping] = useState<Mapping>({
-    womanName: "",
-    husbandName: "",
-    nationalId: "",
-    phone: "",
-    village: "",
-    subdistrict: "",
-    children: "",
-    beneficiaryId: "",
+    womanName: "", husbandName: "", nationalId: "", phone: "",
+    village: "", subdistrict: "", children: "", beneficiaryId: "",
   });
 
-  const isMappingComplete = useMemo(
-    () => REQUIRED_MAPPING_FIELDS.every((f) => !!mapping[f]),
-    [mapping]
-  );
-
-  const [progressInfo, setProgressInfo] = useState<WorkerProgress>({
-    status: "idle",
-    progress: 0,
-  });
-
+  const isMappingComplete = useMemo(() => REQUIRED_MAPPING_FIELDS.every((f) => !!mapping[f]), [mapping]);
+  const [progressInfo, setProgressInfo] = useState<WorkerProgress>({ status: "idle", progress: 0 });
   const [workerStatus, setWorkerStatus] = useState("idle");
   const [clusters, setClusters] = useState<any[]>([]);
   const [fileReadProgress, setFileReadProgress] = useState(0);
@@ -159,32 +126,27 @@ export default function UploadPage() {
   const [timeInfo, setTimeInfo] = useState<TimeInfo>({ elapsed: 0 });
 
   const rawRowsRef = useRef<any[]>([]);
-  const workerRef = useRef<Worker | null>(null);
+  const clusterWorkerRef = useRef<Worker | null>(null);
+  const scoringWorkerRef = useRef<Worker | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const startTimeRef = useRef<number | null>(null);
 
-  /* ------------------------------------------------------------------ */
-  /* Worker Setup                                                       */
-  /* ------------------------------------------------------------------ */
-
   useEffect(() => {
     registerServiceWorker();
-    const worker = new Worker(
-      new URL("@/workers/cluster.worker.ts", import.meta.url),
-      { type: "module" }
-    );
+    const clusterWorker = new Worker(new URL("@/workers/cluster.worker.ts", import.meta.url), { type: "module" });
+    const scoringWorker = new Worker(new URL("@/workers/scoring.worker.ts", import.meta.url), { type: "module" });
 
-    workerRef.current = worker;
+    clusterWorkerRef.current = clusterWorker;
+    scoringWorkerRef.current = scoringWorker;
+
     const cleanupWakeLock = setupWakeLockListener();
 
-    worker.onmessage = async (ev) => {
+    clusterWorker.onmessage = async (ev) => {
       const msg = ev.data;
       if (!msg?.type) return;
 
       if (msg.type === "save_progress") {
-        msg.value
-          ? localStorage.setItem(msg.key, JSON.stringify(msg.value))
-          : localStorage.removeItem(msg.key);
+        msg.value ? localStorage.setItem(msg.key, JSON.stringify(msg.value)) : localStorage.removeItem(msg.key);
         return;
       }
 
@@ -195,145 +157,56 @@ export default function UploadPage() {
       }
 
       if (msg.type === "done") {
-        try {
-          setWorkerStatus("calculating_scores");
-          setProgressInfo({ status: "calculating_scores", progress: 96 });
-
-          const rawClusters = msg.payload?.clusters ?? [];
-
-          const finalizedClusters = rawClusters.map((cluster: any) => {
-            const records = cluster.records;
-
-            /* ---------------- PAIR SCORES ---------------- */
-
-            const pairScores: any[] = [];
-
-            for (let i = 0; i < records.length; i++) {
-              for (let j = i + 1; j < records.length; j++) {
-                const p = computePairScore(records[i], records[j], {});
-                if (!p?.breakdown) continue;
-
-                pairScores.push({
-                  aId: records[i]._internalId,
-                  bId: records[j]._internalId,
-                  finalScore: p.score,
-                  womanNameScore: p.breakdown.firstNameScore,
-                  husbandNameScore: p.breakdown.husbandScore,
-                  childrenScore: p.breakdown.childrenScore,
-                  idScore: p.breakdown.idScore,
-                  phoneScore: p.breakdown.phoneScore,
-                  locationScore: p.breakdown.locationScore,
-                });
-              }
-            }
-
-            /* ---------------- CLUSTER AVERAGES ---------------- */
-
-            const avgWomanNameScore = safeAvg(
-              pairScores.map((p) => p.womanNameScore)
-            );
-            const avgHusbandNameScore = safeAvg(
-              pairScores.map((p) => p.husbandNameScore)
-            );
-            const avgFinalScore = safeAvg(
-              pairScores.map((p) => p.finalScore)
-            );
-            
-            const confidenceScore = avgFinalScore !== null ? avgFinalScore : 0;
-
-            /* ---------------- RECORD LEVEL SCORES ---------------- */
-
-            const perRecord: Record<string, any> = {};
-
-            records.forEach((r: any) => {
-              perRecord[r._internalId] = {
-                womanNameScore: [],
-                husbandNameScore: [],
-                childrenScore: [],
-                idScore: [],
-                phoneScore: [],
-                locationScore: [],
-              };
-            });
-
-            pairScores.forEach((p) => {
-              const A = perRecord[p.aId];
-              const B = perRecord[p.bId];
-              if (!A || !B) return;
-
-              A.womanNameScore.push(p.womanNameScore);
-              B.womanNameScore.push(p.womanNameScore);
-              A.husbandNameScore.push(p.husbandNameScore);
-              B.husbandNameScore.push(p.husbandNameScore);
-              A.childrenScore.push(p.childrenScore);
-              B.childrenScore.push(p.childrenScore);
-              A.idScore.push(p.idScore);
-              B.idScore.push(p.idScore);
-              A.phoneScore.push(p.phoneScore);
-              B.phoneScore.push(p.phoneScore);
-              A.locationScore.push(p.locationScore);
-              B.locationScore.push(p.locationScore);
-            });
-
-            const enrichedRecords = records.map((r: any) => ({
-              ...r,
-              womanNameScore: safeAvg(perRecord[r._internalId].womanNameScore),
-              husbandNameScore: safeAvg(perRecord[r._internalId].husbandNameScore),
-              childrenScore: safeAvg(perRecord[r._internalId].childrenScore),
-              idScore: safeAvg(perRecord[r._internalId].idScore),
-              phoneScore: safeAvg(perRecord[r._internalId].phoneScore),
-              locationScore: safeAvg(perRecord[r._internalId].locationScore),
-            }));
-
-            return {
-              ...cluster,
-              records: enrichedRecords,
-              pairScores,
-              avgWomanNameScore,
-              avgHusbandNameScore,
-              avgFinalScore,
-              confidenceScore,
-              clusterSize: records.length,
-            };
-          });
-
-          setClusters(finalizedClusters);
-
-          setWorkerStatus("caching");
-          setProgressInfo({ status: "caching", progress: 98 });
-
-          await cacheFinalResult(
-            { clusters: finalizedClusters, rows: msg.payload.rows },
-            columns
-          );
-
-          setWorkerStatus("done");
-          setProgressInfo({ status: "done", progress: 100 });
-
-          toast({
-            title: t("upload.toasts.clusteringComplete.title"),
-            description: t("upload.toasts.clusteringComplete.description", {
-              count: finalizedClusters.length,
-            }),
-          });
-        } catch (e: any) {
-          setWorkerStatus("error");
-          toast({
-            title: t("upload.toasts.cacheError.title"),
-            description: String(e),
-            variant: "destructive",
-          });
-        }
+        const rawClusters = msg.payload?.clusters ?? [];
+        toast({ title: "Calculating Scores", description: "Clustering complete. Now calculating detailed similarity scores." });
+        setWorkerStatus('calculating_scores');
+        setProgressInfo({ status: 'calculating_scores', progress: 96 });
+        scoringWorker.postMessage({ rawClusters });
+      } else if (msg.type === 'error') {
+        setWorkerStatus('error');
+        toast({ title: t('upload.toasts.workerError.title'), description: msg.error, variant: 'destructive' });
       }
     };
 
+    scoringWorker.onmessage = async (ev) => {
+        const msg = ev.data;
+        if (!msg?.type) return;
+
+        if (msg.type === 'progress') {
+            setProgressInfo(prev => ({ ...prev, progress: 96 + (msg.progress / 100) * 2 })); // Scale scoring progress to 96-98%
+            return;
+        }
+
+        if (msg.type === 'done') {
+            try {
+                const enrichedClusters = msg.enrichedClusters;
+                setClusters(enrichedClusters);
+                setWorkerStatus("caching");
+                setProgressInfo({ status: "caching", progress: 98 });
+                await cacheFinalResult({ clusters: enrichedClusters, rows: rawRowsRef.current }, columns);
+                setWorkerStatus("done");
+                setProgressInfo({ status: "done", progress: 100 });
+                toast({
+                    title: t("upload.toasts.clusteringComplete.title"),
+                    description: t("upload.toasts.clusteringComplete.description", { count: enrichedClusters.length }),
+                });
+            } catch (e: any) {
+                setWorkerStatus("error");
+                toast({ title: t("upload.toasts.cacheError.title"), description: String(e), variant: "destructive" });
+            }
+        } else if (msg.type === 'error') {
+            setWorkerStatus('error');
+            toast({ title: 'Scoring Worker Error', description: msg.error, variant: 'destructive' });
+        }
+    };
+
     return () => {
-      worker.terminate();
+      clusterWorker.terminate();
+      scoringWorker.terminate();
       cleanupWakeLock();
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, [columns, t, toast]);
-
 
   useEffect(() => {
     if (columns.length === 0) return;
@@ -390,20 +263,9 @@ export default function UploadPage() {
       const storageKey = LOCAL_STORAGE_KEY_PREFIX + fileColumns.join(",");
       const saved = localStorage.getItem(storageKey);
       if (saved) {
-        try {
-          setMapping(JSON.parse(saved));
-        } catch {}
+        try { setMapping(JSON.parse(saved)); } catch {}
       } else {
-        setMapping({
-          womanName: "",
-          husbandName: "",
-          nationalId: "",
-          phone: "",
-          village: "",
-          subdistrict: "",
-          children: "",
-          beneficiaryId: "",
-        });
+        setMapping({ womanName: "", husbandName: "", nationalId: "", phone: "", village: "", subdistrict: "", children: "", beneficiaryId: "" });
       }
       setFileReadProgress(100);
     };
@@ -415,7 +277,7 @@ export default function UploadPage() {
   }, []);
 
   const startClustering = useCallback(async () => {
-    if (!workerRef.current) {
+    if (!clusterWorkerRef.current) {
       toast({ title: t("upload.toasts.workerNotReady") });
       return;
     }
@@ -458,22 +320,17 @@ export default function UploadPage() {
       if (d.ok) settings = d.settings || {};
     } catch {}
 
-    workerRef.current!.postMessage({
+    clusterWorkerRef.current!.postMessage({
       type: "start",
-      payload: {
-        mapping,
-        options: settings,
-        resumeState: resumeState,
-        progressKey: progressKey,
-      },
+      payload: { mapping, options: settings, resumeState: resumeState, progressKey: progressKey },
     });
 
     for (let i = 0; i < rawRowsRef.current.length; i += CHUNK_SIZE) {
       const chunk = rawRowsRef.current.slice(i, i + CHUNK_SIZE);
-      workerRef.current!.postMessage({ type: "data", payload: { rows: chunk, total: rawRowsRef.current.length } });
+      clusterWorkerRef.current!.postMessage({ type: "data", payload: { rows: chunk, total: rawRowsRef.current.length } });
       await new Promise((r) => setTimeout(r, 8));
     }
-    workerRef.current!.postMessage({ type: "end" });
+    clusterWorkerRef.current!.postMessage({ type: "end" });
   }, [file, isMappingComplete, mapping, toast, t]);
 
   const resetAll = useCallback(() => {
@@ -565,11 +422,7 @@ export default function UploadPage() {
                 <input id="file-upload" type="file" className="hidden" onChange={handleFile} accept=".xlsx,.xls,.csv,.xlsm,.xlsb" />
               </div>
             </label>
-            {file && (
-              <Button onClick={resetAll} variant="outline">
-                {t("upload.buttons.reset")}
-              </Button>
-            )}
+            {file && (<Button onClick={resetAll} variant="outline">{t("upload.buttons.reset")}</Button>)}
           </div>
           {file && fileReadProgress > 0 && fileReadProgress < 100 && (
             <div className="mt-4">
@@ -590,10 +443,7 @@ export default function UploadPage() {
                   <CardDescription>{isTranslationLoading ? <Skeleton className="h-5 w-64 mt-1" /> : t("upload.steps.2.description")}</CardDescription>
                 </div>
                 <CollapsibleTrigger asChild>
-                  <Button variant="ghost" size="sm">
-                    <ChevronsUpDown className="h-4 w-4" />
-                    <span className="sr-only">Toggle</span>
-                  </Button>
+                  <Button variant="ghost" size="sm"><ChevronsUpDown className="h-4 w-4" /><span className="sr-only">Toggle</span></Button>
                 </CollapsibleTrigger>
               </div>
             </CardHeader>
@@ -612,17 +462,11 @@ export default function UploadPage() {
                     </CardHeader>
                     <CardContent className="p-0">
                       <ScrollArea className="h-48 border-t">
-                        <RadioGroup
-                          value={mapping[field as keyof Mapping]}
-                          onValueChange={(v) => handleMappingChange(field as keyof Mapping, v)}
-                          className="p-4 grid grid-cols-2 gap-2"
-                        >
+                        <RadioGroup value={mapping[field as keyof Mapping]} onValueChange={(v) => handleMappingChange(field as keyof Mapping, v)} className="p-4 grid grid-cols-2 gap-2">
                           {columns.map((col) => (
                             <div key={col} className="flex items-center space-x-2">
                               <RadioGroupItem value={col} id={`${field}-${col}`} />
-                              <Label htmlFor={`${field}-${col}`} className="truncate font-normal" title={col}>
-                                {col}
-                              </Label>
+                              <Label htmlFor={`${field}-${col}`} className="truncate font-normal" title={col}>{col}</Label>
                             </div>
                           ))}
                         </RadioGroup>
@@ -645,25 +489,19 @@ export default function UploadPage() {
           <CardContent>
             <div className="space-y-4">
               <Button onClick={startClustering} disabled={!isMappingComplete || (workerStatus !== "idle" && workerStatus !== "done" && workerStatus !== "error")}>
-                {(workerStatus !== "idle" && workerStatus !== "done" && workerStatus !== "error") ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : null}
+                {(workerStatus !== "idle" && workerStatus !== "done" && workerStatus !== "error") ? (<Loader2 className="mr-2 h-4 w-4 animate-spin" />) : null}
                 {getButtonText()}
               </Button>
 
               {(workerStatus !== "idle" && workerStatus !== "done" && workerStatus !== "error") && (
                 <div className="space-y-2 mt-4">
-                  <div className="flex justify-between items-center text-sm font-medium text-muted-foreground">
-                    <span>{formattedStatus()}</span>
-                  </div>
-
+                  <div className="flex justify-between items-center text-sm font-medium text-muted-foreground"><span>{formattedStatus()}</span></div>
                   <div className="relative h-4 w-full overflow-hidden rounded-full bg-secondary">
                     <Progress value={progressInfo.progress} className="absolute h-full w-full" />
                     <div className="absolute inset-0 flex items-center justify-center">
                       <span className="text-xs font-medium text-primary-foreground mix-blend-difference">{Math.round(progressInfo.progress)}%</span>
                     </div>
                   </div>
-
                   <div className="flex items-center justify-end gap-2 text-sm text-muted-foreground">
                     <Clock className="h-4 w-4" />
                     <span>{formatTime(timeInfo.elapsed)}</span>
