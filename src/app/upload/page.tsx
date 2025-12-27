@@ -19,6 +19,7 @@ import {
   ChevronsUpDown,
   Clock,
 } from "lucide-react";
+
 import { Card, CardHeader, CardContent, CardTitle, CardDescription } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
@@ -35,6 +36,15 @@ import { setupWakeLockListener } from "@/lib/wakeLock";
 import { cacheFinalResult } from "@/lib/cache";
 import { computePairScore } from "@/lib/scoringClient";
 import { calculateClusterConfidence } from "@/lib/clusterConfidence";
+
+/* ------------------------------------------------------------------ */
+/* Helpers (SAFE, NO NaN)                                              */
+/* ------------------------------------------------------------------ */
+
+const safeAvg = (arr: number[]) =>
+  arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null;
+
+/* ------------------------------------------------------------------ */
 
 type Mapping = {
   womanName: string;
@@ -57,6 +67,7 @@ const MAPPING_FIELDS: (keyof Mapping)[] = [
   "children",
   "beneficiaryId",
 ];
+
 const REQUIRED_MAPPING_FIELDS: (keyof Mapping)[] = [
   "womanName",
   "husbandName",
@@ -66,28 +77,56 @@ const REQUIRED_MAPPING_FIELDS: (keyof Mapping)[] = [
   "subdistrict",
   "children",
 ];
+
 const LOCAL_STORAGE_KEY_PREFIX = "beneficiary-mapping-";
 const PROGRESS_KEY_PREFIX = "progress-";
 const CHUNK_SIZE = 2000;
 
-type WorkerProgress = { status: string; progress: number; completed?: number; total?: number };
+type WorkerProgress = {
+  status: string;
+  progress: number;
+  completed?: number;
+  total?: number;
+};
+
 type TimeInfo = { elapsed: number; remaining?: number };
 
-const SummaryCard = ({ icon, title, value, total }: { icon: React.ReactNode; title: string; value: string | number; total?: number }) => (
+/* ------------------------------------------------------------------ */
+
+const SummaryCard = ({
+  icon,
+  title,
+  value,
+  total,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  value: string | number;
+  total?: number;
+}) => (
   <Card>
-    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+    <CardHeader className="flex flex-row items-center justify-between pb-2">
       <CardTitle className="text-sm font-medium">{title}</CardTitle>
       {icon}
     </CardHeader>
     <CardContent>
       <div className="text-2xl font-bold">{value}</div>
-      {total !== undefined && <p className="text-xs text-muted-foreground">out of {total}</p>}
+      {total !== undefined && (
+        <p className="text-xs text-muted-foreground">out of {total}</p>
+      )}
     </CardContent>
   </Card>
 );
 
+/* ================================================================== */
+/* MAIN COMPONENT                                                      */
+/* ================================================================== */
+
 export default function UploadPage() {
   const { t, isLoading: isTranslationLoading } = useTranslation();
+  const { toast } = useToast();
+  const router = useRouter();
+
   const [columns, setColumns] = useState<string[]>([]);
   const [file, setFile] = useState<File | null>(null);
   const [mapping, setMapping] = useState<Mapping>({
@@ -100,139 +139,153 @@ export default function UploadPage() {
     children: "",
     beneficiaryId: "",
   });
+
   const isMappingComplete = useMemo(
     () => REQUIRED_MAPPING_FIELDS.every((f) => !!mapping[f]),
     [mapping]
   );
-  const [progressInfo, setProgressInfo] = useState<WorkerProgress>({ status: "idle", progress: 0 });
-  const [workerStatus, setWorkerStatus] = useState<string>("idle");
-  const [clusters, setClusters] = useState<any[][]>([]);
+
+  const [progressInfo, setProgressInfo] = useState<WorkerProgress>({
+    status: "idle",
+    progress: 0,
+  });
+
+  const [workerStatus, setWorkerStatus] = useState("idle");
+  const [clusters, setClusters] = useState<any[]>([]);
   const [fileReadProgress, setFileReadProgress] = useState(0);
   const [isMappingOpen, setIsMappingOpen] = useState(true);
   const [timeInfo, setTimeInfo] = useState<TimeInfo>({ elapsed: 0 });
+
   const rawRowsRef = useRef<any[]>([]);
   const workerRef = useRef<Worker | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const startTimeRef = useRef<number | null>(null);
-  const { toast } = useToast();
-  const router = useRouter();
+
+  /* ------------------------------------------------------------------ */
+  /* Worker Setup                                                       */
+  /* ------------------------------------------------------------------ */
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
     registerServiceWorker();
-    const w = new Worker(new URL("@/workers/cluster.worker.ts", import.meta.url), { type: "module" });
-    workerRef.current = w;
-    const visibilityHandler = () => {
-      if (document.visibilityState === "visible") workerRef.current?.postMessage({ type: "resume" });
-    };
-    document.addEventListener("visibilitychange", visibilityHandler);
-    const cleanupWakeLockListener = setupWakeLockListener();
+    const worker = new Worker(
+      new URL("@/workers/cluster.worker.ts", import.meta.url),
+      { type: "module" }
+    );
 
-    w.onmessage = async (ev) => {
+    workerRef.current = worker;
+    const cleanupWakeLock = setupWakeLockListener();
+
+    worker.onmessage = async (ev) => {
       const msg = ev.data;
-      if (!msg || !msg.type) return;
+      if (!msg?.type) return;
 
       if (msg.type === "save_progress") {
-        if (msg.value) localStorage.setItem(msg.key, JSON.stringify(msg.value));
-        else localStorage.removeItem(msg.key);
+        msg.value
+          ? localStorage.setItem(msg.key, JSON.stringify(msg.value))
+          : localStorage.removeItem(msg.key);
         return;
       }
 
-      if (document.visibilityState === "hidden" && msg.type === "progress") {
-        const sw = await navigator.serviceWorker.ready;
-        sw.active?.postMessage({
-          type: "PROGRESS_NOTIFICATION",
-          percent: Math.round(msg.progress),
-          status: msg.status,
-        });
+      if (msg.type === "progress") {
+        setWorkerStatus(msg.status);
+        setProgressInfo(msg);
+        return;
       }
 
-      if (msg.type === "progress" || msg.type === "status") {
-        setWorkerStatus(msg.status || "working");
-        setProgressInfo({ status: msg.status || "working", progress: msg.progress ?? 0, completed: msg.completed, total: msg.total });
-      } else if (msg.type === "done") {
-        if (timerRef.current) clearInterval(timerRef.current);
-        startTimeRef.current = null;
-        const sw = await navigator.serviceWorker.ready;
-        sw.active?.postMessage({ type: "DONE_NOTIFICATION" });
-
-        // Start calculating scores status
-        setWorkerStatus("calculating_scores");
-        setProgressInfo({ status: "calculating_scores", progress: 96 });
-
+      if (msg.type === "done") {
         try {
-          const resultPayload = msg.payload || {};
-          const rawClusters = resultPayload.clusters || [];
+          setWorkerStatus("calculating_scores");
+          setProgressInfo({ status: "calculating_scores", progress: 96 });
 
-          const avg = (arr: number[]) =>
-            arr.length > 0 ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+          const rawClusters = msg.payload?.clusters ?? [];
 
-          const enrichedClusters = rawClusters.map((cluster: any) => {
+          const finalizedClusters = rawClusters.map((cluster: any) => {
             const records = cluster.records;
+
+            /* ---------------- PAIR SCORES ---------------- */
+
             const pairScores: any[] = [];
+
             for (let i = 0; i < records.length; i++) {
               for (let j = i + 1; j < records.length; j++) {
                 const p = computePairScore(records[i], records[j], {});
-                if (!p || !p.breakdown) continue;
+                if (!p?.breakdown) continue;
+
                 pairScores.push({
                   aId: records[i]._internalId,
                   bId: records[j]._internalId,
-                  score: p.score,
-                  breakdown: p.breakdown,
+                  finalScore: p.score,
+                  womanNameScore: p.breakdown.firstNameScore,
+                  husbandNameScore: p.breakdown.husbandScore,
+                  childrenScore: p.breakdown.childrenScore,
+                  idScore: p.breakdown.idScore,
+                  phoneScore: p.breakdown.phoneScore,
+                  locationScore: p.breakdown.locationScore,
                 });
               }
             }
-            
-            const avgWomanNameScore = avg(pairScores.map(p => p.breakdown.firstNameScore));
-            const avgHusbandNameScore = avg(pairScores.map(p => p.breakdown.husbandScore));
-            const avgFinalScore = avg(pairScores.map(p => p.score));
-            
-            const confidenceScore = calculateClusterConfidence(avgWomanNameScore, avgHusbandNameScore);
 
-            const recordScoreMap = new Map<string, any>();
-            for (const r of records) {
-                recordScoreMap.set(r._internalId, {
-                    nameScore: [],
-                    husbandScore: [],
-                    childrenScore: [],
-                    idScore: [],
-                    phoneScore: [],
-                    locationScore: [],
-                });
-            }
+            /* ---------------- CLUSTER AVERAGES ---------------- */
 
-            for (const p of pairScores) {
-                const a = recordScoreMap.get(p.aId);
-                const b = recordScoreMap.get(p.bId);
+            const avgWomanNameScore = safeAvg(
+              pairScores.map((p) => p.womanNameScore)
+            );
+            const avgHusbandNameScore = safeAvg(
+              pairScores.map((p) => p.husbandNameScore)
+            );
+            const avgFinalScore = safeAvg(
+              pairScores.map((p) => p.finalScore)
+            );
 
-                if (a && b) {
-                    a.nameScore.push(p.breakdown.firstNameScore);
-                    b.nameScore.push(p.breakdown.firstNameScore);
-                    a.husbandScore.push(p.breakdown.husbandScore);
-                    b.husbandScore.push(p.breakdown.husbandScore);
-                    a.childrenScore.push(p.breakdown.childrenScore);
-                    b.childrenScore.push(p.breakdown.childrenScore);
-                    a.idScore.push(p.breakdown.idScore);
-                    b.idScore.push(p.breakdown.idScore);
-                    a.phoneScore.push(p.breakdown.phoneScore);
-                    b.phoneScore.push(p.breakdown.phoneScore);
-                    a.locationScore.push(p.breakdown.locationScore);
-                    b.locationScore.push(p.breakdown.locationScore);
-                }
-            }
+            const confidenceScore = calculateClusterConfidence(
+              avgWomanNameScore,
+              avgHusbandNameScore,
+              avgFinalScore
+            );
 
-            const enrichedRecords = records.map((r: any) => {
-              const s = recordScoreMap.get(r._internalId);
-              return {
-                ...r,
-                nameScore: avg(s.nameScore),
-                husbandScore: avg(s.husbandScore),
-                childrenScore: avg(s.childrenScore),
-                idScore: avg(s.idScore),
-                phoneScore: avg(s.phoneScore),
-                locationScore: avg(s.locationScore),
+            /* ---------------- RECORD LEVEL SCORES ---------------- */
+
+            const perRecord: Record<string, any> = {};
+
+            records.forEach((r: any) => {
+              perRecord[r._internalId] = {
+                womanNameScore: [],
+                husbandNameScore: [],
+                childrenScore: [],
+                idScore: [],
+                phoneScore: [],
+                locationScore: [],
               };
             });
+
+            pairScores.forEach((p) => {
+              const A = perRecord[p.aId];
+              const B = perRecord[p.bId];
+              if (!A || !B) return;
+
+              A.womanNameScore.push(p.womanNameScore);
+              B.womanNameScore.push(p.womanNameScore);
+              A.husbandNameScore.push(p.husbandNameScore);
+              B.husbandNameScore.push(p.husbandNameScore);
+              A.childrenScore.push(p.childrenScore);
+              B.childrenScore.push(p.childrenScore);
+              A.idScore.push(p.idScore);
+              B.idScore.push(p.idScore);
+              A.phoneScore.push(p.phoneScore);
+              B.phoneScore.push(p.phoneScore);
+              A.locationScore.push(p.locationScore);
+              B.locationScore.push(p.locationScore);
+            });
+
+            const enrichedRecords = records.map((r: any) => ({
+              ...r,
+              womanNameScore: safeAvg(perRecord[r._internalId].womanNameScore),
+              husbandNameScore: safeAvg(perRecord[r._internalId].husbandNameScore),
+              childrenScore: safeAvg(perRecord[r._internalId].childrenScore),
+              idScore: safeAvg(perRecord[r._internalId].idScore),
+              phoneScore: safeAvg(perRecord[r._internalId].phoneScore),
+              locationScore: safeAvg(perRecord[r._internalId].locationScore),
+            }));
 
             return {
               ...cluster,
@@ -245,43 +298,44 @@ export default function UploadPage() {
               clusterSize: records.length,
             };
           });
-          
-          resultPayload.clusters = enrichedClusters;
-          setClusters(enrichedClusters);
 
-          // Start caching status
+          setClusters(finalizedClusters);
+
           setWorkerStatus("caching");
           setProgressInfo({ status: "caching", progress: 98 });
-          await cacheFinalResult(resultPayload, columns);
+
+          await cacheFinalResult(
+            { clusters: finalizedClusters, rows: msg.payload.rows },
+            columns
+          );
 
           setWorkerStatus("done");
           setProgressInfo({ status: "done", progress: 100 });
+
           toast({
             title: t("upload.toasts.clusteringComplete.title"),
-            description: t("upload.toasts.clusteringComplete.description", { count: enrichedClusters.length }),
+            description: t("upload.toasts.clusteringComplete.description", {
+              count: finalizedClusters.length,
+            }),
           });
-        } catch (err: any) {
+        } catch (e: any) {
           setWorkerStatus("error");
-          if (timerRef.current) clearInterval(timerRef.current);
-          toast({ title: t("upload.toasts.cacheError.title"), description: String(err), variant: "destructive" });
+          toast({
+            title: t("upload.toasts.cacheError.title"),
+            description: String(e),
+            variant: "destructive",
+          });
         }
-      } else if (msg.type === "error") {
-        setWorkerStatus("error");
-        if (timerRef.current) clearInterval(timerRef.current);
-        toast({ title: t("upload.toasts.workerError.title"), description: msg.error || "Unknown", variant: "destructive" });
       }
     };
 
     return () => {
-      if (workerRef.current) {
-        workerRef.current.terminate();
-        workerRef.current = null;
-      }
+      worker.terminate();
+      cleanupWakeLock();
       if (timerRef.current) clearInterval(timerRef.current);
-      document.removeEventListener("visibilitychange", visibilityHandler);
-      cleanupWakeLockListener();
     };
-  }, [columns, toast, t]);
+  }, [columns, t, toast]);
+
 
   useEffect(() => {
     if (columns.length === 0) return;
