@@ -1,5 +1,6 @@
-
 // src/lib/arabicClusterSummary.ts
+
+import { calculateClusterConfidence } from "./clusterConfidence";
 
 const getScoreColor = (score?: number) => {
     if (score === undefined) return "color: #4B5563"; // gray-600
@@ -71,13 +72,9 @@ export function generateArabicClusterSummary(
   -------------------------------------------------- */
   const avgWoman = cluster.avgWomanNameScore || 0;
   const avgHusband = cluster.avgHusbandNameScore || 0;
-  const avgFinal = cluster.avgFinalScore || 0;
-
-  const womanScorePct = Math.round(avgWoman * 100);
-  const husbandScorePct = Math.round(avgHusband * 100);
-  const finalScorePct = Math.round(avgFinal * 100);
-
-  const confidenceScore = cluster.confidence || 0;
+  
+  const confidenceScore = calculateClusterConfidence(avgWoman, avgHusband);
+  const finalScorePct = Math.round(cluster.avgFinalScore * 100);
 
 
   /* --------------------------------------------------
@@ -89,7 +86,7 @@ export function generateArabicClusterSummary(
   /* --------------------------------------------------
      4️⃣ FINAL ARABIC SUMMARY (HTML SAFE)
   -------------------------------------------------- */
-  const summaryHtml = `النتيجة العامة:<br>تم تجميع <strong>${size}</strong> سجلات يُحتمل أنها تمثل نفس المستفيد أو نفس الأسرة.<br><br>مستوى الثقة: <strong style="${getScoreColor(confidenceScore)}">${confidenceScore}%</strong><br><br>تحليل درجات التشابه:<br>• متوسط تشابه اسم المرأة: <strong style="${getScoreColor(womanScorePct)}">${womanScorePct}%</strong><br>• متوسط تشابه اسم الزوج: <strong style="${getScoreColor(husbandScorePct)}">${husbandScorePct}%</strong><br>• الدرجة النهائية للتشابه: <strong style="${getScoreColor(finalScorePct)}">${finalScorePct}%</strong><br><br>أسباب التجميع:<br>${explanations.map(e => `• ${e}`).join("<br>") || "• تحليل التشابه العام"}<br><br>تقييم خبير:<br>${expertNote}<br><br>القرار النهائي: ${decision}`;
+  const summaryHtml = `النتيجة العامة:<br>تم تجميع <strong>${size}</strong> سجلات يُحتمل أنها تمثل نفس المستفيد أو نفس الأسرة.<br><br>مستوى الثقة: <strong style="${getScoreColor(confidenceScore)}">${confidenceScore}%</strong><br><br>تحليل درجات التشابه:<br>• متوسط تشابه اسم المرأة: <strong style="${getScoreColor(avgWoman * 100)}">${Math.round(avgWoman * 100)}%</strong><br>• متوسط تشابه اسم الزوج: <strong style="${getScoreColor(avgHusband * 100)}">${Math.round(avgHusband * 100)}%</strong><br>• الدرجة النهائية للتشابه: <strong style="${getScoreColor(finalScorePct)}">${finalScorePct}%</strong><br><br>أسباب التجميع:<br>${explanations.map(e => `• ${e}`).join("<br>") || "• تحليل التشابه العام"}<br><br>تقييم خبير:<br>${expertNote}<br><br>القرار النهائي: ${decision}`;
 
   return summaryHtml;
 }
