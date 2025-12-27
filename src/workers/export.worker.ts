@@ -1,4 +1,3 @@
-
 // src/workers/export.worker.ts
 // This worker is responsible for generating the Excel file on the client-side.
 
@@ -134,10 +133,10 @@ async function enrichData(cachedData: any): Promise<{ enrichedRecords: EnrichedR
                 pairScore: cluster.avgFinalScore,
                 nameScore: cluster.avgWomanNameScore,
                 husbandScore: cluster.avgHusbandNameScore,
-                childrenScore: cluster.pairScores.reduce((a: number, c: any) => a + (c.breakdown.childrenScore || 0), 0) / cluster.pairScores.length,
-                idScore: cluster.pairScores.reduce((a: number, c: any) => a + (c.breakdown.idScore || 0), 0) / cluster.pairScores.length,
-                phoneScore: cluster.pairScores.reduce((a: number, c: any) => a + (c.breakdown.phoneScore || 0), 0) / cluster.pairScores.length,
-                locationScore: cluster.pairScores.reduce((a: number, c: any) => a + (c.breakdown.locationScore || 0), 0) / cluster.pairScores.length,
+                childrenScore: cluster.pairScores.reduce((a: number, c: any) => a + (c.breakdown.childrenScore || 0), 0) / (cluster.pairScores.length || 1),
+                idScore: cluster.pairScores.reduce((a: number, c: any) => a + (c.breakdown.idScore || 0), 0) / (cluster.pairScores.length || 1),
+                phoneScore: cluster.pairScores.reduce((a: number, c: any) => a + (c.breakdown.phoneScore || 0), 0) / (cluster.pairScores.length || 1),
+                locationScore: cluster.pairScores.reduce((a: number, c: any) => a + (c.breakdown.locationScore || 0), 0) / (cluster.pairScores.length || 1),
             };
         }
         return record;
