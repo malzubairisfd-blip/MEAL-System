@@ -6,7 +6,7 @@ import type { RecordRow } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { Loader2, Search, ChevronLeft, AlertTriangle, ChevronRight, Sparkles, Microscope, Calculator, PieChart } from "lucide-react";
+import { Loader2, Search, ChevronLeft, AlertTriangle, ChevronRight, PieChart } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
 import { PairwiseModal } from "@/components/PairwiseModal";
@@ -14,6 +14,7 @@ import { generateArabicClusterSummary, getDecisionAndNote } from "@/lib/arabicCl
 import { useTranslation } from "@/hooks/use-translation";
 import { DecisionPieChart } from "@/components/DecisionPieChart";
 import { loadCachedResult } from "@/lib/cache";
+import { calculateClusterConfidence } from "@/lib/clusterConfidence";
 
 
 type Cluster = {
@@ -44,12 +45,22 @@ export default function ReviewPage() {
 
       if (result && result.clusters) {
         const clusters = result.clusters || [];
-        setAllClusters(clusters);
+        // Pre-calculate confidence scores if they don't exist
+        const clustersWithConfidence = clusters.map(c => {
+            if (c.confidence === undefined) {
+                const avgWomanNameScore = c.pairScores?.reduce((acc: number, p: any) => acc + (p.womanNameScore || 0), 0) / (c.pairScores?.length || 1);
+                const avgHusbandNameScore = c.pairScores?.reduce((acc: number, p: any) => acc + (p.husbandNameScore || 0), 0) / (c.pairScores?.length || 1);
+                return {
+                    ...c,
+                    avgWomanNameScore,
+                    avgHusbandNameScore,
+                    confidence: calculateClusterConfidence(avgWomanNameScore, avgHusbandNameScore)
+                };
+            }
+            return c;
+        });
 
-        // Check if scores are pre-calculated
-        if (clusters.length > 0 && clusters[0].confidence === undefined) {
-             toast({ title: t('review.toasts.noScores.title'), description: t('review.toasts.noScores.description'), variant: 'destructive'});
-        }
+        setAllClusters(clustersWithConfidence);
 
         if (clusters.length === 0) {
           toast({ title: t('review.toasts.noClustersFound.title'), description: t('review.toasts.noClustersFound.description'), variant: "default" });
@@ -85,11 +96,11 @@ export default function ReviewPage() {
   }, [search, allClusters]);
   
   const decisionChartData = useMemo(() => {
-    if (loading || allClusters.length === 0 || allClusters.some(c => c.confidence === undefined)) {
+    if (loading || allClusters.length === 0) {
       return [];
     }
 
-    const decisionCounts = {
+    const decisionCounts: Record<string, number> = {
         'تكرار مؤكد': 0,
         'اشتباه تكرار مؤكد': 0,
         'اشتباه تكرار': 0,

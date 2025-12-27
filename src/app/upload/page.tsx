@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useEffect, useState, useRef, useCallback, useMemo } from "react";
@@ -32,6 +33,7 @@ import { useTranslation } from "@/hooks/use-translation";
 import { Skeleton } from "@/components/ui/skeleton";
 import { registerServiceWorker } from "@/lib/registerSW";
 import { setupWakeLockListener } from "@/lib/wakeLock";
+import { cacheFinalResult } from "@/lib/cache";
 
 type Mapping = {
   womanName: string;
@@ -154,25 +156,15 @@ export default function UploadPage() {
         sw.active?.postMessage({ type: "DONE_NOTIFICATION" });
         setWorkerStatus("caching");
         setProgressInfo({ status: "caching", progress: 98 });
-        const resultPayload = msg.payload || {};
-        const resultClusters = resultPayload.clusters || [];
-        setClusters(resultClusters);
+        
         try {
-          const cacheId = "cache-" + Date.now() + "-" + Math.random().toString(36).slice(2, 9);
-          sessionStorage.setItem("cacheId", cacheId);
-          const allRows = resultPayload.rows || [];
-          const dataToCache = { rows: allRows, clusters: resultClusters, originalHeaders: columns };
-          await fetch("/api/cluster-cache", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ cacheId, ...dataToCache }),
-          });
-          sessionStorage.setItem("cacheTimestamp", Date.now().toString());
+          await cacheFinalResult(msg.payload, columns);
+          setClusters(msg.payload.clusters || []);
           setWorkerStatus("done");
           setProgressInfo({ status: "done", progress: 100 });
           toast({
             title: t("upload.toasts.clusteringComplete.title"),
-            description: t("upload.toasts.clusteringComplete.description", { count: resultClusters.length }),
+            description: t("upload.toasts.clusteringComplete.description", { count: msg.payload.clusters.length }),
           });
         } catch (err: any) {
           setWorkerStatus("error");

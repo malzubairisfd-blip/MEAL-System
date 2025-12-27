@@ -4,7 +4,7 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { FileDown, Loader2, XCircle, CheckCircle, Database, Users, Upload, Microscope, ClipboardList, BarChartHorizontal } from "lucide-react";
+import { FileDown, Loader2, Database, Users, Upload, Microscope, ClipboardList, BarChartHorizontal } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -20,9 +20,6 @@ type DownloadVersion = {
     createdAt: string;
     blob: Blob;
 };
-
-type GenerationStep = "enriching" | "sorting" | "sheets" | "audit" | "summary" | "done";
-const allSteps: GenerationStep[] = ["enriching", "sorting", "sheets", "audit", "summary"];
 
 export default function ExportPage() {
     const { t, language } = useTranslation();

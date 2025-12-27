@@ -7,23 +7,15 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
-import { AlertTriangle, ShieldCheck, Loader2, ChevronLeft, ArrowRight, UserX, Users, Ban, Fingerprint, Copy, Sigma, BarChartHorizontal } from "lucide-react";
+import { AlertTriangle, ShieldCheck, Loader2, ChevronLeft, ArrowRight, UserX, Users, Copy, Sigma, BarChartHorizontal } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { loadCachedResult } from "@/lib/cache";
 import { openDB } from 'idb';
 import { useTranslation } from "@/hooks/use-translation";
-import { runClientSideAudit } from "@/lib/auditEngine";
+import { runClientSideAudit, AuditFinding } from "@/lib/auditEngine";
 
-
-// Redefine AuditFinding here as it's used in this component's state
-export interface AuditFinding {
-  type: string;
-  severity: "high" | "medium" | "low";
-  description: string;
-  records: RecordRow[];
-}
 
 type GroupedFinding = {
   record: RecordRow;
@@ -64,11 +56,10 @@ export default function AuditPage() {
     
     setLoading(prev => ({...prev, audit: true}));
     try {
-        // This now runs on the client-side
         const newFindings = await runClientSideAudit(clustersToAudit);
         
         setFindings(newFindings);
-        await saveAuditFindings(newFindings); // Cache the findings
+        await saveAuditFindings(newFindings);
 
         toast({ title: t('audit.toasts.auditComplete'), description: t('audit.toasts.issuesFound', { newFindings: newFindings.length }) });
 
@@ -154,7 +145,7 @@ export default function AuditPage() {
 
   const summaryCards = [
       { title: t('audit.findingTypes.WOMAN_MULTIPLE_HUSBANDS'), key: 'WOMAN_MULTIPLE_HUSBANDS', icon: <UserX className="h-6 w-6 text-red-500" /> },
-      { title: t('audit.findingTypes.MULTIPLE_NATIONAL_IDS'), key: 'MULTIPLE_NATIONAL_IDS', icon: <Fingerprint className="h-6 w-6 text-orange-500" /> },
+      { title: t('audit.findingTypes.MULTIPLE_NATIONAL_IDS'), key: 'MULTIPLE_NATIONAL_IDS', icon: <Users className="h-6 w-6 text-orange-500" /> },
       { title: t('audit.findingTypes.DUPLICATE_ID'), key: 'DUPLICATE_ID', icon: <Copy className="h-6 w-6 text-yellow-500" /> },
       { title: t('audit.findingTypes.DUPLICATE_COUPLE'), key: 'DUPLICATE_COUPLE', icon: <Users className="h-6 w-6 text-blue-500" /> },
       { title: t('audit.findingTypes.HIGH_SIMILARITY'), key: 'HIGH_SIMILARITY', icon: <Sigma className="h-6 w-6 text-purple-500" /> }
