@@ -6,7 +6,7 @@ import type { RecordRow } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { Loader2, Search, ChevronLeft, AlertTriangle, ChevronRight, PieChart } from "lucide-react";
+import { Loader2, Search, ChevronLeft, AlertTriangle, ChevronRight, PieChart, Microscope } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
 import { PairwiseModal } from "@/components/PairwiseModal";
@@ -24,6 +24,7 @@ type Cluster = {
   avgHusbandNameScore?: number;
   avgFinalScore?: number;
   confidence?: number;
+  pairScores?: any[];
 };
 
 export default function ReviewPage() {
@@ -302,4 +303,9 @@ function ClusterCard({ cluster, clusterNumber, onInspect }: { cluster: Cluster, 
       <CardFooter className="flex flex-col sm:flex-row gap-2">
         <Button variant="outline" className="w-full" onClick={onInspect}>
           <Microscope className="mr-2 h-4 w-4" />
-          {t
+          {t('review.clusterCard.inspect')}
+        </Button>
+      </CardFooter>
+    </Card>
+  );
+}
