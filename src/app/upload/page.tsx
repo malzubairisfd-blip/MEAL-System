@@ -239,7 +239,7 @@ export default function UploadPage() {
 
             const confidenceScore =
               avgFinalScore !== null
-                ? Math.round(avgFinalScore)
+                ? avgFinalScore
                 : 0;
 
             /* ---------------- RECORD LEVEL SCORES ---------------- */

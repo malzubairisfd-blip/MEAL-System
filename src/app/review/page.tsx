@@ -93,7 +93,7 @@ export default function ReviewPage() {
     };
 
     allClusters.forEach(cluster => {
-        const { decision } = getDecisionAndNote(cluster.confidenceScore || 0);
+        const { decision } = getDecisionAndNote((cluster.confidenceScore || 0) * 100);
         if (decision in decisionCounts) {
             decisionCounts[decision as keyof typeof decisionCounts]++;
         }
@@ -238,10 +238,10 @@ export default function ReviewPage() {
 function ClusterCard({ cluster, clusterNumber, onInspect }: { cluster: Cluster, clusterNumber: number, onInspect: () => void }) {
   const { t } = useTranslation();
   const summaryHtml = generateArabicClusterSummary(cluster, cluster.records);
-  const confidenceScore = cluster.confidenceScore !== undefined ? Math.round(cluster.confidenceScore) : 0;
+  const confidenceScore = cluster.confidenceScore !== undefined ? Math.round(cluster.confidenceScore * 100) : null;
 
-  const getScoreColor = (score?: number) => {
-    if (score === undefined) return "text-gray-500";
+  const getScoreColor = (score?: number | null) => {
+    if (score == null) return "text-gray-500";
     if (score >= 90) return "text-red-600 font-bold";
     if (score >= 75) return "text-orange-500 font-semibold";
     if (score >= 60) return "text-blue-600";
@@ -258,7 +258,9 @@ function ClusterCard({ cluster, clusterNumber, onInspect }: { cluster: Cluster, 
           </div>
            <div className="text-right">
               <p className="text-xs text-muted-foreground">{t('review.clusterCard.confidence')}</p>
-              <strong className={`text-lg ${getScoreColor(confidenceScore)}`}>{cluster.confidenceScore === undefined ? <Loader2 className="h-4 w-4 animate-spin" /> : `${confidenceScore}%`}</strong>
+              <strong className={`text-lg ${getScoreColor(confidenceScore)}`}>
+                {confidenceScore === null ? <Loader2 className="h-4 w-4 animate-spin" /> : `${confidenceScore}%`}
+              </strong>
           </div>
         </div>
       </CardHeader>
