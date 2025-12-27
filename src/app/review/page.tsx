@@ -22,7 +22,7 @@ type Cluster = {
   avgWomanNameScore?: number;
   avgHusbandNameScore?: number;
   avgFinalScore?: number;
-  confidence?: number;
+  confidenceScore?: number;
   pairScores?: any[];
 };
 
@@ -45,20 +45,7 @@ export default function ReviewPage() {
 
       if (result && result.clusters) {
         const clusters = result.clusters || [];
-        // Pre-calculate confidence scores if they don't exist
-        const clustersWithConfidence = clusters.map(c => {
-            if (c.confidence === undefined) {
-                const avgWomanNameScore = c.avgWomanNameScore || 0;
-                const avgHusbandNameScore = c.avgHusbandNameScore || 0;
-                return {
-                    ...c,
-                    confidence: calculateClusterConfidence(avgWomanNameScore, avgHusbandNameScore)
-                };
-            }
-            return c;
-        });
-
-        setAllClusters(clustersWithConfidence);
+        setAllClusters(clusters);
 
         if (clusters.length === 0) {
           toast({ title: t('review.toasts.noClustersFound.title'), description: t('review.toasts.noClustersFound.description'), variant: "default" });
@@ -106,7 +93,7 @@ export default function ReviewPage() {
     };
 
     allClusters.forEach(cluster => {
-        const { decision } = getDecisionAndNote(cluster.confidence || 0);
+        const { decision } = getDecisionAndNote(cluster.confidenceScore || 0);
         if (decision in decisionCounts) {
             decisionCounts[decision as keyof typeof decisionCounts]++;
         }
@@ -251,7 +238,7 @@ export default function ReviewPage() {
 function ClusterCard({ cluster, clusterNumber, onInspect }: { cluster: Cluster, clusterNumber: number, onInspect: () => void }) {
   const { t } = useTranslation();
   const summaryHtml = generateArabicClusterSummary(cluster, cluster.records);
-  const confidenceScore = cluster.confidence !== undefined ? Math.round(cluster.confidence) : 0;
+  const confidenceScore = cluster.confidenceScore !== undefined ? Math.round(cluster.confidenceScore) : 0;
 
   const getScoreColor = (score?: number) => {
     if (score === undefined) return "text-gray-500";
@@ -271,7 +258,7 @@ function ClusterCard({ cluster, clusterNumber, onInspect }: { cluster: Cluster, 
           </div>
            <div className="text-right">
               <p className="text-xs text-muted-foreground">{t('review.clusterCard.confidence')}</p>
-              <strong className={`text-lg ${getScoreColor(confidenceScore)}`}>{cluster.confidence === undefined ? <Loader2 className="h-4 w-4 animate-spin" /> : `${confidenceScore}%`}</strong>
+              <strong className={`text-lg ${getScoreColor(confidenceScore)}`}>{cluster.confidenceScore === undefined ? <Loader2 className="h-4 w-4 animate-spin" /> : `${confidenceScore}%`}</strong>
           </div>
         </div>
       </CardHeader>

@@ -73,8 +73,8 @@ export function generateArabicClusterSummary(
   const avgWoman = cluster.avgWomanNameScore || 0;
   const avgHusband = cluster.avgHusbandNameScore || 0;
   
-  const confidenceScore = calculateClusterConfidence(avgWoman, avgHusband);
-  const finalScorePct = Math.round(cluster.avgFinalScore * 100);
+  const confidenceScore = cluster.confidenceScore || 0;
+  const finalScorePct = Math.round((cluster.avgFinalScore || 0) * 100);
 
 
   /* --------------------------------------------------

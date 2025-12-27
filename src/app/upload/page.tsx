@@ -164,38 +164,88 @@ export default function UploadPage() {
           const resultPayload = msg.payload || {};
           const rawClusters = resultPayload.clusters || [];
 
-           // --- Pre-calculate all scores before caching ---
-          const avg = (arr: number[]) => arr.length > 0 ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
-          
-          const enrichedClusters = rawClusters.map((clusterObj: any) => {
-            const pairs = [];
-            for (let i = 0; i < clusterObj.records.length; i++) {
-                for (let j = i + 1; j < clusterObj.records.length; j++) {
-                    pairs.push(computePairScore(clusterObj.records[i], clusterObj.records[j], {}));
-                }
+          const avg = (arr: number[]) =>
+            arr.length > 0 ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+
+          const enrichedClusters = rawClusters.map((cluster: any) => {
+            const records = cluster.records;
+            const pairScores: any[] = [];
+            for (let i = 0; i < records.length; i++) {
+              for (let j = i + 1; j < records.length; j++) {
+                const p = computePairScore(records[i], records[j], {});
+                if (!p || !p.breakdown) continue;
+                pairScores.push({
+                  aId: records[i]._internalId,
+                  bId: records[j]._internalId,
+                  score: p.score,
+                  breakdown: p.breakdown,
+                });
+              }
             }
             
-            const womanScores = pairs.map(p => p.breakdown.firstNameScore || 0);
-            const husbandScores = pairs.map(p => p.breakdown.husbandScore || 0);
-            const finalScores = pairs.map(p => p.score || 0);
+            const avgWomanNameScore = avg(pairScores.map(p => p.breakdown.firstNameScore));
+            const avgHusbandNameScore = avg(pairScores.map(p => p.breakdown.husbandScore));
+            const avgFinalScore = avg(pairScores.map(p => p.score));
             
-            const avgWoman = avg(womanScores);
-            const avgHusband = avg(husbandScores);
-            const avgFinal = avg(finalScores);
-            
+            const confidenceScore = calculateClusterConfidence(avgWomanNameScore, avgHusbandNameScore);
+
+            const recordScoreMap = new Map<string, any>();
+            for (const r of records) {
+                recordScoreMap.set(r._internalId, {
+                    nameScore: [],
+                    husbandScore: [],
+                    childrenScore: [],
+                    idScore: [],
+                    phoneScore: [],
+                    locationScore: [],
+                });
+            }
+
+            for (const p of pairScores) {
+                const a = recordScoreMap.get(p.aId);
+                const b = recordScoreMap.get(p.bId);
+
+                if (a && b) {
+                    a.nameScore.push(p.breakdown.firstNameScore);
+                    b.nameScore.push(p.breakdown.firstNameScore);
+                    a.husbandScore.push(p.breakdown.husbandScore);
+                    b.husbandScore.push(p.breakdown.husbandScore);
+                    a.childrenScore.push(p.breakdown.childrenScore);
+                    b.childrenScore.push(p.breakdown.childrenScore);
+                    a.idScore.push(p.breakdown.idScore);
+                    b.idScore.push(p.breakdown.idScore);
+                    a.phoneScore.push(p.breakdown.phoneScore);
+                    b.phoneScore.push(p.breakdown.phoneScore);
+                    a.locationScore.push(p.breakdown.locationScore);
+                    b.locationScore.push(p.breakdown.locationScore);
+                }
+            }
+
+            const enrichedRecords = records.map((r: any) => {
+              const s = recordScoreMap.get(r._internalId);
+              return {
+                ...r,
+                nameScore: avg(s.nameScore),
+                husbandScore: avg(s.husbandScore),
+                childrenScore: avg(s.childrenScore),
+                idScore: avg(s.idScore),
+                phoneScore: avg(s.phoneScore),
+                locationScore: avg(s.locationScore),
+              };
+            });
+
             return {
-                ...clusterObj,
-                avgWomanNameScore: avgWoman,
-                avgHusbandNameScore: avgHusband,
-                avgFinalScore: avgFinal,
-                confidence: calculateClusterConfidence(avgWoman, avgHusband),
-                pairScores: pairs.map(p => ({
-                    score: p.score,
-                    breakdown: p.breakdown
-                }))
+              ...cluster,
+              records: enrichedRecords,
+              pairScores,
+              avgWomanNameScore,
+              avgHusbandNameScore,
+              avgFinalScore,
+              confidenceScore,
+              clusterSize: records.length,
             };
           });
-
+          
           resultPayload.clusters = enrichedClusters;
           setClusters(enrichedClusters);
 

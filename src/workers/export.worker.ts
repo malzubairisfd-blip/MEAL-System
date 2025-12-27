@@ -1,4 +1,3 @@
-
 // src/workers/export.worker.ts
 // This worker is responsible for generating the Excel file on the client-side.
 
@@ -132,7 +131,7 @@ async function enrichData(cachedData: any): Promise<{ enrichedRecords: EnrichedR
     const enrichedRecords: EnrichedRecord[] = allRecords.map((record: RecordRow) => {
         const cluster = recordToCluster.get(record._internalId!);
         if (cluster) {
-            const { decision, expertNote } = getDecisionAndNote(cluster.confidence || 0);
+            const { decision, expertNote } = getDecisionAndNote(cluster.confidenceScore || 0);
             
             const score = cluster.avgFinalScore * 100;
             let flag = '?';
@@ -150,12 +149,12 @@ async function enrichData(cachedData: any): Promise<{ enrichedRecords: EnrichedR
                 'تصنيف المجموعة المبدئي': decision,
                 'نتائج تحليل المجموعة': expertNote,
                 pairScore: cluster.avgFinalScore,
-                nameScore: cluster.avgWomanNameScore,
-                husbandScore: cluster.avgHusbandNameScore,
-                childrenScore: cluster.pairScores.reduce((a: number, c: any) => a + (c.breakdown.childrenScore || 0), 0) / (cluster.pairScores.length || 1),
-                idScore: cluster.pairScores.reduce((a: number, c: any) => a + (c.breakdown.idScore || 0), 0) / (cluster.pairScores.length || 1),
-                phoneScore: cluster.pairScores.reduce((a: number, c: any) => a + (c.breakdown.phoneScore || 0), 0) / (cluster.pairScores.length || 1),
-                locationScore: cluster.pairScores.reduce((a: number, c: any) => a + (c.breakdown.locationScore || 0), 0) / (cluster.pairScores.length || 1),
+                nameScore: record.nameScore,
+                husbandScore: record.husbandScore,
+                childrenScore: record.childrenScore,
+                idScore: record.idScore,
+                phoneScore: record.phoneScore,
+                locationScore: record.locationScore,
             };
         }
         return record;
@@ -292,7 +291,7 @@ function createEnrichedDataSheet(wb: ExcelJS.Workbook, data: EnrichedRecord[], o
     });
 }
 
-function createSummarySheet(wb: ExcelJS.Workbook, allRecords: RecordRow[], clusters: {records: RecordRow[], confidence?: number}[], auditFindings: AuditFinding[]) {
+function createSummarySheet(wb: ExcelJS.Workbook, allRecords: RecordRow[], clusters: {records: RecordRow[], confidenceScore?: number}[], auditFindings: AuditFinding[]) {
     const ws = wb.addWorksheet("Review Summary");
     ws.views = [{ rightToLeft: true }];
     
@@ -341,7 +340,7 @@ function createSummarySheet(wb: ExcelJS.Workbook, allRecords: RecordRow[], clust
     const decisionCounts = { 'تكرار مؤكد': 0, 'اشتباه تكرار مؤكد': 0, 'اشتباه تكرار': 0, 'إحتمالية تكرار': 0 };
 
     clusters.forEach(clusterObj => {
-        const { decision } = getDecisionAndNote(clusterObj.confidence || 0);
+        const { decision } = getDecisionAndNote(clusterObj.confidenceScore || 0);
         if (decision in decisionCounts) {
             decisionCounts[decision as keyof typeof decisionCounts]++;
         }
