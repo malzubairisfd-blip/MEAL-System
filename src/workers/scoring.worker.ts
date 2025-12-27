@@ -52,9 +52,13 @@ self.onmessage = (event) => {
 
             const avgWomanNameScore = safeAvg(pairScores.map(p => p.womanNameScore));
             const avgHusbandNameScore = safeAvg(pairScores.map(p => p.husbandNameScore));
-            const avgFinalScore = safeAvg(pairScores.map(p => p.finalScore));
+            
+            // This is the confidence score based on the overall similarity of pairs.
+            const confidenceScore = safeAvg(pairScores.map(p => p.finalScore));
+            
+            // This is a simpler average of the two main name components for display.
+            const avgFinalScore = safeAvg([avgWomanNameScore, avgHusbandNameScore]);
 
-            const confidenceScore = avgFinalScore;
             
             const perRecord: Record<string, any> = {};
             records.forEach((r: any) => {
