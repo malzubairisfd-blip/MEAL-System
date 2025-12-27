@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useEffect, useState, useRef, useCallback, useMemo } from "react";
@@ -156,9 +155,11 @@ export default function UploadPage() {
         startTimeRef.current = null;
         const sw = await navigator.serviceWorker.ready;
         sw.active?.postMessage({ type: "DONE_NOTIFICATION" });
-        setWorkerStatus("caching");
-        setProgressInfo({ status: "caching", progress: 98 });
-        
+
+        // Start calculating scores status
+        setWorkerStatus("calculating_scores");
+        setProgressInfo({ status: "calculating_scores", progress: 96 });
+
         try {
           const resultPayload = msg.payload || {};
           const rawClusters = resultPayload.clusters || [];
@@ -195,10 +196,12 @@ export default function UploadPage() {
             };
           });
 
-          // Update payload with enriched clusters
           resultPayload.clusters = enrichedClusters;
           setClusters(enrichedClusters);
 
+          // Start caching status
+          setWorkerStatus("caching");
+          setProgressInfo({ status: "caching", progress: 98 });
           await cacheFinalResult(resultPayload, columns);
 
           setWorkerStatus("done");
@@ -407,6 +410,7 @@ export default function UploadPage() {
       case "building-edges":
       case "merging-edges":
       case "annotating":
+      case "calculating_scores":
         return t("upload.buttons.processing");
       case "caching":
         return t("upload.buttons.caching");
@@ -539,7 +543,7 @@ export default function UploadPage() {
           <CardContent>
             <div className="space-y-4">
               <Button onClick={startClustering} disabled={!isMappingComplete || (workerStatus !== "idle" && workerStatus !== "done" && workerStatus !== "error")}>
-                {(workerStatus === "processing" || workerStatus === "caching" || workerStatus === "building-edges" || workerStatus === "merging-edges" || workerStatus === "annotating" || workerStatus === "blocking") ? (
+                {(workerStatus !== "idle" && workerStatus !== "done" && workerStatus !== "error") ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : null}
                 {getButtonText()}
