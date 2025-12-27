@@ -1,3 +1,4 @@
+
 // src/workers/export.worker.ts
 // This worker is responsible for generating the Excel file on the client-side.
 
@@ -5,7 +6,7 @@ import ExcelJS from "exceljs";
 import type { AuditFinding } from "@/lib/auditEngine";
 import type { RecordRow } from "@/lib/types";
 import { generateArabicClusterSummary, getDecisionAndNote } from '@/lib/arabicClusterSummary';
-import { similarityScoreDetailed, fullPairwiseBreakdown } from "@/lib/scoring-server";
+import { computePairScore } from "@/lib/scoringClient";
 import { calculateClusterConfidence } from "@/lib/clusterConfidence";
 
 /**
@@ -23,6 +24,24 @@ function safePostMessage(message: any) {
       data: 'Worker message serialization failed'
     });
   }
+}
+
+function fullPairwiseBreakdown(cluster: RecordRow[]) {
+    const pairs: { a: RecordRow; b: RecordRow; score: number; breakdown: any }[] = [];
+    if (cluster.length < 2) return pairs;
+
+    for (let i = 0; i < cluster.length; i++) {
+        for (let j = i + 1; j < cluster.length; j++) {
+            const result = computePairScore(cluster[i], cluster[j], {});
+            pairs.push({
+                a: cluster[i],
+                b: cluster[j],
+                score: result.score,
+                breakdown: result.breakdown
+            });
+        }
+    }
+    return pairs;
 }
 
 type EnrichedRecord = RecordRow & {
@@ -733,3 +752,5 @@ function createDashboardReportSheet(wb: ExcelJS.Workbook, chartImages: Record<st
         addImage(chartImages.map, { col: 4, row: currentRow }, { width: 347, height: 749 });
     }
 }
+
+    
