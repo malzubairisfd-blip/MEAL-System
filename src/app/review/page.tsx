@@ -92,7 +92,7 @@ export default function ReviewPage() {
     };
 
     allClusters.forEach(cluster => {
-        const { decision } = getDecisionAndNote((cluster.confidenceScore || 0));
+        const { decision } = getDecisionAndNote((cluster.confidenceScore || 0) * 100);
         if (decision in decisionCounts) {
             decisionCounts[decision as keyof typeof decisionCounts]++;
         }
@@ -247,6 +247,8 @@ function ClusterCard({ cluster, clusterNumber, onInspect }: { cluster: Cluster, 
     return "text-gray-600";
   };
   
+  const displayConfidence = confidenceScore !== undefined ? Math.round(confidenceScore * 100) : null;
+  
   return (
     <Card className="flex flex-col hover:shadow-md transition-shadow">
       <CardHeader>
@@ -257,8 +259,8 @@ function ClusterCard({ cluster, clusterNumber, onInspect }: { cluster: Cluster, 
           </div>
            <div className="text-right">
               <p className="text-xs text-muted-foreground">{t('review.clusterCard.confidence')}</p>
-              <strong className={`text-lg ${getScoreColor(confidenceScore)}`}>
-                {confidenceScore === undefined ? <Loader2 className="h-4 w-4 animate-spin" /> : `${confidenceScore}%`}
+              <strong className={`text-lg ${getScoreColor(displayConfidence)}`}>
+                {displayConfidence === null ? <Loader2 className="h-4 w-4 animate-spin" /> : `${displayConfidence}%`}
               </strong>
           </div>
         </div>

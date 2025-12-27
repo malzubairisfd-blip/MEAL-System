@@ -54,7 +54,7 @@ self.onmessage = (event) => {
             const avgHusbandNameScore = safeAvg(pairScores.map(p => p.husbandNameScore));
             const avgFinalScore = safeAvg(pairScores.map(p => p.finalScore));
 
-            const confidenceScore = avgFinalScore !== null ? Math.round(avgFinalScore * 100) : 0;
+            const confidenceScore = avgFinalScore;
             
             const perRecord: Record<string, any> = {};
             records.forEach((r: any) => {
