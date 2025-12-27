@@ -70,9 +70,21 @@ export function generateArabicClusterSummary(
   /* --------------------------------------------------
      2️⃣ PAIRWISE SIMILARITY SCORE ANALYSIS
   -------------------------------------------------- */
-  const avgWoman = Number.isFinite(cluster.avgWomanNameScore) ? Math.round(cluster.avgWomanNameScore * 100) : 0;
-  const avgHusband = Number.isFinite(cluster.avgHusbandNameScore) ? Math.round(cluster.avgHusbandNameScore * 100) : 0;
-  const avgFinal = Number.isFinite(cluster.avgFinalScore) ? Math.round(cluster.avgFinalScore * 100) : 0;
+  const avgWoman =
+    Number.isFinite(cluster.avgWomanNameScore)
+      ? Math.round(cluster.avgWomanNameScore * 100)
+      : 0;
+
+  const avgHusband =
+    Number.isFinite(cluster.avgHusbandNameScore)
+      ? Math.round(cluster.avgHusbandNameScore * 100)
+      : 0;
+
+  const avgFinal =
+    Number.isFinite(cluster.avgFinalScore)
+      ? Math.round(cluster.avgFinalScore * 100)
+      : 0;
+  
   const confidenceScore = Number.isFinite(cluster.confidenceScore) ? Math.round(cluster.confidenceScore * 100) : 0;
 
 
