@@ -422,6 +422,12 @@
       "save": "Save",
       "saving": "Saving..."
     },
+    "cache": {
+      "title": "View Raw Cached Data",
+      "description": "Inspect the raw data currently stored in your browser's IndexedDB cache. This is useful for debugging.",
+      "button": "View Cached Data",
+      "loading": "Loading cached data..."
+    },
     "thresholds": {
       "title": "Thresholds & Performance",
       "minPair": "Min Pair Score",

@@ -15,6 +15,8 @@ import Link from "next/link";
 import { useTranslation } from "@/hooks/use-translation";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Textarea } from "@/components/ui/textarea";
+import { loadCachedResult } from "@/lib/cache";
 
 
 type Settings = any;
@@ -40,6 +42,20 @@ export default function SettingsPage() {
   
   const [savedProgressFiles, setSavedProgressFiles] = useState<SavedProgressFile[]>([]);
   const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
+  
+  const [cachedData, setCachedData] = useState('');
+  const [cacheLoading, setCacheLoading] = useState(false);
+
+  const loadCache = async () => {
+    setCacheLoading(true);
+    const data = await loadCachedResult();
+    if (data) {
+      setCachedData(JSON.stringify(data, null, 2));
+    } else {
+      setCachedData("No cached data found.");
+    }
+    setCacheLoading(false);
+  };
 
   const loadSavedProgress = useCallback(() => {
     if (typeof window === 'undefined') return;
@@ -445,6 +461,28 @@ export default function SettingsPage() {
                 )}
             </CardContent>
            </Card>
+
+            <Card>
+                <CardHeader>
+                    <CardTitle>{t('settings.cache.title')}</CardTitle>
+                    <CardDescription>{t('settings.cache.description')}</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <Button onClick={loadCache} disabled={cacheLoading}>
+                        {cacheLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        {t('settings.cache.button')}
+                    </Button>
+                    {cachedData && (
+                        <Textarea
+                            readOnly
+                            className="mt-4 h-64 font-mono text-xs"
+                            value={cachedData}
+                            placeholder={t('settings.cache.loading')}
+                        />
+                    )}
+                </CardContent>
+            </Card>
+
         </aside>
       </main>
     </div>
