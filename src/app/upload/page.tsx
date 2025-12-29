@@ -205,9 +205,10 @@ export default function UploadPage() {
   }, [t, toast]);
 
   useEffect(() => {
-    if (columns.length === 0) return;
-    const key = LOCAL_STORAGE_KEY_PREFIX + columns.join(",");
-    localStorage.setItem(key, JSON.stringify(mapping));
+    if (columns.length > 0) {
+      const key = LOCAL_STORAGE_KEY_PREFIX + columns.join(",");
+      localStorage.setItem(key, JSON.stringify(mapping));
+    }
   }, [mapping, columns]);
 
   useEffect(() => {
@@ -536,3 +537,5 @@ export default function UploadPage() {
     </div>
   );
 }
+
+    
