@@ -1,3 +1,4 @@
+
 // src/workers/export.worker.ts
 import ExcelJS from "exceljs";
 import type { AuditFinding } from "@/lib/auditEngine";
@@ -84,8 +85,11 @@ function enrichData(cachedData: any): { enrichedRecords: EnrichedRecord[], enric
 
     const enrichedClusters = clusters.map((cluster: any, index: number) => {
         const clusterId = index + 1;
+        
+        // Calculate the single maximum pairwise score for the entire cluster
         const maxPairScoreInCluster = Math.max(0, ...(cluster.pairScores || []).map((p: any) => p.score));
-
+        
+        // Enrich each record within the cluster with its *individual average* scores
         const recordsWithScores = cluster.records.map((record: RecordRow) => {
             const relatedPairs = (cluster.pairScores || []).filter((p: any) => p.aId === record._internalId || p.bId === record._internalId);
             const safeAvg = (arr: (number | null | undefined)[]) => {
@@ -96,7 +100,7 @@ function enrichData(cachedData: any): { enrichedRecords: EnrichedRecord[], enric
             return {
                 ...record,
                 pairScore: safeAvg(relatedPairs.map((p: any) => p.score)),
-                nameScore: safeAvg(relatedPairs.map((p: any) => p.firstNameScore)),
+                nameScore: safeAvg(relatedPairs.map((p: any) => p.tokenReorderScore)),
                 husbandScore: safeAvg(relatedPairs.map((p: any) => p.husbandScore)),
                 childrenScore: safeAvg(relatedPairs.map((p: any) => p.childrenScore)),
                 idScore: safeAvg(relatedPairs.map((p: any) => p.idScore)),
@@ -104,22 +108,19 @@ function enrichData(cachedData: any): { enrichedRecords: EnrichedRecord[], enric
                 locationScore: safeAvg(relatedPairs.map((p: any) => p.locationScore)),
             };
         });
-
-        // Recalculate Max_PairScore based on the newly calculated average `pairScore` for each record in the cluster
-        const maxPairScoreFromAverages = Math.max(0, ...recordsWithScores.map(r => r.pairScore));
         
         let flag = '?';
-        if (maxPairScoreFromAverages >= 0.9) flag = 'm?';
-        else if (maxPairScoreFromAverages >= 0.8) flag = 'm';
-        else if (maxPairScoreFromAverages >= 0.7) flag = '??';
+        if (maxPairScoreInCluster >= 0.9) flag = 'm?';
+        else if (maxPairScoreInCluster >= 0.8) flag = 'm';
+        else if (maxPairScoreInCluster >= 0.7) flag = '??';
         
-        const { decision, expertNote } = getDecisionAndNote(cluster.confidenceScore * 100 || 0);
+        const { decision, expertNote } = getDecisionAndNote(cluster.confidenceScore || 0);
         
         return {
             ...cluster,
             clusterId,
-            records: recordsWithScores,
-            Max_PairScore: maxPairScoreFromAverages, // Use the max of the averages
+            records: recordsWithScores, // Use the records that now have individual scores
+            Max_PairScore: maxPairScoreInCluster, // This is the single max score for the whole cluster
             Flag: flag,
             'تصنيف المجموعة المبدئي': decision,
             'نتائج تحليل المجموعة': expertNote,
@@ -149,10 +150,10 @@ function enrichData(cachedData: any): { enrichedRecords: EnrichedRecord[], enric
 
         return {
             ...record,
-            ...scoredRecord, // This adds the individual average scores
+            ...scoredRecord, // This adds the individual average scores (pairScore, nameScore, etc.)
             Generated_Cluster_ID: generatedClusterId,
             Cluster_Size: enrichedCluster.records.length,
-            Max_PairScore: enrichedCluster.Max_PairScore,
+            Max_PairScore: enrichedCluster.Max_PairScore, // This is the same for all records in the cluster
             Flag: enrichedCluster.Flag,
             'تصنيف المجموعة المبدئي': enrichedCluster['تصنيف المجموعة المبدئي'],
             'نتائج تحليل المجموعة': enrichedCluster['نتائج تحليل المجموعة'],
@@ -359,7 +360,7 @@ function createSummarySheet(wb: ExcelJS.Workbook, allRecords: RecordRow[], clust
     const decisionCounts: Record<string, number> = { 'تكرار مؤكد': 0, 'اشتباه تكرار مؤكد': 0, 'اشتباه تكرار': 0, 'إحتمالية تكرار': 0 };
 
     clusters.forEach(clusterObj => {
-        const { decision } = getDecisionAndNote(clusterObj.confidenceScore ? clusterObj.confidenceScore * 100 : 0);
+        const { decision } = getDecisionAndNote(clusterObj.confidenceScore || 0);
         if (decision in decisionCounts) {
             decisionCounts[decision as keyof typeof decisionCounts]++;
         }
@@ -770,3 +771,5 @@ function createDashboardReportSheet(wb: ExcelJS.Workbook, chartImages: Record<st
         addImage(chartImages.map, { col: 4, row: currentRow }, { width: 347, height: 749 });
     }
 }
+
+    
