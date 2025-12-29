@@ -85,12 +85,11 @@ function enrichData(cachedData: any): { enrichedRecords: EnrichedRecord[], enric
 
     const enrichedClusters = clusters.map((cluster: any, index: number) => {
         const clusterId = index + 1;
+        const clusterRecords = cluster.records || [];
         
-        // Calculate the single maximum pairwise score for the entire cluster
         const maxPairScoreInCluster = Math.max(0, ...(cluster.pairScores || []).map((p: any) => p.score));
         
-        // Enrich each record within the cluster with its *individual average* scores
-        const recordsWithScores = cluster.records.map((record: RecordRow) => {
+        const recordsWithScores = clusterRecords.map((record: RecordRow) => {
             const relatedPairs = (cluster.pairScores || []).filter((p: any) => p.aId === record._internalId || p.bId === record._internalId);
             const safeAvg = (arr: (number | null | undefined)[]) => {
                 const valid = arr.filter(v => typeof v === 'number' && isFinite(v)) as number[];
@@ -119,8 +118,8 @@ function enrichData(cachedData: any): { enrichedRecords: EnrichedRecord[], enric
         return {
             ...cluster,
             clusterId,
-            records: recordsWithScores, // Use the records that now have individual scores
-            Max_PairScore: maxPairScoreInCluster, // This is the single max score for the whole cluster
+            records: recordsWithScores,
+            Max_PairScore: maxPairScoreInCluster,
             Flag: flag,
             'تصنيف المجموعة المبدئي': decision,
             'نتائج تحليل المجموعة': expertNote,
@@ -140,8 +139,14 @@ function enrichData(cachedData: any): { enrichedRecords: EnrichedRecord[], enric
             return record; // Record not in any cluster
         }
         
-        // Find the specific record with its calculated scores
         const scoredRecord = enrichedCluster.records.find((r: RecordRow) => r._internalId === record._internalId);
+        if (!scoredRecord) {
+             return { // Fallback just in case
+                ...record,
+                Generated_Cluster_ID: enrichedCluster.clusterId,
+                Cluster_Size: enrichedCluster.records.length,
+             }
+        }
 
         const generatedClusterId = enrichedCluster.records.reduce((max: number, r: RecordRow) => {
             const currentId = Number(r.beneficiaryId);
@@ -150,10 +155,10 @@ function enrichData(cachedData: any): { enrichedRecords: EnrichedRecord[], enric
 
         return {
             ...record,
-            ...scoredRecord, // This adds the individual average scores (pairScore, nameScore, etc.)
+            ...scoredRecord,
             Generated_Cluster_ID: generatedClusterId,
             Cluster_Size: enrichedCluster.records.length,
-            Max_PairScore: enrichedCluster.Max_PairScore, // This is the same for all records in the cluster
+            Max_PairScore: enrichedCluster.Max_PairScore,
             Flag: enrichedCluster.Flag,
             'تصنيف المجموعة المبدئي': enrichedCluster['تصنيف المجموعة المبدئي'],
             'نتائج تحليل المجموعة': enrichedCluster['نتائج تحليل المجموعة'],
@@ -771,5 +776,3 @@ function createDashboardReportSheet(wb: ExcelJS.Workbook, chartImages: Record<st
         addImage(chartImages.map, { col: 4, row: currentRow }, { width: 347, height: 749 });
     }
 }
-
-    
