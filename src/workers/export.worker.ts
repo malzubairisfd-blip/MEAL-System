@@ -105,12 +105,13 @@ function enrichData(cachedData: any): { enrichedRecords: EnrichedRecord[], enric
             };
         });
 
+        // Recalculate Max_PairScore based on the newly calculated average `pairScore` for each record in the cluster
         const maxPairScoreFromAverages = Math.max(0, ...recordsWithScores.map(r => r.pairScore));
         
         let flag = '?';
-        if (maxPairScoreInCluster >= 0.9) flag = 'm?';
-        else if (maxPairScoreInCluster >= 0.8) flag = 'm';
-        else if (maxPairScoreInCluster >= 0.7) flag = '??';
+        if (maxPairScoreFromAverages >= 0.9) flag = 'm?';
+        else if (maxPairScoreFromAverages >= 0.8) flag = 'm';
+        else if (maxPairScoreFromAverages >= 0.7) flag = '??';
         
         const { decision, expertNote } = getDecisionAndNote(cluster.confidenceScore * 100 || 0);
         
@@ -118,7 +119,7 @@ function enrichData(cachedData: any): { enrichedRecords: EnrichedRecord[], enric
             ...cluster,
             clusterId,
             records: recordsWithScores,
-            Max_PairScore: maxPairScoreInCluster,
+            Max_PairScore: maxPairScoreFromAverages, // Use the max of the averages
             Flag: flag,
             'تصنيف المجموعة المبدئي': decision,
             'نتائج تحليل المجموعة': expertNote,
@@ -225,7 +226,8 @@ function createEnrichedDataSheet(wb: ExcelJS.Workbook, data: EnrichedRecord[], o
     ];
     
     const finalOriginalHeaders = originalHeaders.filter(h => !h.startsWith('_'));
-    const finalHeaders = [ ...enrichmentHeaders, ...internalDataHeaders, ...finalOriginalHeaders ];
+    // Corrected column order
+    const finalHeaders = [ ...enrichmentHeaders, ...finalOriginalHeaders, ...internalDataHeaders ];
     
     ws.columns = finalHeaders.map(h => ({
       header: h,
