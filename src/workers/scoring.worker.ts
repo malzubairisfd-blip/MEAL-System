@@ -1,5 +1,6 @@
 // src/workers/scoring.worker.ts
 import { computePairScore } from '@/lib/scoringClient';
+import { calculateClusterConfidence } from '@/lib/clusterConfidence';
 
 const safeAvg = (arr: (number | null)[]) => {
     const validArr = arr.filter(n => typeof n === 'number' && isFinite(n)) as number[];
@@ -43,14 +44,13 @@ self.onmessage = (event) => {
                     });
                 }
             }
-
+            
             const avgWomanNameScore = safeAvg(pairScores.map(p => p.tokenReorderScore));
             const avgHusbandNameScore = safeAvg(pairScores.map(p => p.husbandScore));
-            
-            const confidenceScore = safeAvg(pairScores.map(p => p.score));
-            
             const avgFinalScore = safeAvg([avgWomanNameScore, avgHusbandNameScore]);
 
+            // Use the new, more advanced confidence calculation
+            const confidenceScore = calculateClusterConfidence(pairScores, records.length);
             
             const perRecord: Record<string, any> = {};
             records.forEach((r: any) => {

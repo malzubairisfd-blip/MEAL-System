@@ -92,7 +92,7 @@ export default function ReviewPage() {
     };
 
     allClusters.forEach(cluster => {
-        const { decision } = getDecisionAndNote((cluster.confidenceScore || 0) * 100);
+        const { decision } = getDecisionAndNote(cluster.confidenceScore || 0);
         if (decision in decisionCounts) {
             decisionCounts[decision as keyof typeof decisionCounts]++;
         }
@@ -247,7 +247,7 @@ function ClusterCard({ cluster, clusterNumber, onInspect }: { cluster: Cluster, 
     return "text-gray-600";
   };
   
-  const displayConfidence = confidenceScore !== undefined ? Math.round(confidenceScore * 100) : null;
+  const displayConfidence = confidenceScore !== undefined ? Math.round(confidenceScore) : null;
   
   return (
     <Card className="flex flex-col hover:shadow-md transition-shadow">
