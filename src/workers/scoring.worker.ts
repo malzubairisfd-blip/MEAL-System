@@ -27,18 +27,19 @@ const calculateConfidenceScore = (pairScores: any[], clusterSize: number) => {
 
   // Consistency: penalize wide disagreement between pairs
   const v = variance(finalScores);
-  const consistencyScore = Math.max(0, 100 - v);
+  const consistencyScore = Math.max(0, 1 - v); // Score from 0-1
 
   // Small, capped boost for larger clusters
-  const sizeBoost = Math.min(10, Math.max(0, (clusterSize - 2) * 3));
+  const sizeBoost = Math.min(0.1, Math.max(0, (clusterSize - 2) * 0.03)); // boost as 0-0.1
 
   const confidence =
-    avgPairScore * 0.7 +
-    consistencyScore * 0.2 +
-    sizeBoost * 0.1;
+    (avgPairScore * 0.7) +
+    (consistencyScore * 0.2) +
+    sizeBoost;
 
-  return Math.round(Math.min(100, Math.max(0, confidence)));
+  return Math.round(Math.min(1, Math.max(0, confidence)) * 100);
 };
+
 
 /* ───────────────────────────────────────────── */
 /* Worker                                       */
