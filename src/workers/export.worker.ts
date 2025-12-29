@@ -1,4 +1,3 @@
-
 // src/workers/export.worker.ts
 import ExcelJS from "exceljs";
 import type { AuditFinding } from "@/lib/auditEngine";
@@ -27,8 +26,6 @@ function safePostMessage(message: any) {
 type EnrichedRecord = RecordRow & {
     Generated_Cluster_ID?: number | null;
     Cluster_Size?: number | null;
-    Flag?: string | null;
-    Max_PairScore?: number | null;
     pairScore?: number | null;
     nameScore?: number | null;
     husbandScore?: number | null;
@@ -87,8 +84,6 @@ function enrichData(cachedData: any): { enrichedRecords: EnrichedRecord[], enric
         const clusterId = index + 1;
         const clusterRecords = cluster.records || [];
         
-        const maxPairScoreInCluster = Math.max(0, ...(cluster.pairScores || []).map((p: any) => p.score));
-        
         const recordsWithScores = clusterRecords.map((record: RecordRow) => {
             const relatedPairs = (cluster.pairScores || []).filter((p: any) => p.aId === record._internalId || p.bId === record._internalId);
             const safeAvg = (arr: (number | null | undefined)[]) => {
@@ -108,19 +103,12 @@ function enrichData(cachedData: any): { enrichedRecords: EnrichedRecord[], enric
             };
         });
         
-        let flag = '?';
-        if (maxPairScoreInCluster >= 0.9) flag = 'm?';
-        else if (maxPairScoreInCluster >= 0.8) flag = 'm';
-        else if (maxPairScoreInCluster >= 0.7) flag = '??';
-        
         const { decision, expertNote } = getDecisionAndNote(cluster.confidenceScore || 0);
         
         return {
             ...cluster,
             clusterId,
             records: recordsWithScores,
-            Max_PairScore: maxPairScoreInCluster,
-            Flag: flag,
             'تصنيف المجموعة المبدئي': decision,
             'نتائج تحليل المجموعة': expertNote,
         };
@@ -158,8 +146,6 @@ function enrichData(cachedData: any): { enrichedRecords: EnrichedRecord[], enric
             ...scoredRecord,
             Generated_Cluster_ID: generatedClusterId,
             Cluster_Size: enrichedCluster.records.length,
-            Max_PairScore: enrichedCluster.Max_PairScore,
-            Flag: enrichedCluster.Flag,
             'تصنيف المجموعة المبدئي': enrichedCluster['تصنيف المجموعة المبدئي'],
             'نتائج تحليل المجموعة': enrichedCluster['نتائج تحليل المجموعة'],
         };
@@ -171,8 +157,8 @@ function enrichData(cachedData: any): { enrichedRecords: EnrichedRecord[], enric
 
 function sortData(data: EnrichedRecord[]): EnrichedRecord[] {
     return data.sort((a, b) => {
-        const scoreA = a.Max_PairScore ?? -1;
-        const scoreB = b.Max_PairScore ?? -1;
+        const scoreA = a.pairScore ?? -1;
+        const scoreB = b.pairScore ?? -1;
         if (scoreA !== scoreB) {
             return scoreB - scoreA;
         }
@@ -222,7 +208,7 @@ function createEnrichedDataSheet(wb: ExcelJS.Workbook, data: EnrichedRecord[], o
     ws.views = [{ rightToLeft: true }];
     
     const enrichmentHeaders = [
-        "Generated_Cluster_ID", "Cluster_Size", "Flag", "Max_PairScore",
+        "Generated_Cluster_ID", "Cluster_Size",
         "pairScore", "nameScore", "husbandScore", "childrenScore", "idScore", "phoneScore", "locationScore",
         "تصنيف المجموعة المبدئي", "نتائج تحليل المجموعة"
     ];
@@ -272,7 +258,7 @@ function createEnrichedDataSheet(wb: ExcelJS.Workbook, data: EnrichedRecord[], o
         const rowData = data[rowNumber - 2]; 
         if (!rowData) return;
 
-        const score = rowData.Max_PairScore ?? -1;
+        const score = rowData.pairScore ?? -1;
         if (score > 0) {
             let fillColor: string | undefined;
             if (score >= 0.9) { fillColor = 'FFFF0000'; } 
