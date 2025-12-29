@@ -81,83 +81,84 @@ function enrichData(cachedData: any): { enrichedRecords: EnrichedRecord[], enric
     }
 
     const recordMap = new Map<string, RecordRow>(allRecords.map((r: RecordRow) => [r._internalId!, r]));
-    const recordToClusterMap = new Map<string, any>();
 
-    clusters.forEach((cluster: any, index: number) => {
+    const enrichedClusters = clusters.map((cluster: any, index: number) => {
         const clusterId = index + 1;
-        cluster.records.forEach((record: RecordRow) => {
-            recordToClusterMap.set(record._internalId!, { ...cluster, clusterId });
+        const maxPairScoreInCluster = Math.max(0, ...(cluster.pairScores || []).map((p: any) => p.score));
+
+        const recordsWithScores = cluster.records.map((record: RecordRow) => {
+            const relatedPairs = (cluster.pairScores || []).filter((p: any) => p.aId === record._internalId || p.bId === record._internalId);
+            const safeAvg = (arr: (number | null | undefined)[]) => {
+                const valid = arr.filter(v => typeof v === 'number' && isFinite(v)) as number[];
+                return valid.length > 0 ? valid.reduce((a, b) => a + b, 0) / valid.length : 0;
+            };
+
+            return {
+                ...record,
+                pairScore: safeAvg(relatedPairs.map((p: any) => p.score)),
+                nameScore: safeAvg(relatedPairs.map((p: any) => p.firstNameScore)),
+                husbandScore: safeAvg(relatedPairs.map((p: any) => p.husbandScore)),
+                childrenScore: safeAvg(relatedPairs.map((p: any) => p.childrenScore)),
+                idScore: safeAvg(relatedPairs.map((p: any) => p.idScore)),
+                phoneScore: safeAvg(relatedPairs.map((p: any) => p.phoneScore)),
+                locationScore: safeAvg(relatedPairs.map((p: any) => p.locationScore)),
+            };
         });
-    });
 
-    const tempEnrichedRecords = allRecords.map((record: RecordRow) => {
-        const cluster = recordToClusterMap.get(record._internalId!);
-        if (!cluster) {
-            return record; // Return as is if not in any cluster
-        }
-
-        const relatedPairs = (cluster.pairScores || []).filter((p: any) => p.aId === record._internalId || p.bId === record._internalId);
+        const maxPairScoreFromAverages = Math.max(0, ...recordsWithScores.map(r => r.pairScore));
         
-        const safeAvg = (arr: (number | null | undefined)[]) => {
-            const valid = arr.filter(v => typeof v === 'number' && isFinite(v)) as number[];
-            return valid.length > 0 ? valid.reduce((a, b) => a + b, 0) / valid.length : 0;
-        };
+        let flag = '?';
+        if (maxPairScoreInCluster >= 0.9) flag = 'm?';
+        else if (maxPairScoreInCluster >= 0.8) flag = 'm';
+        else if (maxPairScoreInCluster >= 0.7) flag = '??';
         
-        const pairScore = safeAvg(relatedPairs.map((p: any) => p.score));
-        const nameScore = safeAvg(relatedPairs.map((p: any) => p.firstNameScore));
-        const husbandScore = safeAvg(relatedPairs.map((p: any) => p.husbandScore));
-        const childrenScore = safeAvg(relatedPairs.map((p: any) => p.childrenScore));
-        const idScore = safeAvg(relatedPairs.map((p: any) => p.idScore));
-        const phoneScore = safeAvg(relatedPairs.map((p: any) => p.phoneScore));
-        const locationScore = safeAvg(relatedPairs.map((p: any) => p.locationScore));
-
         const { decision, expertNote } = getDecisionAndNote(cluster.confidenceScore * 100 || 0);
-
-        const generatedClusterId = cluster.records.reduce((max: number, r: RecordRow) => {
-            const currentId = Number(r.beneficiaryId);
-            return !isNaN(currentId) && currentId > max ? currentId : max;
-        }, 0) || cluster.clusterId;
-
+        
         return {
-            ...record,
-            Generated_Cluster_ID: generatedClusterId,
-            Cluster_Size: cluster.records.length,
-            // Max_PairScore and Flag will be calculated in a second pass
-            pairScore, nameScore, husbandScore, childrenScore, idScore, phoneScore, locationScore,
+            ...cluster,
+            clusterId,
+            records: recordsWithScores,
+            Max_PairScore: maxPairScoreInCluster,
+            Flag: flag,
             'تصنيف المجموعة المبدئي': decision,
             'نتائج تحليل المجموعة': expertNote,
         };
     });
 
-    const clusterToMaxPairScore = new Map<number, number>();
-    tempEnrichedRecords.forEach(record => {
-      if (record.Generated_Cluster_ID) {
-        const currentMax = clusterToMaxPairScore.get(record.Generated_Cluster_ID) || 0;
-        if ((record.pairScore || 0) > currentMax) {
-          clusterToMaxPairScore.set(record.Generated_Cluster_ID, record.pairScore || 0);
-        }
-      }
+    const recordToEnrichedClusterMap = new Map<string, any>();
+    enrichedClusters.forEach(cluster => {
+        cluster.records.forEach((record: RecordRow) => {
+            recordToEnrichedClusterMap.set(record._internalId!, cluster);
+        });
     });
 
-    const enrichedRecords = tempEnrichedRecords.map(record => {
-      if (!record.Generated_Cluster_ID) {
-        return record;
-      }
-      const maxPairScore = clusterToMaxPairScore.get(record.Generated_Cluster_ID) || 0;
-      
-      let flag = '?';
-      if (maxPairScore >= 0.9) flag = 'm?';
-      else if (maxPairScore >= 0.8) flag = 'm';
-      else if (maxPairScore >= 0.7) flag = '??';
-      
-      return {
-        ...record,
-        Max_PairScore: maxPairScore,
-        Flag: flag,
-      };
+    const finalEnrichedRecords = allRecords.map((record: RecordRow) => {
+        const enrichedCluster = recordToEnrichedClusterMap.get(record._internalId!);
+        if (!enrichedCluster) {
+            return record; // Record not in any cluster
+        }
+        
+        // Find the specific record with its calculated scores
+        const scoredRecord = enrichedCluster.records.find((r: RecordRow) => r._internalId === record._internalId);
+
+        const generatedClusterId = enrichedCluster.records.reduce((max: number, r: RecordRow) => {
+            const currentId = Number(r.beneficiaryId);
+            return !isNaN(currentId) && currentId > max ? currentId : max;
+        }, 0) || enrichedCluster.clusterId;
+
+        return {
+            ...record,
+            ...scoredRecord, // This adds the individual average scores
+            Generated_Cluster_ID: generatedClusterId,
+            Cluster_Size: enrichedCluster.records.length,
+            Max_PairScore: enrichedCluster.Max_PairScore,
+            Flag: enrichedCluster.Flag,
+            'تصنيف المجموعة المبدئي': enrichedCluster['تصنيف المجموعة المبدئي'],
+            'نتائج تحليل المجموعة': enrichedCluster['نتائج تحليل المجموعة'],
+        };
     });
-    
-    return { enrichedRecords, enrichedClusters: clusters };
+
+    return { enrichedRecords: finalEnrichedRecords, enrichedClusters };
 }
 
 
@@ -218,9 +219,13 @@ function createEnrichedDataSheet(wb: ExcelJS.Workbook, data: EnrichedRecord[], o
         "pairScore", "nameScore", "husbandScore", "childrenScore", "idScore", "phoneScore", "locationScore",
         "تصنيف المجموعة المبدئي", "نتائج تحليل المجموعة"
     ];
+
+    const internalDataHeaders = [
+        "womanName_normalized", "husbandName_normalized", "children_normalized", "subdistrict_normalized", "village_normalized", "_parts", "_husbandParts"
+    ];
     
     const finalOriginalHeaders = originalHeaders.filter(h => !h.startsWith('_'));
-    const finalHeaders = [ ...enrichmentHeaders, ...finalOriginalHeaders ];
+    const finalHeaders = [ ...enrichmentHeaders, ...internalDataHeaders, ...finalOriginalHeaders ];
     
     ws.columns = finalHeaders.map(h => ({
       header: h,
@@ -237,10 +242,13 @@ function createEnrichedDataSheet(wb: ExcelJS.Workbook, data: EnrichedRecord[], o
     const dataForSheet = data.map(record => {
         const newRecord: any = {};
         finalHeaders.forEach(header => {
-            const value = record[header];
+            let value = record[header];
              if (typeof value === 'number') {
                 newRecord[header] = parseFloat(value.toFixed(3));
-            } else {
+            } else if (Array.isArray(value)) {
+                newRecord[header] = value.join(', ');
+            }
+             else {
                 newRecord[header] = value;
             }
         });
@@ -251,7 +259,7 @@ function createEnrichedDataSheet(wb: ExcelJS.Workbook, data: EnrichedRecord[], o
     
     let lastClusterId: number | string | null = null;
     ws.eachRow({ includeEmpty: false }, (row, rowNumber) => {
-        if (rowNumber === 1) return;
+        if (rowNumber === 1 || rowNumber > data.length + 1) return;
         
         const rowData = data[rowNumber - 2]; 
         if (!rowData) return;
@@ -290,9 +298,12 @@ function createEnrichedDataSheet(wb: ExcelJS.Workbook, data: EnrichedRecord[], o
     if (data.length > 0) {
       const lastDataRow = data[data.length -1];
       if (lastDataRow && lastDataRow.Generated_Cluster_ID) {
-          ws.getRow(data.length + 1).eachCell({ includeEmpty: true }, cell => {
-              cell.border = { ...cell.border, bottom: { style: 'thick', color: { argb: 'FF002060' } } };
-          });
+          const lastRowInSheet = ws.getRow(data.length + 1);
+          if (lastRowInSheet) {
+            lastRowInSheet.eachCell({ includeEmpty: true }, cell => {
+                cell.border = { ...cell.border, bottom: { style: 'thick', color: { argb: 'FF002060' } } };
+            });
+          }
       }
     }
 }
