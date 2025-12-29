@@ -230,6 +230,19 @@ export default function UploadPage() {
     };
   }, [workerStatus, progressInfo.progress]);
 
+  const resetAll = useCallback(() => {
+    setFile(null);
+    setColumns([]);
+    rawRowsRef.current = [];
+    setClusters([]);
+    setWorkerStatus("idle");
+    setProgressInfo({ status: "idle", progress: 0 });
+    setFileReadProgress(0);
+    setTimeInfo({ elapsed: 0 });
+    if (timerRef.current) clearInterval(timerRef.current);
+    setIsDataCached(false);
+  }, []);
+
   const handleFile = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (!f) return;
@@ -332,19 +345,6 @@ export default function UploadPage() {
     }
     clusterWorkerRef.current!.postMessage({ type: "end" });
   }, [isMappingComplete, mapping, toast, t]);
-
-  const resetAll = useCallback(() => {
-    setFile(null);
-    setColumns([]);
-    rawRowsRef.current = [];
-    setClusters([]);
-    setWorkerStatus("idle");
-    setProgressInfo({ status: "idle", progress: 0 });
-    setFileReadProgress(0);
-    setTimeInfo({ elapsed: 0 });
-    if (timerRef.current) clearInterval(timerRef.current);
-    setIsDataCached(false);
-  }, []);
 
   const formatTime = useCallback((seconds: number) => {
     const h = Math.floor(seconds / 3600);
