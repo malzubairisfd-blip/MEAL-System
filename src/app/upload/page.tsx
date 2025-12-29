@@ -257,7 +257,6 @@ export default function UploadPage() {
         const sheet = wb.Sheets[wb.SheetNames[0]];
         const json = XLSX.utils.sheet_to_json<any>(sheet, { defval: "" });
         
-        // --- Generate internalId immediately ---
         const rowsWithId = json.map((row, index) => ({
           ...row,
           _internalId: `row_${Date.now()}_${index}`
@@ -267,7 +266,6 @@ export default function UploadPage() {
         const fileColumns = Object.keys(json[0] || {});
         setColumns(fileColumns);
         
-        // --- Cache to IndexedDB before enabling clustering ---
         await cacheRawData({ rows: rowsWithId, originalHeaders: fileColumns });
         setIsDataCached(true);
         toast({ title: "Data Ready", description: "Internal IDs generated and data cached. You can now run clustering." });
@@ -275,7 +273,10 @@ export default function UploadPage() {
         const storageKey = LOCAL_STORAGE_KEY_PREFIX + fileColumns.join(",");
         const saved = localStorage.getItem(storageKey);
         if (saved) {
-          try { setMapping(JSON.parse(saved)); } catch {}
+          try { 
+            const savedMapping = JSON.parse(saved);
+            setMapping(savedMapping); 
+          } catch {}
         } else {
           setMapping({ womanName: "", husbandName: "", nationalId: "", phone: "", village: "", subdistrict: "", children: "", beneficiaryId: "" });
         }
@@ -286,7 +287,7 @@ export default function UploadPage() {
       }
     };
     reader.readAsArrayBuffer(f);
-  }, [toast]);
+  }, [toast, resetAll]);
 
   const handleMappingChange = useCallback((field: keyof Mapping, value: string) => {
     setMapping((m) => ({ ...m, [field]: value }));
@@ -537,5 +538,3 @@ export default function UploadPage() {
     </div>
   );
 }
-
-    
