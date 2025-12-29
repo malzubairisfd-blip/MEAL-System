@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
-import { Save, RotateCcw, Upload, Download, Loader2, Plus, Minus, ArrowLeft, Trash2 } from "lucide-react";
+import { Save, RotateCcw, Upload, Download, Loader2, Plus, Minus, ArrowLeft, Trash2, Search } from "lucide-react";
 import Link from "next/link";
 import { useTranslation } from "@/hooks/use-translation";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -43,19 +43,68 @@ export default function SettingsPage() {
   const [savedProgressFiles, setSavedProgressFiles] = useState<SavedProgressFile[]>([]);
   const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
   
-  const [cachedData, setCachedData] = useState('');
+  const [rawCachedDataObject, setRawCachedDataObject] = useState<any>(null);
+  const [filteredCachedDataString, setFilteredCachedDataString] = useState('');
+  const [cacheSearchQuery, setCacheSearchQuery] = useState('');
   const [cacheLoading, setCacheLoading] = useState(false);
 
   const loadCache = async () => {
     setCacheLoading(true);
+    setCacheSearchQuery('');
     const data = await loadCachedResult();
+    setRawCachedDataObject(data);
     if (data) {
-      setCachedData(JSON.stringify(data, null, 2));
+      setFilteredCachedDataString(JSON.stringify(data, null, 2));
     } else {
-      setCachedData("No cached data found.");
+      setFilteredCachedDataString("No cached data found.");
     }
     setCacheLoading(false);
   };
+  
+  useEffect(() => {
+    if (!rawCachedDataObject) return;
+
+    if (!cacheSearchQuery.trim()) {
+        setFilteredCachedDataString(JSON.stringify(rawCachedDataObject, null, 2));
+        return;
+    }
+
+    try {
+        const query = cacheSearchQuery.toLowerCase();
+        
+        const deepFilter = (obj: any): any => {
+            if (!obj) return null;
+
+            if (Array.isArray(obj)) {
+                const filteredArray = obj.map(deepFilter).filter(item => item !== null && (typeof item !== 'object' || Object.keys(item).length > 0));
+                return filteredArray.length > 0 ? filteredArray : null;
+            }
+
+            if (typeof obj === 'object') {
+                const isMatch = Object.values(obj).some(val => String(val).toLowerCase().includes(query));
+                if (isMatch) return obj;
+
+                const newObj: any = {};
+                for (const key in obj) {
+                    const result = deepFilter(obj[key]);
+                    if (result !== null) {
+                        newObj[key] = result;
+                    }
+                }
+                return Object.keys(newObj).length > 0 ? newObj : null;
+            }
+            
+            return null;
+        };
+        
+        const filtered = deepFilter({rows: rawCachedDataObject.rows, clusters: rawCachedDataObject.clusters});
+        setFilteredCachedDataString(JSON.stringify(filtered, null, 2));
+
+    } catch (e) {
+        setFilteredCachedDataString("Error while filtering data.");
+    }
+
+  }, [cacheSearchQuery, rawCachedDataObject]);
 
   const loadSavedProgress = useCallback(() => {
     if (typeof window === 'undefined') return;
@@ -468,15 +517,29 @@ export default function SettingsPage() {
                     <CardDescription>{t('settings.cache.description')}</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <Button onClick={loadCache} disabled={cacheLoading}>
-                        {cacheLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        {t('settings.cache.button')}
-                    </Button>
-                    {cachedData && (
+                    <div className="flex flex-col gap-2">
+                        <Button onClick={loadCache} disabled={cacheLoading}>
+                            {cacheLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            {t('settings.cache.button')}
+                        </Button>
+                        {rawCachedDataObject && (
+                            <div className="relative">
+                                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                                <Input
+                                    type="text"
+                                    placeholder="Search cached data..."
+                                    className="pl-10"
+                                    value={cacheSearchQuery}
+                                    onChange={(e) => setCacheSearchQuery(e.target.value)}
+                                />
+                            </div>
+                        )}
+                    </div>
+                    {rawCachedDataObject && (
                         <Textarea
                             readOnly
                             className="mt-4 h-64 font-mono text-xs"
-                            value={cachedData}
+                            value={filteredCachedDataString}
                             placeholder={t('settings.cache.loading')}
                         />
                     )}
