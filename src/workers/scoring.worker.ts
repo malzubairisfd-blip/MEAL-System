@@ -1,11 +1,48 @@
 // src/workers/scoring.worker.ts
 import { computePairScore } from '@/lib/scoringClient';
-import { calculateClusterConfidence } from '@/lib/clusterConfidence';
+
+/* ───────────────────────────────────────────── */
+/* Utilities                                    */
+/* ───────────────────────────────────────────── */
 
 const safeAvg = (arr: (number | null | undefined)[]) => {
   const valid = arr.filter(v => typeof v === 'number' && isFinite(v)) as number[];
   return valid.length ? valid.reduce((a, b) => a + b, 0) / valid.length : 0;
 };
+
+const variance = (arr: number[]) => {
+  if (arr.length === 0) return 0;
+  const mean = safeAvg(arr);
+  return safeAvg(arr.map(v => Math.pow(v - mean, 2)));
+};
+
+/**
+ * Deterministic cluster confidence score (0–100)
+ */
+const calculateConfidenceScore = (pairScores: any[], clusterSize: number) => {
+  if (pairScores.length === 0) return 0;
+
+  const finalScores = pairScores.map(p => p.score);
+  const avgPairScore = safeAvg(finalScores);
+
+  // Consistency: penalize wide disagreement between pairs
+  const v = variance(finalScores);
+  const consistencyScore = Math.max(0, 100 - v);
+
+  // Small, capped boost for larger clusters
+  const sizeBoost = Math.min(10, Math.max(0, (clusterSize - 2) * 3));
+
+  const confidence =
+    avgPairScore * 0.7 +
+    consistencyScore * 0.2 +
+    sizeBoost * 0.1;
+
+  return Math.round(Math.min(100, Math.max(0, confidence)));
+};
+
+/* ───────────────────────────────────────────── */
+/* Worker                                       */
+/* ───────────────────────────────────────────── */
 
 self.onmessage = (event) => {
   const { rawClusters } = event.data;
@@ -24,9 +61,7 @@ self.onmessage = (event) => {
 
       const records = cluster.records || [];
 
-      // ─────────────────────────────────────────────
-      // Single-record or empty cluster
-      // ─────────────────────────────────────────────
+      /* ───────── Single / empty cluster ───────── */
       if (records.length < 2) {
         return {
           ...cluster,
@@ -40,9 +75,7 @@ self.onmessage = (event) => {
         };
       }
 
-      // ─────────────────────────────────────────────
-      // Pairwise scoring
-      // ─────────────────────────────────────────────
+      /* ───────── Pairwise scoring ───────── */
       const pairScores: any[] = [];
 
       for (let i = 0; i < records.length; i++) {
@@ -59,9 +92,7 @@ self.onmessage = (event) => {
         }
       }
 
-      // ─────────────────────────────────────────────
-      // Cluster-level averages
-      // ─────────────────────────────────────────────
+      /* ───────── Cluster averages ───────── */
       const avgWomanNameScore = safeAvg(
         pairScores.map(p => p.tokenReorderScore)
       );
@@ -70,22 +101,16 @@ self.onmessage = (event) => {
         pairScores.map(p => p.husbandScore)
       );
 
-      // Weighted final score (name 40% + husband 60%)
       const avgFinalScore =
         avgWomanNameScore * 0.4 +
         avgHusbandNameScore * 0.6;
 
-      // ─────────────────────────────────────────────
-      // Confidence score (single source of truth)
-      // ─────────────────────────────────────────────
-      const confidenceScore = calculateClusterConfidence(
+      const confidenceScore = calculateConfidenceScore(
         pairScores,
         records.length
       );
 
-      // ─────────────────────────────────────────────
-      // Per-record aggregation
-      // ─────────────────────────────────────────────
+      /* ───────── Per-record aggregation ───────── */
       const perRecord: Record<string, any> = {};
 
       records.forEach((r: any) => {
@@ -104,7 +129,7 @@ self.onmessage = (event) => {
         const B = perRecord[p.bId];
         if (!A || !B) return;
 
-        // ✅ FIX: nameScore now uses tokenReorderScore
+        // ✅ nameScore uses tokenReorderScore
         A.nameScore.push(p.tokenReorderScore);
         B.nameScore.push(p.tokenReorderScore);
 
@@ -134,9 +159,7 @@ self.onmessage = (event) => {
         locationScore: safeAvg(perRecord[r._internalId].locationScore),
       }));
 
-      // ─────────────────────────────────────────────
-      // Final cluster object
-      // ─────────────────────────────────────────────
+      /* ───────── Final cluster ───────── */
       return {
         ...cluster,
         records: enrichedRecords,
@@ -151,6 +174,9 @@ self.onmessage = (event) => {
 
     postMessage({ type: 'done', enrichedClusters });
   } catch (e: any) {
-    postMessage({ type: 'error', error: e?.message || 'Unknown scoring error' });
+    postMessage({
+      type: 'error',
+      error: e?.message || 'Unknown scoring error',
+    });
   }
 };
