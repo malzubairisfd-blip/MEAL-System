@@ -44,7 +44,7 @@ self.onmessage = (event) => {
                 }
             }
 
-            const avgWomanNameScore = safeAvg(pairScores.map(p => p.firstNameScore));
+            const avgWomanNameScore = safeAvg(pairScores.map(p => p.tokenReorderScore));
             const avgHusbandNameScore = safeAvg(pairScores.map(p => p.husbandScore));
             
             const confidenceScore = safeAvg(pairScores.map(p => p.score));
