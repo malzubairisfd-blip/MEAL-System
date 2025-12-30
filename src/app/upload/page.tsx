@@ -34,7 +34,7 @@ import { useTranslation } from "@/hooks/use-translation";
 import { Skeleton } from "@/components/ui/skeleton";
 import { registerServiceWorker } from "@/lib/registerSW";
 import { setupWakeLockListener } from "@/lib/wakeLock";
-import { cacheRawData, cacheFinalResult } from "@/lib/cache";
+import { cacheRawData, cacheFinalResult, loadCachedResult } from "@/lib/cache";
 
 type Mapping = {
   womanName: string;
@@ -131,6 +131,7 @@ export default function UploadPage() {
   const scoringWorkerRef = useRef<Worker | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const startTimeRef = useRef<number | null>(null);
+  const notifiedAboutSaveRef = useRef(false);
 
   useEffect(() => {
     registerServiceWorker();
@@ -179,7 +180,13 @@ export default function UploadPage() {
                 setClusters(enrichedClusters);
                 setWorkerStatus("caching");
                 setProgressInfo({ status: "caching", progress: 98 });
-                await cacheFinalResult({ clusters: enrichedClusters });
+                const currentData = await loadCachedResult();
+                await cacheFinalResult({
+                  ...currentData,
+                  clusters: enrichedClusters,
+                  rows: currentData?.rows ?? rawRowsRef.current,
+                  originalHeaders: currentData?.originalHeaders ?? columns
+                });
                 setWorkerStatus("done");
                 setProgressInfo({ status: "done", progress: 100 });
                 toast({
@@ -202,14 +209,18 @@ export default function UploadPage() {
       cleanupWakeLock();
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [t, toast]);
+  }, [t, toast, columns]);
 
   useEffect(() => {
-    if (columns.length > 0) {
+    if (isMappingComplete && columns.length > 0) {
       const key = LOCAL_STORAGE_KEY_PREFIX + columns.join(",");
       localStorage.setItem(key, JSON.stringify(mapping));
+      if (!notifiedAboutSaveRef.current) {
+        toast({ title: "Mapping Saved", description: "Your column mapping has been saved locally for this file structure." });
+        notifiedAboutSaveRef.current = true;
+      }
     }
-  }, [mapping, columns]);
+  }, [mapping, columns, isMappingComplete, toast]);
 
   useEffect(() => {
     if (workerStatus !== "idle" && workerStatus !== "done" && workerStatus !== "error" && startTimeRef.current) {
@@ -255,6 +266,7 @@ export default function UploadPage() {
     setFileReadProgress(0);
     setIsMappingOpen(true);
     setIsDataCached(false);
+    notifiedAboutSaveRef.current = false;
 
     const reader = new FileReader();
     reader.onprogress = (event) => {
@@ -269,6 +281,23 @@ export default function UploadPage() {
         const wb = XLSX.read(buffer, { type: "array", cellDates: true });
         const sheet = wb.Sheets[wb.SheetNames[0]];
         const json = XLSX.utils.sheet_to_json<any>(sheet, { defval: "" });
+        const fileColumns = Object.keys(json[0] || {});
+        
+        // Load mapping from local storage if it exists
+        const storageKey = LOCAL_STORAGE_KEY_PREFIX + fileColumns.join(",");
+        const savedMapping = localStorage.getItem(storageKey);
+        if (savedMapping) {
+          try { 
+            const parsedMapping = JSON.parse(savedMapping);
+            setMapping(parsedMapping);
+            toast({ title: "Mapping Loaded", description: "Loaded saved column mapping from your last session." });
+            notifiedAboutSaveRef.current = true; // Don't notify again for this session
+          } catch {}
+        } else {
+          setMapping({ womanName: "", husbandName: "", nationalId: "", phone: "", village: "", subdistrict: "", children: "", beneficiaryId: "" });
+        }
+        
+        setColumns(fileColumns);
         
         const rowsWithId = json.map((row, index) => ({
           ...row,
@@ -276,23 +305,8 @@ export default function UploadPage() {
         }));
         rawRowsRef.current = rowsWithId;
         
-        const fileColumns = Object.keys(json[0] || {});
-        setColumns(fileColumns);
-        
         await cacheRawData({ rows: rowsWithId, originalHeaders: fileColumns });
         setIsDataCached(true);
-        toast({ title: "Data Ready", description: "Internal IDs generated and data cached. You can now run clustering." });
-
-        const storageKey = LOCAL_STORAGE_KEY_PREFIX + fileColumns.join(",");
-        const saved = localStorage.getItem(storageKey);
-        if (saved) {
-          try { 
-            const savedMapping = JSON.parse(saved);
-            setMapping(savedMapping); 
-          } catch {}
-        } else {
-          setMapping({ womanName: "", husbandName: "", nationalId: "", phone: "", village: "", subdistrict: "", children: "", beneficiaryId: "" });
-        }
         setFileReadProgress(100);
       } catch (err: any) {
         toast({ title: "Error processing file", description: err.message, variant: "destructive"});
@@ -538,3 +552,5 @@ export default function UploadPage() {
     </div>
   );
 }
+
+  

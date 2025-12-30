@@ -48,22 +48,10 @@ export async function cacheRawData(payload: { rows: RecordRow[], originalHeaders
  * Updates the cached result with final cluster information.
  * This assumes raw data has already been cached.
  */
-export async function cacheFinalResult(payload: { clusters: any[] }): Promise<void> {
+export async function cacheFinalResult(payload: FullResult): Promise<void> {
     const db = await getDb();
     const tx = db.transaction(STORE_NAME, 'readwrite');
-    const store = tx.objectStore(STORE_NAME);
-    const currentData = await store.get(FULL_RESULT_KEY) as FullResult | undefined;
-
-    if (!currentData) {
-        throw new Error("Cannot cache final results because raw data was not found. Please re-upload the file.");
-    }
-    
-    const updatedData: FullResult = {
-        ...currentData,
-        clusters: payload.clusters || [],
-    };
-    
-    await store.put(updatedData, FULL_RESULT_KEY);
+    await tx.objectStore(STORE_NAME).put(payload, FULL_RESULT_KEY);
     await tx.done;
 }
 
@@ -78,3 +66,5 @@ export async function loadCachedResult(): Promise<FullResult | null> {
      return null;
   }
 }
+
+  
