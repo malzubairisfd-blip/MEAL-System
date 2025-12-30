@@ -26,6 +26,7 @@ function safePostMessage(message: any) {
 type EnrichedRecord = RecordRow & {
     Generated_Cluster_ID?: number | null;
     Cluster_Size?: number | null;
+    Flag?: string;
     pairScore?: number | null;
     nameScore?: number | null;
     husbandScore?: number | null;
@@ -91,9 +92,20 @@ function enrichData(cachedData: any): { enrichedRecords: EnrichedRecord[], enric
                 return valid.length > 0 ? valid.reduce((a, b) => a + b, 0) / valid.length : 0;
             };
 
+            const recordPairScore = safeAvg(relatedPairs.map((p: any) => p.score));
+            let flag = '?';
+            if (recordPairScore >= 0.9) {
+                flag = 'm?';
+            } else if (recordPairScore >= 0.8) {
+                flag = 'm';
+            } else if (recordPairScore >= 0.7) {
+                flag = '??';
+            }
+            
             return {
                 ...record,
-                pairScore: safeAvg(relatedPairs.map((p: any) => p.score)),
+                pairScore: recordPairScore,
+                Flag: flag,
                 nameScore: safeAvg(relatedPairs.map((p: any) => p.tokenReorderScore)),
                 husbandScore: safeAvg(relatedPairs.map((p: any) => p.husbandScore)),
                 childrenScore: safeAvg(relatedPairs.map((p: any) => p.childrenScore)),
@@ -208,7 +220,7 @@ function createEnrichedDataSheet(wb: ExcelJS.Workbook, data: EnrichedRecord[], o
     ws.views = [{ rightToLeft: true }];
     
     const enrichmentHeaders = [
-        "Generated_Cluster_ID", "Cluster_Size",
+        "Generated_Cluster_ID", "Cluster_Size", "Flag",
         "pairScore", "nameScore", "husbandScore", "childrenScore", "idScore", "phoneScore", "locationScore",
         "تصنيف المجموعة المبدئي", "نتائج تحليل المجموعة"
     ];
