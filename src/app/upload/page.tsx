@@ -1,7 +1,12 @@
-
 "use client";
 
-import React, { useEffect, useState, useRef, useCallback, useMemo } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import * as XLSX from "xlsx";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -21,7 +26,7 @@ import {
   Clock,
 } from "lucide-react";
 
-import { Card, CardHeader, CardContent, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -112,13 +117,17 @@ export default function UploadPage() {
 
   const [columns, setColumns] = useState<string[]>([]);
   const [file, setFile] = useState<File | null>(null);
-  const [isDataCached, setIsDataCached] = useState(false);
   const [mapping, setMapping] = useState<Mapping>({
-    womanName: "", husbandName: "", nationalId: "", phone: "",
-    village: "", subdistrict: "", children: "", beneficiaryId: "",
+    womanName: "",
+    husbandName: "",
+    nationalId: "",
+    phone: "",
+    village: "",
+    subdistrict: "",
+    children: "",
+    beneficiaryId: "",
   });
-
-  const isMappingComplete = useMemo(() => REQUIRED_MAPPING_FIELDS.every((f) => !!mapping[f]), [mapping]);
+  const [isDataCached, setIsDataCached] = useState(false);
   const [progressInfo, setProgressInfo] = useState<WorkerProgress>({ status: "idle", progress: 0 });
   const [workerStatus, setWorkerStatus] = useState("idle");
   const [clusters, setClusters] = useState<any[]>([]);
@@ -132,6 +141,27 @@ export default function UploadPage() {
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const startTimeRef = useRef<number | null>(null);
   const notifiedAboutSaveRef = useRef(false);
+  const progressInfoRef = useRef(progressInfo);
+  progressInfoRef.current = progressInfo;
+
+  const isMappingComplete = useMemo(
+    () => REQUIRED_MAPPING_FIELDS.every((field) => Boolean(mapping[field])),
+    [mapping]
+  );
+
+  const resetAll = useCallback(() => {
+    setFile(null);
+    setColumns([]);
+    rawRowsRef.current = [];
+    setClusters([]);
+    setWorkerStatus("idle");
+    setProgressInfo({ status: "idle", progress: 0 });
+    setFileReadProgress(0);
+    setTimeInfo({ elapsed: 0 });
+    setIsDataCached(false);
+    notifiedAboutSaveRef.current = false;
+    if (timerRef.current) clearInterval(timerRef.current);
+  }, []);
 
   useEffect(() => {
     registerServiceWorker();
@@ -143,65 +173,84 @@ export default function UploadPage() {
 
     const cleanupWakeLock = setupWakeLockListener();
 
-    clusterWorker.onmessage = async (ev) => {
-      const msg = ev.data;
+    const handleClusterMessage = (msg: any) => {
       if (!msg?.type) return;
-
       if (msg.type === "progress") {
         setWorkerStatus(msg.status);
         setProgressInfo(msg);
         return;
       }
-
       if (msg.type === "done") {
         const rawClusters = msg.payload?.clusters ?? [];
-        toast({ title: "Calculating Scores", description: "Clustering complete. Now calculating detailed similarity scores." });
-        setWorkerStatus('calculating_scores');
-        setProgressInfo({ status: 'calculating_scores', progress: 96 });
+        toast({
+          title: "Calculating Scores",
+          description: "Clustering complete. Now calculating detailed similarity scores.",
+        });
+        setWorkerStatus("calculating_scores");
+        setProgressInfo({ status: "calculating_scores", progress: 96 });
         scoringWorker.postMessage({ rawClusters });
-      } else if (msg.type === 'error') {
-        setWorkerStatus('error');
-        toast({ title: t('upload.toasts.workerError.title'), description: msg.error, variant: 'destructive' });
+        return;
+      }
+      if (msg.type === "error") {
+        setWorkerStatus("error");
+        toast({
+          title: t("upload.toasts.workerError.title"),
+          description: msg.error,
+          variant: "destructive",
+        });
       }
     };
 
-    scoringWorker.onmessage = async (ev) => {
-        const msg = ev.data;
-        if (!msg?.type) return;
-
-        if (msg.type === 'progress') {
-            setProgressInfo(prev => ({ ...prev, progress: 96 + (msg.progress / 100) * 2 }));
-            return;
-        }
-
-        if (msg.type === 'done') {
-            try {
-                const enrichedClusters = msg.enrichedClusters;
-                setClusters(enrichedClusters);
-                setWorkerStatus("caching");
-                setProgressInfo({ status: "caching", progress: 98 });
-                const currentData = await loadCachedResult();
-                await cacheFinalResult({
-                  ...currentData,
-                  clusters: enrichedClusters,
-                  rows: currentData?.rows ?? rawRowsRef.current,
-                  originalHeaders: currentData?.originalHeaders ?? columns
-                });
-                setWorkerStatus("done");
-                setProgressInfo({ status: "done", progress: 100 });
-                toast({
-                    title: t("upload.toasts.clusteringComplete.title"),
-                    description: t("upload.toasts.clusteringComplete.description", { count: enrichedClusters.length }),
-                });
-            } catch (e: any) {
-                setWorkerStatus("error");
-                toast({ title: t("upload.toasts.cacheError.title"), description: String(e), variant: "destructive" });
-            }
-        } else if (msg.type === 'error') {
-            setWorkerStatus('error');
-            toast({ title: 'Scoring Worker Error', description: msg.error, variant: 'destructive' });
-        }
+    const handleScoringMessage = (msg: any) => {
+      if (!msg?.type) return;
+      if (msg.type === "progress") {
+        setProgressInfo((prev) => ({
+          ...prev,
+          progress: 96 + (msg.progress / 100) * 2,
+        }));
+        return;
+      }
+      if (msg.type === "done") {
+        (async () => {
+          try {
+            const enrichedClusters = msg.enrichedClusters;
+            setClusters(enrichedClusters);
+            setWorkerStatus("caching");
+            setProgressInfo({ status: "caching", progress: 98 });
+            const currentData = await loadCachedResult();
+            await cacheFinalResult({
+              ...currentData,
+              clusters: enrichedClusters,
+              rows: currentData?.rows ?? rawRowsRef.current,
+              originalHeaders: currentData?.originalHeaders ?? columns,
+            });
+            setWorkerStatus("done");
+            setProgressInfo({ status: "done", progress: 100 });
+            toast({
+              title: t("upload.toasts.clusteringComplete.title"),
+              description: t("upload.toasts.clusteringComplete.description", {
+                count: enrichedClusters.length,
+              }),
+            });
+          } catch (error: any) {
+            setWorkerStatus("error");
+            toast({
+              title: t("upload.toasts.cacheError.title"),
+              description: String(error),
+              variant: "destructive",
+            });
+          }
+        })();
+        return;
+      }
+      if (msg.type === "error") {
+        setWorkerStatus("error");
+        toast({ title: "Scoring Worker Error", description: msg.error, variant: "destructive" });
+      }
     };
+
+    clusterWorker.onmessage = (ev) => handleClusterMessage(ev.data);
+    scoringWorker.onmessage = (ev) => handleScoringMessage(ev.data);
 
     return () => {
       clusterWorker.terminate();
@@ -212,112 +261,138 @@ export default function UploadPage() {
   }, [t, toast, columns]);
 
   useEffect(() => {
-    if (isMappingComplete && columns.length > 0) {
-      const key = LOCAL_STORAGE_KEY_PREFIX + columns.join(",");
+    if (isMappingComplete && columns.length) {
+      const key = `${LOCAL_STORAGE_KEY_PREFIX}${columns.join(",")}`;
       localStorage.setItem(key, JSON.stringify(mapping));
       if (!notifiedAboutSaveRef.current) {
-        toast({ title: "Mapping Saved", description: "Your column mapping has been saved locally for this file structure." });
+        toast({
+          title: "Mapping Saved",
+          description: "Your column mapping has been saved locally for this file structure.",
+        });
         notifiedAboutSaveRef.current = true;
       }
     }
-  }, [mapping, columns, isMappingComplete, toast]);
+  }, [columns, isMappingComplete, mapping, toast]);
 
   useEffect(() => {
-    if (workerStatus !== "idle" && workerStatus !== "done" && workerStatus !== "error" && startTimeRef.current) {
+    if (
+      workerStatus !== "idle" &&
+      workerStatus !== "done" &&
+      workerStatus !== "error" &&
+      startTimeRef.current
+    ) {
       if (timerRef.current) clearInterval(timerRef.current);
       timerRef.current = setInterval(() => {
         const elapsed = (Date.now() - startTimeRef.current!) / 1000;
         let remaining;
-        if (progressInfo.progress > 0 && progressInfo.progress < 100) {
-          remaining = (elapsed / progressInfo.progress) * (100 - progressInfo.progress);
+        if (progressInfoRef.current.progress > 0 && progressInfoRef.current.progress < 100) {
+          remaining =
+            (elapsed / progressInfoRef.current.progress) * (100 - progressInfoRef.current.progress);
         }
         setTimeInfo({ elapsed, remaining });
       }, 1000);
-    } else {
-      if (timerRef.current) clearInterval(timerRef.current);
+    } else if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
     }
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [workerStatus, progressInfo.progress]);
+  }, [workerStatus]);
 
-  const resetAll = useCallback(() => {
-    setFile(null);
-    setColumns([]);
-    rawRowsRef.current = [];
-    setClusters([]);
-    setWorkerStatus("idle");
-    setProgressInfo({ status: "idle", progress: 0 });
-    setFileReadProgress(0);
-    setTimeInfo({ elapsed: 0 });
-    if (timerRef.current) clearInterval(timerRef.current);
-    setIsDataCached(false);
-  }, []);
+  const handleFile = useCallback(
+    async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const selectedFile = event.target.files?.[0];
+      if (!selectedFile) return;
+      resetAll();
+      setFile(selectedFile);
+      setIsMappingOpen(true);
 
-  const handleFile = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
-    if (!f) return;
-    setFile(f);
-    setWorkerStatus("idle");
-    setProgressInfo({ status: "idle", progress: 0 });
-    setClusters([]);
-    setTimeInfo({ elapsed: 0 });
-    if (timerRef.current) clearInterval(timerRef.current);
-    setFileReadProgress(0);
-    setIsMappingOpen(true);
-    setIsDataCached(false);
-    notifiedAboutSaveRef.current = false;
-
-    const reader = new FileReader();
-    reader.onprogress = (event) => {
-      if (event.lengthComputable) {
-        const percentage = (event.loaded / event.total) * 100;
-        setFileReadProgress(percentage);
-      }
-    };
-    reader.onload = async (ev) => {
-      try {
-        const buffer = ev.target?.result;
-        const wb = XLSX.read(buffer, { type: "array", cellDates: true });
-        const sheet = wb.Sheets[wb.SheetNames[0]];
-        const json = XLSX.utils.sheet_to_json<any>(sheet, { defval: "" });
-        const fileColumns = Object.keys(json[0] || {});
-        
-        // Load mapping from local storage if it exists
-        const storageKey = LOCAL_STORAGE_KEY_PREFIX + fileColumns.join(",");
-        const savedMapping = localStorage.getItem(storageKey);
-        if (savedMapping) {
-          try { 
-            const parsedMapping = JSON.parse(savedMapping);
-            setMapping(parsedMapping);
-            toast({ title: "Mapping Loaded", description: "Loaded saved column mapping from your last session." });
-            notifiedAboutSaveRef.current = true; // Don't notify again for this session
-          } catch {}
-        } else {
-          setMapping({ womanName: "", husbandName: "", nationalId: "", phone: "", village: "", subdistrict: "", children: "", beneficiaryId: "" });
+      const reader = new FileReader();
+      reader.onprogress = (progressEvent) => {
+        if (progressEvent.lengthComputable) {
+          const percent = (progressEvent.loaded / progressEvent.total) * 100;
+          setFileReadProgress(percent);
         }
-        
-        setColumns(fileColumns);
-        
-        const rowsWithId = json.map((row, index) => ({
-          ...row,
-          _internalId: `row_${Date.now()}_${index}`
-        }));
-        rawRowsRef.current = rowsWithId;
-        
-        await cacheRawData({ rows: rowsWithId, originalHeaders: fileColumns });
-        setIsDataCached(true);
-        setFileReadProgress(100);
-      } catch (err: any) {
-        toast({ title: "Error processing file", description: err.message, variant: "destructive"});
-        resetAll();
-      }
-    };
-    reader.readAsArrayBuffer(f);
-  }, [toast, resetAll]);
+      };
+      reader.onload = async (loadEvent) => {
+        try {
+          const buffer = loadEvent.target?.result;
+          const workbook = XLSX.read(buffer, { type: "array", cellDates: true });
+          const sheet = workbook.Sheets[workbook.SheetNames[0]];
+          const json = XLSX.utils.sheet_to_json<any>(sheet, { defval: "" });
+          const detectedColumns = Object.keys(json[0] || {});
+          const storageKey = `${LOCAL_STORAGE_KEY_PREFIX}${detectedColumns.join(",")}`;
+          const saved = localStorage.getItem(storageKey);
+          if (saved) {
+            try {
+              setMapping(JSON.parse(saved));
+              toast({
+                title: "Mapping Loaded",
+                description: "Loaded saved column mapping from your last session.",
+              });
+              notifiedAboutSaveRef.current = true;
+            } catch {
+              setMapping({
+                womanName: "",
+                husbandName: "",
+                nationalId: "",
+                phone: "",
+                village: "",
+                subdistrict: "",
+                children: "",
+                beneficiaryId: "",
+              });
+            }
+          } else {
+            setMapping({
+              womanName: "",
+              husbandName: "",
+              nationalId: "",
+              phone: "",
+              village: "",
+              subdistrict: "",
+              children: "",
+              beneficiaryId: "",
+            });
+          }
+
+          setColumns(detectedColumns);
+          const rowsWithId = json.map((row, index) => ({
+            ...row,
+            _internalId: `row_${Date.now()}_${index}`,
+          }));
+          rawRowsRef.current = rowsWithId;
+          await cacheRawData({ rows: rowsWithId, originalHeaders: detectedColumns });
+          setIsDataCached(true);
+          setFileReadProgress(100);
+        } catch (error: any) {
+          toast({
+            title: "Error processing file",
+            description: error.message,
+            variant: "destructive",
+          });
+          resetAll();
+        }
+      };
+      reader.readAsArrayBuffer(selectedFile);
+    },
+    [resetAll, toast]
+  );
 
   const handleMappingChange = useCallback((field: keyof Mapping, value: string) => {
-    setMapping((m) => ({ ...m, [field]: value }));
+    setMapping((prev) => ({ ...prev, [field]: value }));
+  }, []);
+
+  const fetchSettings = useCallback(async () => {
+    try {
+      const response = await fetch("/api/settings");
+      const data = await response.json();
+      if (data.ok) return data.settings || {};
+    } catch {
+      // ignore
+    }
+    return {};
   }, []);
 
   const startClustering = useCallback(async () => {
@@ -333,32 +408,29 @@ export default function UploadPage() {
       toast({ title: t("upload.toasts.mappingIncomplete"), variant: "destructive" });
       return;
     }
-
     setIsMappingOpen(false);
     setWorkerStatus("processing");
     setProgressInfo({ status: "processing", progress: 1 });
     setTimeInfo({ elapsed: 0 });
     startTimeRef.current = Date.now();
 
-    let settings = {};
-    try {
-      const res = await fetch("/api/settings");
-      const d = await res.json();
-      if (d.ok) settings = d.settings || {};
-    } catch {}
+    const settings = await fetchSettings();
 
-    clusterWorkerRef.current!.postMessage({
+    clusterWorkerRef.current.postMessage({
       type: "start",
       payload: { mapping, options: settings },
     });
 
     for (let i = 0; i < rawRowsRef.current.length; i += CHUNK_SIZE) {
       const chunk = rawRowsRef.current.slice(i, i + CHUNK_SIZE);
-      clusterWorkerRef.current!.postMessage({ type: "data", payload: { rows: chunk, total: rawRowsRef.current.length } });
-      await new Promise((r) => setTimeout(r, 8));
+      clusterWorkerRef.current.postMessage({
+        type: "data",
+        payload: { rows: chunk, total: rawRowsRef.current.length },
+      });
+      await new Promise((resolve) => setTimeout(resolve, 8));
     }
-    clusterWorkerRef.current!.postMessage({ type: "end" });
-  }, [isMappingComplete, mapping, toast, t]);
+    clusterWorkerRef.current.postMessage({ type: "end" });
+  }, [fetchSettings, isMappingComplete, mapping, t, toast]);
 
   const formatTime = useCallback((seconds: number) => {
     const h = Math.floor(seconds / 3600);
@@ -368,13 +440,13 @@ export default function UploadPage() {
   }, []);
 
   const formattedStatus = useCallback(() => {
-    const s = progressInfo.status || "idle";
-    const statusText = isTranslationLoading ? "" : t(`upload.status.${s}`);
+    const statusKey = progressInfo.status || "idle";
+    const translated = isTranslationLoading ? "" : t(`upload.status.${statusKey}`);
     if (progressInfo.completed !== undefined && progressInfo.total) {
-      return `${t("upload.status.label")}: ${statusText} (${progressInfo.completed.toLocaleString()}/${progressInfo.total.toLocaleString()})`;
+      return `${t("upload.status.label")}: ${translated} (${progressInfo.completed.toLocaleString()}/${progressInfo.total.toLocaleString()})`;
     }
-    return `${t("upload.status.label")}: ${statusText}`;
-  }, [progressInfo, isTranslationLoading, t]);
+    return `${t("upload.status.label")}: ${translated}`;
+  }, [isTranslationLoading, progressInfo, t]);
 
   const getButtonText = useCallback(() => {
     if (isTranslationLoading) return <Loader2 className="mr-2 h-4 w-4 animate-spin" />;
@@ -422,22 +494,35 @@ export default function UploadPage() {
                     <>
                       <p className="font-semibold text-primary">{file.name}</p>
                       <p className="text-xs text-muted-foreground">
-                        {rawRowsRef.current.length > 0 ? `${rawRowsRef.current.length} ${t("upload.file.rowsDetected")}` : t("upload.file.reading")}
+                        {rawRowsRef.current.length > 0
+                          ? `${rawRowsRef.current.length} ${t("upload.file.rowsDetected")}`
+                          : t("upload.file.reading")}
                       </p>
                     </>
                   ) : (
                     <>
                       <p className="mb-2 text-sm text-muted-foreground">
-                        <span className="font-semibold">{t("upload.file.clickToUpload")}</span> {t("upload.file.orDragAndDrop")}
+                        <span className="font-semibold">{t("upload.file.clickToUpload")}</span>{" "}
+                        {t("upload.file.orDragAndDrop")}
                       </p>
                       <p className="text-xs text-muted-foreground">{t("upload.file.fileTypes")}</p>
                     </>
                   )}
                 </div>
-                <input id="file-upload" type="file" className="hidden" onChange={handleFile} accept=".xlsx,.xls,.csv,.xlsm,.xlsb" />
+                <input
+                  id="file-upload"
+                  type="file"
+                  className="hidden"
+                  onChange={handleFile}
+                  accept=".xlsx,.xls,.csv,.xlsm,.xlsb"
+                />
               </div>
             </label>
-            {file && (<Button onClick={resetAll} variant="outline">{t("upload.buttons.reset")}</Button>)}
+            {file && (
+              <Button onClick={resetAll} variant="outline">
+                {t("upload.buttons.reset")}
+              </Button>
+            )}
           </div>
           {file && fileReadProgress > 0 && fileReadProgress < 100 && (
             <div className="mt-4">
@@ -458,7 +543,10 @@ export default function UploadPage() {
                   <CardDescription>{isTranslationLoading ? <Skeleton className="h-5 w-64 mt-1" /> : t("upload.steps.2.description")}</CardDescription>
                 </div>
                 <CollapsibleTrigger asChild>
-                  <Button variant="ghost" size="sm"><ChevronsUpDown className="h-4 w-4" /><span className="sr-only">Toggle</span></Button>
+                  <Button variant="ghost" size="sm">
+                    <ChevronsUpDown className="h-4 w-4" />
+                    <span className="sr-only">Toggle</span>
+                  </Button>
                 </CollapsibleTrigger>
               </div>
             </CardHeader>
@@ -468,20 +556,36 @@ export default function UploadPage() {
                   <Card key={field}>
                     <CardHeader className="p-4 flex flex-row items-center justify-between">
                       <div className="flex items-center gap-2">
-                        {mapping[field as keyof Mapping] ? <CheckCircle className="h-5 w-5 text-green-500" /> : <XCircle className="h-5 w-5 text-red-500" />}
+                        {mapping[field as keyof Mapping] ? (
+                          <CheckCircle className="h-5 w-5 text-green-500" />
+                        ) : (
+                          <XCircle className="h-5 w-5 text-red-500" />
+                        )}
                         <Label htmlFor={String(field)} className="capitalize font-semibold text-base">
                           {t(`upload.mappingFields.${String(field)}`)}
-                          {REQUIRED_MAPPING_FIELDS.includes(field as any) && <span className="text-destructive">*</span>}
+                          {REQUIRED_MAPPING_FIELDS.includes(field as any) && (
+                            <span className="text-destructive">*</span>
+                          )}
                         </Label>
                       </div>
                     </CardHeader>
                     <CardContent className="p-0">
                       <ScrollArea className="h-48 border-t">
-                        <RadioGroup value={mapping[field as keyof Mapping]} onValueChange={(v) => handleMappingChange(field as keyof Mapping, v)} className="p-4 grid grid-cols-2 gap-2">
+                        <RadioGroup
+                          value={mapping[field as keyof Mapping]}
+                          onValueChange={(value) => handleMappingChange(field as keyof Mapping, value)}
+                          className="p-4 grid grid-cols-2 gap-2"
+                        >
                           {columns.map((col) => (
                             <div key={col} className="flex items-center space-x-2">
                               <RadioGroupItem value={col} id={`${field}-${col}`} />
-                              <Label htmlFor={`${field}-${col}`} className="truncate font-normal" title={col}>{col}</Label>
+                              <Label
+                                htmlFor={`${field}-${col}`}
+                                className="truncate font-normal"
+                                title={col}
+                              >
+                                {col}
+                              </Label>
                             </div>
                           ))}
                         </RadioGroup>
@@ -503,27 +607,48 @@ export default function UploadPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              <Button onClick={startClustering} disabled={!isMappingComplete || !isDataCached || (workerStatus !== "idle" && workerStatus !== "done" && workerStatus !== "error")}>
-                {(workerStatus !== "idle" && workerStatus !== "done" && workerStatus !== "error") ? (<Loader2 className="mr-2 h-4 w-4 animate-spin" />) : null}
+              <Button
+                onClick={startClustering}
+                disabled={
+                  !isMappingComplete ||
+                  !isDataCached ||
+                  !(workerStatus === "idle" || workerStatus === "done" || workerStatus === "error")
+                }
+              >
+                {workerStatus !== "idle" &&
+                workerStatus !== "done" &&
+                workerStatus !== "error" ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : null}
                 {getButtonText()}
               </Button>
 
-              {(workerStatus !== "idle" && workerStatus !== "done" && workerStatus !== "error") && (
-                <div className="space-y-2 mt-4">
-                  <div className="flex justify-between items-center text-sm font-medium text-muted-foreground"><span>{formattedStatus()}</span></div>
-                  <div className="relative h-4 w-full overflow-hidden rounded-full bg-secondary">
-                    <Progress value={progressInfo.progress} className="absolute h-full w-full" />
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <span className="text-xs font-medium text-primary-foreground mix-blend-difference">{Math.round(progressInfo.progress)}%</span>
+              {workerStatus !== "idle" &&
+                workerStatus !== "done" &&
+                workerStatus !== "error" && (
+                  <div className="space-y-2 mt-4">
+                    <div className="flex justify-between items-center text-sm font-medium text-muted-foreground">
+                      <span>{formattedStatus()}</span>
+                    </div>
+                    <div className="relative h-4 w-full overflow-hidden rounded-full bg-secondary">
+                      <Progress value={progressInfo.progress} className="absolute h-full w-full" />
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <span className="text-xs font-medium text-primary-foreground mix-blend-difference">
+                          {Math.round(progressInfo.progress)}%
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-end gap-2 text-sm text-muted-foreground">
+                      <Clock className="h-4 w-4" />
+                      <span>{formatTime(timeInfo.elapsed)}</span>
+                      {timeInfo.remaining !== undefined && (
+                        <span className="text-xs">
+                          (est. {formatTime(timeInfo.remaining)} left)
+                        </span>
+                      )}
                     </div>
                   </div>
-                  <div className="flex items-center justify-end gap-2 text-sm text-muted-foreground">
-                    <Clock className="h-4 w-4" />
-                    <span>{formatTime(timeInfo.elapsed)}</span>
-                    {timeInfo.remaining !== undefined && <span className="text-xs">(est. {formatTime(timeInfo.remaining)} left)</span>}
-                  </div>
-                </div>
-              )}
+                )}
             </div>
           </CardContent>
         </Card>
@@ -533,17 +658,39 @@ export default function UploadPage() {
         <Card>
           <CardHeader>
             <CardTitle>{isTranslationLoading ? <Skeleton className="h-8 w-48" /> : t("upload.steps.4.title")}</CardTitle>
-            <CardDescription>{isTranslationLoading ? <Skeleton className="h-5 w-64 mt-1" /> : t("upload.steps.4.description")}</CardDescription>
+            <CardDescription>
+              {isTranslationLoading ? <Skeleton className="h-5 w-64 mt-1" /> : t("upload.steps.4.description")}
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-4">
-              <SummaryCard icon={<Users className="h-4 w-4 text-muted-foreground" />} title={t("upload.results.totalRecords")} value={rawRowsRef.current.length} />
-              <SummaryCard icon={<Group className="h-4 w-4 text-muted-foreground" />} title={t("upload.results.clusteredRecords")} value={clusters.flatMap((c) => (c as any).records).length} />
-              <SummaryCard icon={<Unlink className="h-4 w-4 text-muted-foreground" />} title={t("upload.results.unclusteredRecords")} value={rawRowsRef.current.length - clusters.flatMap((c) => (c as any).records).length} />
-              <SummaryCard icon={<BoxSelect className="h-4 w-4 text-muted-foreground" />} title={t("upload.results.clusterCount")} value={clusters.length} />
-              <SummaryCard icon={<Sigma className="h-4 w-4 text-muted-foreground" />} title={t("upload.results.avgClusterSize")} value={clusters.length > 0 ? (clusters.flatMap((c) => (c as any).records).length / clusters.length).toFixed(2) : 0} />
+              <SummaryCard
+                icon={<Users className="h-4 w-4 text-muted-foreground" />}
+                title={t("upload.results.totalRecords")}
+                value={rawRowsRef.current.length}
+              />
+              <SummaryCard
+                icon={<Group className="h-4 w-4 text-muted-foreground" />}
+                title={t("upload.results.clusteredRecords")}
+                value={clusters.flatMap((c) => c.records).length}
+              />
+              <SummaryCard
+                icon={<Unlink className="h-4 w-4 text-muted-foreground" />}
+                title={t("upload.results.unclusteredRecords")}
+                value={rawRowsRef.current.length - clusters.flatMap((c) => c.records).length}
+              />
+              <SummaryCard
+                icon={<BoxSelect className="h-4 w-4 text-muted-foreground" />}
+                title={t("upload.results.clusterCount")}
+                value={clusters.length}
+              />
+              <SummaryCard
+                icon={<Sigma className="h-4 w-4 text-muted-foreground" />}
+                title={t("upload.results.avgClusterSize")}
+                value={clusters.length > 0 ? (clusters.flatMap((c) => c.records).length / clusters.length).toFixed(2) : 0}
+              />
             </div>
-            <Button onClick={() => router.push("/review")} disabled={clusters.length === 0}>
+            <Button onClick={() => router.push("/review")} disabled={!clusters.length}>
               {t("upload.buttons.goToReview")} <ChevronRight className="ml-2 h-4 w-4" />
             </Button>
           </CardContent>
@@ -552,5 +699,3 @@ export default function UploadPage() {
     </div>
   );
 }
-
-  
