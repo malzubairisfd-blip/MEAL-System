@@ -27,11 +27,19 @@ export function getDecisionAndNote(confidenceScore: number) {
   return { decision, expertNote };
 }
 
+type ClusterSummaryData = {
+  reasons?: string[];
+  avgWomanNameScore?: number;
+  avgHusbandNameScore?: number;
+  avgFinalScore?: number;
+  confidenceScore?: number;
+}
+
 export function generateArabicClusterSummary(
-  cluster: any,
+  summaryData: ClusterSummaryData,
   rows: any[]
 ) {
-  const reasons: string[] = cluster.reasons || [];
+  const reasons: string[] = summaryData.reasons || [];
   const size = rows.length;
 
   const explanations: string[] = [];
@@ -57,10 +65,10 @@ export function generateArabicClusterSummary(
     );
   }
 
-  const avgWoman = Number.isFinite(cluster.avgWomanNameScore) ? Math.round(cluster.avgWomanNameScore * 100) : 0;
-  const avgHusband = Number.isFinite(cluster.avgHusbandNameScore) ? Math.round(cluster.avgHusbandNameScore * 100) : 0;
-  const avgFinal = Number.isFinite(cluster.avgFinalScore) ? Math.round(cluster.avgFinalScore * 100) : 0;
-  const confidenceScore = Number.isFinite(cluster.confidenceScore) ? Math.round(cluster.confidenceScore) : 0;
+  const avgWoman = Number.isFinite(summaryData.avgWomanNameScore) ? Math.round(summaryData.avgWomanNameScore! * 100) : 0;
+  const avgHusband = Number.isFinite(summaryData.avgHusbandNameScore) ? Math.round(summaryData.avgHusbandNameScore! * 100) : 0;
+  const avgFinal = Number.isFinite(summaryData.avgFinalScore) ? Math.round(summaryData.avgFinalScore! * 100) : 0;
+  const confidenceScore = Number.isFinite(summaryData.confidenceScore) ? Math.round(summaryData.confidenceScore!) : 0;
 
   const { decision, expertNote } = getDecisionAndNote(confidenceScore);
 

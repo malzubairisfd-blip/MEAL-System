@@ -236,7 +236,13 @@ export default function ReviewPage() {
 
 function ClusterCard({ cluster, clusterNumber, onInspect }: { cluster: Cluster, clusterNumber: number, onInspect: () => void }) {
   const { t } = useTranslation();
-  const summaryHtml = generateArabicClusterSummary(cluster, cluster.records);
+  const summaryHtml = generateArabicClusterSummary({
+      reasons: cluster.reasons,
+      avgWomanNameScore: cluster.avgWomanNameScore,
+      avgHusbandNameScore: cluster.avgHusbandNameScore,
+      avgFinalScore: cluster.avgFinalScore,
+      confidenceScore: cluster.confidenceScore
+  }, cluster.records);
   const confidenceScore = cluster.confidenceScore;
 
   const getScoreColor = (score?: number | null) => {
