@@ -179,7 +179,7 @@ const applyAdditionalRules = (a: PreprocessedRow, b: PreprocessedRow, opts: Work
     if (s93(F1, F2) && s93(Fa1, Fa2) && s93(G1, G2) && jw(L1, L2) >= 0.85) {
       if (jw(HF1, HF2) < 0.7) return { reason: "WOMAN_LINEAGE_MATCH", boost: 0.18 };
     }
-    if (A.length === 4 && B.length === 5 || A.length === 5 && B.length === 4) {
+    if ((A.length === 4 && B.length === 5) || (A.length === 5 && B.length === 4)) {
       if (s93(F1, F2) && s93(Fa1, Fa2) && s93(G1, G2) && s93(L1 || "", L2 || "")) {
         if (jw(HF1, HF2) < 0.7) return { reason: "WOMAN_LINEAGE_MATCH", boost: 0.17 };
       }
@@ -329,7 +329,7 @@ const preprocessRow = (raw: any): PreprocessedRow => {
   const subdistrict_normalized = raw.subdistrict_normalized || normalizeArabicRaw(row.subdistrict);
   const children_normalized =
     raw.children_normalized ||
-    row.children.map((child: any) => normalizeArabicRaw(child));
+    (row.children || []).map((child: any) => normalizeArabicRaw(child));
 
   return {
     ...row,
@@ -344,65 +344,80 @@ const preprocessRow = (raw: any): PreprocessedRow => {
 };
 
 const pairwiseScore = (rowA: PreprocessedRow, rowB: PreprocessedRow, opts: WorkerOptions) => {
-    const o = opts || defaultOptions;
-    
-    // Exact ID match short-circuit
-    if (rowA.nationalId && rowB.nationalId && rowA.nationalId === rowB.nationalId) {
-        return { score: 0.99, breakdown: { reason: "EXACT_ID" }, reasons: ["EXACT_ID"] };
-    }
+    const o = opts;
+    const weights = o.finalScoreWeights;
 
-    // Polygamy Check
-    if (o.rules.enablePolygamyRules) {
-        const husbandJW = jaroWinkler(rowA.husbandName_normalized, rowB.husbandName_normalized);
-        if (husbandJW >= 0.95) {
-            const aFather = rowA.parts[1] || "";
-            const bFather = rowB.parts[1] || "";
-            const aGrand = rowA.parts[2] || "";
-            const bGrand = rowB.parts[2] || "";
-            if (jaroWinkler(aFather, bFather) >= 0.93 && jaroWinkler(aGrand, bGrand) >= 0.90) {
-                return { score: 0.97, breakdown: { reason: "POLYGAMY_STRONG" }, reasons: ["POLYGAMY_PATTERN"] };
-            }
-        }
-    }
-    
-    // Additional rules
     const ruleResult = applyAdditionalRules(rowA, rowB, o);
     if (ruleResult) {
-        return { score: Math.min(1, ruleResult.score), breakdown: { reason: "ADDITIONAL_RULE", boostedTo: ruleResult.score }, reasons: ruleResult.reasons };
+        return {
+          score: ruleResult.score,
+          reasons: ruleResult.reasons,
+          breakdown: { reason: "RULE_BASED", boostedTo: ruleResult.score }
+        };
     }
 
-    // Weighted Scoring
-    const weights = o.finalScoreWeights;
+    if (rowA.nationalId && rowB.nationalId && rowA.nationalId === rowB.nationalId) {
+       return { score: 0.99, reasons: ["EXACT_ID"], breakdown: { reason: "EXACT_ID" } };
+    }
+
+    const polygamyMatch =
+      o.rules.enablePolygamyRules &&
+      jaroWinkler(rowA.husbandName_normalized, rowB.husbandName_normalized) >= 0.95 &&
+      jaroWinkler(rowA.parts[1] || "", rowB.parts[1] || "") >= 0.93 &&
+      jaroWinkler(rowA.parts[2] || "", rowB.parts[2] || "") >= 0.9;
+
+    if (polygamyMatch) {
+       return { score: 0.97, reasons: ["POLYGAMY_PATTERN"], breakdown: { reason: "POLYGAMY_PATTERN" } };
+    }
+    
     const A = rowA.parts;
     const B = rowB.parts;
-
     const firstNameScore = jaroWinkler(A[0] || "", B[0] || "");
     const familyNameScore = jaroWinkler(A.slice(1).join(" "), B.slice(1).join(" "));
     const advancedNameScore = (() => {
-        const root = (s: string) => (splitParts(s).map((token) => token.slice(0, 3)).join(" "));
-        const rootA = root(rowA.womanName_normalized);
-        const rootB = root(rowB.womanName_normalized);
-        if (!rootA || !rootB) return 0;
-        return Math.min(0.5, jaroWinkler(rootA, rootB));
+      const root = (s: string) =>
+        (splitParts(s).map((token) => token.slice(0, 3)).join(" "));
+      const rootA = root(rowA.womanName_normalized);
+      const rootB = root(rowB.womanName_normalized);
+      if (!rootA || !rootB) return 0;
+      return Math.min(0.5, jaroWinkler(rootA, rootB));
     })();
     const tokenReorderScore = nameOrderFreeScore(A, B);
     const husbandScore = Math.max(
-        jaroWinkler(rowA.husbandName_normalized, rowB.husbandName_normalized),
-        nameOrderFreeScore(rowA.husbandParts, rowB.husbandParts)
+      jaroWinkler(rowA.husbandName_normalized, rowB.husbandName_normalized),
+      nameOrderFreeScore(rowA.husbandParts, rowB.husbandParts)
     );
-    const phoneScore = rowA.phone && rowB.phone ? (rowA.phone === rowB.phone ? 1 : (rowA.phone.slice(-6) === rowB.phone.slice(-6) ? 0.85 : (rowA.phone.slice(-4) === rowB.phone.slice(-4) ? 0.6 : 0))) : 0;
-    const idScore = rowA.nationalId && rowB.nationalId ? (rowA.nationalId === rowB.nationalId ? 1 : (rowA.nationalId.slice(-5) === rowB.nationalId.slice(-5) ? 0.75 : 0)) : 0;
+    const phoneScore = rowA.phone && rowB.phone
+      ? rowA.phone === rowB.phone
+        ? 1
+        : rowA.phone.slice(-6) === rowB.phone.slice(-6)
+        ? 0.85
+        : rowA.phone.slice(-4) === rowB.phone.slice(-4)
+        ? 0.6
+        : 0
+      : 0;
+    const idScore = rowA.nationalId && rowB.nationalId
+      ? rowA.nationalId === rowB.nationalId
+        ? 1
+        : rowA.nationalId.slice(-5) === rowB.nationalId.slice(-5)
+        ? 0.75
+        : 0
+      : 0;
     const childrenScore = tokenJaccard(rowA.children_normalized, rowB.children_normalized);
     let locationScore = 0;
     if (rowA.village_normalized && rowB.village_normalized && rowA.village_normalized === rowB.village_normalized) {
-        locationScore += 0.4;
+      locationScore += 0.4;
     }
-    if (rowA.subdistrict_normalized && rowB.subdistrict_normalized && rowA.subdistrict_normalized === rowB.subdistrict_normalized) {
-        locationScore += 0.25;
+    if (
+      rowA.subdistrict_normalized &&
+      rowB.subdistrict_normalized &&
+      rowA.subdistrict_normalized === rowB.subdistrict_normalized
+    ) {
+      locationScore += 0.25;
     }
     locationScore = Math.min(0.5, locationScore);
 
-    const components = [
+    const components: [string, number][] = [
         ["firstNameScore", firstNameScore],
         ["familyNameScore", familyNameScore],
         ["advancedNameScore", advancedNameScore],
@@ -419,8 +434,8 @@ const pairwiseScore = (rowA: PreprocessedRow, rowB: PreprocessedRow, opts: Worke
 
     for (const [key, val] of components) {
         const w = weights[key as keyof typeof weights] || 0;
-        if ((val as number) > 0) {
-            weightedSum += w * (val as number);
+        if (val > 0) {
+            weightedSum += w * val;
             weightSum += w;
         }
     }
@@ -429,12 +444,11 @@ const pairwiseScore = (rowA: PreprocessedRow, rowB: PreprocessedRow, opts: Worke
 
     const strongParts = [firstNameScore, familyNameScore, tokenReorderScore].filter((s) => s >= 0.85).length;
     if (strongParts >= 2) {
-        score = Math.min(1, score + 0.04);
+      score = Math.min(1, score + 0.04);
     }
     
-    // Penalty for very low name scores
     if (firstNameScore < 0.4 && familyNameScore < 0.4) {
-        score *= 0.6;
+      score *= 0.6;
     }
 
     score = Math.max(0, Math.min(1, score));
@@ -443,14 +457,21 @@ const pairwiseScore = (rowA: PreprocessedRow, rowB: PreprocessedRow, opts: Worke
     if (tokenReorderScore > 0.85) reasons.push("TOKEN_REORDER");
 
     return {
-        score,
-        breakdown: {
-            firstNameScore, familyNameScore, advancedNameScore, tokenReorderScore,
-            husbandScore, idScore, phoneScore, childrenScore, locationScore
-        },
-        reasons
+      score,
+      reasons,
+      breakdown: {
+        firstNameScore,
+        familyNameScore,
+        advancedNameScore,
+        tokenReorderScore,
+        husbandScore,
+        idScore,
+        phoneScore,
+        childrenScore,
+        locationScore,
+      }
     };
-};
+}
 
 
 const buildEdges = async (
@@ -462,18 +483,17 @@ const buildEdges = async (
   const n = rows.length;
   if (n <= 1) return { edges: [], finalState: null };
   const totalPairs = (n * (n - 1)) / 2;
-  const edges = resumeState?.edges || [];
+  const edges: { a: number, b: number, score: number, reasons: string[] }[] = resumeState?.edges || [];
   let processed = resumeState?.processed || 0;
   let i = resumeState?.i || 0;
-  let j = resumeState?.j || i + 1;
 
   const progressInterval = 5000;
 
   for (; i < n; i++) {
-    for (let currentJ = j; currentJ < n; currentJ++) {
-      const result = pairwiseScore(rows[i], rows[currentJ], opts);
+    for (let j = i + 1; j < n; j++) {
+      const result = pairwiseScore(rows[i], rows[j], opts);
       if (result.score >= minScore) {
-        edges.push({a: i, b: currentJ, score: result.score, reasons: result.reasons});
+        edges.push({ a: i, b: j, score: result.score, reasons: result.reasons });
       }
       processed++;
       if (processed % progressInterval === 0) {
@@ -487,7 +507,6 @@ const buildEdges = async (
         await yieldToEventLoop();
       }
     }
-    j = i + 2;
   }
 
   postMessage({ type: "progress", status: "edges-built", progress: 50, completed: totalPairs, total: totalPairs });
@@ -577,7 +596,7 @@ const runClustering = async (rows: PreprocessedRow[], edges: any[], opts: Worker
   const finalized = new Set<number>();
   const rootReasons = new Map<number, Set<string>>();
 
-  edges.sort((a,b) => b.score - a.score);
+  edges.sort((a, b) => b.score - a.score);
 
   for (let idx = 0; idx < edges.length; idx++) {
     const edge = edges[idx];
@@ -767,6 +786,3 @@ const splitCluster = (rowsSubset: PreprocessedRow[], minInternal: number, opts: 
 
   return result;
 };
-
-computeFinalScore is not defined
-computePairScore is not defined
