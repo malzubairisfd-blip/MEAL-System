@@ -322,6 +322,16 @@ export default function UploadPage() {
           const sheet = workbook.Sheets[workbook.SheetNames[0]];
           const json = XLSX.utils.sheet_to_json<any>(sheet, { defval: "" });
           const detectedColumns = Object.keys(json[0] || {});
+          
+          const rowsWithId = json.map((row, index) => ({
+            ...row,
+            _internalId: `row_${Date.now()}_${index}`,
+          }));
+          
+          rawRowsRef.current = rowsWithId;
+          await cacheRawData({ rows: rowsWithId, originalHeaders: detectedColumns });
+          setIsDataCached(true);
+
           const storageKey = `${LOCAL_STORAGE_KEY_PREFIX}${detectedColumns.join(",")}`;
           const saved = localStorage.getItem(storageKey);
           if (saved) {
@@ -333,38 +343,11 @@ export default function UploadPage() {
               });
               notifiedAboutSaveRef.current = true;
             } catch {
-              setMapping({
-                womanName: "",
-                husbandName: "",
-                nationalId: "",
-                phone: "",
-                village: "",
-                subdistrict: "",
-                children: "",
-                beneficiaryId: "",
-              });
+              // Fallback to default if parsing fails
             }
-          } else {
-            setMapping({
-              womanName: "",
-              husbandName: "",
-              nationalId: "",
-              phone: "",
-              village: "",
-              subdistrict: "",
-              children: "",
-              beneficiaryId: "",
-            });
           }
-
+          
           setColumns(detectedColumns);
-          const rowsWithId = json.map((row, index) => ({
-            ...row,
-            _internalId: `row_${Date.now()}_${index}`,
-          }));
-          rawRowsRef.current = rowsWithId;
-          await cacheRawData({ rows: rowsWithId, originalHeaders: detectedColumns });
-          setIsDataCached(true);
           setFileReadProgress(100);
         } catch (error: any) {
           toast({
