@@ -1,6 +1,4 @@
 // workers/cluster.worker.ts
-import { DSU } from "@/lib/dsu";
-
 const normalizeArabicRaw = (value: any) => {
   if (!value) return "";
   try {
@@ -331,7 +329,7 @@ const preprocessRow = (raw: any): PreprocessedRow => {
   const subdistrict_normalized = raw.subdistrict_normalized || normalizeArabicRaw(row.subdistrict);
   const children_normalized =
     raw.children_normalized ||
-    row.children.map((child: any) => normalizeArabicRaw(child));
+    row.children.map((child:any) => normalizeArabicRaw(child));
 
   return {
     ...row,
@@ -345,118 +343,96 @@ const preprocessRow = (raw: any): PreprocessedRow => {
   };
 };
 
-const pairwiseScore = (a: PreprocessedRow, b: PreprocessedRow, opts: WorkerOptions) => {
-  const o = opts;
-  const breakdown = {
-    firstNameScore: 0,
-    familyNameScore: 0,
-    advancedNameScore: 0,
-    tokenReorderScore: 0,
-    husbandScore: 0,
-    idScore: 0,
-    phoneScore: 0,
-    childrenScore: 0,
-    locationScore: 0,
-  };
+const pairwiseScore = (aRaw: any, bRaw: any, opts: any) => {
+    const o = { ...defaultOptions, ...opts };
+    o.finalScoreWeights = { ...defaultOptions.finalScoreWeights, ...(opts.finalScoreWeights || {}) };
+    o.thresholds = { ...defaultOptions.thresholds, ...(opts.thresholds || {}) };
+    o.rules = { ...defaultOptions.rules, ...(opts.rules || {}) };
 
-  const ruleResult = applyAdditionalRules(a, b, o);
-  if (ruleResult) {
-    return { score: ruleResult.score, breakdown, reasons: ruleResult.reasons };
-  }
+    const a = preprocessRow(aRaw);
+    const b = preprocessRow(bRaw);
 
-  if (a.nationalId && b.nationalId && a.nationalId === b.nationalId) {
-    return { score: 0.99, breakdown, reasons: ["EXACT_ID"] };
-  }
-  const husbandJW = jaroWinkler(a.husbandName_normalized, b.husbandName_normalized);
-  const aFather = a.parts[1] || "";
-  const bFather = b.parts[1] || "";
-  const aGrand = a.parts[2] || "";
-  const bGrand = b.parts[2] || "";
-  if (o.rules.enablePolygamyRules && husbandJW >= 0.95 && jaroWinkler(aFather, bFather) >= 0.93 && jaroWinkler(aGrand, bGrand) >= 0.9) {
-    return { score: 0.97, breakdown, reasons: ["POLYGAMY_PATTERN"] };
-  }
-
-  const firstNameScore = jaroWinkler(a.parts[0] || "", b.parts[0] || "");
-  const familyNameScore = jaroWinkler(a.parts.slice(1).join(" "), b.parts.slice(1).join(" "));
-  const advancedNameScore = (() => {
-    const root = (s: string) => splitParts(s).map((token) => token.slice(0, 3)).join(" ");
-    const rA = root(a.womanName_normalized);
-    const rB = root(b.womanName_normalized);
-    if (!rA || !rB) return 0;
-    return Math.min(0.5, jaroWinkler(rA, rB));
-  })();
-  const tokenReorderScore = nameOrderFreeScore(a.parts, b.parts);
-  const husbandScore = Math.max(
-    jaroWinkler(a.husbandName_normalized, b.husbandName_normalized),
-    nameOrderFreeScore(a.husbandParts, b.husbandParts)
-  );
-  const phoneScoreVal = a.phone && b.phone
-    ? a.phone === b.phone ? 1 : a.phone.slice(-6) === b.phone.slice(-6) ? 0.85 : a.phone.slice(-4) === b.phone.slice(-4) ? 0.6 : 0
-    : 0;
-  const idScore = a.nationalId && b.nationalId
-    ? a.nationalId === b.nationalId ? 1 : a.nationalId.slice(-5) === b.nationalId.slice(-5) ? 0.75 : 0
-    : 0;
-  const childrenScore = tokenJaccard(a.children_normalized, b.children_normalized);
-  let locationScore = 0;
-  if (a.village_normalized && b.village_normalized && a.village_normalized === b.village_normalized) {
-    locationScore += 0.4;
-  }
-  if (a.subdistrict_normalized && b.subdistrict_normalized && a.subdistrict_normalized === b.subdistrict_normalized) {
-    locationScore += 0.25;
-  }
-  locationScore = Math.min(0.5, locationScore);
-
-  breakdown.firstNameScore = firstNameScore;
-  breakdown.familyNameScore = familyNameScore;
-  breakdown.advancedNameScore = advancedNameScore;
-  breakdown.tokenReorderScore = tokenReorderScore;
-  breakdown.husbandScore = husbandScore;
-  breakdown.idScore = idScore;
-  breakdown.phoneScore = phoneScoreVal;
-  breakdown.childrenScore = childrenScore;
-  breakdown.locationScore = locationScore;
-
-  const W = o.finalScoreWeights;
-  const components: [string, number][] = [
-    ["firstNameScore", firstNameScore],
-    ["familyNameScore", familyNameScore],
-    ["advancedNameScore", advancedNameScore],
-    ["tokenReorderScore", tokenReorderScore],
-    ["husbandScore", husbandScore],
-    ["idScore", idScore],
-    ["phoneScore", phoneScoreVal],
-    ["childrenScore", childrenScore],
-    ["locationScore", locationScore]
-  ];
-
-  let weightedSum = 0;
-  let weightSum = 0;
-
-  for (const [key, val] of components) {
-    const w = W[key] || 0;
-    if (val > 0) {
-      weightedSum += w * val;
-      weightSum += w;
+    const ruleResult = applyAdditionalRules(a, b, o);
+    if (ruleResult) {
+        return { score: ruleResult.score, reasons: ruleResult.reasons };
     }
-  }
 
-  let score = weightSum > 0 ? weightedSum / weightSum : 0;
+    if (a.nationalId && b.nationalId && a.nationalId === b.nationalId) {
+        return { score: 0.99, reasons: ["EXACT_ID"] };
+    }
 
-  const strongParts = [firstNameScore, familyNameScore, tokenReorderScore].filter((v) => v >= 0.85).length;
-  if (strongParts >= 2) score = Math.min(1, score + 0.04);
-  
-  if (firstNameScore < 0.4 && familyNameScore < 0.4) {
-    score *= 0.6;
-  }
-  
-  score = Math.max(0, Math.min(1, score));
+    const husbandJW = jaroWinkler(a.husbandName_normalized, b.husbandName_normalized);
+    const aFather = a.parts[1] || "";
+    const bFather = b.parts[1] || "";
+    const aGrand = a.parts[2] || "";
+    const bGrand = b.parts[2] || "";
+    if (o.rules.enablePolygamyRules && husbandJW >= 0.95 && jaroWinkler(aFather, bFather) >= 0.93 && jaroWinkler(aGrand, bGrand) >= 0.90) {
+        return { score: 0.97, reasons: ["POLYGAMY_PATTERN"] };
+    }
 
-  const reasons: string[] = [];
-  if (tokenReorderScore > 0.85 && !ruleResult) reasons.push("TOKEN_REORDER");
+    const firstNameScore = jaroWinkler(a.parts[0] || "", b.parts[0] || "");
+    const familyNameScore = jaroWinkler(a.parts.slice(1).join(" "), b.parts.slice(1).join(" "));
+    const advancedNameScore = (() => {
+        const root = (s: string) => splitParts(s).map((t) => t.slice(0, 3)).join(" ");
+        const rA = root(a.womanName_normalized);
+        const rB = root(b.womanName_normalized);
+        if (!rA || !rB) return 0;
+        return Math.min(0.5, jaroWinkler(rA, rB));
+    })();
+    const tokenReorderScore = nameOrderFreeScore(a.parts, b.parts);
+    const husbandScore = Math.max(
+        jaroWinkler(a.husbandName_normalized, b.husbandName_normalized),
+        nameOrderFreeScore(a.husbandParts, b.husbandParts)
+    );
+    const phoneScoreVal = a.phone && b.phone ? (a.phone === b.phone ? 1 : a.phone.slice(-6) === b.phone.slice(-6) ? 0.85 : a.phone.slice(-4) === b.phone.slice(-4) ? 0.6 : 0) : 0;
+    const idScore = a.nationalId && b.nationalId ? (a.nationalId === b.nationalId ? 1 : a.nationalId.slice(-5) === b.nationalId.slice(-5) ? 0.75 : 0) : 0;
+    const childrenScore = tokenJaccard(a.children_normalized, b.children_normalized);
+    let locationScore = 0;
+    if (a.village_normalized && b.village_normalized && a.village_normalized === b.village_normalized) locationScore += 0.4;
+    if (a.subdistrict_normalized && b.subdistrict_normalized && a.subdistrict_normalized === b.subdistrict_normalized) locationScore += 0.25;
+    locationScore = Math.min(0.5, locationScore);
 
-  return { score, breakdown, reasons };
-};
+    const W = o.finalScoreWeights;
+    const components: [string, number][] = [
+        ["firstNameScore", firstNameScore],
+        ["familyNameScore", familyNameScore],
+        ["advancedNameScore", advancedNameScore],
+        ["tokenReorderScore", tokenReorderScore],
+        ["husbandScore", husbandScore],
+        ["idScore", idScore],
+        ["phoneScore", phoneScoreVal],
+        ["childrenScore", childrenScore],
+        ["locationScore", locationScore]
+    ];
 
+    let weightedSum = 0;
+    let weightSum = 0;
+
+    for (const [key, val] of components) {
+        const w = W[key] || 0;
+        if (val > 0) {
+            weightedSum += w * val;
+            weightSum += w;
+        }
+    }
+
+    let score = weightSum > 0 ? weightedSum / weightSum : 0;
+    
+    if (firstNameScore < 0.4 && familyNameScore < 0.4) {
+      score *= 0.6;
+    }
+
+    const strongParts = [firstNameScore, familyNameScore, tokenReorderScore].filter(v => v >= 0.85).length;
+    if (strongParts >= 2) score = Math.min(1, score + 0.04);
+    score = Math.max(0, Math.min(1, score));
+
+    const reasons: string[] = [];
+    if (tokenReorderScore > 0.85 && !ruleResult) {
+        reasons.push("TOKEN_REORDER");
+    }
+
+    return { score, reasons };
+}
 
 const buildEdges = async (
   rows: PreprocessedRow[],
@@ -478,7 +454,7 @@ const buildEdges = async (
     for (; j < n; j++) {
       const result = pairwiseScore(rows[i], rows[j], opts);
       if (result.score >= minScore) {
-        edges.push({a:i, b: j, score: result.score, reasons: result.reasons});
+        edges.push({a: i, b: j, score: result.score, reasons: result.reasons});
       }
       processed++;
       if (processed % progressInterval === 0) {
@@ -590,24 +566,16 @@ self.onmessage = (event) => {
 };
 
 const runClustering = async (rows: PreprocessedRow[], edges: any[], opts: WorkerOptions) => {
-  const uf = new DSU();
-  rows.forEach((row, index) => uf.make(String(index)));
-  
+  const uf = new UF(rows.length);
   const finalClusters: any[] = [];
-  const finalized = new Set<string>();
-  const rootReasons = new Map<string, Set<string>>();
-
-  edges.sort((a,b) => b.score - a.score);
+  const finalized = new Set<number>();
+  const rootReasons = new Map<number, Set<string>>();
 
   for (let idx = 0; idx < edges.length; idx++) {
     const edge = edges[idx];
-    const aStr = String(edge.a);
-    const bStr = String(edge.b);
-    
-    if (finalized.has(aStr) || finalized.has(bStr)) continue;
-
-    const rootA = uf.find(aStr);
-    const rootB = uf.find(bStr);
+    if (finalized.has(edge.a) || finalized.has(edge.b)) continue;
+    const rootA = uf.find(edge.a);
+    const rootB = uf.find(edge.b);
 
     const reasonsA = rootReasons.get(rootA) || new Set();
     const reasonsB = rootReasons.get(rootB) || new Set();
@@ -622,15 +590,14 @@ const runClustering = async (rows: PreprocessedRow[], edges: any[], opts: Worker
       continue;
     }
 
-    if ((uf.size.get(rootA) ?? 0) + (uf.size.get(rootB) ?? 0) <= 4) {
-      uf.union(rootA, rootB);
-      const mergedRoot = uf.find(rootA);
+    if (uf.size[rootA] + uf.size[rootB] <= 4) {
+      const mergedRoot = uf.merge(rootA, rootB);
       const aggregatedReasons = new Set([...(rootReasons.get(rootA) || []), ...(rootReasons.get(rootB) || [])]);
       rootReasons.set(mergedRoot, aggregatedReasons);
       continue;
     }
 
-    const combinedIndices = Array.from(new Set([...(uf.members.get(rootA) || []), ...(uf.members.get(rootB) || [])])).map(Number);
+    const combinedIndices = Array.from(new Set([...uf.rootMembers(rootA), ...uf.rootMembers(rootB)]));
     const combinedRows = combinedIndices.map((index) => rows[index]);
     const subsetClusters = splitCluster(combinedRows, opts.thresholds.minInternal, opts);
 
@@ -645,7 +612,7 @@ const runClustering = async (rows: PreprocessedRow[], edges: any[], opts: Worker
       finalClusters.push(cluster);
       cluster.records.forEach((record: any) => {
         const originalIndex = rows.findIndex((row) => row._internalId === record._internalId);
-        if (originalIndex >= 0) finalized.add(String(originalIndex));
+        if (originalIndex >= 0) finalized.add(originalIndex);
       });
     });
 
@@ -661,19 +628,18 @@ const runClustering = async (rows: PreprocessedRow[], edges: any[], opts: Worker
     }
   }
 
-  const leftovers = new Map<string, string[]>();
-  rows.forEach((row, index) => {
-    const iStr = String(index);
-    if(finalized.has(iStr)) return;
-    const root = uf.find(iStr);
+  const leftovers = new Map<number, number[]>();
+  for (let i = 0; i < rows.length; i++) {
+    if (finalized.has(i)) continue;
+    const root = uf.find(i);
     const arr = leftovers.get(root) || [];
-    arr.push(iStr);
+    arr.push(i);
     leftovers.set(root, arr);
-  });
+  }
 
   leftovers.forEach((indices, root) => {
     if (indices.length <= 1) return;
-    const subset = indices.map((index) => rows[Number(index)]);
+    const subset = indices.map((index) => rows[index]);
     const parts = splitCluster(subset, opts.thresholds.minInternal, opts);
     parts.forEach((cluster) => {
       if (cluster.records.length <= 1) return;
@@ -703,6 +669,45 @@ const runClustering = async (rows: PreprocessedRow[], edges: any[], opts: Worker
   };
 };
 
+class UF {
+  parent: number[];
+  size: number[];
+  members: Map<number, Set<number>>;
+
+  constructor(n: number) {
+    this.parent = Array.from({ length: n }, (_, index) => index);
+    this.size = Array(n).fill(1);
+    this.members = new Map();
+    for (let i = 0; i < n; i++) {
+      this.members.set(i, new Set([i]));
+    }
+  }
+
+  find(x: number) {
+    if (this.parent[x] === x) return x;
+    this.parent[x] = this.find(this.parent[x]);
+    return this.parent[x];
+  }
+
+  merge(a: number, b: number) {
+    a = this.find(a);
+    b = this.find(b);
+    if (a === b) return a;
+    if (this.size[a] < this.size[b]) [a, b] = [b, a];
+    this.parent[b] = a;
+    this.size[a] += this.size[b];
+    const membersA = this.members.get(a)!;
+    const membersB = this.members.get(b)!;
+    membersB.forEach((member) => membersA.add(member));
+    this.members.delete(b);
+    return a;
+  }
+
+  rootMembers(x: number) {
+    return Array.from(this.members.get(this.find(x)) || []);
+  }
+}
+
 const splitCluster = (rowsSubset: PreprocessedRow[], minInternal: number, opts: WorkerOptions) => {
   if (!rowsSubset.length) return [];
   const localEdges: any[] = [];
@@ -721,23 +726,19 @@ const splitCluster = (rowsSubset: PreprocessedRow[], minInternal: number, opts: 
   }
 
   localEdges.sort((a, b) => b.score - a.score);
-  const uf = new DSU();
-  rowsSubset.forEach((r, i) => uf.make(String(i)));
-  
+  const uf = new UF(rowsSubset.length);
   localEdges.forEach((edge) => {
-    const aStr = String(edge.a);
-    const bStr = String(edge.b);
-    const ra = uf.find(aStr);
-    const rb = uf.find(bStr);
+    const ra = uf.find(edge.a);
+    const rb = uf.find(edge.b);
     if (ra === rb) return;
-    if ((uf.size.get(ra) ?? 0) + (uf.size.get(rb) ?? 0) <= 4) {
-      uf.union(ra, rb);
+    if (uf.size[ra] + uf.size[rb] <= 4) {
+      uf.merge(ra, rb);
     }
   });
 
-  const groups = new Map<string, number[]>();
+  const groups = new Map<number, number[]>();
   for (let i = 0; i < rowsSubset.length; i++) {
-    const root = uf.find(String(i));
+    const root = uf.find(i);
     const arr = groups.get(root) || [];
     arr.push(i);
     groups.set(root, arr);
