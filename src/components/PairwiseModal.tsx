@@ -124,7 +124,9 @@ export function PairwiseModal({ cluster, isOpen, onClose }: PairwiseModalProps) 
                         {Object.entries(p.breakdown).map(([key, value]) => (
                           <TableRow key={key}>
                             <TableCell className="capitalize font-medium">{key.replace('Score', ' Score')}</TableCell>
-                            <TableCell className="text-right font-mono">{(value as number).toFixed(4)}</TableCell>
+                            <TableCell className="text-right font-mono">
+                              {typeof value === 'number' ? value.toFixed(4) : String(value)}
+                            </TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
