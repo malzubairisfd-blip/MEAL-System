@@ -185,16 +185,20 @@ function sortData(data: EnrichedRecord[]): EnrichedRecord[] {
     return data.sort((a, b) => {
         const clusterA = a.Generated_Cluster_ID ?? Number.MAX_SAFE_INTEGER;
         const clusterB = b.Generated_Cluster_ID ?? Number.MAX_SAFE_INTEGER;
+        
+        // Primary Sort: Generated_Cluster_ID Ascending
         if (clusterA !== clusterB) {
             return clusterA - clusterB;
         }
 
+        // Secondary Sort: Max_PairScore Descending
         const scoreA = a.Max_PairScore ?? -1;
         const scoreB = b.Max_PairScore ?? -1;
         if (scoreA !== scoreB) {
             return scoreB - scoreA;
         }
         
+        // Tertiary Sort (tie-breaker)
         return String(a.beneficiaryId || '').localeCompare(String(b.beneficiaryId || ''));
     });
 }
@@ -787,3 +791,5 @@ function createDashboardReportSheet(wb: ExcelJS.Workbook, chartImages: Record<st
         addImage(chartImages.map, { col: 4, row: currentRow }, { width: 347, height: 749 });
     }
 }
+
+    
