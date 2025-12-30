@@ -28,6 +28,7 @@ type EnrichedRecord = RecordRow & {
     Cluster_Size?: number | null;
     Flag?: string;
     pairScore?: number | null;
+    Max_PairScore?: number | null;
     nameScore?: number | null;
     husbandScore?: number | null;
     childrenScore?: number | null;
@@ -80,11 +81,14 @@ function enrichData(cachedData: any): { enrichedRecords: EnrichedRecord[], enric
     }
 
     const recordMap = new Map<string, RecordRow>(allRecords.map((r: RecordRow) => [r._internalId!, r]));
+    const clusterMaxScores = new Map<number, number>();
 
     const enrichedClusters = clusters.map((cluster: any, index: number) => {
         const clusterId = index + 1;
         const clusterRecords = cluster.records || [];
         
+        let maxPairScoreInCluster = 0;
+
         const recordsWithScores = clusterRecords.map((record: RecordRow) => {
             const relatedPairs = (cluster.pairScores || []).filter((p: any) => p.aId === record._internalId || p.bId === record._internalId);
             const safeAvg = (arr: (number | null | undefined)[]) => {
@@ -93,6 +97,10 @@ function enrichData(cachedData: any): { enrichedRecords: EnrichedRecord[], enric
             };
 
             const recordPairScore = safeAvg(relatedPairs.map((p: any) => p.score));
+            if (recordPairScore > maxPairScoreInCluster) {
+                maxPairScoreInCluster = recordPairScore;
+            }
+
             let flag = '?';
             if (recordPairScore >= 0.9) {
                 flag = 'm?';
@@ -115,6 +123,8 @@ function enrichData(cachedData: any): { enrichedRecords: EnrichedRecord[], enric
             };
         });
         
+        clusterMaxScores.set(clusterId, maxPairScoreInCluster);
+
         const { decision, expertNote } = getDecisionAndNote(cluster.confidenceScore || 0);
         
         return {
@@ -140,26 +150,30 @@ function enrichData(cachedData: any): { enrichedRecords: EnrichedRecord[], enric
         }
         
         const scoredRecord = enrichedCluster.records.find((r: RecordRow) => r._internalId === record._internalId);
-        if (!scoredRecord) {
-             return { // Fallback just in case
-                ...record,
-                Generated_Cluster_ID: enrichedCluster.clusterId,
-                Cluster_Size: enrichedCluster.records.length,
-             }
-        }
-
+        
         const generatedClusterId = enrichedCluster.records.reduce((max: number, r: RecordRow) => {
             const currentId = Number(r.beneficiaryId);
             return !isNaN(currentId) && currentId > max ? currentId : max;
         }, 0) || enrichedCluster.clusterId;
 
-        return {
+        const maxPairScoreForCluster = clusterMaxScores.get(enrichedCluster.clusterId) || 0;
+
+        const baseRecord = {
             ...record,
-            ...scoredRecord,
             Generated_Cluster_ID: generatedClusterId,
             Cluster_Size: enrichedCluster.records.length,
+            Max_PairScore: maxPairScoreForCluster,
             'تصنيف المجموعة المبدئي': enrichedCluster['تصنيف المجموعة المبدئي'],
             'نتائج تحليل المجموعة': enrichedCluster['نتائج تحليل المجموعة'],
+        };
+
+        if (!scoredRecord) {
+             return baseRecord;
+        }
+
+        return {
+            ...baseRecord,
+            ...scoredRecord,
         };
     });
 
@@ -169,16 +183,16 @@ function enrichData(cachedData: any): { enrichedRecords: EnrichedRecord[], enric
 
 function sortData(data: EnrichedRecord[]): EnrichedRecord[] {
     return data.sort((a, b) => {
-        const scoreA = a.pairScore ?? -1;
-        const scoreB = b.pairScore ?? -1;
-        if (scoreA !== scoreB) {
-            return scoreB - scoreA;
-        }
-
         const clusterA = a.Generated_Cluster_ID ?? Number.MAX_SAFE_INTEGER;
         const clusterB = b.Generated_Cluster_ID ?? Number.MAX_SAFE_INTEGER;
         if (clusterA !== clusterB) {
             return clusterA - clusterB;
+        }
+
+        const scoreA = a.Max_PairScore ?? -1;
+        const scoreB = b.Max_PairScore ?? -1;
+        if (scoreA !== scoreB) {
+            return scoreB - scoreA;
         }
         
         return String(a.beneficiaryId || '').localeCompare(String(b.beneficiaryId || ''));
@@ -220,7 +234,7 @@ function createEnrichedDataSheet(wb: ExcelJS.Workbook, data: EnrichedRecord[], o
     ws.views = [{ rightToLeft: true }];
     
     const enrichmentHeaders = [
-        "Generated_Cluster_ID", "Cluster_Size", "Flag",
+        "Generated_Cluster_ID", "Cluster_Size", "Flag", "Max_PairScore",
         "pairScore", "nameScore", "husbandScore", "childrenScore", "idScore", "phoneScore", "locationScore",
         "تصنيف المجموعة المبدئي", "نتائج تحليل المجموعة"
     ];
@@ -230,7 +244,6 @@ function createEnrichedDataSheet(wb: ExcelJS.Workbook, data: EnrichedRecord[], o
     ];
     
     const finalOriginalHeaders = originalHeaders.filter(h => !h.startsWith('_'));
-    // Corrected column order
     const finalHeaders = [ ...enrichmentHeaders, ...finalOriginalHeaders, ...internalDataHeaders ];
     
     ws.columns = finalHeaders.map(h => ({
@@ -270,19 +283,19 @@ function createEnrichedDataSheet(wb: ExcelJS.Workbook, data: EnrichedRecord[], o
         const rowData = data[rowNumber - 2]; 
         if (!rowData) return;
 
-        const score = rowData.pairScore ?? -1;
-        if (score > 0) {
+        const maxScore = rowData.Max_PairScore ?? -1;
+        if (maxScore > 0) {
             let fillColor: string | undefined;
-            if (score >= 0.9) { fillColor = 'FFFF0000'; } 
-            else if (score >= 0.8) { fillColor = 'FFFFC7CE'; } 
-            else if (score >= 0.7) { fillColor = 'FFFFC000'; } 
+            if (maxScore >= 0.9) { fillColor = 'FFFF0000'; } 
+            else if (maxScore >= 0.8) { fillColor = 'FFFFC7CE'; } 
+            else if (maxScore >= 0.7) { fillColor = 'FFFFC000'; } 
             else { fillColor = 'FFFFFF00'; }
 
             if (fillColor) {
                 const fill = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: fillColor } };
                  row.eachCell({ includeEmpty: true }, (cell) => {
                      cell.fill = fill;
-                     if (score >= 0.9) {
+                     if (maxScore >= 0.9) {
                         cell.font = { ...cell.font, bold: true, color: { argb: 'FFFFFFFF' } };
                     }
                 });
