@@ -387,7 +387,7 @@ const pairwiseScore = (rowA: PreprocessedRow, rowB: PreprocessedRow, opts: Worke
       jaroWinkler(rowA.husbandName_normalized, rowB.husbandName_normalized),
       nameOrderFreeScore(rowA.husbandParts, rowB.husbandParts)
     );
-    const phoneScore = rowA.phone && rowB.phone
+    const phoneScoreVal = rowA.phone && rowB.phone
       ? rowA.phone === rowB.phone
         ? 1
         : rowA.phone.slice(-6) === rowB.phone.slice(-6)
@@ -417,60 +417,31 @@ const pairwiseScore = (rowA: PreprocessedRow, rowB: PreprocessedRow, opts: Worke
     }
     locationScore = Math.min(0.5, locationScore);
 
-    const components: [string, number][] = [
-        ["firstNameScore", firstNameScore],
-        ["familyNameScore", familyNameScore],
-        ["advancedNameScore", advancedNameScore],
-        ["tokenReorderScore", tokenReorderScore],
-        ["husbandScore", husbandScore],
-        ["idScore", idScore],
-        ["phoneScore", phoneScore],
-        ["childrenScore", childrenScore],
-        ["locationScore", locationScore]
-    ];
-
-    let weightedSum = 0;
-    let weightSum = 0;
-
-    for (const [key, val] of components) {
-        const w = weights[key as keyof typeof weights] || 0;
-        if (val > 0) {
-            weightedSum += w * val;
-            weightSum += w;
-        }
-    }
-
-    let score = weightSum > 0 ? weightedSum / weightSum : 0;
-
-    const strongParts = [firstNameScore, familyNameScore, tokenReorderScore].filter((s) => s >= 0.85).length;
-    if (strongParts >= 2) {
-      score = Math.min(1, score + 0.04);
-    }
-    
-    if (firstNameScore < 0.4 && familyNameScore < 0.4) {
-      score *= 0.6;
-    }
-
-    score = Math.max(0, Math.min(1, score));
-
-    const reasons: string[] = [];
-    if (tokenReorderScore > 0.85) reasons.push("TOKEN_REORDER");
-
-    return {
-      score,
-      reasons,
-      breakdown: {
+    const breakdown = {
         firstNameScore,
         familyNameScore,
         advancedNameScore,
         tokenReorderScore,
         husbandScore,
         idScore,
-        phoneScore,
+        phoneScore: phoneScoreVal,
         childrenScore,
         locationScore,
-      }
-    };
+      };
+
+    const W = o.finalScoreWeights;
+  let score = (W.firstNameScore || 0) * firstNameScore + (W.familyNameScore || 0) * familyNameScore +
+              (W.advancedNameScore || 0) * advancedNameScore + (W.tokenReorderScore || 0) * tokenReorderScore +
+              (W.husbandScore || 0) * husbandScore + (W.idScore || 0) * idScore +
+              (W.phoneScore || 0) * phoneScoreVal + (W.childrenScore || 0) * childrenScore +
+              (W.locationScore || 0) * locationScore;
+  const strongParts = [firstNameScore, familyNameScore, tokenReorderScore].filter((v: any) => v >= 0.85).length;
+  if (strongParts >= 2) score = Math.min(1, score + 0.04);
+  score = Math.max(0, Math.min(1, score));
+  
+  const reasons: any[] = [];
+  if (tokenReorderScore > 0.85) reasons.push("TOKEN_REORDER");
+  return { score, breakdown, reasons };
 }
 
 

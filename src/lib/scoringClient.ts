@@ -1,4 +1,3 @@
-
 // src/lib/scoringClient.ts
 
 // All scoring logic is consolidated here to be shared between workers and client components.
@@ -154,7 +153,7 @@ const defaultOptions = {
     husbandScore: 0.12,
     idScore: 0.08,
     phoneScore: 0.05,
-    childrenScore: 0.06,
+    childrenScore: 0.04,
     locationScore: 0.04,
   },
   rules: {
@@ -372,7 +371,7 @@ export function computePairScore(rawA: any, rawB: any, opts: WorkerOptions) {
     jaroWinkler(rowA.husbandName_normalized, rowB.husbandName_normalized),
     nameOrderFreeScore(rowA.husbandParts, rowB.husbandParts)
   );
-  const phoneScore = rowA.phone && rowB.phone
+  const phoneScoreVal = rowA.phone && rowB.phone
     ? rowA.phone === rowB.phone
       ? 1
       : rowA.phone.slice(-6) === rowB.phone.slice(-6)
@@ -398,60 +397,29 @@ export function computePairScore(rawA: any, rawB: any, opts: WorkerOptions) {
   }
   locationScore = Math.min(0.5, locationScore);
 
-  const W = mergedOpts.finalScoreWeights;
-  
-  const components: [keyof typeof W, number][] = [
-    ["firstNameScore", firstNameScore],
-    ["familyNameScore", familyNameScore],
-    ["advancedNameScore", advancedNameScore],
-    ["tokenReorderScore", tokenReorderScore],
-    ["husbandScore", husbandScore],
-    ["idScore", idScore],
-    ["phoneScore", phoneScore],
-    ["childrenScore", childrenScore],
-    ["locationScore", locationScore],
-  ];
-
-  let weightedSum = 0;
-  let weightSum = 0;
-
-  for (const [key, val] of components) {
-      const w = W[key] || 0;
-      if (val > 0) {
-          weightedSum += w * val;
-          weightSum += w;
-      }
-  }
-  
-  let score = weightSum > 0 ? weightedSum / weightSum : 0;
-
-  const strongParts = [firstNameScore, familyNameScore, tokenReorderScore].filter((s) => s >= 0.85).length;
-  if (strongParts >= 2) {
-    score = Math.min(1, score + 0.04);
-  }
-
-  if (firstNameScore < 0.4 && familyNameScore < 0.4) {
-      score *= 0.6;
-  }
-
-  score = Math.max(0, Math.min(1, score));
-
-  const reasons: string[] = [];
-  if (tokenReorderScore > 0.85) reasons.push("TOKEN_REORDER");
-
-  return {
-    score,
-    reasons,
-    breakdown: {
-      firstNameScore,
-      familyNameScore,
-      advancedNameScore,
-      tokenReorderScore,
-      husbandScore,
-      idScore,
-      phoneScore,
-      childrenScore,
-      locationScore,
-    },
+  const breakdown = {
+    firstNameScore,
+    familyNameScore,
+    advancedNameScore,
+    tokenReorderScore,
+    husbandScore,
+    idScore,
+    phoneScore: phoneScoreVal,
+    childrenScore,
+    locationScore,
   };
+  
+  const W = mergedOpts.finalScoreWeights;
+  let score = (W.firstNameScore || 0) * firstNameScore + (W.familyNameScore || 0) * familyNameScore +
+              (W.advancedNameScore || 0) * advancedNameScore + (W.tokenReorderScore || 0) * tokenReorderScore +
+              (W.husbandScore || 0) * husbandScore + (W.idScore || 0) * idScore +
+              (W.phoneScore || 0) * phoneScoreVal + (W.childrenScore || 0) * childrenScore +
+              (W.locationScore || 0) * locationScore;
+  const strongParts = [firstNameScore, familyNameScore, tokenReorderScore].filter((v: any) => v >= 0.85).length;
+  if (strongParts >= 2) score = Math.min(1, score + 0.04);
+  score = Math.max(0, Math.min(1, score));
+  
+  const reasons: any[] = [];
+  if (tokenReorderScore > 0.85) reasons.push("TOKEN_REORDER");
+  return { score, breakdown, reasons };
 }
