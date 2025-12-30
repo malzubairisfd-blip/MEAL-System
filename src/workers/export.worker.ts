@@ -183,19 +183,18 @@ function enrichData(cachedData: any): { enrichedRecords: EnrichedRecord[], enric
 
 function sortData(data: EnrichedRecord[]): EnrichedRecord[] {
     return data.sort((a, b) => {
-        const clusterA = a.Generated_Cluster_ID ?? Number.MAX_SAFE_INTEGER;
-        const clusterB = b.Generated_Cluster_ID ?? Number.MAX_SAFE_INTEGER;
-        
-        // Primary Sort: Generated_Cluster_ID Ascending
-        if (clusterA !== clusterB) {
-            return clusterA - clusterB;
-        }
-
-        // Secondary Sort: Max_PairScore Descending
+        // Primary Sort: Max_PairScore Descending
         const scoreA = a.Max_PairScore ?? -1;
         const scoreB = b.Max_PairScore ?? -1;
         if (scoreA !== scoreB) {
             return scoreB - scoreA;
+        }
+        
+        // Secondary Sort: Generated_Cluster_ID Ascending
+        const clusterA = a.Generated_Cluster_ID ?? Number.MAX_SAFE_INTEGER;
+        const clusterB = b.Generated_Cluster_ID ?? Number.MAX_SAFE_INTEGER;
+        if (clusterA !== clusterB) {
+            return clusterA - clusterB;
         }
         
         // Tertiary Sort (tie-breaker)
@@ -791,5 +790,3 @@ function createDashboardReportSheet(wb: ExcelJS.Workbook, chartImages: Record<st
         addImage(chartImages.map, { col: 4, row: currentRow }, { width: 347, height: 749 });
     }
 }
-
-    
