@@ -16,11 +16,12 @@ export default function AppLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const currentYear = new Date().getFullYear();
   return (
     <html lang="en">
       <body>
         <LanguageProvider>
-          <LayoutProvider>{children}</LayoutProvider>
+          <LayoutProvider year={currentYear}>{children}</LayoutProvider>
         </LanguageProvider>
         <Toaster />
       </body>

@@ -62,7 +62,7 @@ function ClientOnlyLanguageSwitcher() {
 }
 
 
-export function LayoutProvider({ children }: { children: React.ReactNode }) {
+export function LayoutProvider({ children, year }: { children: React.ReactNode, year: number }) {
   const currentPathname = usePathname();
   const [pathname, setPathname] = useState(currentPathname);
   const { t, isLoading: isTranslationLoading } = useTranslation();
@@ -119,7 +119,7 @@ export function LayoutProvider({ children }: { children: React.ReactNode }) {
         </SidebarContent>
         <SidebarFooter>
           <div className="text-xs text-muted-foreground p-4">
-             © {new Date().getFullYear()}
+             © {year}
           </div>
         </SidebarFooter>
       </Sidebar>
