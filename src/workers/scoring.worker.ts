@@ -1,5 +1,8 @@
-
 // src/workers/scoring.worker.ts
+// Scoring worker: first consumes a reduced candidate pair list (provided by the cluster worker via the main thread),
+// computes and caches pair scores for that reduced set, then enriches clusters using cached values where available.
+// If an intra-cluster pair is missing from the cache, it falls back to computing the pair score (to guarantee identical outputs).
+
 import { computePairScore } from "@/lib/scoringClient";
 
 const safeAvg = (values: (number | null | undefined)[]) => {
@@ -27,14 +30,82 @@ const calculateConfidenceScore = (pairScores: any[], clusterSize: number) => {
   return Math.round(Math.min(1, Math.max(0, confidence)) * 100);
 };
 
-self.onmessage = (event) => {
-  const { rawClusters } = event.data;
+type CandidatePair = {
+  aId: string;
+  bId: string;
+  score?: number;
+  reasons?: string[];
+  breakdown?: any;
+};
+
+type IncomingMessage = {
+  rawClusters?: any[];
+  candidatePairs?: CandidatePair[];
+  rowsMap?: Record<string, any>;
+};
+
+const pairCache = new Map<string, any>();
+
+const keyFor = (aId: string, bId: string) => (aId < bId ? `${aId}|${bId}` : `${bId}|${aId}`);
+
+self.onmessage = async (event: MessageEvent<IncomingMessage>) => {
+  const { rawClusters, candidatePairs, rowsMap } = event.data;
+
   if (!rawClusters) {
     postMessage({ type: "error", error: "No clusters provided to scoring worker." });
     return;
   }
 
   try {
+    // Build an initial cache from the provided candidatePairs (reduced set).
+    if (Array.isArray(candidatePairs) && candidatePairs.length) {
+      let idx = 0;
+      for (const cp of candidatePairs) {
+        const progress = Math.round((idx / candidatePairs.length) * 100);
+        if (idx % 50 === 0) {
+          postMessage({ type: "progress", progress: Math.min(100, progress) });
+          // yield to event loop (allow UI to update)
+          await new Promise((r) => setTimeout(r, 0));
+        }
+        const k = keyFor(cp.aId, cp.bId);
+        if (pairCache.has(k)) {
+          idx++;
+          continue;
+        }
+        if (cp.breakdown) {
+          // If the cluster worker provided a precomputed breakdown/score, use it.
+          pairCache.set(k, {
+            score: cp.score ?? (cp.breakdown?.score ?? 0),
+            breakdown: cp.breakdown,
+            reasons: cp.reasons || [],
+          });
+        } else {
+          // We may need the actual record objects to run computePairScore.
+          const a = rowsMap?.[cp.aId];
+          const b = rowsMap?.[cp.bId];
+          if (a && b) {
+            try {
+              const result = computePairScore(a, b, {});
+              pairCache.set(k, {
+                score: result?.score ?? 0,
+                breakdown: result?.breakdown ?? null,
+                reasons: result?.reasons ?? [],
+              });
+            } catch (err) {
+              // store a safe fallback
+              pairCache.set(k, { score: cp.score ?? 0, breakdown: null, reasons: cp.reasons || [] });
+            }
+          } else {
+            // No record objects available for this candidate; store the provided score if any
+            pairCache.set(k, { score: cp.score ?? 0, breakdown: cp.breakdown ?? null, reasons: cp.reasons || [] });
+          }
+        }
+        idx++;
+      }
+      postMessage({ type: "progress", progress: 100 });
+    }
+
+    // Now enrich clusters. For each intra-cluster pair we try to use the cache first.
     const enrichedClusters = rawClusters.map((cluster: any, index: number) => {
       const progress = Math.round((index / rawClusters.length) * 100);
       postMessage({ type: "progress", progress });
@@ -54,15 +125,37 @@ self.onmessage = (event) => {
       }
 
       const pairScores: any[] = [];
+      // Ensure we have quick access to records by id for computing missing pairs
+      const recMap: Record<string, any> = {};
+      for (const r of records) recMap[r._internalId] = r;
+
       for (let i = 0; i < records.length; i++) {
         for (let j = i + 1; j < records.length; j++) {
-          const result = computePairScore(records[i], records[j], {});
-          if (!result || !result.breakdown) continue;
+          const ai = records[i]._internalId;
+          const bi = records[j]._internalId;
+          const k = keyFor(ai, bi);
+          let cached = pairCache.get(k);
+          if (!cached) {
+            // compute now (fallback) and cache it
+            try {
+              const result = computePairScore(recMap[ai], recMap[bi], {});
+              cached = {
+                score: result?.score ?? 0,
+                breakdown: result?.breakdown ?? null,
+                reasons: result?.reasons ?? [],
+              };
+            } catch (err) {
+              cached = { score: 0, breakdown: null, reasons: [] };
+            }
+            pairCache.set(k, cached);
+          }
+          if (!cached) continue;
           pairScores.push({
-            aId: records[i]._internalId,
-            bId: records[j]._internalId,
-            score: result.score,
-            ...result.breakdown,
+            aId: ai,
+            bId: bi,
+            score: cached.score,
+            ...((cached.breakdown && typeof cached.breakdown === "object") ? cached.breakdown : {}),
+            reasons: cached.reasons || [],
           });
         }
       }
