@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, {
@@ -110,6 +111,80 @@ const SummaryCard = ({
   </Card>
 );
 
+/**
+ * Lightweight, fast normalization on main thread for blocking key construction.
+ * Intentionally simpler than cluster normalization but consistent enough to
+ * group likely candidates before sending to the worker.
+ */
+const fastNormalize = (value: any) => {
+  if (!value && value !== 0) return "";
+  try {
+    value = String(value);
+  } catch {
+    value = "";
+  }
+  return value
+    .normalize("NFKC")
+    .replace(/[ًٌٍََُِّْـ]/g, "")
+    .replace(/[أإآ]/g, "ا")
+    .replace(/ى/g, "ي")
+    .replace(/ؤ/g, "و")
+    .replace(/ئ/g, "ي")
+    .replace(/ة/g, "ه")
+    .replace(/گ/g, "ك")
+    .replace(/[^ء-ي0-9a-zA-Z\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+};
+
+const digitsOnlyFast = (value: any) => {
+  if (value === undefined || value === null) return "";
+  return String(value).replace(/\D/g, "");
+};
+
+/**
+ * Build a small set of blocking keys for each row. These are intentionally
+ * compact and cheap to compute. They are uploaded alongside the chunks so the
+ * cluster worker can form blocks and only compare reduced candidate sets.
+ */
+const buildBlockingKeys = (row: any, mapping: Mapping) => {
+  const keys: string[] = [];
+
+  const woman = fastNormalize(row[mapping.womanName] || "");
+  const husband = fastNormalize(row[mapping.husbandName] || "");
+  const village = fastNormalize(row[mapping.village] || "");
+  const subdistrict = fastNormalize(row[mapping.subdistrict] || "");
+  const phone = digitsOnlyFast(row[mapping.phone] || "");
+  const id = String(row[mapping.nationalId] || row.id || "");
+
+  // first-name token (first token)
+  const firstToken = woman.split(/\s+/)[0] || "";
+  if (firstToken) keys.push(`fn:${firstToken}`);
+
+  // family name token (last token)
+  const familyToken = woman.split(/\s+/).slice(-1)[0] || "";
+  if (familyToken) keys.push(`ln:${familyToken}`);
+
+  // husband first token
+  const husbandFirst = husband.split(/\s+/)[0] || "";
+  if (husbandFirst) keys.push(`hf:${husbandFirst}`);
+
+  // phone suffixes
+  if (phone.length >= 6) keys.push(`ph6:${phone.slice(-6)}`);
+  if (phone.length >= 4) keys.push(`ph4:${phone.slice(-4)}`);
+
+  // id suffix
+  if (id.length >= 5) keys.push(`id5:${id.slice(-5)}`);
+
+  // location keys
+  if (village) keys.push(`v:${village}`);
+  if (subdistrict) keys.push(`s:${subdistrict}`);
+
+  // ensure uniqueness
+  return Array.from(new Set(keys));
+};
+
 export default function UploadPage() {
   const { t, isLoading: isTranslationLoading } = useTranslation();
   const { toast } = useToast();
@@ -136,6 +211,7 @@ export default function UploadPage() {
   const [timeInfo, setTimeInfo] = useState<TimeInfo>({ elapsed: 0 });
 
   const rawRowsRef = useRef<any[]>([]);
+  const preblockedRowsRef = useRef<any[] | null>(null);
   const clusterWorkerRef = useRef<Worker | null>(null);
   const scoringWorkerRef = useRef<Worker | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -153,6 +229,7 @@ export default function UploadPage() {
     setFile(null);
     setColumns([]);
     rawRowsRef.current = [];
+    preblockedRowsRef.current = null;
     setClusters([]);
     setWorkerStatus("idle");
     setProgressInfo({ status: "idle", progress: 0 });
@@ -182,13 +259,70 @@ export default function UploadPage() {
       }
       if (msg.type === "done") {
         const rawClusters = msg.payload?.clusters ?? [];
+        const edgesUsed = msg.payload?.edgesUsed ?? [];
+        const rows = msg.payload?.rows ?? [];
+
         toast({
           title: "Calculating Scores",
           description: "Clustering complete. Now calculating detailed similarity scores.",
         });
         setWorkerStatus("calculating_scores");
         setProgressInfo({ status: "calculating_scores", progress: 96 });
-        scoringWorker.postMessage({ rawClusters });
+
+        // Build a reduced candidate set (pairs) from edgesUsed and a small rows map
+        try {
+          const candidates: any[] = [];
+          const rowsMap: Record<string, any> = {};
+          // map rows by internalId for any rows that appear in edges or in clusters
+          const referencedIds = new Set<string>();
+
+          // edgesUsed indices refer to the rows array returned by the cluster worker
+          for (const e of edgesUsed) {
+            const a = rows[e.a];
+            const b = rows[e.b];
+            if (!a || !b) continue;
+            referencedIds.add(a._internalId);
+            referencedIds.add(b._internalId);
+            candidates.push({
+              aId: a._internalId,
+              bId: b._internalId,
+              score: e.score,
+              reasons: e.reasons,
+              breakdown: e.breakdown || undefined,
+            });
+          }
+
+          // ensure cluster records are available too
+          for (const cluster of rawClusters) {
+            for (const rec of cluster.records || []) {
+              referencedIds.add(rec._internalId);
+            }
+          }
+
+          // populate rowsMap with rows from the full rows array where referenced
+          for (const r of rows) {
+            if (referencedIds.has(r._internalId)) {
+              rowsMap[r._internalId] = r;
+            }
+          }
+
+          // Also include the cluster record objects (they might be normalized copies)
+          for (const cluster of rawClusters) {
+            for (const rec of cluster.records || []) {
+              rowsMap[rec._internalId] = rec;
+            }
+          }
+
+          scoringWorkerRef.current?.postMessage({
+            rawClusters,
+            candidatePairs: candidates,
+            rowsMap,
+          });
+        } catch (err) {
+          // fallback: send only clusters
+          scoringWorkerRef.current?.postMessage({ rawClusters });
+        }
+
         return;
       }
       if (msg.type === "error") {
@@ -322,12 +456,12 @@ export default function UploadPage() {
           const sheet = workbook.Sheets[workbook.SheetNames[0]];
           const json = XLSX.utils.sheet_to_json<any>(sheet, { defval: "" });
           const detectedColumns = Object.keys(json[0] || {});
-          
+
           const rowsWithId = json.map((row, index) => ({
             ...row,
             _internalId: `row_${Date.now()}_${index}`,
           }));
-          
+
           rawRowsRef.current = rowsWithId;
           await cacheRawData({ rows: rowsWithId, originalHeaders: detectedColumns });
           setIsDataCached(true);
@@ -346,7 +480,7 @@ export default function UploadPage() {
               // Fallback to default if parsing fails
             }
           }
-          
+
           setColumns(detectedColumns);
           setFileReadProgress(100);
         } catch (error: any) {
@@ -399,17 +533,30 @@ export default function UploadPage() {
 
     const settings = await fetchSettings();
 
+    // Build blocking keys on the main thread quickly to avoid sending the entire dataset into workers.
+    // This preprocessing is intentionally lightweight and synchronous.
+    const preblocked = rawRowsRef.current.map((r) => {
+      // keep original fields but add cheap blocking keys for the worker to create candidate blocks
+      return {
+        ...r,
+        _blockingKeys: buildBlockingKeys(r, mapping),
+      };
+    });
+    preblockedRowsRef.current = preblocked;
+
     clusterWorkerRef.current.postMessage({
       type: "start",
       payload: { mapping, options: settings },
     });
 
-    for (let i = 0; i < rawRowsRef.current.length; i += CHUNK_SIZE) {
-      const chunk = rawRowsRef.current.slice(i, i + CHUNK_SIZE);
+    // Stream the preblocked rows in chunks (same CHUNK_SIZE semantics)
+    for (let i = 0; i < preblocked.length; i += CHUNK_SIZE) {
+      const chunk = preblocked.slice(i, i + CHUNK_SIZE);
       clusterWorkerRef.current.postMessage({
         type: "data",
-        payload: { rows: chunk, total: rawRowsRef.current.length },
+        payload: { rows: chunk, total: preblocked.length },
       });
+      // a short pause to keep UI responsive and let main thread handle messages
       await new Promise((resolve) => setTimeout(resolve, 8));
     }
     clusterWorkerRef.current.postMessage({ type: "end" });
@@ -599,8 +746,8 @@ export default function UploadPage() {
                 }
               >
                 {workerStatus !== "idle" &&
-                workerStatus !== "done" &&
-                workerStatus !== "error" ? (
+                  workerStatus !== "done" &&
+                  workerStatus !== "error" ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : null}
                 {getButtonText()}
