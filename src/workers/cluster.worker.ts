@@ -1,4 +1,11 @@
+
 // workers/cluster.worker.ts
+// This worker now accepts lightweight blocking keys per row (property: _blockingKeys)
+// and uses them to build reduced candidate blocks. Pairwise comparisons are only
+// done among candidates inside blocks, avoiding redundant full-matrix comparisons.
+// The scoring computation logic is unchanged and pairwise results are included
+// in edgesUsed which the main thread forwards to the scoring worker as a reduced candidate set.
+
 const normalizeArabicRaw = (value: any) => {
   if (!value) return "";
   try {
@@ -310,6 +317,7 @@ type PreprocessedRow = {
   children_normalized: string[];
   parts: string[];
   husbandParts: string[];
+  blockingKeys?: string[]; // lightweight blocking keys provided by the main thread
 };
 
 const preprocessRow = (raw: any): PreprocessedRow => {
@@ -340,148 +348,110 @@ const preprocessRow = (raw: any): PreprocessedRow => {
     children_normalized,
     parts: raw._parts || splitParts(womanName_normalized),
     husbandParts: raw._husbandParts || splitParts(husbandName_normalized),
+    blockingKeys: Array.isArray(raw._blockingKeys) ? raw._blockingKeys : undefined,
   };
 };
 
 const pairwiseScore = (rowA: PreprocessedRow, rowB: PreprocessedRow, opts: WorkerOptions) => {
-    const o = opts;
-    const weights = o.finalScoreWeights;
+  const o = opts;
+  const weights = o.finalScoreWeights;
 
-    const ruleResult = applyAdditionalRules(rowA, rowB, o);
-    if (ruleResult) {
-        return {
-          score: ruleResult.score,
-          reasons: ruleResult.reasons,
-          breakdown: { reason: "RULE_BASED", boostedTo: ruleResult.score }
-        };
-    }
+  const ruleResult = applyAdditionalRules(rowA, rowB, o);
+  if (ruleResult) {
+    return {
+      score: ruleResult.score,
+      reasons: ruleResult.reasons,
+      breakdown: { reason: "RULE_BASED", boostedTo: ruleResult.score }
+    };
+  }
 
-    if (rowA.nationalId && rowB.nationalId && rowA.nationalId === rowB.nationalId) {
-       return { score: 0.99, reasons: ["EXACT_ID"], breakdown: { reason: "EXACT_ID" } };
-    }
+  if (rowA.nationalId && rowB.nationalId && rowA.nationalId === rowB.nationalId) {
+    return { score: 0.99, reasons: ["EXACT_ID"], breakdown: { reason: "EXACT_ID" } };
+  }
 
-    const polygamyMatch =
-      o.rules.enablePolygamyRules &&
-      jaroWinkler(rowA.husbandName_normalized, rowB.husbandName_normalized) >= 0.95 &&
-      jaroWinkler(rowA.parts[1] || "", rowB.parts[1] || "") >= 0.93 &&
-      jaroWinkler(rowA.parts[2] || "", rowB.parts[2] || "") >= 0.9;
+  const polygamyMatch =
+    o.rules.enablePolygamyRules &&
+    jaroWinkler(rowA.husbandName_normalized, rowB.husbandName_normalized) >= 0.95 &&
+    jaroWinkler(rowA.parts[1] || "", rowB.parts[1] || "") >= 0.93 &&
+    jaroWinkler(rowA.parts[2] || "", rowB.parts[2] || "") >= 0.9;
 
-    if (polygamyMatch) {
-       return { score: 0.97, reasons: ["POLYGAMY_PATTERN"], breakdown: { reason: "POLYGAMY_PATTERN" } };
-    }
-    
-    const A = rowA.parts;
-    const B = rowB.parts;
-    const firstNameScore = jaroWinkler(A[0] || "", B[0] || "");
-    const familyNameScore = jaroWinkler(A.slice(1).join(" "), B.slice(1).join(" "));
-    const advancedNameScore = (() => {
-      const root = (s: string) =>
-        (splitParts(s).map((token) => token.slice(0, 3)).join(" "));
-      const rootA = root(rowA.womanName_normalized);
-      const rootB = root(rowB.womanName_normalized);
-      if (!rootA || !rootB) return 0;
-      return Math.min(0.5, jaroWinkler(rootA, rootB));
-    })();
-    const tokenReorderScore = nameOrderFreeScore(A, B);
-    const husbandScore = Math.max(
-      jaroWinkler(rowA.husbandName_normalized, rowB.husbandName_normalized),
-      nameOrderFreeScore(rowA.husbandParts, rowB.husbandParts)
-    );
-    const phoneScoreVal = rowA.phone && rowB.phone
-      ? rowA.phone === rowB.phone
-        ? 1
-        : rowA.phone.slice(-6) === rowB.phone.slice(-6)
-        ? 0.85
-        : rowA.phone.slice(-4) === rowB.phone.slice(-4)
-        ? 0.6
-        : 0
-      : 0;
-    const idScore = rowA.nationalId && rowB.nationalId
-      ? rowA.nationalId === rowB.nationalId
-        ? 1
-        : rowA.nationalId.slice(-5) === rowB.nationalId.slice(-5)
-        ? 0.75
-        : 0
-      : 0;
-    const childrenScore = tokenJaccard(rowA.children_normalized, rowB.children_normalized);
-    let locationScore = 0;
-    if (rowA.village_normalized && rowB.village_normalized && rowA.village_normalized === rowB.village_normalized) {
-      locationScore += 0.4;
-    }
-    if (
-      rowA.subdistrict_normalized &&
-      rowB.subdistrict_normalized &&
-      rowA.subdistrict_normalized === rowB.subdistrict_normalized
-    ) {
-      locationScore += 0.25;
-    }
-    locationScore = Math.min(0.5, locationScore);
+  if (polygamyMatch) {
+    return { score: 0.97, reasons: ["POLYGAMY_PATTERN"], breakdown: { reason: "POLYGAMY_PATTERN" } };
+  }
 
-    const breakdown = {
-        firstNameScore,
-        familyNameScore,
-        advancedNameScore,
-        tokenReorderScore,
-        husbandScore,
-        idScore,
-        phoneScore: phoneScoreVal,
-        childrenScore,
-        locationScore,
-      };
+  const A = rowA.parts;
+  const B = rowB.parts;
+  const firstNameScore = jaroWinkler(A[0] || "", B[0] || "");
+  const familyNameScore = jaroWinkler(A.slice(1).join(" "), B.slice(1).join(" "));
+  const advancedNameScore = (() => {
+    const root = (s: string) =>
+      (splitParts(s).map((token) => token.slice(0, 3)).join(" "));
+    const rootA = root(rowA.womanName_normalized);
+    const rootB = root(rowB.womanName_normalized);
+    if (!rootA || !rootB) return 0;
+    return Math.min(0.5, jaroWinkler(rootA, rootB));
+  })();
+  const tokenReorderScore = nameOrderFreeScore(A, B);
+  const husbandScore = Math.max(
+    jaroWinkler(rowA.husbandName_normalized, rowB.husbandName_normalized),
+    nameOrderFreeScore(rowA.husbandParts, rowB.husbandParts)
+  );
+  const phoneScoreVal = rowA.phone && rowB.phone
+    ? rowA.phone === rowB.phone
+      ? 1
+      : rowA.phone.slice(-6) === rowB.phone.slice(-6)
+      ? 0.85
+      : rowA.phone.slice(-4) === rowB.phone.slice(-4)
+      ? 0.6
+      : 0
+    : 0;
+  const idScore = rowA.nationalId && rowB.nationalId
+    ? rowA.nationalId === rowB.nationalId
+      ? 1
+      : rowA.nationalId.slice(-5) === rowB.nationalId.slice(-5)
+      ? 0.75
+      : 0
+    : 0;
+  const childrenScore = tokenJaccard(rowA.children_normalized, rowB.children_normalized);
+  let locationScore = 0;
+  if (rowA.village_normalized && rowB.village_normalized && rowA.village_normalized === rowB.village_normalized) {
+    locationScore += 0.4;
+  }
+  if (
+    rowA.subdistrict_normalized &&
+    rowB.subdistrict_normalized &&
+    rowA.subdistrict_normalized === rowB.subdistrict_normalized
+  ) {
+    locationScore += 0.25;
+  }
+  locationScore = Math.min(0.5, locationScore);
 
-    const W = o.finalScoreWeights;
+  const breakdown = {
+    firstNameScore,
+    familyNameScore,
+    advancedNameScore,
+    tokenReorderScore,
+    husbandScore,
+    idScore,
+    phoneScore: phoneScoreVal,
+    childrenScore,
+    locationScore,
+  };
+
+  const W = o.finalScoreWeights;
+
   let score = (W.firstNameScore || 0) * firstNameScore + (W.familyNameScore || 0) * familyNameScore +
-              (W.advancedNameScore || 0) * advancedNameScore + (W.tokenReorderScore || 0) * tokenReorderScore +
-              (W.husbandScore || 0) * husbandScore + (W.idScore || 0) * idScore +
-              (W.phoneScore || 0) * phoneScoreVal + (W.childrenScore || 0) * childrenScore +
-              (W.locationScore || 0) * locationScore;
+    (W.advancedNameScore || 0) * advancedNameScore + (W.tokenReorderScore || 0) * tokenReorderScore +
+    (W.husbandScore || 0) * husbandScore + (W.idScore || 0) * idScore +
+    (W.phoneScore || 0) * phoneScoreVal + (W.childrenScore || 0) * childrenScore +
+    (W.locationScore || 0) * locationScore;
   const strongParts = [firstNameScore, familyNameScore, tokenReorderScore].filter((v: any) => v >= 0.85).length;
   if (strongParts >= 2) score = Math.min(1, score + 0.04);
   score = Math.max(0, Math.min(1, score));
-  
+
   const reasons: any[] = [];
   if (tokenReorderScore > 0.85) reasons.push("TOKEN_REORDER");
   return { score, breakdown, reasons };
-}
-
-
-const buildEdges = async (
-  rows: PreprocessedRow[],
-  minScore: number,
-  opts: WorkerOptions,
-  resumeState: any = null
-) => {
-  const n = rows.length;
-  if (n <= 1) return { edges: [], finalState: null };
-  const totalPairs = (n * (n - 1)) / 2;
-  const edges: { a: number, b: number, score: number, reasons: string[] }[] = resumeState?.edges || [];
-  let processed = resumeState?.processed || 0;
-  let i = resumeState?.i || 0;
-
-  const progressInterval = 5000;
-
-  for (; i < n; i++) {
-    for (let j = i + 1; j < n; j++) {
-      const result = pairwiseScore(rows[i], rows[j], opts);
-      if (result.score >= minScore) {
-        edges.push({ a: i, b: j, score: result.score, reasons: result.reasons });
-      }
-      processed++;
-      if (processed % progressInterval === 0) {
-        postMessage({
-          type: "progress",
-          status: "building-edges",
-          progress: 10 + Math.round(40 * (processed / totalPairs)),
-          completed: processed,
-          total: totalPairs,
-        });
-        await yieldToEventLoop();
-      }
-    }
-  }
-
-  postMessage({ type: "progress", status: "edges-built", progress: 50, completed: totalPairs, total: totalPairs });
-  return { edges, finalState: null };
 };
 
 const preprocessIncoming = (rowsChunk: any[], mapping: any) =>
@@ -498,6 +468,11 @@ const preprocessIncoming = (rowsChunk: any[], mapping: any) =>
       }
     });
 
+    // If the main thread provided blocking keys (cheap, precomputed), keep them.
+    if (Array.isArray(row._blockingKeys)) {
+      mappedRow._blockingKeys = row._blockingKeys;
+    }
+
     return preprocessRow(mappedRow);
   });
 
@@ -506,6 +481,9 @@ let mapping: any = {};
 let options: WorkerOptions = defaultOptions;
 let resumeState: any = null;
 let progressKey = "";
+
+// Block map so we only produce candidate sets per block
+const blockMap: Map<string, number[]> = new Map(); // blockKey -> indices in inbound
 
 self.onmessage = (event) => {
   const { type, payload } = event.data;
@@ -520,6 +498,7 @@ self.onmessage = (event) => {
     resumeState = payload.resumeState || null;
     progressKey = payload.progressKey || "";
     inbound = [];
+    blockMap.clear();
     postMessage({ type: "progress", status: "worker-ready", progress: 1 });
     return;
   }
@@ -527,7 +506,26 @@ self.onmessage = (event) => {
   if (type === "data") {
     const rows = Array.isArray(payload.rows) ? payload.rows : [];
     const mapped = preprocessIncoming(rows, mapping);
+    const startIndex = inbound.length;
     inbound.push(...mapped);
+
+    // populate blockMap using provided blocking keys where available
+    for (let idx = 0; idx < mapped.length; idx++) {
+      const absoluteIndex = startIndex + idx;
+      const r = mapped[idx];
+      const keys = Array.isArray(r.blockingKeys) ? r.blockingKeys : [];
+      // If no blocking keys were provided, fallback to cheap keys
+      if (!keys.length) {
+        const fallbackKey = `fn:${(r.womanName_normalized || "").split(/\s+/)[0] || ""}`;
+        keys.push(fallbackKey);
+      }
+      for (const k of keys) {
+        const arr = blockMap.get(k) || [];
+        arr.push(absoluteIndex);
+        blockMap.set(k, arr);
+      }
+    }
+
     postMessage({
       type: "progress",
       status: "receiving",
@@ -548,7 +546,50 @@ self.onmessage = (event) => {
           completed: 0,
           total: inbound.length,
         });
-        const { edges } = await buildEdges(inbound, options.thresholds.minPair, options, resumeState);
+
+        // Build edges by iterating blocks only. Avoid duplicate pair calculations
+        // by tracking seen pairs in a Set keyed by "minIdx|maxIdx".
+        const edges: { a: number, b: number, score: number, reasons: string[], breakdown?: any }[] = [];
+        const seenPairs = new Set<string>();
+        const minScore = options.thresholds.minPair;
+        let processedBlocks = 0;
+        const blockEntries = Array.from(blockMap.entries());
+        const totalBlocks = blockEntries.length || 1;
+
+        for (const [blockKey, indices] of blockEntries) {
+          // For large blocks, we can further chunk inside to keep memory stable
+          // but for now compare pairs within each block.
+          for (let i = 0; i < indices.length; i++) {
+            for (let j = i + 1; j < indices.length; j++) {
+              const aIdx = indices[i];
+              const bIdx = indices[j];
+              if (aIdx === bIdx) continue;
+              const key = aIdx < bIdx ? `${aIdx}|${bIdx}` : `${bIdx}|${aIdx}`;
+              if (seenPairs.has(key)) continue;
+              seenPairs.add(key);
+              const result = pairwiseScore(inbound[aIdx], inbound[bIdx], options);
+              if (result.score >= minScore) {
+                edges.push({ a: aIdx, b: bIdx, score: result.score, reasons: result.reasons, breakdown: result.breakdown });
+              }
+            }
+          }
+          processedBlocks++;
+          if (processedBlocks % 50 === 0) {
+            postMessage({
+              type: "progress",
+              status: "building-edges",
+              progress: 10 + Math.round(40 * (processedBlocks / totalBlocks)),
+              completed: processedBlocks,
+              total: totalBlocks,
+            });
+            // yield so messages can be processed
+            // eslint-disable-next-line no-await-in-loop
+            await yieldToEventLoop();
+          }
+        }
+
+        postMessage({ type: "progress", status: "edges-built", progress: 50, completed: edges.length, total: edges.length });
+
         const result = await runClustering(inbound, edges, options);
         postMessage({
           type: "done",
@@ -624,6 +665,7 @@ const runClustering = async (rows: PreprocessedRow[], edges: any[], opts: Worker
       });
       await yieldToEventLoop();
     }
+
   }
 
   const leftovers = new Map<number, number[]>();
