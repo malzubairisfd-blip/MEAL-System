@@ -231,7 +231,8 @@ const applyAdditionalRules = (a: PreprocessedRow, b: PreprocessedRow, opts: type
 
   if (ratio >= 0.8) {
     reasons.push("TOKEN_REORDER");
-    return { score: Math.min(1, minPair + 0.22), reasons };
+    // Return null to allow full scoring to proceed
+    return null;
   }
 
   const firstNameMatch = A.length && B.length && jw(A[0], B[0]) >= 0.93;
