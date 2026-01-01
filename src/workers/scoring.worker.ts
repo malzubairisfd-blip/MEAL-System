@@ -66,7 +66,7 @@ const records = cluster.records || [];
     }  
   }  
 
-  const avgWomanNameScore = safeAvg(pairScores.map((pair) => pair.nameScore));
+  const avgWomanNameScore = safeAvg(pairScores.map((pair) => (pair.firstNameScore + pair.familyNameScore) / 2));
   const avgHusbandNameScore = safeAvg(pairScores.map((pair) => pair.husbandScore));
   const avgFinalScore = avgWomanNameScore * 0.4 + avgHusbandNameScore * 0.6;
   const confidenceScore = calculateConfidenceScore(pairScores, records.length);  
@@ -87,8 +87,9 @@ const records = cluster.records || [];
     const entryA = perRecord[pair.aId];  
     const entryB = perRecord[pair.bId];  
     if (!entryA || !entryB) return;  
-    entryA.nameScore.push(pair.nameScore);
-    entryB.nameScore.push(pair.nameScore);
+    const womanNameScore = (pair.firstNameScore + pair.familyNameScore) / 2;
+    entryA.nameScore.push(womanNameScore);  
+    entryB.nameScore.push(womanNameScore);  
     entryA.husbandScore.push(pair.husbandScore);  
     entryB.husbandScore.push(pair.husbandScore);  
     entryA.childrenScore.push(pair.childrenScore);  
