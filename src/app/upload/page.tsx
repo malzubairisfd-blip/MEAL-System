@@ -153,15 +153,15 @@ const digitsOnlyFast = (value: any) => {
  * to transfer. The cluster worker will use these to form blocks and only
  * compare candidates inside blocks.
  */
-const buildBlockingKeys = (row: any, mapping: Mapping) => {
+const buildBlockingKeys = (row: any) => {
   const keys: string[] = [];
 
-  const woman = fastNormalize(row[mapping.womanName] || "");
-  const husband = fastNormalize(row[mapping.husbandName] || "");
-  const village = fastNormalize(row[mapping.village] || "");
-  const subdistrict = fastNormalize(row[mapping.subdistrict] || "");
-  const phone = digitsOnlyFast(row[mapping.phone] || "");
-  const id = String(row[mapping.nationalId] || row.id || "");
+  const woman = fastNormalize(row.womanName || "");
+  const husband = fastNormalize(row.husbandName || "");
+  const village = fastNormalize(row.village || "");
+  const subdistrict = fastNormalize(row.subdistrict || "");
+  const phone = digitsOnlyFast(row.phone || "");
+  const id = String(row.nationalId || row.id || "");
 
   const firstToken = woman.split(/\s+/)[0] || "";
   if (firstToken) keys.push(`fn:${firstToken}`);
