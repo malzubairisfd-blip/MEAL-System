@@ -66,9 +66,9 @@ const records = cluster.records || [];
     }  
   }  
 
-  const avgWomanNameScore = safeAvg(pairScores.map((pair) => pair.tokenReorderScore));  
-  const avgHusbandNameScore = safeAvg(pairScores.map((pair) => pair.husbandScore));  
-  const avgFinalScore = avgWomanNameScore * 0.4 + avgHusbandNameScore * 0.6;  
+  const avgWomanNameScore = safeAvg(pairScores.map((pair) => pair.nameScore));
+  const avgHusbandNameScore = safeAvg(pairScores.map((pair) => pair.husbandScore));
+  const avgFinalScore = avgWomanNameScore * 0.4 + avgHusbandNameScore * 0.6;
   const confidenceScore = calculateConfidenceScore(pairScores, records.length);  
 
   const perRecord = records.reduce<Record<string, Record<string, number[]>>>((acc, record) => {  
@@ -87,8 +87,8 @@ const records = cluster.records || [];
     const entryA = perRecord[pair.aId];  
     const entryB = perRecord[pair.bId];  
     if (!entryA || !entryB) return;  
-    entryA.nameScore.push(pair.tokenReorderScore);  
-    entryB.nameScore.push(pair.tokenReorderScore);  
+    entryA.nameScore.push(pair.nameScore);
+    entryB.nameScore.push(pair.nameScore);
     entryA.husbandScore.push(pair.husbandScore);  
     entryB.husbandScore.push(pair.husbandScore);  
     entryA.childrenScore.push(pair.childrenScore);  
