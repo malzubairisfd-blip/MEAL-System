@@ -296,7 +296,7 @@ const applyAdditionalRules = (a: PreprocessedRow, b: PreprocessedRow, opts: type
       investigationWords.some((word) => HB.includes(word));
 
     if (hasInvestigation && jw(A[0], B[0]) >= 0.95 && jw(A[A.length - 1], B[B.length - 1]) >= 0.9 && nameOrderFreeScore(HA, HB) >= 0.93) {
-      return { reason: "INVESTIGATION_PLACEHOLDER", boost: 0.25 };
+      return { reason: "ADMINISTRATIVE_PLACEHOLDER_OVERRIDE", boost: 0.25 };
     }
 
     const husbandSame = nameOrderFreeScore(HA, HB) >= 0.8;
@@ -332,29 +332,7 @@ export function computePairScore(rawA: any, rawB: any, opts: WorkerOptions) {
   const rowA = preprocessRow(rawA);
   const rowB = preprocessRow(rawB);
 
-  const ruleResult = applyAdditionalRules(rowA, rowB, mergedOpts);
-  if (ruleResult) {
-    return {
-      score: ruleResult.score,
-      reasons: ruleResult.reasons,
-      breakdown: { reason: "RULE_BASED", boostedTo: ruleResult.score },
-    };
-  }
-
-  if (rowA.nationalId && rowB.nationalId && rowA.nationalId === rowB.nationalId) {
-    return { score: 0.99, reasons: ["EXACT_ID"], breakdown: { reason: "EXACT_ID" } };
-  }
-
-  const polygamyMatch =
-    mergedOpts.rules.enablePolygamyRules &&
-    jaroWinkler(rowA.husbandName_normalized, rowB.husbandName_normalized) >= 0.95 &&
-    jaroWinkler(rowA.parts[1] || "", rowB.parts[1] || "") >= 0.93 &&
-    jaroWinkler(rowA.parts[2] || "", rowB.parts[2] || "") >= 0.9;
-
-  if (polygamyMatch) {
-    return { score: 0.97, reasons: ["POLYGAMY_PATTERN"], breakdown: { reason: "POLYGAMY_PATTERN" } };
-  }
-
+  // --- Start Score Calculation ---
   const A = rowA.parts;
   const B = rowB.parts;
   const firstNameScore = jaroWinkler(A[0] || "", B[0] || "");
@@ -417,9 +395,33 @@ export function computePairScore(rawA: any, rawB: any, opts: WorkerOptions) {
               (W.locationScore || 0) * locationScore;
   const strongParts = [firstNameScore, familyNameScore, tokenReorderScore].filter((v: any) => v >= 0.85).length;
   if (strongParts >= 2) score = Math.min(1, score + 0.04);
-  score = Math.max(0, Math.min(1, score));
   
-  const reasons: any[] = [];
-  if (tokenReorderScore > 0.85) reasons.push("TOKEN_REORDER");
-  return { score, breakdown, reasons };
+  let finalScore = Math.max(0, Math.min(1, score));
+  let finalReasons: string[] = [];
+  if (tokenReorderScore > 0.85) finalReasons.push("TOKEN_REORDER");
+
+  // --- Apply Rules ---
+  const ruleResult = applyAdditionalRules(rowA, rowB, mergedOpts);
+  if (ruleResult) {
+    finalScore = ruleResult.score; // Override score if a rule matches
+    finalReasons = [...new Set([...finalReasons, ...ruleResult.reasons])];
+  }
+
+  if (rowA.nationalId && rowB.nationalId && rowA.nationalId === rowB.nationalId) {
+    finalScore = Math.max(finalScore, 0.99);
+    finalReasons.push("EXACT_ID");
+  }
+
+  const polygamyMatch =
+    mergedOpts.rules.enablePolygamyRules &&
+    jaroWinkler(rowA.husbandName_normalized, rowB.husbandName_normalized) >= 0.95 &&
+    jaroWinkler(rowA.parts[1] || "", rowB.parts[1] || "") >= 0.93 &&
+    jaroWinkler(rowA.parts[2] || "", rowB.parts[2] || "") >= 0.9;
+
+  if (polygamyMatch) {
+    finalScore = Math.max(finalScore, 0.97);
+    finalReasons.push("POLYGAMY_PATTERN");
+  }
+  
+  return { score: finalScore, breakdown, reasons: finalReasons };
 }
