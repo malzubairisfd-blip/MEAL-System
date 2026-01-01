@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, {
@@ -27,7 +26,13 @@ import {
   Clock,
 } from "lucide-react";
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -35,12 +40,20 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import type { RecordRow } from "@/lib/types";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { useTranslation } from "@/hooks/use-translation";
 import { Skeleton } from "@/components/ui/skeleton";
 import { registerServiceWorker } from "@/lib/registerSW";
 import { setupWakeLockListener } from "@/lib/wakeLock";
-import { cacheRawData, cacheFinalResult, loadCachedResult } from "@/lib/cache";
+import {
+  cacheRawData,
+  cacheFinalResult,
+  loadCachedResult,
+} from "@/lib/cache";
 
 type Mapping = {
   womanName: string;
@@ -86,6 +99,96 @@ type WorkerProgress = {
 
 type TimeInfo = { elapsed: number; remaining?: number };
 
+const normalizeArabicForBlocking = (value: any) => {
+  if (!value) return "";
+  let normalized: string;
+  try {
+    normalized = String(value)
+      .normalize("NFKC")
+      .replace(/\u064A\u062D\u064A\u064A/g, "\u064A\u062D\u064A")
+      .replace(/\u064A\u062D\u064A\u0649/g, "\u064A\u062D\u064A")
+      .replace(/\u0639\u0628\u062F /g, "\u0639\u0628\u062F")
+      .replace(
+        /[\u0651\u064E\u064B\u064C\u064D\u064E\u064F\u0650\u0652\u0640\u0621]/g,
+        ""
+      )
+      .replace(/[\u0623\u0625\u0622]/g, "\u0627")
+      .replace(/\u0649/g, "\u064A")
+      .replace(/\u0624/g, "\u0648")
+      .replace(/\u0626/g, "\u064A")
+      .replace(/\u0629/g, "\u0647")
+      .replace(/\u06AF/g, "\u0643")
+      .replace(/[^\u0621-\u064A0-9a-zA-Z\s]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .toLowerCase();
+  } catch {
+    normalized = "";
+  }
+  return normalized;
+};
+
+const digitsOnlyForBlocking = (value: any) => {
+  if (value === undefined || value === null) return "";
+  return String(value).replace(/\D/g, "");
+};
+
+const splitBlockingParts = (value: string) =>
+  value ? value.split(/\s+/).filter(Boolean) : [];
+
+const buildBlockingKeys = (row: any, mapping: Mapping) => {
+  const womanName = String(row[mapping.womanName] ?? "");
+  const husbandName = String(row[mapping.husbandName] ?? "");
+  const nationalId = String(row[mapping.nationalId] ?? "");
+  const phone = String(row[mapping.phone] ?? "");
+  const childrenValue = row[mapping.children];
+  const normalizedWoman = normalizeArabicForBlocking(womanName);
+  const normalizedHusband = normalizeArabicForBlocking(husbandName);
+  const womanParts = splitBlockingParts(normalizedWoman);
+  const husbandParts = splitBlockingParts(normalizedHusband);
+  const keys = new Set<string>();
+  if (womanParts.length) {
+    keys.add(`W:${womanParts[0].slice(0, 4)}`);
+    if (womanParts.length > 1) {
+      keys.add(`WF:${womanParts[0].slice(0, 3)}:${womanParts[1].slice(0, 3)}`);
+    }
+  }
+  if (husbandParts.length) {
+    keys.add(`H:${husbandParts[0].slice(0, 4)}`);
+    if (husbandParts.length > 1) {
+      keys.add(`HV:${husbandParts[0].slice(0, 3)}:${husbandParts[1].slice(0, 3)}`);
+    }
+  }
+  if (normalizedHusband) {
+    keys.add(`HN:${normalizedHusband.slice(0, 6)}`);
+  }
+  if (nationalId) {
+    keys.add(`ID:${nationalId.slice(-4)}`);
+  }
+  const phoneDigits = digitsOnlyForBlocking(phone);
+  if (phoneDigits) {
+    keys.add(`P:${phoneDigits.slice(-4)}`);
+  }
+  if (childrenValue) {
+    const childrenList = Array.isArray(childrenValue)
+      ? childrenValue
+      : String(childrenValue)
+          .split(/[;,|،]/)
+          .map((part) => part.trim())
+          .filter(Boolean);
+    childrenList.slice(0, 2).forEach((child) => {
+      const normalizedChild = normalizeArabicForBlocking(child);
+      if (normalizedChild) {
+        keys.add(`C:${normalizedChild.slice(0, 4)}`);
+      }
+    });
+  }
+  if (!keys.size) {
+    keys.add(`ROW:${row._internalId}`);
+  }
+  return Array.from(keys).slice(0, 5);
+};
+
 const SummaryCard = ({
   icon,
   title,
@@ -111,80 +214,6 @@ const SummaryCard = ({
   </Card>
 );
 
-/**
- * Lightweight, fast normalization on main thread for blocking key construction.
- * Intentionally simpler than cluster normalization but consistent enough to
- * group likely candidates before sending to the worker.
- */
-const fastNormalize = (value: any) => {
-  if (!value && value !== 0) return "";
-  try {
-    value = String(value);
-  } catch {
-    value = "";
-  }
-  return value
-    .normalize("NFKC")
-    .replace(/[ًٌٍََُِّْـ]/g, "")
-    .replace(/[أإآ]/g, "ا")
-    .replace(/ى/g, "ي")
-    .replace(/ؤ/g, "و")
-    .replace(/ئ/g, "ي")
-    .replace(/ة/g, "ه")
-    .replace(/گ/g, "ك")
-    .replace(/[^ء-ي0-9a-zA-Z\s]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .toLowerCase();
-};
-
-const digitsOnlyFast = (value: any) => {
-  if (value === undefined || value === null) return "";
-  return String(value).replace(/\D/g, "");
-};
-
-/**
- * Build a small set of blocking keys for each row. These are intentionally
- * compact and cheap to compute. They are uploaded alongside the chunks so the
- * cluster worker can form blocks and only compare reduced candidate sets.
- */
-const buildBlockingKeys = (row: any, mapping: Mapping) => {
-  const keys: string[] = [];
-
-  const woman = fastNormalize(row[mapping.womanName] || "");
-  const husband = fastNormalize(row[mapping.husbandName] || "");
-  const village = fastNormalize(row[mapping.village] || "");
-  const subdistrict = fastNormalize(row[mapping.subdistrict] || "");
-  const phone = digitsOnlyFast(row[mapping.phone] || "");
-  const id = String(row[mapping.nationalId] || row.id || "");
-
-  // first-name token (first token)
-  const firstToken = woman.split(/\s+/)[0] || "";
-  if (firstToken) keys.push(`fn:${firstToken}`);
-
-  // family name token (last token)
-  const familyToken = woman.split(/\s+/).slice(-1)[0] || "";
-  if (familyToken) keys.push(`ln:${familyToken}`);
-
-  // husband first token
-  const husbandFirst = husband.split(/\s+/)[0] || "";
-  if (husbandFirst) keys.push(`hf:${husbandFirst}`);
-
-  // phone suffixes
-  if (phone.length >= 6) keys.push(`ph6:${phone.slice(-6)}`);
-  if (phone.length >= 4) keys.push(`ph4:${phone.slice(-4)}`);
-
-  // id suffix
-  if (id.length >= 5) keys.push(`id5:${id.slice(-5)}`);
-
-  // location keys
-  if (village) keys.push(`v:${village}`);
-  if (subdistrict) keys.push(`s:${subdistrict}`);
-
-  // ensure uniqueness
-  return Array.from(new Set(keys));
-};
-
 export default function UploadPage() {
   const { t, isLoading: isTranslationLoading } = useTranslation();
   const { toast } = useToast();
@@ -203,7 +232,10 @@ export default function UploadPage() {
     beneficiaryId: "",
   });
   const [isDataCached, setIsDataCached] = useState(false);
-  const [progressInfo, setProgressInfo] = useState<WorkerProgress>({ status: "idle", progress: 0 });
+  const [progressInfo, setProgressInfo] = useState<WorkerProgress>({
+    status: "idle",
+    progress: 0,
+  });
   const [workerStatus, setWorkerStatus] = useState("idle");
   const [clusters, setClusters] = useState<any[]>([]);
   const [fileReadProgress, setFileReadProgress] = useState(0);
@@ -211,7 +243,6 @@ export default function UploadPage() {
   const [timeInfo, setTimeInfo] = useState<TimeInfo>({ elapsed: 0 });
 
   const rawRowsRef = useRef<any[]>([]);
-  const preblockedRowsRef = useRef<any[] | null>(null);
   const clusterWorkerRef = useRef<Worker | null>(null);
   const scoringWorkerRef = useRef<Worker | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -229,7 +260,6 @@ export default function UploadPage() {
     setFile(null);
     setColumns([]);
     rawRowsRef.current = [];
-    preblockedRowsRef.current = null;
     setClusters([]);
     setWorkerStatus("idle");
     setProgressInfo({ status: "idle", progress: 0 });
@@ -242,8 +272,14 @@ export default function UploadPage() {
 
   useEffect(() => {
     registerServiceWorker();
-    const clusterWorker = new Worker(new URL("@/workers/cluster.worker.ts", import.meta.url), { type: "module" });
-    const scoringWorker = new Worker(new URL("@/workers/scoring.worker.ts", import.meta.url), { type: "module" });
+    const clusterWorker = new Worker(
+      new URL("@/workers/cluster.worker.ts", import.meta.url),
+      { type: "module" }
+    );
+    const scoringWorker = new Worker(
+      new URL("@/workers/scoring.worker.ts", import.meta.url),
+      { type: "module" }
+    );
 
     clusterWorkerRef.current = clusterWorker;
     scoringWorkerRef.current = scoringWorker;
@@ -259,70 +295,14 @@ export default function UploadPage() {
       }
       if (msg.type === "done") {
         const rawClusters = msg.payload?.clusters ?? [];
-        const edgesUsed = msg.payload?.edgesUsed ?? [];
-        const rows = msg.payload?.rows ?? [];
-
         toast({
           title: "Calculating Scores",
-          description: "Clustering complete. Now calculating detailed similarity scores.",
+          description:
+            "Clustering complete. Now calculating detailed similarity scores.",
         });
         setWorkerStatus("calculating_scores");
         setProgressInfo({ status: "calculating_scores", progress: 96 });
-
-        // Build a reduced candidate set (pairs) from edgesUsed and a small rows map
-        try {
-          const candidates: any[] = [];
-          const rowsMap: Record<string, any> = {};
-          // map rows by internalId for any rows that appear in edges or in clusters
-          const referencedIds = new Set<string>();
-
-          // edgesUsed indices refer to the rows array returned by the cluster worker
-          for (const e of edgesUsed) {
-            const a = rows[e.a];
-            const b = rows[e.b];
-            if (!a || !b) continue;
-            referencedIds.add(a._internalId);
-            referencedIds.add(b._internalId);
-            candidates.push({
-              aId: a._internalId,
-              bId: b._internalId,
-              score: e.score,
-              reasons: e.reasons,
-              breakdown: e.breakdown || undefined,
-            });
-          }
-
-          // ensure cluster records are available too
-          for (const cluster of rawClusters) {
-            for (const rec of cluster.records || []) {
-              referencedIds.add(rec._internalId);
-            }
-          }
-
-          // populate rowsMap with rows from the full rows array where referenced
-          for (const r of rows) {
-            if (referencedIds.has(r._internalId)) {
-              rowsMap[r._internalId] = r;
-            }
-          }
-
-          // Also include the cluster record objects (they might be normalized copies)
-          for (const cluster of rawClusters) {
-            for (const rec of cluster.records || []) {
-              rowsMap[rec._internalId] = rec;
-            }
-          }
-
-          scoringWorkerRef.current?.postMessage({
-            rawClusters,
-            candidatePairs: candidates,
-            rowsMap,
-          });
-        } catch (err) {
-          // fallback: send only clusters
-          scoringWorkerRef.current?.postMessage({ rawClusters });
-        }
-
+        scoringWorker.postMessage({ rawClusters });
         return;
       }
       if (msg.type === "error") {
@@ -356,7 +336,8 @@ export default function UploadPage() {
               ...currentData,
               clusters: enrichedClusters,
               rows: currentData?.rows ?? rawRowsRef.current,
-              originalHeaders: currentData?.originalHeaders ?? columns,
+              originalHeaders:
+                currentData?.originalHeaders ?? columns,
             });
             setWorkerStatus("done");
             setProgressInfo({ status: "done", progress: 100 });
@@ -379,7 +360,11 @@ export default function UploadPage() {
       }
       if (msg.type === "error") {
         setWorkerStatus("error");
-        toast({ title: "Scoring Worker Error", description: msg.error, variant: "destructive" });
+        toast({
+          title: "Scoring Worker Error",
+          description: msg.error,
+          variant: "destructive",
+        });
       }
     };
 
@@ -401,7 +386,8 @@ export default function UploadPage() {
       if (!notifiedAboutSaveRef.current) {
         toast({
           title: "Mapping Saved",
-          description: "Your column mapping has been saved locally for this file structure.",
+          description:
+            "Your column mapping has been saved locally for this file structure.",
         });
         notifiedAboutSaveRef.current = true;
       }
@@ -419,9 +405,13 @@ export default function UploadPage() {
       timerRef.current = setInterval(() => {
         const elapsed = (Date.now() - startTimeRef.current!) / 1000;
         let remaining;
-        if (progressInfoRef.current.progress > 0 && progressInfoRef.current.progress < 100) {
+        if (
+          progressInfoRef.current.progress > 0 &&
+          progressInfoRef.current.progress < 100
+        ) {
           remaining =
-            (elapsed / progressInfoRef.current.progress) * (100 - progressInfoRef.current.progress);
+            (elapsed / progressInfoRef.current.progress) *
+            (100 - progressInfoRef.current.progress);
         }
         setTimeInfo({ elapsed, remaining });
       }, 1000);
@@ -456,28 +446,32 @@ export default function UploadPage() {
           const sheet = workbook.Sheets[workbook.SheetNames[0]];
           const json = XLSX.utils.sheet_to_json<any>(sheet, { defval: "" });
           const detectedColumns = Object.keys(json[0] || {});
-
           const rowsWithId = json.map((row, index) => ({
             ...row,
             _internalId: `row_${Date.now()}_${index}`,
           }));
-
           rawRowsRef.current = rowsWithId;
-          await cacheRawData({ rows: rowsWithId, originalHeaders: detectedColumns });
+          await cacheRawData({
+            rows: rowsWithId,
+            originalHeaders: detectedColumns,
+          });
           setIsDataCached(true);
 
-          const storageKey = `${LOCAL_STORAGE_KEY_PREFIX}${detectedColumns.join(",")}`;
+          const storageKey = `${LOCAL_STORAGE_KEY_PREFIX}${detectedColumns.join(
+            ","
+          )}`;
           const saved = localStorage.getItem(storageKey);
           if (saved) {
             try {
               setMapping(JSON.parse(saved));
               toast({
                 title: "Mapping Loaded",
-                description: "Loaded saved column mapping from your last session.",
+                description:
+                  "Loaded saved column mapping from your last session.",
               });
               notifiedAboutSaveRef.current = true;
             } catch {
-              // Fallback to default if parsing fails
+              void 0;
             }
           }
 
@@ -507,7 +501,7 @@ export default function UploadPage() {
       const data = await response.json();
       if (data.ok) return data.settings || {};
     } catch {
-      // ignore
+      void 0;
     }
     return {};
   }, []);
@@ -522,9 +516,16 @@ export default function UploadPage() {
       return;
     }
     if (!isMappingComplete) {
-      toast({ title: t("upload.toasts.mappingIncomplete"), variant: "destructive" });
+      toast({
+        title: t("upload.toasts.mappingIncomplete"),
+        variant: "destructive",
+      });
       return;
     }
+    rawRowsRef.current = rawRowsRef.current.map((row) => ({
+      ...row,
+      blockKeys: buildBlockingKeys(row, mapping),
+    }));
     setIsMappingOpen(false);
     setWorkerStatus("processing");
     setProgressInfo({ status: "processing", progress: 1 });
@@ -533,30 +534,17 @@ export default function UploadPage() {
 
     const settings = await fetchSettings();
 
-    // Build blocking keys on the main thread quickly to avoid sending the entire dataset into workers.
-    // This preprocessing is intentionally lightweight and synchronous.
-    const preblocked = rawRowsRef.current.map((r) => {
-      // keep original fields but add cheap blocking keys for the worker to create candidate blocks
-      return {
-        ...r,
-        _blockingKeys: buildBlockingKeys(r, mapping),
-      };
-    });
-    preblockedRowsRef.current = preblocked;
-
     clusterWorkerRef.current.postMessage({
       type: "start",
       payload: { mapping, options: settings },
     });
 
-    // Stream the preblocked rows in chunks (same CHUNK_SIZE semantics)
-    for (let i = 0; i < preblocked.length; i += CHUNK_SIZE) {
-      const chunk = preblocked.slice(i, i + CHUNK_SIZE);
+    for (let i = 0; i < rawRowsRef.current.length; i += CHUNK_SIZE) {
+      const chunk = rawRowsRef.current.slice(i, i + CHUNK_SIZE);
       clusterWorkerRef.current.postMessage({
         type: "data",
-        payload: { rows: chunk, total: preblocked.length },
+        payload: { rows: chunk, total: rawRowsRef.current.length },
       });
-      // a short pause to keep UI responsive and let main thread handle messages
       await new Promise((resolve) => setTimeout(resolve, 8));
     }
     clusterWorkerRef.current.postMessage({ type: "end" });
@@ -566,7 +554,9 @@ export default function UploadPage() {
     const h = Math.floor(seconds / 3600);
     const m = Math.floor((seconds % 3600) / 60);
     const s = Math.floor(seconds % 60);
-    return [h > 0 ? `${h}h` : "", m > 0 ? `${m}m` : "", `${s}s`].filter(Boolean).join(" ");
+    return [h > 0 ? `${h}h` : "", m > 0 ? `${m}m` : "", `${s}s`]
+      .filter(Boolean)
+      .join(" ");
   }, []);
 
   const formattedStatus = useCallback(() => {
@@ -579,7 +569,8 @@ export default function UploadPage() {
   }, [isTranslationLoading, progressInfo, t]);
 
   const getButtonText = useCallback(() => {
-    if (isTranslationLoading) return <Loader2 className="mr-2 h-4 w-4 animate-spin" />;
+    if (isTranslationLoading)
+      return <Loader2 className="mr-2 h-4 w-4 animate-spin" />;
     switch (workerStatus) {
       case "processing":
       case "blocking":
@@ -604,13 +595,29 @@ export default function UploadPage() {
       <Card>
         <CardHeader className="flex flex-row items-start justify-between">
           <div>
-            <CardTitle>{isTranslationLoading ? <Skeleton className="h-8 w-48" /> : t("upload.steps.1.title")}</CardTitle>
-            <CardDescription>{isTranslationLoading ? <Skeleton className="h-5 w-64 mt-1" /> : t("upload.steps.1.description")}</CardDescription>
+            <CardTitle>
+              {isTranslationLoading ? (
+                <Skeleton className="h-8 w-48" />
+              ) : (
+                t("upload.steps.1.title")
+              )}
+            </CardTitle>
+            <CardDescription>
+              {isTranslationLoading ? (
+                <Skeleton className="h-5 w-64 mt-1" />
+              ) : (
+                t("upload.steps.1.description")
+              )}
+            </CardDescription>
           </div>
           <Button variant="outline" asChild>
             <Link href="/settings">
               <Settings className="mr-2 h-4 w-4" />
-              {isTranslationLoading ? <Skeleton className="h-5 w-20" /> : t("upload.buttons.settings")}
+              {isTranslationLoading ? (
+                <Skeleton className="h-5 w-20" />
+              ) : (
+                t("upload.buttons.settings")
+              )}
             </Link>
           </Button>
         </CardHeader>
@@ -632,10 +639,14 @@ export default function UploadPage() {
                   ) : (
                     <>
                       <p className="mb-2 text-sm text-muted-foreground">
-                        <span className="font-semibold">{t("upload.file.clickToUpload")}</span>{" "}
+                        <span className="font-semibold">
+                          {t("upload.file.clickToUpload")}
+                        </span>{" "}
                         {t("upload.file.orDragAndDrop")}
                       </p>
-                      <p className="text-xs text-muted-foreground">{t("upload.file.fileTypes")}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {t("upload.file.fileTypes")}
+                      </p>
                     </>
                   )}
                 </div>
@@ -669,8 +680,20 @@ export default function UploadPage() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle>{isTranslationLoading ? <Skeleton className="h-8 w-48" /> : t("upload.steps.2.title")}</CardTitle>
-                  <CardDescription>{isTranslationLoading ? <Skeleton className="h-5 w-64 mt-1" /> : t("upload.steps.2.description")}</CardDescription>
+                  <CardTitle>
+                    {isTranslationLoading ? (
+                      <Skeleton className="h-8 w-48" />
+                    ) : (
+                      t("upload.steps.2.title")
+                    )}
+                  </CardTitle>
+                  <CardDescription>
+                    {isTranslationLoading ? (
+                      <Skeleton className="h-5 w-64 mt-1" />
+                    ) : (
+                      t("upload.steps.2.description")
+                    )}
+                  </CardDescription>
                 </div>
                 <CollapsibleTrigger asChild>
                   <Button variant="ghost" size="sm">
@@ -691,7 +714,10 @@ export default function UploadPage() {
                         ) : (
                           <XCircle className="h-5 w-5 text-red-500" />
                         )}
-                        <Label htmlFor={String(field)} className="capitalize font-semibold text-base">
+                        <Label
+                          htmlFor={String(field)}
+                          className="capitalize font-semibold text-base"
+                        >
                           {t(`upload.mappingFields.${String(field)}`)}
                           {REQUIRED_MAPPING_FIELDS.includes(field as any) && (
                             <span className="text-destructive">*</span>
@@ -703,7 +729,9 @@ export default function UploadPage() {
                       <ScrollArea className="h-48 border-t">
                         <RadioGroup
                           value={mapping[field as keyof Mapping]}
-                          onValueChange={(value) => handleMappingChange(field as keyof Mapping, value)}
+                          onValueChange={(value) =>
+                            handleMappingChange(field as keyof Mapping, value)
+                          }
                           className="p-4 grid grid-cols-2 gap-2"
                         >
                           {columns.map((col) => (
@@ -732,8 +760,20 @@ export default function UploadPage() {
       {file && (
         <Card>
           <CardHeader>
-            <CardTitle>{isTranslationLoading ? <Skeleton className="h-8 w-48" /> : t("upload.steps.3.title")}</CardTitle>
-            <CardDescription>{isTranslationLoading ? <Skeleton className="h-5 w-64 mt-1" /> : t("upload.steps.3.description")}</CardDescription>
+            <CardTitle>
+              {isTranslationLoading ? (
+                <Skeleton className="h-8 w-48" />
+              ) : (
+                t("upload.steps.3.title")
+              )}
+            </CardTitle>
+            <CardDescription>
+              {isTranslationLoading ? (
+                <Skeleton className="h-5 w-64 mt-1" />
+              ) : (
+                t("upload.steps.3.description")
+              )}
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
@@ -742,12 +782,16 @@ export default function UploadPage() {
                 disabled={
                   !isMappingComplete ||
                   !isDataCached ||
-                  !(workerStatus === "idle" || workerStatus === "done" || workerStatus === "error")
+                  !(
+                    workerStatus === "idle" ||
+                    workerStatus === "done" ||
+                    workerStatus === "error"
+                  )
                 }
               >
                 {workerStatus !== "idle" &&
-                  workerStatus !== "done" &&
-                  workerStatus !== "error" ? (
+                workerStatus !== "done" &&
+                workerStatus !== "error" ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : null}
                 {getButtonText()}
@@ -787,9 +831,19 @@ export default function UploadPage() {
       {workerStatus === "done" && (
         <Card>
           <CardHeader>
-            <CardTitle>{isTranslationLoading ? <Skeleton className="h-8 w-48" /> : t("upload.steps.4.title")}</CardTitle>
+            <CardTitle>
+              {isTranslationLoading ? (
+                <Skeleton className="h-8 w-48" />
+              ) : (
+                t("upload.steps.4.title")
+              )}
+            </CardTitle>
             <CardDescription>
-              {isTranslationLoading ? <Skeleton className="h-5 w-64 mt-1" /> : t("upload.steps.4.description")}
+              {isTranslationLoading ? (
+                <Skeleton className="h-5 w-64 mt-1" />
+              ) : (
+                t("upload.steps.4.description")
+              )}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -807,7 +861,10 @@ export default function UploadPage() {
               <SummaryCard
                 icon={<Unlink className="h-4 w-4 text-muted-foreground" />}
                 title={t("upload.results.unclusteredRecords")}
-                value={rawRowsRef.current.length - clusters.flatMap((c) => c.records).length}
+                value={
+                  rawRowsRef.current.length -
+                  clusters.flatMap((c) => c.records).length
+                }
               />
               <SummaryCard
                 icon={<BoxSelect className="h-4 w-4 text-muted-foreground" />}
@@ -817,11 +874,18 @@ export default function UploadPage() {
               <SummaryCard
                 icon={<Sigma className="h-4 w-4 text-muted-foreground" />}
                 title={t("upload.results.avgClusterSize")}
-                value={clusters.length > 0 ? (clusters.flatMap((c) => c.records).length / clusters.length).toFixed(2) : 0}
+                value={
+                  clusters.length > 0
+                    ? (
+                        clusters.flatMap((c) => c.records).length / clusters.length
+                      ).toFixed(2)
+                    : 0
+                }
               />
             </div>
             <Button onClick={() => router.push("/review")} disabled={!clusters.length}>
-              {t("upload.buttons.goToReview")} <ChevronRight className="ml-2 h-4 w-4" />
+              {t("upload.buttons.goToReview")}{" "}
+              <ChevronRight className="ml-2 h-4 w-4" />
             </Button>
           </CardContent>
         </Card>
