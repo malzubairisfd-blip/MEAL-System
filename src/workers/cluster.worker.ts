@@ -1,4 +1,5 @@
 // --- Constants & Helpers ---
+
 const normalizeArabicRaw = (value: any) => {
   if (!value) return "";
   try {
@@ -45,6 +46,7 @@ const yieldToEventLoop = () =>
   new Promise<void>((resolve) => setTimeout(resolve, 0));
 
 // --- Similarity Functions ---
+
 const jaroWinkler = (a: string, b: string) => {
   const sanitizedA = String(a || "");
   const sanitizedB = String(b || "");
@@ -150,8 +152,6 @@ const applyAdditionalRules = (a: PreprocessedRow, b: PreprocessedRow, opts: Work
   const reasons: string[] = [];
 
   const s93 = (x: string, y: string) => jw(x || "", y || "") >= 0.93;
-  const s95 = (x: string, y: string) => jw(x || "", y || "") >= 0.95;
-  const get = (arr: string[], i: number) => arr[i] || "";
 
   /* -------------------------------------------------
      1️⃣ FULL WOMAN + HUSBAND SPELLING VARIANT (STRONGEST)
@@ -399,7 +399,6 @@ const preprocessRow = (raw: any): PreprocessedRow => {
 
 const pairwiseScore = (rowA: PreprocessedRow, rowB: PreprocessedRow, opts: WorkerOptions) => {
   const o = opts;
-  const weights = o.finalScoreWeights;
 
   const ruleResult = applyAdditionalRules(rowA, rowB, o);
   if (ruleResult) {
@@ -460,11 +459,7 @@ const pairwiseScore = (rowA: PreprocessedRow, rowB: PreprocessedRow, opts: Worke
       : 0;
   const childrenScore = tokenJaccard(rowA.children_normalized, rowB.children_normalized);
   let locationScore = 0;
-  if (
-    rowA.village_normalized &&
-    rowB.village_normalized &&
-    rowA.village_normalized === rowB.village_normalized
-  ) {
+  if (rowA.village_normalized && rowB.village_normalized && rowA.village_normalized === rowB.village_normalized) {
     locationScore += 0.4;
   }
   if (
@@ -510,6 +505,7 @@ const pairwiseScore = (rowA: PreprocessedRow, rowB: PreprocessedRow, opts: Worke
 };
 
 // --- Optimized Edges Builder (Blocking / Inverted Index) ---
+
 const buildEdges = async (
   rows: PreprocessedRow[],
   minScore: number,
@@ -720,10 +716,7 @@ const runClustering = async (rows: PreprocessedRow[], edges: any[], opts: Worker
 
     if (uf.size[rootA] + uf.size[rootB] <= 4) {
       const mergedRoot = uf.merge(rootA, rootB);
-      const aggregatedReasons = new Set([
-        ...(rootReasons.get(rootA) || []),
-        ...(rootReasons.get(rootB) || []),
-      ]);
+      const aggregatedReasons = new Set([...(rootReasons.get(rootA) || []), ...(rootReasons.get(rootB) || [])]);
       rootReasons.set(mergedRoot, aggregatedReasons);
       continue;
     }
@@ -751,7 +744,7 @@ const runClustering = async (rows: PreprocessedRow[], edges: any[], opts: Worker
       postMessage({
         type: "progress",
         status: "merging-edges",
-        progress: 60 + Math.round(35 * (idx / edges.length)),
+        progress: 60 + Math.round(25 * (idx / edges.length)),
         completed: idx + 1,
         total: edges.length,
       });
@@ -779,6 +772,46 @@ const runClustering = async (rows: PreprocessedRow[], edges: any[], opts: Worker
       finalClusters.push(cluster);
     });
   });
+
+  // --- REFINEMENT PASS START ---
+  let refinementMerges = -1;
+  let refinementPasses = 0;
+  while(refinementMerges !== 0 && refinementPasses < 3) {
+    refinementPasses++;
+    postMessage({ type: 'progress', status: 're-clustering-pass', progress: 85 + (refinementPasses * 3), pass: refinementPasses });
+    
+    const clusteredRecordIds = new Set(finalClusters.flatMap(c => c.records.map((r: any) => r._internalId)));
+    const unclusteredRows = rows.filter(r => !clusteredRecordIds.has(r._internalId));
+    let recordsToMove = new Map<string, number>(); // Map recordId to clusterIndex
+
+    for (let i = 0; i < finalClusters.length; i++) {
+      const cluster = finalClusters[i];
+      for (const clusterRecord of cluster.records) {
+        for (const unclusteredRecord of unclusteredRows) {
+          if (recordsToMove.has(unclusteredRecord._internalId)) continue;
+          
+          const womanNameScore = jaroWinkler(clusterRecord.womanName_normalized, unclusteredRecord.womanName_normalized);
+          if (womanNameScore > 0.90) { // High threshold for re-grouping
+             recordsToMove.set(unclusteredRecord._internalId, i);
+             break;
+          }
+        }
+      }
+    }
+    
+    refinementMerges = recordsToMove.size;
+    if (refinementMerges > 0) {
+      const recordsToMoveArray = Array.from(recordsToMove.entries());
+      for (const [recordId, clusterIndex] of recordsToMoveArray) {
+        const record = rows.find(r => r._internalId === recordId);
+        if (record) {
+          finalClusters[clusterIndex].records.push(record);
+        }
+      }
+    }
+  }
+  // --- REFINEMENT PASS END ---
+
 
   const mergedClusters = mergeOverlappingClusters(finalClusters);
 
