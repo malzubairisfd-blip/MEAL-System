@@ -633,14 +633,6 @@ const buildEdges = async (
       const matches = tokenMap.get(key);
       if (!matches) continue;
 
-      // If a single key returns massive results (e.g. "Name starts with Moh"),
-      // we only include them if it's not the ONLY key being checked, or strictly limit it.
-      // But for integrity, we process, just capped at deduplication step.
-      // Note: If 10k people are named Mohamed, we don't want to compare all of them.
-      // We only compare if they share something else OR if the list is manageable.
-
-      // Strict Rule: If the key is just a generic first name key, and it's huge, skip adding these candidates
-      // UNLESS the row also has other keys.
       if (matches.length > COMMON_TOKEN_THRESHOLD) {
         if (key.startsWith("W_N:") || key.startsWith("H_N:")) continue;
       }
@@ -656,7 +648,7 @@ const buildEdges = async (
     for (const j of candidates) {
       const result = pairwiseScore(rows[i], rows[j], opts);
       if (result.score >= minScore) {
-        edges.push({ a: i, b: j, score: result.score, reasons: result.reasons as string[] });
+        edges.push({ a: i, b: j, score: result.score, reasons: result.reasons });
       }
     }
 
@@ -682,7 +674,6 @@ const buildEdges = async (
 const preprocessIncoming = (rowsChunk: any[], mapping: any) =>
   rowsChunk.map((row, index) => {
     const mappedRow: any = {
-      // FIXED: use a proper template string fallback so _internalId always exists
       _internalId: row._internalId || `row_${Date.now()}_${index}`,
     };
 
