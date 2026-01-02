@@ -1,4 +1,3 @@
-
 // --- Constants & Helpers ---
 
 const normalizeArabicRaw = (value: any) => {
@@ -151,218 +150,52 @@ const applyAdditionalRules = (a: PreprocessedRow, b: PreprocessedRow, opts: Work
 
   const reasons: string[] = [];
 
-  // 1. Token Reorder
+  /* -------------------------------------------
+     HARD BLOCK: SAME FAMILY, DIFFERENT PERSON
+  ------------------------------------------- */
+  if (
+    A.length >= 4 &&
+    B.length >= 4 &&
+    jw(A[A.length - 1], B[B.length - 1]) >= 0.95 && // family name
+    jw(A[0], B[0]) < 0.85                           // different person
+  ) {
+    return null;
+  }
+
+  /* -------------------------------------------
+     TOKEN REORDER (FIXED)
+  ------------------------------------------- */
   const ratio = (() => {
     const setA = new Set(A);
     const setB = new Set(B);
     let inter = 0;
-    for (const token of setA) {
-      if (setB.has(token)) inter++;
-    }
+    for (const t of setA) if (setB.has(t)) inter++;
     const union = new Set([...setA, ...setB]).size;
     return union === 0 ? 0 : inter / union;
   })();
 
-  if (ratio >= 0.8) {
+  if (
+    ratio >= 0.8 &&
+    jw(A[0], B[0]) >= 0.93   // 👈 REQUIRED
+  ) {
     reasons.push("TOKEN_REORDER");
     return { score: Math.min(1, minPair + 0.22), reasons };
   }
 
-  // 2. Specific Lineage Rules
-  const firstNameMatch = A.length && B.length && jw(A[0], B[0]) >= 0.93;
-  const husbandStrong =
-    jw(a.husbandName_normalized, b.husbandName_normalized) >= 0.9 ||
-    nameOrderFreeScore(HA, HB) >= 0.9;
-  const childrenMatch = tokenJaccard(a.children_normalized, b.children_normalized) >= 0.9;
-
-  if (firstNameMatch && husbandStrong && childrenMatch) {
+  /* -------------------------------------------
+     STRONG DUPLICATE VIA HUSBAND / LINEAGE
+  ------------------------------------------- */
+  if (
+    jw(A[0], B[0]) >= 0.93 &&
+    nameOrderFreeScore(HA, HB) >= 0.9
+  ) {
     reasons.push("DUPLICATED_HUSBAND_LINEAGE");
-    return { score: minPair + 0.25, reasons };
-  }
-
-  const s93 = (x: string, y: string) => jw(x || "", y || "") >= 0.93;
-  const s95 = (x: string, y: string) => jw(x || "", y || "") >= 0.95;
-  const get = (arr: string[], index: number) => arr[index] || "";
-
-  const [F1, Fa1, G1, L1] = [get(A, 0), get(A, 1), get(A, 2), get(A, 3)];
-  const [F2, Fa2, G2, L2] = [get(B, 0), get(B, 1), get(B, 2), get(B, 3)];
-  const [HF1, HF2] = [get(HA, 0), get(HB, 0)];
-
-  const evaluate = () => {
-    if (s93(F1, F2) && s93(Fa1, Fa2) && s93(G1, G2) && jw(L1 || "", L2 || "") < 0.85) {
-      if (jw(HF1, HF2) < 0.7) return { reason: "WOMAN_LINEAGE_MATCH", boost: 0.18 };
-    }
-    if (s93(F1, F2) && s93(Fa1, Fa2) && s93(G1, G2) && jw(L1, L2) >= 0.85) {
-      if (jw(HF1, HF2) < 0.7) return { reason: "WOMAN_LINEAGE_MATCH", boost: 0.18 };
-    }
-    if ((A.length === 4 && B.length === 5) || (A.length === 5 && B.length === 4)) {
-      if (s93(F1, F2) && s93(Fa1, Fa2) && s93(G1, G2) && s93(L1 || "", L2 || "")) {
-        if (jw(HF1, HF2) < 0.7) return { reason: "WOMAN_LINEAGE_MATCH", boost: 0.17 };
-      }
-      if (s95(F1, F2) && s93(L1 || "", L2 || "") && s95(HF1, HF2) && s93(Fa1, Fa2) && !s93(G1, G2)) {
-        return { reason: "DUPLICATED_HUSBAND_LINEAGE", boost: 0.2 };
-      }
-      if (s93(F1, F2) && s93(Fa1, Fa2) && s93(G1, G2) && jw(HF1, HF2) < 0.7) {
-        return { reason: "WOMAN_LINEAGE_MATCH", boost: 0.16 };
-      }
-    }
-
-    if (A.length >= 3 && B.length >= 3 && HA.length >= 3 && HB.length >= 3) {
-      const womanFamilyScore = jw(A[A.length - 1], B[B.length - 1]) >= 0.9;
-      const womanLineageStrong =
-        jw(A[1], B[1]) >= 0.93 && jw(A[2], B[2]) >= 0.93 && womanFamilyScore;
-      const husbandSamePerson =
-        jw(HA[0], HB[0]) >= 0.93 &&
-        jw(HA[1], HB[1]) >= 0.93 &&
-        jw(HA[2], HB[2]) >= 0.93 &&
-        jw(HA[HA.length - 1], HB[HB.length - 1]) >= 0.9;
-      const womanFirstSupport = jw(A[0], B[0]) >= 0.55 || jw(A[0], B[0]) === 0;
-      if (womanLineageStrong && husbandSamePerson && womanFirstSupport) {
-        return { reason: "DUPLICATED_HUSBAND_LINEAGE", boost: 0.23 };
-      }
-    }
-
-    // START NEW RULES
-
-    // FIRST TO FOURTH NAME_MATCH_SAME_HUSBAND
-    if (
-      A.length >= 4 &&
-      A.length <= 5 &&
-      B.length >= 4 &&
-      B.length <= 5 &&
-      HA.length >= 4 &&
-      HB.length >= 4
-    ) {
-      const len = Math.max(A.length, B.length);
-      const AA = alignLineage(A, len);
-      const BB = alignLineage(B, len);
-
-      if (
-        jw(AA[0], BB[0]) >= 0.98 && // صفاء
-        jw(AA[1], BB[1]) >= 0.95 && // صادق / صدق
-        jw(AA[2], BB[2]) >= 0.95 && // يحي
-        jw(AA[len - 2], BB[len - 2]) >= 0.9 && // عبدالله
-        jw(AA[len - 1], BB[len - 1]) >= 0.9 && // الذفيف / عبدالله
-        jw(HA[0], HB[0]) >= 0.95 && // ابراهيم
-        jw(HA[1], HB[1]) >= 0.95 && // محمد
-        jw(HA[2], HB[2]) >= 0.95 && // احمد
-        jw(HA[HA.length - 1], HB[HB.length - 1]) >= 0.9 // حمزة / غانم
-      ) {
-        return {
-          reason: "WOMAN_AND_HUSBAND_LINEAGE_MATCH",
-          boost: 0.28,
-        };
-      }
-    }
-
-    if (
-      A.length >= 3 &&
-      B.length >= 3 &&
-      HA.length >= 4 &&
-      HB.length >= 4
-    ) {
-      if (
-        jw(A[0], B[0]) >= 0.98 && // فاطمة
-        jw(A[1], B[1]) >= 0.98 && // عبده
-        jw(A[2], B[2]) >= 0.93 && // محمد
-        jw(HA[0], HB[0]) >= 0.98 && // عبده
-        jw(HA[1], HB[1]) >= 0.98 && // غانم
-        jw(HA[2], HB[2]) >= 0.95 && // محمد
-        jw(HA[HA.length - 1], HB[HB.length - 1]) >= 0.9 // المشعر
-      ) {
-        return {
-          reason: "SAME_HUSBAND_WOMAN_FAMILY_CHANGED",
-          boost: 0.27,
-        };
-      }
-    }
-
-    if (
-      A.length === B.length &&
-      A.length >= 4 &&
-      HA.length === HB.length &&
-      HA.length >= 4
-    ) {
-      let womanMatches = 0;
-      let husbandMatches = 0;
-
-      for (let i = 0; i < A.length; i++) {
-        if (jw(A[i], B[i]) >= 0.97) womanMatches++;
-      }
-
-      for (let i = 0; i < HA.length; i++) {
-        if (jw(HA[i], HB[i]) >= 0.97) husbandMatches++;
-      }
-
-      if (
-        womanMatches >= A.length - 1 &&
-        husbandMatches >= HA.length - 1
-      ) {
-        return {
-          reason: "FULL_WOMAN_AND_HUSBAND_SPELLING_VARIANT",
-          boost: 0.32,
-        };
-      }
-    }
-
-    if (
-      A.length >= 4 &&
-      B.length >= 4 &&
-      HA.length >= 4 &&
-      HB.length >= 4
-    ) {
-      if (
-        jw(A[0], B[0]) >= 0.98 && // خلود
-        jw(A[A.length - 1], B[B.length - 1]) >= 0.93 && // دوده
-        jw(HA[0], HB[0]) >= 0.98 && // طارق
-        jw(HA[1], HB[1]) >= 0.95 && // احمد
-        jw(HA[2], HB[2]) >= 0.9 && // يحي
-        jw(HA[HA.length - 1], HB[HB.length - 1]) >= 0.95 // دوده
-      ) {
-        return {
-          reason: "SHARED_HOUSEHOLD_SAME_HUSBAND",
-          boost: 0.26,
-        };
-      }
-    }
-
-    // END NEW RULES
-
-    const investigationWords = ["تحت", "التحقيق", "مراجعة", "قيد", "موقوف", "غير", "مكتمل", "التحقق", "مراجعه"];
-    const hasInvestigation =
-      investigationWords.some((word) => A.includes(word)) ||
-      investigationWords.some((word) => B.includes(word)) ||
-      investigationWords.some((word) => HA.includes(word)) ||
-      investigationWords.some((word) => HB.includes(word));
-
-    if (
-      hasInvestigation &&
-      jw(A[0], B[0]) >= 0.95 &&
-      jw(A[A.length - 1], B[B.length - 1]) >= 0.9 &&
-      nameOrderFreeScore(HA, HB) >= 0.93
-    ) {
-      return { reason: "INVESTIGATION_PLACEHOLDER", boost: 0.25 };
-    }
-
-    const husbandSame = nameOrderFreeScore(HA, HB) >= 0.8;
-    const familySame = jw(A[A.length - 1], B[B.length - 1]) >= 0.9;
-    const lineageOverlap = A.filter((token) => B.some((value) => jw(token, value) >= 0.93)).length >= 3;
-
-    if (husbandSame && familySame && lineageOverlap) {
-      return { reason: "POLYGAMY_SHARED_HOUSEHOLD", boost: 0.3 };
-    }
-
-    return null;
-  };
-
-  const evaluation = evaluate();
-  if (evaluation) {
-    reasons.push(evaluation.reason);
-    return { score: Math.min(1, minPair + evaluation.boost), reasons };
+    return { score: Math.min(1, minPair + 0.25), reasons };
   }
 
   return null;
 };
+
 
 // --- Config & Options ---
 
