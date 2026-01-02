@@ -131,6 +131,25 @@ const nameOrderFreeScore = (aTokens: string[], bTokens: string[]) => {
 const splitParts = (value: string) =>
   value ? value.split(/\s+/).filter(Boolean) : [];
 
+const alignLineage = (arr: string[], targetLen: number) => {
+  if (arr.length === targetLen) return arr;
+  const copy = arr.slice();
+
+  // 4 → 5 (duplicate grandfather)
+  if (arr.length === 4 && targetLen === 5) {
+    copy.splice(2, 0, arr[2]);
+    return copy;
+  }
+
+  // 5 → 4 (remove weakest middle)
+  if (arr.length === 5 && targetLen === 4) {
+    copy.splice(2, 1);
+    return copy;
+  }
+
+  return copy;
+};
+
 // --- Rule Logic ---
 
 const applyAdditionalRules = (a: PreprocessedRow, b: PreprocessedRow, opts: WorkerOptions) => {
@@ -158,6 +177,104 @@ const applyAdditionalRules = (a: PreprocessedRow, b: PreprocessedRow, opts: Work
   if (ratio >= 0.8) {
     reasons.push("TOKEN_REORDER");
     return { score: Math.min(1, minPair + 0.22), reasons };
+  }
+  
+  if (
+    A.length >= 4 && A.length <= 5 &&
+    B.length >= 4 && B.length <= 5 &&
+    HA.length >= 4 && HB.length >= 4
+  ) {
+    const len = Math.max(A.length, B.length);
+    const AA = alignLineage(A, len);
+    const BB = alignLineage(B, len);
+  
+    if (
+      jw(AA[0], BB[0]) >= 0.95 &&
+      jw(AA[1], BB[1]) >= 0.93 &&
+      jw(AA[2], BB[2]) >= 0.95 &&
+      jw(AA[len - 2], BB[len - 2]) >= 0.9 &&
+      jw(AA[len - 1], BB[len - 1]) >= 0.9 &&
+      jw(HA[0], HB[0]) >= 0.95 &&
+      jw(HA[1], HB[1]) >= 0.95 &&
+      jw(HA[2], HB[2]) >= 0.95 &&
+      jw(HA[HA.length - 1], HB[HB.length - 1]) >= 0.9
+    ) {
+      return {
+        reason: "WOMAN_AND_HUSBAND_LINEAGE_MATCH",
+        boost: 0.28,
+      };
+    }
+  }
+
+  if (
+    A.length >= 3 &&
+    B.length >= 3 &&
+    HA.length >= 4 &&
+    HB.length >= 4
+  ) {
+    if (
+      jw(A[0], B[0]) >= 0.95 &&
+      jw(A[1], B[1]) >= 0.95 &&
+      jw(A[2], B[2]) >= 0.95 &&
+      jw(HA[0], HB[0]) >= 0.95 &&
+      jw(HA[1], HB[1]) >= 0.95 &&
+      jw(HA[2], HB[2]) >= 0.95 &&
+      jw(HA[HA.length - 1], HB[HB.length - 1]) >= 0.93
+    ) {
+      return {
+        reason: "SAME_HUSBAND_WOMAN_FAMILY_CHANGED",
+        boost: 0.27,
+      };
+    }
+  }
+
+  if (
+    A.length === B.length &&
+    A.length >= 4 &&
+    HA.length === HB.length &&
+    HA.length >= 4
+  ) {
+    let womanMatches = 0;
+    let husbandMatches = 0;
+  
+    for (let i = 0; i < A.length; i++) {
+      if (jw(A[i], B[i]) >= 0.95) womanMatches++;
+    }
+  
+    for (let i = 0; i < HA.length; i++) {
+      if (jw(HA[i], HB[i]) >= 0.95) husbandMatches++;
+    }
+  
+    if (
+      womanMatches >= A.length - 1 &&
+      husbandMatches >= HA.length - 1
+    ) {
+      return {
+        reason: "FULL_WOMAN_AND_HUSBAND_SPELLING_VARIANT",
+        boost: 0.32,
+      };
+    }
+  }
+
+  if (
+    A.length >= 4 &&
+    B.length >= 4 &&
+    HA.length >= 4 &&
+    HB.length >= 4
+  ) {
+    if (
+      jw(A[0], B[0]) >= 0.95 &&
+      jw(A[A.length - 1], B[B.length - 1]) >= 0.93 &&
+      jw(HA[0], HB[0]) >= 0.95 &&
+      jw(HA[1], HB[1]) >= 0.95 &&
+      jw(HA[2], HB[2]) >= 0.93 &&
+      jw(HA[HA.length - 1], HB[HB.length - 1]) >= 0.93
+    ) {
+      return {
+        reason: "SHARED_HOUSEHOLD_SAME_HUSBAND",
+        boost: 0.26,
+      };
+    }
   }
 
   // 2. Specific Lineage Rules
@@ -853,3 +970,8 @@ const splitCluster = (rowsSubset: PreprocessedRow[], minInternal: number, opts: 
 
   return result;
 };
+
+----
+
+
+Do not add anything stip your stupidity
