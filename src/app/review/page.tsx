@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
@@ -68,8 +69,8 @@ export default function ReviewPage() {
       const filtered = allClusters.filter((cluster) =>
         cluster.records.some(
           (r) =>
-            r.womanName?.toLowerCase().includes(s) ||
-            r.husbandName?.toLowerCase().includes(s) ||
+            String(r.womanName ?? '').toLowerCase().includes(s) ||
+            String(r.husbandName ?? '').toLowerCase().includes(s) ||
             String(r.phone ?? '').toLowerCase().includes(s)
         )
       );
