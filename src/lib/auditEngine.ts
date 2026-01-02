@@ -20,21 +20,22 @@ function digitsOnly(x: any) {
   return safeString(x).replace(/\D/g, "");
 }
 
-function normalizeArabic(s: string): string {
+function normalizeArabic(s: any): string {
   if (!s) return "";
-  s = s.normalize("NFKC");
-  s = s.replace(/يحيي/g, "يحي");
-  s = s.replace(/يحيى/g, "يحي");
-  s = s.replace(/عبد /g, "عبد");
-  s = s.replace(/[ًٌٍََُِّْـء]/g, "");
-  s = s.replace(/[أإآ]/g, "ا");
-  s = s.replace(/ى/g, "ي");
-  s = s.replace(/ؤ/g, "و");
-  s = s.replace(/ئ/g, "ي");
-  s = s.replace(/ة/g, "ه");
-  s = s.replace(/[^ء-ي0-9 ]/g, " ");
-  s = s.replace(/\s+/g, " ").trim();
-  return s.toLowerCase();
+  let str = String(s); // Ensure 's' is a string before calling normalize
+  str = str.normalize("NFKC");
+  str = str.replace(/يحيي/g, "يحي");
+  str = str.replace(/يحيى/g, "يحي");
+  str = str.replace(/عبد /g, "عبد");
+  str = str.replace(/[ًٌٍََُِّْـء]/g, "");
+  str = str.replace(/[أإآ]/g, "ا");
+  str = str.replace(/ى/g, "ي");
+  str = str.replace(/ؤ/g, "و");
+  str = str.replace(/ئ/g, "ي");
+  str = str.replace(/ة/g, "ه");
+  str = str.replace(/[^ء-ي0-9 ]/g, " ");
+  str = str.replace(/\s+/g, " ").trim();
+  return str.toLowerCase();
 }
 
 function tokens(s: string) {
