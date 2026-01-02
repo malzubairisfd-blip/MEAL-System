@@ -165,7 +165,7 @@ const applyAdditionalRules = (a: PreprocessedRow, b: PreprocessedRow, opts: Work
     return { score: Math.min(1, minPair + 0.22), reasons };
   }
 
-  const firstNameMatch = A.length && B.length && jw(A[0], B[0]) >= 0.93;
+  const firstNameMatch = A.length > 0 && B.length > 0 && jw(A[0], B[0]) >= 0.93;
   const husbandStrong =
     jw(a.husbandName_normalized, b.husbandName_normalized) >= 0.9 ||
     nameOrderFreeScore(HA, HB) >= 0.9;
@@ -202,131 +202,27 @@ const applyAdditionalRules = (a: PreprocessedRow, b: PreprocessedRow, opts: Work
         return { reason: "WOMAN_LINEAGE_MATCH", boost: 0.16 };
       }
     }
-
-    if (
-      A.length >= 3 &&
-      B.length >= 3 &&
-      HA.length >= 3 &&
-      HB.length >= 3
-    ) {
-      const womanFamilyScore = jw(A[A.length - 1], B[B.length - 1]) >= 0.9;
-      const womanLineageStrong =
-        jw(A[1], B[1]) >= 0.93 && jw(A[2], B[2]) >= 0.93 && womanFamilyScore;
-      const husbandSamePerson =
-        jw(HA[0], HB[0]) >= 0.93 &&
-        jw(HA[1], HB[1]) >= 0.93 &&
-        jw(HA[2], HB[2]) >= 0.93 &&
-        jw(HA[HA.length - 1], HB[HB.length - 1]) >= 0.9;
-      const womanFirstSupport = jw(A[0], B[0]) >= 0.55 || jw(A[0], B[0]) === 0;
-      if (womanLineageStrong && husbandSamePerson && womanFirstSupport) {
-        return { reason: "DUPLICATED_HUSBAND_LINEAGE", boost: 0.23 };
-      }
-    }
-
-    if (
-      A.length >= 4 &&
-      A.length <= 5 &&
-      B.length >= 4 &&
-      B.length <= 5 &&
-      HA.length >= 4 &&
-      HB.length >= 4
-    ) {
-      const len = Math.max(A.length, B.length);
-      const AA = alignLineage(A, len);
-      const BB = alignLineage(B, len);
-      if (
-        jw(AA[0], BB[0]) >= 0.98 &&
-        jw(AA[1], BB[1]) >= 0.95 &&
-        jw(AA[2], BB[2]) >= 0.95 &&
-        jw(AA[len - 2], BB[len - 2]) >= 0.9 &&
-        jw(AA[len - 1], BB[len - 1]) >= 0.9 &&
-        jw(HA[0], HB[0]) >= 0.95 &&
-        jw(HA[1], HB[1]) >= 0.95 &&
-        jw(HA[2], HB[2]) >= 0.95 &&
-        jw(HA[HA.length - 1], HB[HB.length - 1]) >= 0.9
-      ) {
-        return {
-          reason: "WOMAN_AND_HUSBAND_LINEAGE_MATCH",
-          boost: 0.28,
-        };
-      }
-    }
-
-    if (
-      A.length >= 3 &&
-      B.length >= 3 &&
-      HA.length >= 4 &&
-      HB.length >= 4
-    ) {
-      if (
-        jw(A[0], B[0]) >= 0.98 &&
-        jw(A[1], B[1]) >= 0.98 &&
-        jw(A[2], B[2]) >= 0.93 &&
-        jw(HA[0], HB[0]) >= 0.98 &&
-        jw(HA[1], HB[1]) >= 0.98 &&
-        jw(HA[2], HB[2]) >= 0.95 &&
-        jw(HA[HA.length - 1], HB[HB.length - 1]) >= 0.9
-      ) {
-        return {
-          reason: "SAME_HUSBAND_WOMAN_FAMILY_CHANGED",
-          boost: 0.27,
-        };
-      }
-    }
-
-    if (
-      A.length === B.length &&
-      A.length >= 4 &&
-      HA.length === HB.length &&
-      HA.length >= 4
-    ) {
-      let womanMatches = 0;
-      let husbandMatches = 0;
-
-      for (let i = 0; i < A.length; i++) {
-        if (jw(A[i], B[i]) >= 0.97) womanMatches++;
-      }
-
-      for (let i = 0; i < HA.length; i++) {
-        if (jw(HA[i], HB[i]) >= 0.97) husbandMatches++;
-      }
-
-      if (womanMatches >= A.length - 1 && husbandMatches >= HA.length - 1) {
-        return {
-          reason: "FULL_WOMAN_AND_HUSBAND_SPELLING_VARIANT",
-          boost: 0.32,
-        };
-      }
-    }
-
-    if (
-      A.length >= 4 &&
-      B.length >= 4 &&
-      HA.length >= 4 &&
-      HB.length >= 4
-    ) {
-      if (
-        jw(A[0], B[0]) >= 0.98 &&
-        jw(A[A.length - 1], B[B.length - 1]) >= 0.93 &&
-        jw(HA[0], HB[0]) >= 0.98 &&
-        jw(HA[1], HB[1]) >= 0.95 &&
-        jw(HA[2], HB[2]) >= 0.9 &&
-        jw(HA[HA.length - 1], HB[HB.length - 1]) >= 0.95
-      ) {
-        return {
-          reason: "SHARED_HOUSEHOLD_SAME_HUSBAND",
-          boost: 0.26,
-        };
-      }
-    }
-
-    return null;
   };
 
-  const evaluationResult = evaluate();
-  if (evaluationResult) {
-    reasons.push(evaluationResult.reason);
-    return { score: Math.min(1, minPair + evaluationResult.boost), reasons };
+  const evaluation = evaluate();
+  if (evaluation) {
+    reasons.push(evaluation.reason);
+    return { score: Math.min(1, minPair + evaluation.boost), reasons };
+  }
+
+  if (A.length >= 3 && B.length >= 3 && HA.length >= 3 && HB.length >= 3) {
+    const womanFamilyScore = jw(A[A.length - 1], B[B.length - 1]) >= 0.9;
+    const womanLineageStrong =
+      jw(A[1], B[1]) >= 0.93 && jw(A[2], B[2]) >= 0.93 && womanFamilyScore;
+    const husbandSamePerson =
+      jw(HA[0], HB[0]) >= 0.93 &&
+      jw(HA[1], HB[1]) >= 0.93 &&
+      jw(HA[2], HB[2]) >= 0.93 &&
+      jw(HA[HA.length - 1], HB[HB.length - 1]) >= 0.9;
+    const womanFirstSupport = jw(A[0], B[0]) >= 0.55 || jw(A[0], B[0]) === 0;
+    if (womanLineageStrong && husbandSamePerson && womanFirstSupport) {
+      return { reason: "DUPLICATED_HUSBAND_LINEAGE", boost: 0.23 };
+    }
   }
 
   const investigationWords = ["تحت", "التحقيق", "مراجعة", "قيد", "موقوف", "غير", "مكتمل", "التحقق", "مراجعه"];
@@ -347,7 +243,8 @@ const applyAdditionalRules = (a: PreprocessedRow, b: PreprocessedRow, opts: Work
 
   const husbandSame = nameOrderFreeScore(HA, HB) >= 0.8;
   const familySame = jw(A[A.length - 1], B[B.length - 1]) >= 0.9;
-  const lineageOverlap = A.filter((token) => B.some((value) => jw(token, value) >= 0.93)).length >= 3;
+  const lineageOverlap =
+    A.filter((token) => B.some((value) => jw(token, value) >= 0.93)).length >= 3;
 
   if (husbandSame && familySame && lineageOverlap) {
     return { reason: "POLYGAMY_SHARED_HOUSEHOLD", boost: 0.3 };
@@ -574,17 +471,17 @@ const buildEdges = async (
   for (let i = 0; i < n; i++) {
     const row = rows[i];
 
-    if (row.nationalId) addToken(`ID:${row.nationalId}`, i);
-    if (row.phone && row.phone.length >= 6) addToken(`PH:${row.phone.slice(-6)}`, i);
+    if (row.nationalId) addToken(\`ID:\${row.nationalId}\`, i);
+    if (row.phone && row.phone.length >= 6) addToken(\`PH:\${row.phone.slice(-6)}\`, i);
     if (row.parts[0] && row.parts[0].length >= 2) {
-      addToken(`W_N:${row.parts[0].substring(0, 3)}`, i);
+      addToken(\`W_N:\${row.parts[0].substring(0, 3)}\`, i);
     }
     if (row.husbandParts[0] && row.husbandParts[0].length >= 2) {
-      addToken(`H_N:${row.husbandParts[0].substring(0, 3)}`, i);
+      addToken(\`H_N:\${row.husbandParts[0].substring(0, 3)}\`, i);
     }
     if (row.parts.length > 1) {
       const last = row.parts[row.parts.length - 1];
-      if (last.length > 2) addToken(`W_L:${last}`, i);
+      if (last.length > 2) addToken(\`W_L:\${last}\`, i);
     }
 
     if (i % 25000 === 0) {
@@ -601,13 +498,13 @@ const buildEdges = async (
     const row = rows[i];
     const candidates = new Set<number>();
     const keysToCheck: string[] = [];
-    if (row.nationalId) keysToCheck.push(`ID:${row.nationalId}`);
-    if (row.phone && row.phone.length >= 6) keysToCheck.push(`PH:${row.phone.slice(-6)}`);
-    if (row.parts[0] && row.parts[0].length >= 2) keysToCheck.push(`W_N:${row.parts[0].substring(0, 3)}`);
-    if (row.husbandParts[0] && row.husbandParts[0].length >= 2) keysToCheck.push(`H_N:${row.husbandParts[0].substring(0, 3)}`);
+    if (row.nationalId) keysToCheck.push(\`ID:\${row.nationalId}\`);
+    if (row.phone && row.phone.length >= 6) keysToCheck.push(\`PH:\${row.phone.slice(-6)}\`);
+    if (row.parts[0] && row.parts[0].length >= 2) keysToCheck.push(\`W_N:\${row.parts[0].substring(0, 3)}\`);
+    if (row.husbandParts[0] && row.husbandParts[0].length >= 2) keysToCheck.push(\`H_N:\${row.husbandParts[0].substring(0, 3)}\`);
     if (row.parts.length > 1) {
       const last = row.parts[row.parts.length - 1];
-      if (last.length > 2) keysToCheck.push(`W_L:${last}`);
+      if (last.length > 2) keysToCheck.push(\`W_L:\${last}\`);
     }
 
     for (const key of keysToCheck) {
@@ -652,7 +549,7 @@ const buildEdges = async (
 const preprocessIncoming = (rowsChunk: any[], mapping: any) =>
   rowsChunk.map((row, index) => {
     const mappedRow: any = {
-      _internalId: row._internalId || `row_${Date.now()}_${index}`,
+      _internalId: row._internalId || \`row_\${Date.now()}_\${index}\`,
     };
 
     Object.entries(mapping).forEach(([key, column]) => {
@@ -758,10 +655,7 @@ const runClustering = async (rows: PreprocessedRow[], edges: any[], opts: Worker
 
     if (uf.size[rootA] + uf.size[rootB] <= 4) {
       const mergedRoot = uf.merge(rootA, rootB);
-      const aggregatedReasons = new Set([
-        ...(rootReasons.get(rootA) || []),
-        ...(rootReasons.get(rootB) || []),
-      ]);
+      const aggregatedReasons = new Set([...(rootReasons.get(rootA) || []), ...(rootReasons.get(rootB) || [])]);
       rootReasons.set(mergedRoot, aggregatedReasons);
       continue;
     }
@@ -981,7 +875,7 @@ const mergeDedupPairScores = (target: any[], source: any[]) => {
     const bKey = edge.bId ?? edge.b ?? "";
     if (!aKey || !bKey) return;
     const sorted = [aKey, bKey].sort();
-    map.set(`${sorted[0]}_${sorted[1]}`, edge);
+    map.set(\`\${sorted[0]}_\${sorted[1]}\`, edge);
   };
   target.forEach(addEdge);
   source.forEach(addEdge);
