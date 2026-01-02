@@ -180,102 +180,103 @@ const applyAdditionalRules = (a: PreprocessedRow, b: PreprocessedRow, opts: Work
   }
   
   if (
-    A.length >= 4 && A.length <= 5 &&
-    B.length >= 4 && B.length <= 5 &&
-    HA.length >= 4 && HB.length >= 4
+  A.length >= 4 && A.length <= 5 &&
+  B.length >= 4 && B.length <= 5 &&
+  HA.length >= 4 && HB.length >= 4
+) {
+  const len = Math.max(A.length, B.length);
+  const AA = alignLineage(A, len);
+  const BB = alignLineage(B, len);
+
+  if (
+    jw(AA[0], BB[0]) >= 0.95 &&           // صفاء
+    jw(AA[1], BB[1]) >= 0.93 &&           // صادق / صدق
+    jw(AA[2], BB[2]) >= 0.93 &&           // يحي
+    jw(AA[len - 2], BB[len - 2]) >= 0.9 &&// عبدالله
+    jw(AA[len - 1], BB[len - 1]) >= 0.9 &&// الذفيف / عبدالله
+    jw(HA[0], HB[0]) >= 0.95 &&            // ابراهيم
+    jw(HA[1], HB[1]) >= 0.95 &&            // محمد
+    jw(HA[2], HB[2]) >= 0.95 &&            // احمد
+    jw(HA[HA.length - 1], HB[HB.length - 1]) >= 0.9 // حمزة / غانم
   ) {
-    const len = Math.max(A.length, B.length);
-    const AA = alignLineage(A, len);
-    const BB = alignLineage(B, len);
-  
-    if (
-      jw(AA[0], BB[0]) >= 0.95 &&
-      jw(AA[1], BB[1]) >= 0.93 &&
-      jw(AA[2], BB[2]) >= 0.95 &&
-      jw(AA[len - 2], BB[len - 2]) >= 0.9 &&
-      jw(AA[len - 1], BB[len - 1]) >= 0.9 &&
-      jw(HA[0], HB[0]) >= 0.95 &&
-      jw(HA[1], HB[1]) >= 0.95 &&
-      jw(HA[2], HB[2]) >= 0.95 &&
-      jw(HA[HA.length - 1], HB[HB.length - 1]) >= 0.9
-    ) {
-      return {
-        reason: "WOMAN_AND_HUSBAND_LINEAGE_MATCH",
-        boost: 0.28,
-      };
-    }
+    return {
+      reason: "WOMAN_AND_HUSBAND_LINEAGE_MATCH",
+      boost: 0.28,
+    };
+  }
+}
+
+  if (
+  A.length >= 3 &&
+  B.length >= 3 &&
+  HA.length >= 4 &&
+  HB.length >= 4
+) {
+  if (
+    jw(A[0], B[0]) >= 0.95 &&       // فاطمة
+    jw(A[1], B[1]) >= 0.95 &&       // عبده
+    jw(A[2], B[2]) >= 0.95 &&       // محمد
+    jw(HA[0], HB[0]) >= 0.95 &&     // عبده
+    jw(HA[1], HB[1]) >= 0.95 &&     // غانم
+    jw(HA[2], HB[2]) >= 0.95 &&     // محمد
+    jw(HA[HA.length - 1], HB[HB.length - 1]) >= 0.93 // المشعر
+  ) {
+    return {
+      reason: "SAME_HUSBAND_WOMAN_FAMILY_CHANGED",
+      boost: 0.27,
+    };
+  }
+}
+
+if (
+  A.length === B.length &&
+  A.length >= 4 &&
+  HA.length === HB.length &&
+  HA.length >= 4
+) {
+  let womanMatches = 0;
+  let husbandMatches = 0;
+
+  for (let i = 0; i < A.length; i++) {
+    if (jw(A[i], B[i]) >= 0.95) womanMatches++;
+  }
+
+  for (let i = 0; i < HA.length; i++) {
+    if (jw(HA[i], HB[i]) >= 0.95) husbandMatches++;
   }
 
   if (
-    A.length >= 3 &&
-    B.length >= 3 &&
-    HA.length >= 4 &&
-    HB.length >= 4
+    womanMatches >= A.length - 1 &&
+    husbandMatches >= HA.length - 1
   ) {
-    if (
-      jw(A[0], B[0]) >= 0.95 &&
-      jw(A[1], B[1]) >= 0.95 &&
-      jw(A[2], B[2]) >= 0.95 &&
-      jw(HA[0], HB[0]) >= 0.95 &&
-      jw(HA[1], HB[1]) >= 0.95 &&
-      jw(HA[2], HB[2]) >= 0.95 &&
-      jw(HA[HA.length - 1], HB[HB.length - 1]) >= 0.93
-    ) {
-      return {
-        reason: "SAME_HUSBAND_WOMAN_FAMILY_CHANGED",
-        boost: 0.27,
-      };
-    }
+    return {
+      reason: "FULL_WOMAN_AND_HUSBAND_SPELLING_VARIANT",
+      boost: 0.32,
+    };
   }
+}
 
+if (
+  A.length >= 4 &&
+  B.length >= 4 &&
+  HA.length >= 4 &&
+  HB.length >= 4
+) {
   if (
-    A.length === B.length &&
-    A.length >= 4 &&
-    HA.length === HB.length &&
-    HA.length >= 4
+    jw(A[0], B[0]) >= 0.95 &&                     // خلود
+    jw(A[A.length - 1], B[B.length - 1]) >= 0.93 &&// دوده
+    jw(HA[0], HB[0]) >= 0.95 &&                   // طارق
+    jw(HA[1], HB[1]) >= 0.95 &&                   // احمد
+    jw(HA[2], HB[2]) >= 0.93 &&                    // يحي
+    jw(HA[HA.length - 1], HB[HB.length - 1]) >= 0.93 // دوده
   ) {
-    let womanMatches = 0;
-    let husbandMatches = 0;
-  
-    for (let i = 0; i < A.length; i++) {
-      if (jw(A[i], B[i]) >= 0.95) womanMatches++;
-    }
-  
-    for (let i = 0; i < HA.length; i++) {
-      if (jw(HA[i], HB[i]) >= 0.95) husbandMatches++;
-    }
-  
-    if (
-      womanMatches >= A.length - 1 &&
-      husbandMatches >= HA.length - 1
-    ) {
-      return {
-        reason: "FULL_WOMAN_AND_HUSBAND_SPELLING_VARIANT",
-        boost: 0.32,
-      };
-    }
+    return {
+      reason: "SHARED_HOUSEHOLD_SAME_HUSBAND",
+      boost: 0.26,
+    };
   }
+}
 
-  if (
-    A.length >= 4 &&
-    B.length >= 4 &&
-    HA.length >= 4 &&
-    HB.length >= 4
-  ) {
-    if (
-      jw(A[0], B[0]) >= 0.95 &&
-      jw(A[A.length - 1], B[B.length - 1]) >= 0.93 &&
-      jw(HA[0], HB[0]) >= 0.95 &&
-      jw(HA[1], HB[1]) >= 0.95 &&
-      jw(HA[2], HB[2]) >= 0.93 &&
-      jw(HA[HA.length - 1], HB[HB.length - 1]) >= 0.93
-    ) {
-      return {
-        reason: "SHARED_HOUSEHOLD_SAME_HUSBAND",
-        boost: 0.26,
-      };
-    }
-  }
 
   // 2. Specific Lineage Rules
   const firstNameMatch = A.length && B.length && jw(A[0], B[0]) >= 0.93;
@@ -970,8 +971,3 @@ const splitCluster = (rowsSubset: PreprocessedRow[], minInternal: number, opts: 
 
   return result;
 };
-
-----
-
-
-Do not add anything stip your stupidity
