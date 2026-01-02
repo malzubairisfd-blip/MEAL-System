@@ -139,15 +139,9 @@ function alignLineage(arr: string[], targetLength: number): string[] {
 }
 
 // --- Rule Logic ---
-
-const applyAdditionalRules = (
-  a: PreprocessedRow,
-  b: PreprocessedRow,
-  opts: WorkerOptions
-) => {
+const applyAdditionalRules = (a: PreprocessedRow, b: PreprocessedRow, opts: WorkerOptions) => {
   const minPair = opts.thresholds.minPair;
   const jw = jaroWinkler;
-
   const A = a.parts;
   const B = b.parts;
   const HA = a.husbandParts;
