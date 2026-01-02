@@ -153,14 +153,27 @@ const applyAdditionalRules = (
   const HA = a.husbandParts;
   const HB = b.husbandParts;
 
+  const reasons: string[] = [];
+
   const s93 = (x?: string, y?: string) => jw(x || "", y || "") >= 0.93;
   const s95 = (x?: string, y?: string) => jw(x || "", y || "") >= 0.95;
+
+  const firstNameMatch = A.length && B.length && jw(A[0], B[0]) >= 0.93;
+  const husbandStrong =
+    jw(a.husbandName_normalized, b.husbandName_normalized) >= 0.9 ||
+    nameOrderFreeScore(HA, HB) >= 0.9;
+  const childrenMatch = tokenJaccard(a.children_normalized, b.children_normalized) >= 0.9;
+
+  if (firstNameMatch && husbandStrong && childrenMatch) {
+    reasons.push("DUPLICATED_HUSBAND_LINEAGE");
+    return { score: minPair + 0.25, reasons };
+  }
 
   /* =========================================================
      TIER 1 — ABSOLUTE IDENTITY (CANNOT BE OVERRIDDEN)
      ========================================================= */
 
-  // FULL_WOMAN_AND_HUSBAND_SPELLING_VARIANT (Group 3)
+  // FULL_WOMAN_AND_HUSBAND_SPELLING_VARIANT
   if (
     A.length >= 4 &&
     B.length >= 4 &&
@@ -183,7 +196,7 @@ const applyAdditionalRules = (
     }
   }
 
-  // WOMAN_AND_HUSBAND_LINEAGE_MATCH (Group 1)
+  // WOMAN_AND_HUSBAND_LINEAGE_MATCH (4–5 parts safe)
   if (
     A.length >= 4 &&
     B.length >= 4 &&
@@ -195,14 +208,14 @@ const applyAdditionalRules = (
     const BB = alignLineage(B, len);
 
     if (
-      jw(AA[0], BB[0]) >= 0.98 && // صفاء
-      jw(AA[1], BB[1]) >= 0.95 && // صادق / صدق
-      jw(AA[2], BB[2]) >= 0.95 && // يحي
-      jw(AA[len - 2], BB[len - 2]) >= 0.9 && // عبدالله
-      jw(HA[0], HB[0]) >= 0.95 && // ابراهيم
-      jw(HA[1], HB[1]) >= 0.95 && // محمد
-      jw(HA[2], HB[2]) >= 0.95 && // احمد
-      jw(HA[HA.length - 1], HB[HB.length - 1]) >= 0.9 // حمزة / غانم
+      jw(AA[0], BB[0]) >= 0.98 &&
+      jw(AA[1], BB[1]) >= 0.95 &&
+      jw(AA[2], BB[2]) >= 0.95 &&
+      jw(AA[len - 1], BB[len - 1]) >= 0.9 &&
+      jw(HA[0], HB[0]) >= 0.95 &&
+      jw(HA[1], HB[1]) >= 0.95 &&
+      jw(HA[2], HB[2]) >= 0.95 &&
+      jw(HA[HA.length - 1], HB[HB.length - 1]) >= 0.9
     ) {
       return {
         score: Math.min(1, minPair + 0.28),
@@ -211,7 +224,7 @@ const applyAdditionalRules = (
     }
   }
 
-  // SAME_HUSBAND_WOMAN_FAMILY_CHANGED (Group 2)
+  // SAME_HUSBAND_WOMAN_FAMILY_CHANGED
   if (
     A.length >= 3 &&
     B.length >= 3 &&
@@ -219,13 +232,13 @@ const applyAdditionalRules = (
     HB.length >= 4
   ) {
     if (
-      jw(A[0], B[0]) >= 0.98 && // فاطمة
-      jw(A[1], B[1]) >= 0.98 && // عبده
-      jw(A[2], B[2]) >= 0.93 && // محمد
-      jw(HA[0], HB[0]) >= 0.98 && // عبده
-      jw(HA[1], HB[1]) >= 0.98 && // غانم
-      jw(HA[2], HB[2]) >= 0.95 && // محمد
-      jw(HA[HA.length - 1], HB[HB.length - 1]) >= 0.9 // المشعر
+      jw(A[0], B[0]) >= 0.98 &&
+      jw(A[1], B[1]) >= 0.98 &&
+      jw(A[2], B[2]) >= 0.93 &&
+      jw(HA[0], HB[0]) >= 0.98 &&
+      jw(HA[1], HB[1]) >= 0.98 &&
+      jw(HA[2], HB[2]) >= 0.95 &&
+      jw(HA[HA.length - 1], HB[HB.length - 1]) >= 0.9
     ) {
       return {
         score: Math.min(1, minPair + 0.27),
@@ -234,7 +247,7 @@ const applyAdditionalRules = (
     }
   }
 
-  // SHARED_HOUSEHOLD_SAME_HUSBAND (Group 4)
+  // SHARED_HOUSEHOLD_SAME_HUSBAND
   if (
     A.length >= 4 &&
     B.length >= 4 &&
@@ -242,12 +255,12 @@ const applyAdditionalRules = (
     HB.length >= 4
   ) {
     if (
-      jw(A[0], B[0]) >= 0.98 && // خلود
-      jw(A[A.length - 1], B[B.length - 1]) >= 0.93 && // دوده
-      jw(HA[0], HB[0]) >= 0.98 && // طارق
-      jw(HA[1], HB[1]) >= 0.95 && // احمد
-      jw(HA[2], HB[2]) >= 0.9 && // يحي
-      jw(HA[HA.length - 1], HB[HB.length - 1]) >= 0.95 // دوده
+      jw(A[0], B[0]) >= 0.98 &&
+      jw(A[A.length - 1], B[B.length - 1]) >= 0.93 &&
+      jw(HA[0], HB[0]) >= 0.98 &&
+      jw(HA[1], HB[1]) >= 0.95 &&
+      jw(HA[2], HB[2]) >= 0.9 &&
+      jw(HA[HA.length - 1], HB[HB.length - 1]) >= 0.95
     ) {
       return {
         score: Math.min(1, minPair + 0.26),
