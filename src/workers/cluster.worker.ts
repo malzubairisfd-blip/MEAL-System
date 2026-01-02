@@ -1,3 +1,4 @@
+
 // --- Constants & Helpers ---
 
 const normalizeArabicRaw = (value: any) => {
@@ -153,24 +154,37 @@ const applyAdditionalRules = (
   const HA = a.husbandParts;
   const HB = b.husbandParts;
 
-  const reasons: string[] = [];
-
   const s93 = (x?: string, y?: string) => jw(x || "", y || "") >= 0.93;
   const s95 = (x?: string, y?: string) => jw(x || "", y || "") >= 0.95;
 
-  const firstNameMatch = A.length && B.length && jw(A[0], B[0]) >= 0.93;
-  const husbandStrong =
-    jw(a.husbandName_normalized, b.husbandName_normalized) >= 0.9 ||
-    nameOrderFreeScore(HA, HB) >= 0.9;
-  const childrenMatch = tokenJaccard(a.children_normalized, b.children_normalized) >= 0.9;
+  /* =========================================================
+     TIER 0 — GUARANTEED / ABSOLUTE (MUST BE FIRST)
+     ========================================================= */
 
-  if (firstNameMatch && husbandStrong && childrenMatch) {
-    reasons.push("DUPLICATED_HUSBAND_LINEAGE");
-    return { score: minPair + 0.25, reasons };
+  // === GUARANTEED DUPLICATE: FULL WOMAN + FULL HUSBAND LINEAGE ===
+  if (
+    A.length >= 4 &&
+    B.length >= 4 &&
+    HA.length >= 4 &&
+    HB.length >= 4 &&
+    jw(A[0], B[0]) >= 0.98 &&
+    jw(A[1], B[1]) >= 0.98 &&
+    jw(A[2], B[2]) >= 0.95 &&
+    jw(A[A.length - 1], B[B.length - 1]) >= 0.95 &&
+    jw(HA[0], HB[0]) >= 0.98 &&
+    jw(HA[1], HB[1]) >= 0.95 &&
+    jw(HA[2], HB[2]) >= 0.95 &&
+    jw(HA[HA.length - 2], HB[HB.length - 2]) >= 0.93 &&
+    jw(HA[HA.length - 1], HB[HB.length - 1]) >= 0.93
+  ) {
+    return {
+      score: Math.min(1, minPair + 0.35),
+      reasons: ["EXACT_WOMAN_AND_HUSBAND_LINEAGE_MATCH"],
+    };
   }
 
   /* =========================================================
-     TIER 1 — ABSOLUTE IDENTITY (CANNOT BE OVERRIDDEN)
+     TIER 1 — FULL STRUCTURAL IDENTITY
      ========================================================= */
 
   // FULL_WOMAN_AND_HUSBAND_SPELLING_VARIANT
@@ -196,7 +210,7 @@ const applyAdditionalRules = (
     }
   }
 
-  // WOMAN_AND_HUSBAND_LINEAGE_MATCH (4–5 parts safe)
+  // WOMAN_AND_HUSBAND_LINEAGE_MATCH (4–5 safe)
   if (
     A.length >= 4 &&
     B.length >= 4 &&
@@ -224,27 +238,28 @@ const applyAdditionalRules = (
     }
   }
 
+  /* =========================================================
+     TIER 2 — SAME CORE, FAMILY VARIATION
+     ========================================================= */
+
   // SAME_HUSBAND_WOMAN_FAMILY_CHANGED
   if (
     A.length >= 3 &&
     B.length >= 3 &&
     HA.length >= 4 &&
-    HB.length >= 4
+    HB.length >= 4 &&
+    jw(A[0], B[0]) >= 0.98 &&
+    jw(A[1], B[1]) >= 0.98 &&
+    jw(A[2], B[2]) >= 0.93 &&
+    jw(HA[0], HB[0]) >= 0.98 &&
+    jw(HA[1], HB[1]) >= 0.98 &&
+    jw(HA[2], HB[2]) >= 0.95 &&
+    jw(HA[HA.length - 1], HB[HB.length - 1]) >= 0.9
   ) {
-    if (
-      jw(A[0], B[0]) >= 0.98 &&
-      jw(A[1], B[1]) >= 0.98 &&
-      jw(A[2], B[2]) >= 0.93 &&
-      jw(HA[0], HB[0]) >= 0.98 &&
-      jw(HA[1], HB[1]) >= 0.98 &&
-      jw(HA[2], HB[2]) >= 0.95 &&
-      jw(HA[HA.length - 1], HB[HB.length - 1]) >= 0.9
-    ) {
-      return {
-        score: Math.min(1, minPair + 0.27),
-        reasons: ["SAME_HUSBAND_WOMAN_FAMILY_CHANGED"],
-      };
-    }
+    return {
+      score: Math.min(1, minPair + 0.27),
+      reasons: ["SAME_HUSBAND_WOMAN_FAMILY_CHANGED"],
+    };
   }
 
   // SHARED_HOUSEHOLD_SAME_HUSBAND
@@ -252,25 +267,22 @@ const applyAdditionalRules = (
     A.length >= 4 &&
     B.length >= 4 &&
     HA.length >= 4 &&
-    HB.length >= 4
+    HB.length >= 4 &&
+    jw(A[0], B[0]) >= 0.98 &&
+    jw(A[A.length - 1], B[B.length - 1]) >= 0.93 &&
+    jw(HA[0], HB[0]) >= 0.98 &&
+    jw(HA[1], HB[1]) >= 0.95 &&
+    jw(HA[2], HB[2]) >= 0.9 &&
+    jw(HA[HA.length - 1], HB[HB.length - 1]) >= 0.95
   ) {
-    if (
-      jw(A[0], B[0]) >= 0.98 &&
-      jw(A[A.length - 1], B[B.length - 1]) >= 0.93 &&
-      jw(HA[0], HB[0]) >= 0.98 &&
-      jw(HA[1], HB[1]) >= 0.95 &&
-      jw(HA[2], HB[2]) >= 0.9 &&
-      jw(HA[HA.length - 1], HB[HB.length - 1]) >= 0.95
-    ) {
-      return {
-        score: Math.min(1, minPair + 0.26),
-        reasons: ["SHARED_HOUSEHOLD_SAME_HUSBAND"],
-      };
-    }
+    return {
+      score: Math.min(1, minPair + 0.26),
+      reasons: ["SHARED_HOUSEHOLD_SAME_HUSBAND"],
+    };
   }
 
   /* =========================================================
-     TIER 2 — STRONG LINEAGE
+     TIER 3 — STRONG LINEAGE (ORDER-FREE)
      ========================================================= */
 
   // DUPLICATED_HUSBAND_LINEAGE
@@ -301,10 +313,9 @@ const applyAdditionalRules = (
   }
 
   /* =========================================================
-     TIER 3 — ADMIN / SPECIAL CASES
+     TIER 4 — ADMIN / SPECIAL
      ========================================================= */
 
-  // INVESTIGATION_PLACEHOLDER
   const investigationWords = [
     "تحت",
     "التحقيق",
@@ -330,7 +341,7 @@ const applyAdditionalRules = (
   }
 
   /* =========================================================
-     TIER 4 — POLYGAMY / HOUSEHOLD INFERENCE
+     TIER 5 — POLYGAMY / INFERENCE
      ========================================================= */
 
   if (
@@ -345,10 +356,9 @@ const applyAdditionalRules = (
   }
 
   /* =========================================================
-     TIER 5 — WEAK / FALLBACK
+     TIER 6 — LAST RESORT ONLY
      ========================================================= */
 
-  // TOKEN_REORDER (last)
   const setA = new Set(A);
   const setB = new Set(B);
   const inter = [...setA].filter(x => setB.has(x)).length;
@@ -363,6 +373,7 @@ const applyAdditionalRules = (
 
   return null;
 };
+
 // --- Config & Options ---
 
 type WorkerOptions = {
