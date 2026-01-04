@@ -276,7 +276,7 @@ if (
     s93(A[2], B[2]) &&
     s95(HA[0], HB[0]) &&
     s93(HA[1], HB[1]) &&
-    s93(HA[2], HB[2]) &&
+    s93(HA[2], HB[2])
   ) {
     return {
       score: Math.min(1, minPair + 0.32),
