@@ -306,14 +306,17 @@ if (
      TIER 3 — STRONG LINEAGE (ORDER FREE)
      ========================================================= */
 
-  if (
-    s93(A[0], B[0]) &&
-    nameOrderFreeScore(HA, HB) >= 0.9 &&
-    tokenJaccard(a.children_normalized, b.children_normalized) >= 0.85
-  ) {
+  // DUPLICATED_HUSBAND_LINEAGE
+  const firstNameMatch = A.length && B.length && jw(A[0], B[0]) >= 0.93;
+  const husbandStrong =
+    jw(a.husbandName_normalized, b.husbandName_normalized) >= 0.9 ||
+    nameOrderFreeScore(HA, HB) >= 0.9;
+  const childrenMatch = tokenJaccard(a.children_normalized, b.children_normalized) >= 0.9;
+
+  if (firstNameMatch && husbandStrong && childrenMatch) {
     return {
       score: Math.min(1, minPair + 0.25),
-      reasons: ["STRONG_HUSBAND_LINEAGE"],
+      reasons: ["DUPLICATED_HUSBAND_LINEAGE"],
     };
   }
 
@@ -656,7 +659,7 @@ const buildEdges = async (
 
   // Cutoff for "Common Names". If a bucket has > 500 people, we don't rely ONLY on that bucket
   // to find candidates, because checking 500*500 is slow. We rely on cross-matching other keys.
-  const COMMON_TOKEN_THRESHOLD = 500;
+  const COMMON_TOKEN_THRESHOLD = 707;
 
   for (let i = 0; i < n; i++) {
     const row = rows[i];
