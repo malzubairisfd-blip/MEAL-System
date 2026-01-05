@@ -1,3 +1,4 @@
+
 // src/workers/scoring.worker.ts
 import { type PreprocessedRow, type WorkerOptions } from "@/lib/scoringClient";
 import { calculateClusterConfidence } from "@/lib/clusterConfidence";
@@ -176,16 +177,32 @@ self.onmessage = (event) => {
           }
       }
 
-      const mean = (arr: number[]) => arr.length > 0 ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+      const safeAvg = (arr: (number | null | undefined)[]) => {
+          const valid = arr.filter(v => typeof v === 'number' && isFinite(v)) as number[];
+          return valid.length > 0 ? valid.reduce((a, b) => a + b, 0) / valid.length : 0;
+      };
+
+      const recordsWithAvgScores = records.map(record => {
+        const relatedPairs = auditTable.filter((p: any) => p.a === record._internalId || p.b === record._internalId);
+        
+        return {
+          ...record,
+          avgPairScore: safeAvg(relatedPairs.map((p: any) => p.score)),
+          avgFirstNameScore: safeAvg(relatedPairs.map((p: any) => p.breakdown?.firstNameScore)),
+          avgFamilyNameScore: safeAvg(relatedPairs.map((p: any) => p.breakdown?.familyNameScore)),
+          avgAdvancedNameScore: safeAvg(relatedPairs.map((p: any) => p.breakdown?.advancedNameScore)),
+          avgTokenReorderScore: safeAvg(relatedPairs.map((p: any) => p.breakdown?.tokenReorderScore)),
+        };
+      });
 
       return {
         ...cluster,
-        records: cluster.records, // Pass through original records
+        records: recordsWithAvgScores, // Pass through original records
         pairScores: auditTable, // The detailed audit table serves as pairScores
         confidenceScore: confidencePercent,
-        avgWomanNameScore: mean(womanScores),
-        avgHusbandNameScore: mean(husbandScores),
-        avgFinalScore: mean(finalScores)
+        avgWomanNameScore: safeAvg(womanScores),
+        avgHusbandNameScore: safeAvg(husbandScores),
+        avgFinalScore: safeAvg(finalScores)
       };
     });
 
