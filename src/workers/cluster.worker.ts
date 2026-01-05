@@ -240,21 +240,6 @@ const applyAdditionalRules = (
    TIER 0.5 — CORE LINEAGE GUARANTEE (4–5 PART SAFE)
    ========================================================= */
 
-const firstNameMatchRule =
-  A.length > 0 &&
-  B.length > 0 &&
-  jw(A[0], B[0]) >= 0.93;
-
-const husbandStrongMatch =
-  jw(a.husbandName_normalized, b.husbandName_normalized) >= 0.96;
-
-if (firstNameMatchRule && husbandStrongMatch) {
-  return {
-    score: 1.0,
-    reasons: ["SAME_WOMAN_FIRSTNAME_EXACT_HUSBAND"],
-  };
-}
-
 if (
   // ---- WOMAN CORE (First / Father / Grandfather) ----
   A.length >= 3 &&
@@ -677,28 +662,6 @@ const buildEdges = async (
   for (let i = 0; i < n; i++) {
     const row = rows[i];
 
-    // Key 1: ID (Exact)
-    if (row.nationalId) addToken(`ID:${row.nationalId}`, i);
-
-    // Key 2: Phone (Last 6 digits)
-    if (row.phone && row.phone.length >= 6) addToken(`PH:${row.phone.slice(-6)}`, i);
-
-    // Key 3: First 3 chars of Normalized First Name (Phonetic Block)
-    if (row.parts[0] && row.parts[0].length >= 2) {
-      addToken(`W_N:${row.parts[0].substring(0, 3)}`, i);
-    }
-
-    // Key 4: Husband First Name (First 3 chars)
-    if (row.husbandParts[0] && row.husbandParts[0].length >= 2) {
-      addToken(`H_N:${row.husbandParts[0].substring(0, 3)}`, i);
-    }
-
-    // Key 5: Woman Family Name (Last Token)
-    if (row.parts.length > 1) {
-      const last = row.parts[row.parts.length - 1];
-      if (last.length > 2) addToken(`W_L:${last}`, i);
-    }
-
     // --- NEW KEYS ---
 
     // 1️⃣ WOMAN CORE LINEAGE KEY
@@ -769,14 +732,6 @@ const buildEdges = async (
     const candidates = new Set<number>();
 
     const keysToCheck: string[] = [];
-    if (row.nationalId) keysToCheck.push(`ID:${row.nationalId}`);
-    if (row.phone && row.phone.length >= 6) keysToCheck.push(`PH:${row.phone.slice(-6)}`);
-    if (row.parts[0] && row.parts[0].length >= 2) keysToCheck.push(`W_N:${row.parts[0].substring(0, 3)}`);
-    if (row.husbandParts[0] && row.husbandParts[0].length >= 2) keysToCheck.push(`H_N:${row.husbandParts[0].substring(0, 3)}`);
-    if (row.parts.length > 1) {
-      const last = row.parts[row.parts.length - 1];
-      if (last.length > 2) keysToCheck.push(`W_L:${last}`);
-    }
     
     // Add new keys to check
     if (row.parts.length >= 3) keysToCheck.push(`W_CORE:${row.parts[0]}|${row.parts[1]}|${row.parts[2]}`);
