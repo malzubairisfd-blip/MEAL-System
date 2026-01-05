@@ -1,5 +1,5 @@
 // src/workers/scoring.worker.ts
-import { computePairScore, type PreprocessedRow, type WorkerOptions } from "@/lib/scoringClient";
+import { type PreprocessedRow, type WorkerOptions } from "@/lib/scoringClient";
 import { calculateClusterConfidence } from "@/lib/clusterConfidence";
 
 
@@ -153,19 +153,39 @@ self.onmessage = (event) => {
           records,
           pairScores: [],
           confidenceScore: 100, // Or some default for single-record clusters
+          avgWomanNameScore: 1,
+          avgHusbandNameScore: 1,
+          avgFinalScore: 1,
         };
       }
       
       const confidenceResult = calculateClusterConfidence(records, options || {});
       const { confidencePercent, auditTable } = confidenceResult;
 
+      // Calculate cluster-wide average scores
+      let womanScores: number[] = [];
+      let husbandScores: number[] = [];
+      let finalScores: number[] = [];
+
+      for (let i = 0; i < records.length; i++) {
+          for (let j = i + 1; j < records.length; j++) {
+              const { womanAvg, husbandAvg, totalAvg } = totalAverageNameScore(records[i], records[j]);
+              womanScores.push(womanAvg);
+              husbandScores.push(husbandAvg);
+              finalScores.push(totalAvg);
+          }
+      }
+
+      const mean = (arr: number[]) => arr.length > 0 ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+
       return {
         ...cluster,
         records: cluster.records, // Pass through original records
         pairScores: auditTable, // The detailed audit table serves as pairScores
         confidenceScore: confidencePercent,
-        // We no longer need to calculate these averages here
-        // avgWomanNameScore, avgHusbandNameScore, avgFinalScore are implicitly part of the confidence calc
+        avgWomanNameScore: mean(womanScores),
+        avgHusbandNameScore: mean(husbandScores),
+        avgFinalScore: mean(finalScores)
       };
     });
 
