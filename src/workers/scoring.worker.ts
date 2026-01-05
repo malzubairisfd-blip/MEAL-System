@@ -675,14 +675,14 @@ export function totalAverageNameScore(
 --------------------------------------------------------- */
 
 type PairScore = {
-  a: string;            // record internal id
-  b: string;            // record internal id
+  aId: string;            // record internal id
+  bId: string;            // record internal id
   womanScore: number;   // 0..1
   husbandScore: number; // 0..1
   totalAvg: number;     // 0..1  ( (woman + husband) / 2 )
   score: number;        // Final computed score
-  breakdown: any;
   reasons: string[];
+  [key: string]: any; // Allow for breakdown properties
 };
 
 type ClusterConfidenceResult = {
@@ -821,13 +821,13 @@ self.onmessage = (event) => {
             const result = computePairScore(records[i], records[j], options || {});
             const nameAvgs = totalAverageNameScore(records[i], records[j]);
             pairScores.push({
-                a: records[i]._internalId,
-                b: records[j]._internalId,
+                aId: records[i]._internalId,
+                bId: records[j]._internalId,
                 womanScore: nameAvgs.womanAvg,
                 husbandScore: nameAvgs.husbandAvg,
                 totalAvg: nameAvgs.totalAvg,
                 score: result.score,
-                breakdown: result.breakdown,
+                ...result.breakdown,
                 reasons: result.reasons,
             });
         }
@@ -836,7 +836,7 @@ self.onmessage = (event) => {
       const confidenceResult = calculateClusterConfidence(pairScores, records.length);
       
       const recordsWithAvgScores = records.map(record => {
-        const relatedPairs = pairScores.filter((p: any) => p.a === record._internalId || p.b === record._internalId);
+        const relatedPairs = pairScores.filter((p: any) => p.aId === record._internalId || p.bId === record._internalId);
         
         const safeAvg = (arr: (number | null | undefined)[]) => {
             const valid = arr.filter(v => typeof v === 'number' && isFinite(v)) as number[];
@@ -845,11 +845,11 @@ self.onmessage = (event) => {
 
         return {
           ...record,
-          avgPairScore: safeAvg(relatedPairs.map((p: any) => p.score)),
-          avgFirstNameScore: safeAvg(relatedPairs.map((p: any) => p.breakdown?.firstNameScore)),
-          avgFamilyNameScore: safeAvg(relatedPairs.map((p: any) => p.breakdown?.familyNameScore)),
-          avgAdvancedNameScore: safeAvg(relatedPairs.map((p: any) => p.breakdown?.advancedNameScore)),
-          avgTokenReorderScore: safeAvg(relatedPairs.map((p: any) => p.breakdown?.tokenReorderScore)),
+          avgPairScore: safeAvg(relatedPairs.map((p) => p.score)),
+          avgFirstNameScore: safeAvg(relatedPairs.map((p) => p.firstNameScore)),
+          avgFamilyNameScore: safeAvg(relatedPairs.map((p) => p.familyNameScore)),
+          avgAdvancedNameScore: safeAvg(relatedPairs.map((p) => p.advancedNameScore)),
+          avgTokenReorderScore: safeAvg(relatedPairs.map((p) => p.tokenReorderScore)),
         };
       });
 
