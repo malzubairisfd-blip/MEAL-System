@@ -11,11 +11,11 @@ import { Badge } from "@/components/ui/badge";
 import { useTranslation } from "@/hooks/use-translation";
 
 type PairScore = {
-  aId: string;
-  bId: string;
-  score: number;
-  breakdown: any;
-  reasons: string[];
+  a: string;
+  b: string;
+  womanScore: number;
+  husbandScore: number;
+  totalAvg: number;
 };
 
 type EnrichedCluster = {
@@ -37,7 +37,7 @@ export function PairwiseModal({ cluster, isOpen, onClose }: PairwiseModalProps) 
   useEffect(() => {
     if (isOpen && cluster?.pairScores) {
       // Sort pairs by score, descending
-      const sortedPairs = [...cluster.pairScores].sort((a,b) => b.score - a.score);
+      const sortedPairs = [...cluster.pairScores].sort((a,b) => b.totalAvg - a.totalAvg);
       setPairs(sortedPairs);
     } else if (isOpen) {
       // Handle case where pairScores might be missing
@@ -72,8 +72,8 @@ export function PairwiseModal({ cluster, isOpen, onClose }: PairwiseModalProps) 
           ) : (
             <div className="space-y-4">
               {pairs.map((p, i) => {
-                const recordA = getRecordById(p.aId);
-                const recordB = getRecordById(p.bId);
+                const recordA = getRecordById(p.a);
+                const recordB = getRecordById(p.b);
 
                 if (!recordA || !recordB) return null;
 
@@ -82,8 +82,8 @@ export function PairwiseModal({ cluster, isOpen, onClose }: PairwiseModalProps) 
                       <CardHeader>
                         <CardTitle className="flex items-center justify-between text-lg">
                           <span>{recordA.womanName} ↔ {recordB.womanName}</span>
-                          <Badge variant={p.score > 0.85 ? "destructive" : p.score > 0.7 ? "default" : "secondary"}>
-                            {t('review.pairwiseModal.score')}: {p.score.toFixed(3)}
+                          <Badge variant={p.totalAvg > 0.85 ? "destructive" : p.totalAvg > 0.7 ? "default" : "secondary"}>
+                            {t('review.pairwiseModal.score')}: {p.totalAvg.toFixed(3)}
                           </Badge>
                         </CardTitle>
                       </CardHeader>
@@ -115,14 +115,18 @@ export function PairwiseModal({ cluster, isOpen, onClose }: PairwiseModalProps) 
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {p.breakdown && Object.entries(p.breakdown).map(([key, value]) => (
-                              <TableRow key={key}>
-                                <TableCell className="capitalize font-medium">{key.replace('Score', ' Score')}</TableCell>
-                                <TableCell className="text-right font-mono">
-                                  {typeof value === 'number' ? value.toFixed(4) : String(value)}
-                                </TableCell>
-                              </TableRow>
-                            ))}
+                            <TableRow>
+                                <TableCell className="font-medium">Woman Name Score</TableCell>
+                                <TableCell className="text-right font-mono">{p.womanScore.toFixed(4)}</TableCell>
+                            </TableRow>
+                             <TableRow>
+                                <TableCell className="font-medium">Husband Name Score</TableCell>
+                                <TableCell className="text-right font-mono">{p.husbandScore.toFixed(4)}</TableCell>
+                            </TableRow>
+                             <TableRow>
+                                <TableCell className="font-medium">Total Average</TableCell>
+                                <TableCell className="text-right font-mono">{p.totalAvg.toFixed(4)}</TableCell>
+                            </TableRow>
                           </TableBody>
                         </Table>
                       </CardContent>

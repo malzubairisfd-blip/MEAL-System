@@ -30,7 +30,7 @@ export default function ReviewPage() {
   const { t } = useTranslation();
   const [allClusters, setAllClusters] = useState<Cluster[]>([]);
   const [filteredClusters, setFilteredClusters] = useState<Cluster[]>([]);
-  const [selectedCluster, setSelectedCluster] = useState<RecordRow[] | null>(null);
+  const [selectedCluster, setSelectedCluster] = useState<Cluster | null>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const { toast } = useToast();
@@ -106,8 +106,8 @@ export default function ReviewPage() {
   }, [allClusters, loading]);
 
 
-  const handleInspect = (clusterRecords: RecordRow[]) => {
-    setSelectedCluster(clusterRecords);
+  const handleInspect = (cluster: Cluster) => {
+    setSelectedCluster(cluster);
   }
 
   const indexOfLastItem = currentPage * itemsPerPage;
@@ -194,7 +194,7 @@ export default function ReviewPage() {
                       key={clusterId}
                       cluster={c} 
                       clusterNumber={(currentPage - 1) * itemsPerPage + idx + 1}
-                      onInspect={() => handleInspect(c.records)}
+                      onInspect={() => handleInspect(c)}
                     />
                   )
                 })}
