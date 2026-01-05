@@ -14,11 +14,12 @@ import { Loader2, Search } from "lucide-react";
 
 interface DataCorrectionModalProps {
   allRecords: RecordRow[];
+  mapping: Record<string, string>;
   isOpen: boolean;
   onClose: () => void;
 }
 
-export function DataCorrectionModal({ allRecords, isOpen, onClose }: DataCorrectionModalProps) {
+export function DataCorrectionModal({ allRecords, mapping, isOpen, onClose }: DataCorrectionModalProps) {
   const { toast } = useToast();
   const [selectedRecordIds, setSelectedRecordIds] = useState<Set<string>>(new Set());
   const [searchTerm, setSearchTerm] = useState("");
@@ -128,11 +129,11 @@ export function DataCorrectionModal({ allRecords, isOpen, onClose }: DataCorrect
                                     onCheckedChange={() => handleSelect(record._internalId!)}
                                 />
                                 </TableCell>
-                                <TableCell>{record.womanName}</TableCell>
-                                <TableCell>{record.husbandName}</TableCell>
-                                <TableCell>{String(record.nationalId)}</TableCell>
-                                <TableCell>{String(record.phone)}</TableCell>
-                                <TableCell>{record.village}</TableCell>
+                                <TableCell>{record[mapping.womanName]}</TableCell>
+                                <TableCell>{record[mapping.husbandName]}</TableCell>
+                                <TableCell>{String(record[mapping.nationalId])}</TableCell>
+                                <TableCell>{String(record[mapping.phone])}</TableCell>
+                                <TableCell>{record[mapping.village]}</TableCell>
                             </TableRow>
                         ))}
                     </TableBody>

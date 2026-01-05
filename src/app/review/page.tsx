@@ -27,6 +27,8 @@ type Cluster = {
   pairScores?: any[];
 };
 
+const LOCAL_STORAGE_KEY_PREFIX = "beneficiary-mapping-";
+
 export default function ReviewPage() {
   const { t } = useTranslation();
   const [allRecords, setAllRecords] = useState<RecordRow[]>([]);
@@ -37,6 +39,7 @@ export default function ReviewPage() {
   const [search, setSearch] = useState("");
   const [isCorrectionModalOpen, setIsCorrectionModalOpen] = useState(false);
   const { toast } = useToast();
+  const [mapping, setMapping] = useState<Record<string, string>>({});
 
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(9);
@@ -46,7 +49,7 @@ export default function ReviewPage() {
       setLoading(true);
       const result = await loadCachedResult();
 
-      if (result && result.clusters) {
+      if (result) {
         setAllRecords(result.rows || []);
         const clusters = result.clusters || [];
         setAllClusters(clusters);
@@ -54,6 +57,17 @@ export default function ReviewPage() {
         if (clusters.length === 0) {
           toast({ title: t('review.toasts.noClustersFound.title'), description: t('review.toasts.noClustersFound.description'), variant: "default" });
         }
+
+        // Load mapping
+        const originalHeaders = result.originalHeaders || [];
+        const storageKey = `${LOCAL_STORAGE_KEY_PREFIX}${originalHeaders.join(",")}`;
+        const savedMapping = localStorage.getItem(storageKey);
+        if (savedMapping) {
+            try {
+                setMapping(JSON.parse(savedMapping));
+            } catch {}
+        }
+
       } else {
         toast({ title: t('review.toasts.noData.title'), description: t('review.toasts.noData.description'), variant: "destructive" });
       }
@@ -242,6 +256,7 @@ export default function ReviewPage() {
       {isCorrectionModalOpen && (
         <DataCorrectionModal
           allRecords={allRecords}
+          mapping={mapping}
           isOpen={isCorrectionModalOpen}
           onClose={() => setIsCorrectionModalOpen(false)}
         />
