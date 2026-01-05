@@ -240,6 +240,21 @@ const applyAdditionalRules = (
    TIER 0.5 — CORE LINEAGE GUARANTEE (4–5 PART SAFE)
    ========================================================= */
 
+const firstNameMatchRule =
+  A.length > 0 &&
+  B.length > 0 &&
+  jw(A[0], B[0]) >= 0.93;
+
+const husbandStrongMatch =
+  jw(a.husbandName_normalized, b.husbandName_normalized) >= 0.96;
+
+if (firstNameMatchRule && husbandStrongMatch) {
+  return {
+    score: 1.0,
+    reasons: ["SAME_WOMAN_FIRSTNAME_EXACT_HUSBAND"],
+  };
+}
+
 if (
   // ---- WOMAN CORE (First / Father / Grandfather) ----
   A.length >= 3 &&
@@ -262,13 +277,13 @@ if (
   };
 }
 
+
 if (
   A.length >= 4 &&
   B.length >= 4 &&
   HA.length >= 4 &&
   HB.length >= 4
 ) {
-
   if (
     jw(A[0], B[0]) >= 0.95 &&                     
     jw(A[A.length - 1], B[B.length - 1]) >= 0.93 &&
@@ -278,8 +293,8 @@ if (
     jw(HA[HA.length - 1], HB[HB.length - 1]) >= 0.93 
   ) {
     return {
-      score: minPair + 0.26,
-      reasons: ["SHARED_HOUSEHOLD_SAME_HUSBAND"],
+      reason: "SHARED_HOUSEHOLD_SAME_HUSBAND",
+      boost: 0.26,
     };
   }
 }
@@ -595,8 +610,8 @@ const pairwiseScore = (rowA: PreprocessedRow, rowB: PreprocessedRow, opts: Worke
         : rowA.phone.slice(-6) === rowB.phone.slice(-6)
         ? 0.85
         : rowA.phone.slice(-4) === rowB.phone.slice(-4)
-        ? 0.6
-        : 0
+          ? 0.6
+          : 0
       : 0;
   const idScore =
     rowA.nationalId && rowB.nationalId
@@ -1232,5 +1247,3 @@ const mergeDedupPairScores = (target: any[], source: any[]) => {
   source.forEach(addEdge);
   return Array.from(map.values());
 };
-
-    
