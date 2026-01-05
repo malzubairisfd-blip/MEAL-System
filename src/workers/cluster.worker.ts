@@ -240,6 +240,22 @@ const applyAdditionalRules = (
    TIER 0.5 — CORE LINEAGE GUARANTEE (4–5 PART SAFE)
    ========================================================= */
 
+
+const firstNameMatch =
+  A.length > 0 &&
+  B.length > 0 &&
+  jw(A[0], B[0]) >= 0.93;
+
+const husbandStrongMatch =
+  jw(a.husbandName_normalized, b.husbandName_normalized) >= 0.96;
+
+if (firstNameMatch && husbandStrongMatch) {
+  return {
+    score: 1.0,
+    reasons: ["SAME_WOMAN_FIRSTNAME_EXACT_HUSBAND"],
+  };
+}
+
 if (
   // ---- WOMAN CORE (First / Father / Grandfather) ----
   A.length >= 3 &&
@@ -253,7 +269,7 @@ if (
   HB.length >= 3 &&
   jw(HA[0], HB[0]) >= 0.98 &&
   jw(HA[1], HB[1]) >= 0.95 &&
-  jw(HA[2], HB[2]) >= 0.95 
+  jw(HA[2], HB[2]) >= 0.95
 
 ) {
   return {
@@ -307,18 +323,17 @@ if (
      ========================================================= */
 
   // DUPLICATED_HUSBAND_LINEAGE
-  const firstNameMatch = A.length && B.length && jw(A[0], B[0]) >= 0.93;
-  const husbandStrong =
-    jw(a.husbandName_normalized, b.husbandName_normalized) >= 0.9 ||
-    nameOrderFreeScore(HA, HB) >= 0.9;
-  const childrenMatch = tokenJaccard(a.children_normalized, b.children_normalized) >= 0.9;
-
-  if (firstNameMatch && husbandStrong && childrenMatch) {
+  if (
+    A.length > 0 && B.length > 0 && jw(A[0], B[0]) >= 0.93 &&
+    (jw(a.husbandName_normalized, b.husbandName_normalized) >= 0.9 || nameOrderFreeScore(HA, HB) >= 0.9) &&
+    tokenJaccard(a.children_normalized, b.children_normalized) >= 0.9
+  ) {
     return {
       score: Math.min(1, minPair + 0.25),
       reasons: ["DUPLICATED_HUSBAND_LINEAGE"],
     };
   }
+
 
   /* =========================================================
      TIER 4 — WOMAN ONLY LINEAGE (NO HUSBAND)
