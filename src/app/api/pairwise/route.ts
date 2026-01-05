@@ -1,6 +1,6 @@
 
 import { NextResponse } from "next/server";
-import { computePairScore } from "@/lib/scoringClient";
+import { computePairScore } from "@/workers/scoring.worker";
 import type { RecordRow } from "@/lib/types";
 
 export const runtime = "nodejs";
