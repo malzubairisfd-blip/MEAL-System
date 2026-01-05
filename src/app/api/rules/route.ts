@@ -7,17 +7,26 @@ import path from "path";
 // Use the 'public' directory for storing rules so they are fetchable by the client.
 const getRulesPath = () => path.join(process.cwd(), 'public', 'rules', 'auto-rules.json');
 
+async function getExistingRules() {
+    const RULES_PATH = getRulesPath();
+    try {
+        await fs.mkdir(path.dirname(RULES_PATH), { recursive: true });
+        const raw = await fs.readFile(RULES_PATH, 'utf-8');
+        const rules = JSON.parse(raw);
+        return Array.isArray(rules) ? rules : [];
+    } catch (e: any) {
+        if (e.code === 'ENOENT') {
+            return []; // File doesn't exist, return empty array
+        }
+        throw e; // Re-throw other errors
+    }
+}
+
 export async function GET() {
-  const RULES_PATH = getRulesPath();
   try {
-    const raw = await fs.readFile(RULES_PATH, "utf8");
-    const rules = JSON.parse(raw);
+    const rules = await getExistingRules();
     return NextResponse.json({ ok: true, rules });
   } catch (err: any) {
-    if (err.code === 'ENOENT') {
-      // File doesn't exist, return empty array
-      return NextResponse.json({ ok: true, rules: [] });
-    }
     return NextResponse.json({ ok: false, error: "Missing or unreadable auto-rules.json" }, { status: 500 });
   }
 }
@@ -25,23 +34,28 @@ export async function GET() {
 export async function POST(req: Request) {
   const RULES_PATH = getRulesPath();
   try {
-    const newRule = await req.json();
+    const body = await req.json();
 
-    if (!newRule || typeof newRule !== "object" || !newRule.id) {
-      return NextResponse.json({ ok: false, error: "Invalid rule payload" }, { status: 400 });
+    if (!body || typeof body !== "object") {
+      return NextResponse.json({ ok: false, error: "Invalid payload" }, { status: 400 });
     }
 
-    let existingRules = [];
-    try {
-        const raw = await fs.readFile(RULES_PATH, 'utf-8');
-        existingRules = JSON.parse(raw);
-        if (!Array.isArray(existingRules)) existingRules = [];
-    } catch (e: any) {
-        if (e.code !== 'ENOENT') throw e; // Re-throw if it's not a "file not found" error
-        // If file doesn't exist, we start with an empty array.
+    let existingRules = await getExistingRules();
+
+    // Handle Deletion
+    if (body.action === 'delete' && Array.isArray(body.ids)) {
+        const idsToDelete = new Set(body.ids);
+        const filteredRules = existingRules.filter((r: any) => !idsToDelete.has(r.id));
+        await fs.writeFile(RULES_PATH, JSON.stringify(filteredRules, null, 2), "utf8");
+        return NextResponse.json({ ok: true, message: `Deleted ${idsToDelete.size} rule(s).` });
     }
     
-    // Add new rule if it doesn't exist
+    // Handle Addition (the original logic)
+    const newRule = body;
+    if (!newRule.id) {
+        return NextResponse.json({ ok: false, error: "Invalid rule payload, missing id" }, { status: 400 });
+    }
+
     if (!existingRules.some((r: any) => r.id === newRule.id)) {
         existingRules.push(newRule);
     }
@@ -51,6 +65,6 @@ export async function POST(req: Request) {
 
   } catch (err: any) {
     console.error("[RULES_API_ERROR]", err);
-    return NextResponse.json({ ok: false, error: "Failed to save rule.", details: String(err) }, { status: 500 });
+    return NextResponse.json({ ok: false, error: "Failed to process rule request.", details: String(err) }, { status: 500 });
   }
 }
