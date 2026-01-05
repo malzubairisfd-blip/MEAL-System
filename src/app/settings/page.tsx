@@ -3,7 +3,7 @@
 "use client";
 
 import React, { useEffect, useState, useCallback } from "react";
-import { computePairScore } from "@/workers/scoring.worker";
+import { computePairScore } from "@/workers/cluster.worker";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";

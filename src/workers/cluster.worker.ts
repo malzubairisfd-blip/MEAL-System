@@ -1,4 +1,5 @@
 
+
 // --- Constants & Helpers ---
 
 function baseArabicNormalize(value: any): string {
@@ -560,39 +561,25 @@ const preprocessRow = (raw: any): PreprocessedRow => {
   };
 };
 
-const pairwiseScore = (rowA: PreprocessedRow, rowB: PreprocessedRow, opts: WorkerOptions) => {
-  const o = opts;
-  const weights = o.finalScoreWeights;
+export function computePairScore(rawA: any, rawB: any, opts: WorkerOptions) {
+  // Merge user options with defaults
+  const mergedOpts: typeof defaultOptions = {
+    ...defaultOptions,
+    thresholds: { ...defaultOptions.thresholds, ...(opts.thresholds || {}) },
+    finalScoreWeights: { ...defaultOptions.finalScoreWeights, ...(opts.finalScoreWeights || {}) },
+    rules: { ...defaultOptions.rules, ...(opts.rules || {}) },
+  };
 
-  const ruleResult = applyAdditionalRules(rowA, rowB, o);
-  if (ruleResult) {
-    return {
-      score: (ruleResult as any).score,
-      reasons: (ruleResult as any).reasons,
-      breakdown: { reason: "RULE_BASED", boostedTo: (ruleResult as any).score },
-    };
-  }
+  const rowA = preprocessRow(rawA);
+  const rowB = preprocessRow(rawB);
 
-  if (rowA.nationalId && rowB.nationalId && rowA.nationalId === rowB.nationalId) {
-    return { score: 0.99, reasons: ["EXACT_ID"], breakdown: { reason: "EXACT_ID" } };
-  }
-
-  const polygamyMatch =
-    o.rules.enablePolygamyRules &&
-    jaroWinkler(rowA.husbandName_normalized, rowB.husbandName_normalized) >= 0.95 &&
-    jaroWinkler(rowA.parts[1] || "", rowB.parts[1] || "") >= 0.93 &&
-    jaroWinkler(rowA.parts[2] || "", rowB.parts[2] || "") >= 0.9;
-
-  if (polygamyMatch) {
-    return { score: 0.97, reasons: ["POLYGAMY_PATTERN"], breakdown: { reason: "POLYGAMY_PATTERN" } };
-  }
-
+  // --- Start Score Calculation ---
   const A = rowA.parts;
   const B = rowB.parts;
   const firstNameScore = jaroWinkler(A[0] || "", B[0] || "");
   const familyNameScore = jaroWinkler(A.slice(1).join(" "), B.slice(1).join(" "));
   const advancedNameScore = (() => {
-    const root = (s: string) => splitParts(s).map((token) => token.slice(0, 3)).join(" ");
+    const root = (s: string) => (splitParts(s).map((token) => token.slice(0, 3)).join(" "));
     const rootA = root(rowA.womanName_normalized);
     const rootB = root(rowB.womanName_normalized);
     if (!rootA || !rootB) return 0;
@@ -603,34 +590,28 @@ const pairwiseScore = (rowA: PreprocessedRow, rowB: PreprocessedRow, opts: Worke
     jaroWinkler(rowA.husbandName_normalized, rowB.husbandName_normalized),
     nameOrderFreeScore(rowA.husbandParts, rowB.husbandParts)
   );
-  const phoneScoreVal =
-    rowA.phone && rowB.phone
-      ? rowA.phone === rowB.phone
-        ? 1
-        : rowA.phone.slice(-6) === rowB.phone.slice(-6)
+  const phoneScoreVal = rowA.phone && rowB.phone
+    ? rowA.phone === rowB.phone
+      ? 1
+      : rowA.phone.slice(-6) === rowB.phone.slice(-6)
         ? 0.85
         : rowA.phone.slice(-4) === rowB.phone.slice(-4)
           ? 0.6
           : 0
-      : 0;
-  const idScore =
-    rowA.nationalId && rowB.nationalId
-      ? rowA.nationalId === rowB.nationalId
-        ? 1
-        : rowA.nationalId.slice(-5) === rowB.nationalId.slice(-5)
+    : 0;
+  const idScore = rowA.nationalId && rowB.nationalId
+    ? rowA.nationalId === rowB.nationalId
+      ? 1
+      : rowA.nationalId.slice(-5) === rowB.nationalId.slice(-5)
         ? 0.75
         : 0
-      : 0;
+    : 0;
   const childrenScore = tokenJaccard(rowA.children_normalized, rowB.children_normalized);
   let locationScore = 0;
   if (rowA.village_normalized && rowB.village_normalized && rowA.village_normalized === rowB.village_normalized) {
     locationScore += 0.4;
   }
-  if (
-    rowA.subdistrict_normalized &&
-    rowB.subdistrict_normalized &&
-    rowA.subdistrict_normalized === rowB.subdistrict_normalized
-  ) {
+  if (rowA.subdistrict_normalized && rowB.subdistrict_normalized && rowA.subdistrict_normalized === rowB.subdistrict_normalized) {
     locationScore += 0.25;
   }
   locationScore = Math.min(0.5, locationScore);
@@ -646,26 +627,49 @@ const pairwiseScore = (rowA: PreprocessedRow, rowB: PreprocessedRow, opts: Worke
     childrenScore,
     locationScore,
   };
-
-  const W = o.finalScoreWeights;
-
-  let score =
-    (W.firstNameScore || 0) * firstNameScore +
-    (W.familyNameScore || 0) * familyNameScore +
-    (W.advancedNameScore || 0) * advancedNameScore +
-    (W.tokenReorderScore || 0) * tokenReorderScore +
-    (W.husbandScore || 0) * husbandScore +
-    (W.idScore || 0) * idScore +
-    (W.phoneScore || 0) * phoneScoreVal +
-    (W.childrenScore || 0) * childrenScore +
-    (W.locationScore || 0) * locationScore;
+  
+  const W = mergedOpts.finalScoreWeights;
+  let score = (W.firstNameScore || 0) * firstNameScore + (W.familyNameScore || 0) * familyNameScore +
+              (W.advancedNameScore || 0) * advancedNameScore + (W.tokenReorderScore || 0) * tokenReorderScore +
+              (W.husbandScore || 0) * husbandScore + (W.idScore || 0) * idScore +
+              (W.phoneScore || 0) * phoneScoreVal + (W.childrenScore || 0) * childrenScore +
+              (W.locationScore || 0) * locationScore;
   const strongParts = [firstNameScore, familyNameScore, tokenReorderScore].filter((v: any) => v >= 0.85).length;
   if (strongParts >= 2) score = Math.min(1, score + 0.04);
-  score = Math.max(0, Math.min(1, score));
+  
+  let finalScore = Math.max(0, Math.min(1, score));
+  let finalReasons: string[] = [];
+  if (tokenReorderScore > 0.85) finalReasons.push("TOKEN_REORDER");
 
-  const reasons: any[] = [];
-  if (tokenReorderScore > 0.85) reasons.push("TOKEN_REORDER");
-  return { score, breakdown, reasons };
+  // --- Apply Rules ---
+  const ruleResult = applyAdditionalRules(rowA, rowB, mergedOpts);
+  if (ruleResult) {
+    finalScore = ruleResult.score; // Override score if a rule matches
+    finalReasons = [...new Set([...finalReasons, ...ruleResult.reasons])];
+  }
+
+  if (rowA.nationalId && rowB.nationalId && rowA.nationalId === rowB.nationalId) {
+    finalScore = Math.max(finalScore, 0.99);
+    finalReasons.push("EXACT_ID");
+  }
+
+  const polygamyMatch =
+    mergedOpts.rules.enablePolygamyRules &&
+    jaroWinkler(rowA.husbandName_normalized, rowB.husbandName_normalized) >= 0.95 &&
+    jaroWinkler(rowA.parts[1] || "", rowB.parts[1] || "") >= 0.93 &&
+    jaroWinkler(rowA.parts[2] || "", rowB.parts[2] || "") >= 0.9;
+
+  if (polygamyMatch) {
+    finalScore = Math.max(finalScore, 0.97);
+    finalReasons.push("POLYGAMY_PATTERN");
+  }
+  
+  return { score: finalScore, breakdown, reasons: finalReasons };
+}
+
+
+const pairwiseScore = (rowA: PreprocessedRow, rowB: PreprocessedRow, opts: WorkerOptions) => {
+    return computePairScore(rowA, rowB, opts);
 };
 
 // --- Optimized Edges Builder (Blocking / Inverted Index) ---
