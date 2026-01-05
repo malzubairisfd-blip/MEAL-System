@@ -1,4 +1,3 @@
-
 // src/workers/scoring.worker.ts
 import { type PreprocessedRow, type WorkerOptions, computePairScore } from "@/lib/scoringClient";
 import { calculateClusterConfidence } from "@/lib/clusterConfidence";
