@@ -1,4 +1,3 @@
-
 // src/lib/scoringClient.ts
 
 // All scoring logic is consolidated here to be shared between workers and client components.
@@ -189,7 +188,7 @@ const nameOrderFreeScore = (aTokens: string[], bTokens: string[]) => {
 const splitParts = (value: string) =>
   value ? value.split(/\s+/).filter(Boolean) : [];
 
-type WorkerOptions = {
+export type WorkerOptions = {
   thresholds?: Partial<{
     minPair: number;
     minInternal: number;
@@ -223,7 +222,7 @@ const defaultOptions = {
   },
 };
 
-type PreprocessedRow = {
+export type PreprocessedRow = {
   _internalId: string;
   womanName: string;
   husbandName: string;
