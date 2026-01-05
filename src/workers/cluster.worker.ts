@@ -332,10 +332,11 @@ function registerAutoRule(rule: AutoRule) {
   AUTO_RULES.push(rule);
 }
 
-function learnFromFailure(cluster: FailureCluster) {
+export function learnFromFailure(cluster: FailureCluster): string {
   const pattern = analyzeClusterPattern(cluster);
   const rule = generateRuleFromPattern(pattern);
   registerAutoRule(rule);
+  return rule.id;
 }
 
 
