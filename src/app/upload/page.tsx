@@ -513,18 +513,12 @@ export default function UploadPage() {
             <CardTitle>{isTranslationLoading ? <Skeleton className="h-8 w-48" /> : t("upload.steps.1.title")}</CardTitle>
             <CardDescription>{isTranslationLoading ? <Skeleton className="h-5 w-64 mt-1" /> : t("upload.steps.1.description")}</CardDescription>
           </div>
-          <div className="flex gap-2">
-            <Button variant="secondary" onClick={() => setIsCorrectionModalOpen(true)} disabled={!isDataCached}>
-                <Wrench className="mr-2 h-4 w-4" />
-                Data Correction
-            </Button>
-            <Button variant="outline" asChild>
-                <Link href="/settings">
-                <Settings className="mr-2 h-4 w-4" />
-                {isTranslationLoading ? <Skeleton className="h-5 w-20" /> : t("upload.buttons.settings")}
-                </Link>
-            </Button>
-          </div>
+          <Button variant="outline" asChild>
+            <Link href="/settings">
+              <Settings className="mr-2 h-4 w-4" />
+              {isTranslationLoading ? <Skeleton className="h-5 w-20" /> : t("upload.buttons.settings")}
+            </Link>
+          </Button>
         </CardHeader>
         <CardContent>
           <div className="flex items-center gap-4">
@@ -735,9 +729,15 @@ export default function UploadPage() {
                 value={clusters.length > 0 ? (clusters.flatMap((c) => c.records).length / clusters.length).toFixed(2) : 0}
               />
             </div>
-            <Button onClick={() => router.push("/review")} disabled={!clusters.length}>
-              {t("upload.buttons.goToReview")} <ChevronRight className="ml-2 h-4 w-4" />
-            </Button>
+            <div className="flex gap-2">
+              <Button onClick={() => router.push("/review")} disabled={!clusters.length}>
+                {t("upload.buttons.goToReview")} <ChevronRight className="ml-2 h-4 w-4" />
+              </Button>
+               <Button variant="secondary" onClick={() => setIsCorrectionModalOpen(true)} disabled={!isDataCached}>
+                  <Wrench className="mr-2 h-4 w-4" />
+                  Data Correction
+              </Button>
+            </div>
           </CardContent>
         </Card>
       )}
