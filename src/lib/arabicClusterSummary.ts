@@ -1,3 +1,4 @@
+
 // src/lib/arabicClusterSummary.ts
 const getScoreColor = (score?: number) => {
     if (score === undefined) return "color: #4B5563"; // gray-600
@@ -35,6 +36,20 @@ type ClusterSummaryData = {
   confidenceScore?: number;
 }
 
+const REASON_EXPLANATIONS: Record<string, string> = {
+  SAME_HUSBAND_CHILDREN_OVERLAP: "تطابق تام لاسم الزوج مع وجود طفل واحد مشترك على الأقل.",
+  CORE_WOMAN_AND_HUSBAND_LINEAGE_MATCH: "تطابق قوي في الأسماء الأولى والآباء والأجداد لكل من الزوجة والزوج.",
+  FULL_WOMAN_AND_HUSBAND_MATCH: "تطابق شبه كامل في أسماء الزوجة والزوج وأنسابهم.",
+  SAME_HUSBAND_WOMAN_VARIANT: "تطابق قوي في اسم الزوج مع تشابه في اسم الزوجة ونسبها.",
+  DUPLICATED_HUSBAND_LINEAGE: "تطابق في اسم الزوج مع وجود تشابه في أسماء الأطفال.",
+  WOMAN_LINEAGE_ONLY: "تشابه قوي في نسب المرأة مع اختلاف في اسم الزوج.",
+  INVESTIGATION_PLACEHOLDER: "أحد السجلات يحتوي على كلمات مثل 'تحت التحقيق' مما يستدعي المراجعة.",
+  POLYGAMY_SHARED_HOUSEHOLD: "نمط تعدد زوجات محتمل بناءً على تطابق اسم العائلة والزوج.",
+  TOKEN_REORDER_LAST_RESORT: "تشابه كبير في الكلمات المكونة للأسماء مع اختلاف في الترتيب.",
+  SHARED_HOUSEHOLD_SAME_HUSBAND: "تطابق قوي في اسم الزوج ونسبه مع تطابق في اسم العائلة للزوجة."
+};
+
+
 export function generateArabicClusterSummary(
   summaryData: ClusterSummaryData,
   rows: any[]
@@ -42,27 +57,12 @@ export function generateArabicClusterSummary(
   const reasons: string[] = summaryData.reasons || [];
   const size = rows.length;
 
-  const explanations: string[] = [];
+  const explanations = Array.from(new Set(reasons))
+        .map(reason => REASON_EXPLANATIONS[reason])
+        .filter(Boolean);
 
-  if (reasons.includes("DUPLICATED_HUSBAND_LINEAGE")) {
-    explanations.push(
-      "تشابه قوي في أسماء الأزواج (الاسم، اسم الأب، واسم الجد) مع اختلافات إملائية طفيفة."
-    );
-  }
-  if (reasons.includes("WOMAN_LINEAGE_MATCH")) {
-    explanations.push(
-      "تشابه واضح في نسب المرأة (الأب، الجد، واسم العائلة) مع اختلاف بسيط في الاسم الأول."
-    );
-  }
-  if (reasons.includes("TOKEN_REORDER")) {
-    explanations.push(
-      "اختلاف في ترتيب أجزاء الاسم أو تكرار بعض الأجزاء نتيجة أخطاء إدخال البيانات."
-    );
-  }
-  if (reasons.includes("POLYGAMY_PATTERN")) {
-    explanations.push(
-      "نمط تعدد زوجات محتمل مع احتمال تسجيل الأسرة أكثر من مرة."
-    );
+  if (explanations.length === 0 && (summaryData.confidenceScore || 0) > 60) {
+      explanations.push("تشابه عام في مكونات متعددة (أسماء، هوية، هاتف).");
   }
 
   const avgWoman = Number.isFinite(summaryData.avgWomanNameScore) ? Math.round(summaryData.avgWomanNameScore! * 100) : 0;

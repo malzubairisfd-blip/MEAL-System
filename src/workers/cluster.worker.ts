@@ -262,6 +262,28 @@ if (
   };
 }
 
+if (
+  A.length >= 4 &&
+  B.length >= 4 &&
+  HA.length >= 4 &&
+  HB.length >= 4
+) {
+
+  if (
+    jw(A[0], B[0]) >= 0.95 &&                     
+    jw(A[A.length - 1], B[B.length - 1]) >= 0.93 &&
+    jw(HA[0], HB[0]) >= 0.95 &&                   
+    jw(HA[1], HB[1]) >= 0.95 &&                   
+    jw(HA[2], HB[2]) >= 0.93 &&                    
+    jw(HA[HA.length - 1], HB[HB.length - 1]) >= 0.93 
+  ) {
+    return {
+      score: minPair + 0.26,
+      reasons: ["SHARED_HOUSEHOLD_SAME_HUSBAND"],
+    };
+  }
+}
+
   /* =========================================================
      TIER 1 — FULL WOMAN + HUSBAND IDENTITY
      ========================================================= */
@@ -313,6 +335,7 @@ const husbandExact =
 // children_normalized is an array of strings
 const childrenA = a.children_normalized || [];
 const childrenB = b.children_normalized || [];
+
 
 // fast exit
 if (husbandExact && (childrenA.length || childrenB.length)) {
