@@ -17,9 +17,10 @@ interface DataCorrectionModalProps {
   mapping: Record<string, string>;
   isOpen: boolean;
   onClose: () => void;
+  learningWorker: Worker;
 }
 
-export function DataCorrectionModal({ allRecords, mapping, isOpen, onClose }: DataCorrectionModalProps) {
+export function DataCorrectionModal({ allRecords, mapping, isOpen, onClose, learningWorker }: DataCorrectionModalProps) {
   const { toast } = useToast();
   const [selectedRecordIds, setSelectedRecordIds] = useState<Set<string>>(new Set());
   const [searchTerm, setSearchTerm] = useState("");
@@ -56,34 +57,16 @@ export function DataCorrectionModal({ allRecords, mapping, isOpen, onClose }: Da
     setIsLearning(true);
     const failureCluster = allRecords.filter(r => selectedRecordIds.has(r._internalId!));
     
-    try {
-      const res = await fetch("/api/learn", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cluster: failureCluster }),
-      });
-      
-      const result = await res.json();
-      
-      if (!res.ok) {
-        throw new Error(result.error || "An unknown error occurred.");
-      }
-      
-      toast({
-        title: "Learning Successful",
-        description: result.message,
-      });
-      onClose();
+    // Offload learning to the worker
+    learningWorker.postMessage({ failureCluster });
 
-    } catch (error: any) {
-      toast({
-        title: "Learning Failed",
-        description: error.message,
-        variant: "destructive",
-      });
-    } finally {
-      setIsLearning(false);
-    }
+    toast({
+      title: "Learning in Progress",
+      description: "The new rule is being generated in the background. You will be notified upon completion.",
+    });
+
+    setIsLearning(false);
+    onClose();
   };
 
   return (

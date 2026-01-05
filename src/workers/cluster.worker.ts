@@ -1,3 +1,6 @@
+
+// src/workers/cluster.worker.ts
+
 // --- Constants & Helpers ---
 
 function baseArabicNormalize(value: any): string {
@@ -215,7 +218,6 @@ type RuleResult = {
   score: number;
   reasons: string[];
 };
-type FailureCluster = PreprocessedRow[];
 
 type LineageDiff = {
   duplicateAncestor: boolean;
@@ -223,120 +225,71 @@ type LineageDiff = {
   firstNameMinJW: number;
   familyNameStable: boolean;
 };
-function analyzeClusterPattern(cluster: FailureCluster): LineageDiff {
-  let minFirstNameJW = 1;
-  let duplicateAncestor = false;
-  let familyStable = true;
-
-  for (let i = 0; i < cluster.length; i++) {
-    for (let j = i + 1; j < cluster.length; j++) {
-      const A = cluster[i].parts;
-      const B = cluster[j].parts;
-
-      minFirstNameJW = Math.min(
-        minFirstNameJW,
-        jaroWinkler(A[0], B[0])
-      );
-
-      if (A.some((v, k) => v === A[k + 1]) ||
-          B.some((v, k) => v === B[k + 1])) {
-        duplicateAncestor = true;
-      }
-
-      if (
-        jaroWinkler(
-          A[A.length - 1],
-          B[B.length - 1]
-        ) < 0.95
-      ) {
-        familyStable = false;
-      }
-    }
-  }
-
-  const lengths = cluster.map(r => r.parts.length);
-  const lengthDiff = Math.max(...lengths) - Math.min(...lengths);
-
-  return {
-    duplicateAncestor,
-    lengthDiff,
-    firstNameMinJW: minFirstNameJW,
-    familyNameStable: familyStable,
-  };
-}
 
 type AutoRule = {
-  id: string;
-  apply: (
+    id: string;
+    pattern: LineageDiff;
+};
+
+let AUTO_RULES: AutoRule[] = [];
+
+async function loadAutoRules() {
+    try {
+        const response = await fetch('/rules/auto-rules.json');
+        if (response.ok) {
+            const rules = await response.json();
+            if (Array.isArray(rules)) {
+                AUTO_RULES = rules;
+            }
+        }
+    } catch (e) {
+        console.warn("Could not load auto-rules.json, starting with none.");
+        AUTO_RULES = [];
+    }
+}
+
+function applyAutoRule(
+    rule: AutoRule,
     a: PreprocessedRow,
     b: PreprocessedRow,
     opts: WorkerOptions
-  ) => RuleResult | null;
-};
+): RuleResult | null {
+    const { pattern } = rule;
+    let A = a.parts;
+    let B = b.parts;
 
-function generateRuleFromPattern(pattern: LineageDiff): AutoRule {
-  const id = `AUTO_LINEAGE_RULE_${Date.now()}`;
-
-  return {
-    id,
-
-    apply: (a, b, opts) => {
-      let A = a.parts;
-      let B = b.parts;
-
-      if (pattern.duplicateAncestor) {
+    if (pattern.duplicateAncestor) {
         A = collapseDuplicateAncestors(A);
         B = collapseDuplicateAncestors(B);
-      }
+    }
 
-      const maxLen = Math.max(A.length, B.length);
-      A = alignLineage(A, maxLen);
-      B = alignLineage(B, maxLen);
+    const maxLen = Math.max(A.length, B.length);
+    A = alignLineage(A, maxLen);
+    B = alignLineage(B, maxLen);
 
-      // family anchor
-      if (
+    if (
         pattern.familyNameStable &&
-        jaroWinkler(
-          A[maxLen - 1],
-          B[maxLen - 1]
-        ) < 0.95
-      ) return null;
+        jaroWinkler(A[maxLen - 1], B[maxLen - 1]) < 0.95
+    ) return null;
 
-      // first name tolerance learned from cluster
-      if (
+    if (
         jaroWinkler(A[0], B[0]) <
         Math.max(0.85, pattern.firstNameMinJW - 0.02)
-      ) return null;
+    ) return null;
 
-      // lineage strength
-      let ok = 0;
-      for (let i = 1; i < maxLen - 1; i++) {
+    let ok = 0;
+    for (let i = 1; i < maxLen - 1; i++) {
         if (jaroWinkler(A[i], B[i]) >= 0.93) ok++;
-      }
-
-      if (ok >= maxLen - 3) {
-        return {
-          score: Math.min(1, opts.thresholds.minPair + 0.38),
-          reasons: [id],
-        };
-      }
-
-      return null;
     }
-  };
-}
 
-const AUTO_RULES: AutoRule[] = [];
+    if (ok >= maxLen - 3) {
+        return {
+            score: Math.min(1, opts.thresholds.minPair + 0.38),
+            reasons: [rule.id],
+        };
+    }
 
-function registerAutoRule(rule: AutoRule) {
-  AUTO_RULES.push(rule);
-}
-
-export function learnFromFailure(cluster: FailureCluster): string {
-  const pattern = analyzeClusterPattern(cluster);
-  const rule = generateRuleFromPattern(pattern);
-  registerAutoRule(rule);
-  return rule.id;
+    return null;
 }
 
 
@@ -348,7 +301,7 @@ const applyAdditionalRules = (
 
   // Apply auto-generated rules first
   for (const rule of AUTO_RULES) {
-    const r = rule.apply(a, b, opts);
+    const r = applyAutoRule(rule, a, b, opts);
     if (r) return r;
   }
   
@@ -653,7 +606,7 @@ if (husbandExact && (childrenA.length || childrenB.length)) {
 
 // --- Config & Options ---
 
-type WorkerOptions = {
+export type WorkerOptions = {
   thresholds: {
     minPair: number;
     minInternal: number;
@@ -687,7 +640,7 @@ const defaultOptions: WorkerOptions = {
   },
 };
 
-type PreprocessedRow = {
+export type PreprocessedRow = {
   _internalId: string;
   womanName: string;
   husbandName: string;
@@ -1093,7 +1046,7 @@ let options: WorkerOptions = defaultOptions;
 let resumeState: any = null;
 let progressKey = "";
 
-self.onmessage = (event) => {
+self.onmessage = async (event) => {
   const { type, payload } = event.data;
   if (!type) return;
 
@@ -1109,6 +1062,7 @@ self.onmessage = (event) => {
     resumeState = payload.resumeState || null;
     progressKey = payload.progressKey || "";
     inbound = [];
+    await loadAutoRules(); // Load learned rules
     postMessage({ type: "progress", status: "worker-ready", progress: 1 });
     return;
   }

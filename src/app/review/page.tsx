@@ -1,16 +1,15 @@
 
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo } from "react";
 import type { RecordRow } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { Loader2, Search, ChevronLeft, AlertTriangle, ChevronRight, PieChart, Microscope, Wrench } from "lucide-react";
+import { Loader2, Search, ChevronLeft, AlertTriangle, ChevronRight, PieChart, Microscope } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
 import { PairwiseModal } from "@/components/PairwiseModal";
-import { DataCorrectionModal } from "@/components/DataCorrectionModal";
 import { generateArabicClusterSummary, getDecisionAndNote } from "@/lib/arabicClusterSummary";
 import { useTranslation } from "@/hooks/use-translation";
 import { DecisionPieChart } from "@/components/DecisionPieChart";
@@ -27,19 +26,14 @@ type Cluster = {
   pairScores?: any[];
 };
 
-const LOCAL_STORAGE_KEY_PREFIX = "beneficiary-mapping-";
-
 export default function ReviewPage() {
   const { t } = useTranslation();
-  const [allRecords, setAllRecords] = useState<RecordRow[]>([]);
   const [allClusters, setAllClusters] = useState<Cluster[]>([]);
   const [filteredClusters, setFilteredClusters] = useState<Cluster[]>([]);
   const [selectedCluster, setSelectedCluster] = useState<Cluster | null>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [isCorrectionModalOpen, setIsCorrectionModalOpen] = useState(false);
   const { toast } = useToast();
-  const [mapping, setMapping] = useState<Record<string, string>>({});
 
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(9);
@@ -50,22 +44,11 @@ export default function ReviewPage() {
       const result = await loadCachedResult();
 
       if (result) {
-        setAllRecords(result.rows || []);
         const clusters = result.clusters || [];
         setAllClusters(clusters);
 
         if (clusters.length === 0) {
           toast({ title: t('review.toasts.noClustersFound.title'), description: t('review.toasts.noClustersFound.description'), variant: "default" });
-        }
-
-        // Load mapping
-        const originalHeaders = result.originalHeaders || [];
-        const storageKey = `${LOCAL_STORAGE_KEY_PREFIX}${originalHeaders.join(",")}`;
-        const savedMapping = localStorage.getItem(storageKey);
-        if (savedMapping) {
-            try {
-                setMapping(JSON.parse(savedMapping));
-            } catch {}
         }
 
       } else {
@@ -157,10 +140,6 @@ export default function ReviewPage() {
                         {t('review.buttons.backToUpload')}
                     </Link>
                 </Button>
-                <Button variant="secondary" onClick={() => setIsCorrectionModalOpen(true)}>
-                    <Wrench className="mr-2 h-4 w-4" />
-                    Data Correction
-                </Button>
                 <Button asChild>
                     <Link href="/audit">
                         {t('review.buttons.goToAudit')}
@@ -250,15 +229,6 @@ export default function ReviewPage() {
           cluster={selectedCluster}
           isOpen={!!selectedCluster}
           onClose={() => setSelectedCluster(null)}
-        />
-      )}
-
-      {isCorrectionModalOpen && (
-        <DataCorrectionModal
-          allRecords={allRecords}
-          mapping={mapping}
-          isOpen={isCorrectionModalOpen}
-          onClose={() => setIsCorrectionModalOpen(false)}
         />
       )}
     </div>
