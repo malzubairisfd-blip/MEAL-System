@@ -103,7 +103,8 @@ self.onmessage = async (event: MessageEvent) => {
         const newRule = generateRuleFromPattern(pattern);
         
         // Persist the rule by sending it to the new API endpoint
-        const res = await fetch("/api/rules", {
+        const apiUrl = new URL('/api/rules', self.location.origin).toString();
+        const res = await fetch(apiUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(newRule),
