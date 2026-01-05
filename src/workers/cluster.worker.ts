@@ -158,15 +158,11 @@ const jaroWinkler = (a: string, b: string) => {
   return jaro + prefix * 0.1 * (1 - jaro);
 };
 
-const tokenJaccard = (aTokens: any, bTokens: any) => {
+const tokenJaccard = (aTokens: string[], bTokens: string[]) => {
   if (!aTokens || !bTokens) return 0;
-
-  const aTokensArr = Array.isArray(aTokens) ? aTokens : String(aTokens).split("|").filter(Boolean);
-  const bTokensArr = Array.isArray(bTokens) ? bTokens : String(bTokens).split("|").filter(Boolean);
-  
-  if (!aTokensArr.length && !bTokensArr.length) return 0;
-  const setA = new Set(aTokensArr);
-  const setB = new Set(bTokensArr);
+  if (!aTokens.length && !bTokens.length) return 0;
+  const setA = new Set(aTokens);
+  const setB = new Set(bTokens);
   let intersection = 0;
   for (const token of setA) {
     if (setB.has(token)) intersection++;
@@ -315,13 +311,9 @@ const husbandExact =
   jw(a.husbandName_normalized, b.husbandName_normalized) >= 0.97;
 
 // children_normalized is assumed like: "حسين|عفاف|وادعه"
-const childrenA = a.children_normalized
-  ? (a.children_normalized as any).split("|").filter(Boolean)
-  : [];
+const childrenA = Array.isArray(a.children_normalized) ? a.children_normalized : [];
 
-const childrenB = b.children_normalized
-  ? (b.children_normalized as any).split("|").filter(Boolean)
-  : [];
+const childrenB = Array.isArray(b.children_normalized) ? b.children_normalized : [];
 
 // fast exit
 if (husbandExact && (childrenA.length || childrenB.length)) {
@@ -339,7 +331,7 @@ if (husbandExact && (childrenA.length || childrenB.length)) {
   // ✅ at least ONE child matches OR strong overall similarity
   const childrenOverlap =
     childMatches >= 1 ||
-    tokenJaccard(a.children_normalized, b.children_normalized) >= 0.6;
+    tokenJaccard(childrenA, childrenB) >= 0.6;
 
   if (childrenOverlap) {
     return {
@@ -723,7 +715,7 @@ const buildEdges = async (
     // 6️⃣ CHILDREN ROOT KEY
     const husbandCore = row.husbandParts.length >= 3 ? `${row.husbandParts[0]}|${row.husbandParts[1]}|${row.husbandParts[2]}` : null;
     const childRoots = row.children_normalized.map(c => c.slice(0, 3)).sort();
-    if (husbandCore && childRoots.length) {
+    if (husbandCore) {
       for (const root of new Set(childRoots)) {
         addToken(`H_CH_ONE:${husbandCore}::${root}`, i);
       }
@@ -772,7 +764,7 @@ const buildEdges = async (
     if (row.parts.length >= 3 && row.husbandParts.length >= 3) keysToCheck.push(`W_H_CORE:${row.parts[0]}|${row.parts[1]}|${row.parts[2]}::${row.husbandParts[0]}|${row.husbandParts[1]}|${row.husbandParts[2]}`);
     const husbandCoreCheck = row.husbandParts.length >= 3 ? `${row.husbandParts[0]}|${row.husbandParts[1]}|${row.husbandParts[2]}` : null;
     const childRootsCheck = row.children_normalized.map(c => c.slice(0, 3)).sort();
-    if (husbandCoreCheck && childRootsCheck.length) {
+    if (husbandCoreCheck) {
       for (const root of new Set(childRootsCheck)) {
         keysToCheck.push(`H_CH_ONE:${husbandCoreCheck}::${root}`);
       }
