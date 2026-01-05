@@ -293,8 +293,8 @@ if (
     jw(HA[HA.length - 1], HB[HB.length - 1]) >= 0.93 
   ) {
     return {
-      reason: "SHARED_HOUSEHOLD_SAME_HUSBAND",
-      boost: 0.26,
+      score: Math.min(1, minPair + 0.26),
+      reasons: ["SHARED_HOUSEHOLD_SAME_HUSBAND"],
     };
   }
 }
@@ -700,26 +700,60 @@ const buildEdges = async (
   for (let i = 0; i < n; i++) {
     const row = rows[i];
 
+    // Key 1: ID (Exact)
+    if (row.nationalId) addToken(`ID:${row.nationalId}`, i);
+
+    // Key 2: Phone (Last 6 digits)
+    if (row.phone && row.phone.length >= 6) addToken(`PH:${row.phone.slice(-6)}`, i);
+
+    // Key 3: First 3 chars of Normalized First Name (Phonetic Block)
+    if (row.parts[0] && row.parts[0].length >= 2) {
+      addToken(`W_N:${row.parts[0].substring(0, 3)}`, i);
+    }
+
+    // Key 4: Husband First Name (First 3 chars)
+    if (row.husbandParts[0] && row.husbandParts[0].length >= 2) {
+      addToken(`H_N:${row.husbandParts[0].substring(0, 3)}`, i);
+    }
+
+    // Key 5: Woman Family Name (Last Token)
+    if (row.parts.length > 1) {
+      const last = row.parts[row.parts.length - 1];
+      if (last.length > 2) addToken(`W_L:${last}`, i);
+    }
+
     // --- NEW KEYS ---
 
     // 1️⃣ WOMAN CORE LINEAGE KEY
     if (row.parts.length >= 3) {
-      addToken(`W_CORE:${row.parts[0]}|${row.parts[1]}|${row.parts[2]}`, i);
+      addToken(
+        `W_CORE:${row.parts[0]}|${row.parts[1]}|${row.parts[2]}`,
+        i
+      );
     }
     
     // 2️⃣ WOMAN CORE + LAST
     if (row.parts.length >= 4) {
-      addToken(`W_CORE_L:${row.parts[0]}|${row.parts[1]}|${row.parts[2]}|${row.parts[row.parts.length - 1]}`, i);
+      addToken(
+        `W_CORE_L:${row.parts[0]}|${row.parts[1]}|${row.parts[2]}|${row.parts[row.parts.length - 1]}`,
+        i
+      );
     }
 
     // 3️⃣ HUSBAND CORE LINEAGE KEY
     if (row.husbandParts.length >= 3) {
-      addToken(`H_CORE:${row.husbandParts[0]}|${row.husbandParts[1]}|${row.husbandParts[2]}`, i);
+      addToken(
+        `H_CORE:${row.husbandParts[0]}|${row.husbandParts[1]}|${row.husbandParts[2]}`,
+        i
+      );
     }
 
     // 4️⃣ FULL HUSBAND LINEAGE
     if (row.husbandParts.length >= 4) {
-      addToken(`H_FULL:${row.husbandParts.slice(0, 4).join("|")}`, i);
+      addToken(
+        `H_FULL:${row.husbandParts.slice(0, 4).join("|")}`,
+        i
+      );
     }
 
     // 5️⃣ WOMAN + HUSBAND CORE COMPOSITE
@@ -771,6 +805,16 @@ const buildEdges = async (
 
     const keysToCheck: string[] = [];
     
+    // Original Keys
+    if (row.nationalId) keysToCheck.push(`ID:${row.nationalId}`);
+    if (row.phone && row.phone.length >= 6) keysToCheck.push(`PH:${row.phone.slice(-6)}`);
+    if (row.parts[0] && row.parts[0].length >= 2) keysToCheck.push(`W_N:${row.parts[0].substring(0, 3)}`);
+    if (row.husbandParts[0] && row.husbandParts[0].length >= 2) keysToCheck.push(`H_N:${row.husbandParts[0].substring(0, 3)}`);
+    if (row.parts.length > 1) {
+      const last = row.parts[row.parts.length - 1];
+      if (last.length > 2) keysToCheck.push(`W_L:${last}`);
+    }
+
     // Add new keys to check
     if (row.parts.length >= 3) keysToCheck.push(`W_CORE:${row.parts[0]}|${row.parts[1]}|${row.parts[2]}`);
     if (row.parts.length >= 4) keysToCheck.push(`W_CORE_L:${row.parts[0]}|${row.parts[1]}|${row.parts[2]}|${row.parts[row.parts.length - 1]}`);
