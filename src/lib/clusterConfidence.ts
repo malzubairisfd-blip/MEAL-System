@@ -1,5 +1,6 @@
 import type { RecordRow } from './types';
 import { computePairScore, type WorkerOptions, type PreprocessedRow } from './scoringClient';
+import { averageWomanNameScore, averageHusbandNameScore, totalAverageNameScore } from '@/workers/scoring.worker';
 
 // --- Utility Functions ---
 
@@ -60,7 +61,11 @@ function buildPairwiseMatrix(
   cluster: PreprocessedRow[],
   opts: WorkerOptions
 ) {
-  const scores: number[] = [];
+  const scores: {
+    womanAvg: number;
+    husbandAvg: number;
+    totalAvg: number;
+  }[] = [];
   const audit: any[] = [];
   const firedRules = new Set<string>();
   const keysUsed = new Set<string>();
@@ -68,8 +73,8 @@ function buildPairwiseMatrix(
   for (let i = 0; i < cluster.length; i++) {
     for (let j = i + 1; j < cluster.length; j++) {
       const r = computePairScore(cluster[i], cluster[j], opts);
-
-      scores.push(r.score);
+      const nameScores = totalAverageNameScore(cluster[i], cluster[j]);
+      scores.push(nameScores);
 
       (r.reasons || []).forEach((x: string) => firedRules.add(x));
 
@@ -83,13 +88,21 @@ function buildPairwiseMatrix(
         a: cluster[i]._internalId,
         b: cluster[j]._internalId,
         score: r.score,
+        ...nameScores,
         reasons: r.reasons || [],
         breakdown: r.breakdown
       });
     }
   }
 
-  return { scores, audit, firedRules: [...firedRules], keysUsed: [...keysUsed] };
+  const safeAvg = (arr: number[]) => arr.length > 0 ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+  const avgScores = {
+    womanAvg: safeAvg(scores.map(s => s.womanAvg)),
+    husbandAvg: safeAvg(scores.map(s => s.husbandAvg)),
+    totalAvg: safeAvg(scores.map(s => s.totalAvg)),
+  }
+
+  return { scores: avgScores, audit, firedRules: [...firedRules], keysUsed: [...keysUsed] };
 }
 
 function autoGenerateClusterSummary(data: {
@@ -122,29 +135,8 @@ export function calculateClusterConfidence(
     buildPairwiseMatrix(cluster, opts);
 
   const size = cluster.length;
-  const thresholds = adaptiveThresholds(size);
-
-  const avg = mean(scores);
-  const std = stdDev(scores);
-  const minScore = scores.length > 0 ? Math.min(...scores) : 0;
-
-  const stdPenalty =
-    clamp(std / thresholds.stdCap) * thresholds.stdCap;
-
-  const sizePenalty =
-    Math.log2(size - 1) * 0.03;
-
-  const weakLinkPenalty =
-    minScore < thresholds.minPair
-      ? (thresholds.minPair - minScore) * 0.6
-      : 0;
-
-  let confidence =
-    avg - stdPenalty - sizePenalty - weakLinkPenalty;
-
-  confidence = clamp(confidence);
-
-  const confidencePercent = Math.round(confidence * 100);
+  
+  const confidencePercent = Math.round(scores.totalAvg * 100);
 
   const confidenceLevel =
     confidencePercent >= 92
@@ -158,22 +150,11 @@ export function calculateClusterConfidence(
   return {
     confidencePercent,
     confidenceLevel,
-    avgScore: avg,
-    stdDeviation: std,
-    penalties: {
-      stdPenalty,
-      sizePenalty,
-      weakLinkPenalty
-    },
+    avgWomanNameScore: scores.womanAvg,
+    avgHusbandNameScore: scores.husbandAvg,
+    avgFinalScore: scores.totalAvg,
     firedRules,
     keysUsed,
     auditTable: audit,
-    summary: autoGenerateClusterSummary({
-      confidencePercent,
-      size,
-      firedRules,
-      keysUsed,
-      minScore
-    })
   };
 }

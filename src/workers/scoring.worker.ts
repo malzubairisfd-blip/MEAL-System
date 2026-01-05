@@ -1,6 +1,6 @@
 
 // src/workers/scoring.worker.ts
-import { type PreprocessedRow, type WorkerOptions } from "@/lib/scoringClient";
+import { type PreprocessedRow, type WorkerOptions, computePairScore } from "@/lib/scoringClient";
 import { calculateClusterConfidence } from "@/lib/clusterConfidence";
 
 
@@ -59,7 +59,7 @@ function jaroWinkler(a: string, b: string) {
 };
 
 
-function averageWomanNameScore(a: PreprocessedRow, b: PreprocessedRow): number {
+export function averageWomanNameScore(a: PreprocessedRow, b: PreprocessedRow): number {
   const A = a.parts;
   const B = b.parts;
   
@@ -79,7 +79,7 @@ function averageWomanNameScore(a: PreprocessedRow, b: PreprocessedRow): number {
   return count ? sum / count : 0;
 }
 
-function averageHusbandNameScore(a: PreprocessedRow, b: PreprocessedRow): number {
+export function averageHusbandNameScore(a: PreprocessedRow, b: PreprocessedRow): number {
   const HA = a.husbandParts;
   const HB = b.husbandParts;
   
@@ -107,7 +107,7 @@ function averageHusbandNameScore(a: PreprocessedRow, b: PreprocessedRow): number
   return 0.6 * partsAvg + 0.4 * fullNameScore;
 }
 
-function totalAverageNameScore(
+export function totalAverageNameScore(
   a: PreprocessedRow,
   b: PreprocessedRow
 ): {
@@ -161,21 +161,7 @@ self.onmessage = (event) => {
       }
       
       const confidenceResult = calculateClusterConfidence(records, options || {});
-      const { confidencePercent, auditTable } = confidenceResult;
-
-      // Calculate cluster-wide average scores
-      let womanScores: number[] = [];
-      let husbandScores: number[] = [];
-      let finalScores: number[] = [];
-
-      for (let i = 0; i < records.length; i++) {
-          for (let j = i + 1; j < records.length; j++) {
-              const { womanAvg, husbandAvg, totalAvg } = totalAverageNameScore(records[i], records[j]);
-              womanScores.push(womanAvg);
-              husbandScores.push(husbandAvg);
-              finalScores.push(totalAvg);
-          }
-      }
+      const { confidencePercent, auditTable, avgWomanNameScore, avgHusbandNameScore, avgFinalScore } = confidenceResult;
 
       const safeAvg = (arr: (number | null | undefined)[]) => {
           const valid = arr.filter(v => typeof v === 'number' && isFinite(v)) as number[];
@@ -197,12 +183,12 @@ self.onmessage = (event) => {
 
       return {
         ...cluster,
-        records: recordsWithAvgScores, // Pass through original records
-        pairScores: auditTable, // The detailed audit table serves as pairScores
+        records: recordsWithAvgScores,
+        pairScores: auditTable, 
         confidenceScore: confidencePercent,
-        avgWomanNameScore: safeAvg(womanScores),
-        avgHusbandNameScore: safeAvg(husbandScores),
-        avgFinalScore: safeAvg(finalScores)
+        avgWomanNameScore,
+        avgHusbandNameScore,
+        avgFinalScore
       };
     });
 
