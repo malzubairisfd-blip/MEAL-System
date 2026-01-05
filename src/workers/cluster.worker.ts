@@ -240,6 +240,21 @@ const applyAdditionalRules = (
    TIER 0.5 — CORE LINEAGE GUARANTEE (4–5 PART SAFE)
    ========================================================= */
 
+const firstNameMatchRule =
+  A.length > 0 &&
+  B.length > 0 &&
+  jw(A[0], B[0]) >= 0.93;
+
+const husbandStrongMatch =
+  jw(a.husbandName_normalized, b.husbandName_normalized) >= 0.96;
+
+if (firstNameMatchRule && husbandStrongMatch) {
+  return {
+    score: 1.0,
+    reasons: ["SAME_WOMAN_FIRSTNAME_EXACT_HUSBAND"],
+  };
+}
+
 if (
   // ---- WOMAN CORE (First / Father / Grandfather) ----
   A.length >= 3 &&
@@ -310,10 +325,9 @@ if (
 const husbandExact =
   jw(a.husbandName_normalized, b.husbandName_normalized) >= 0.97;
 
-// children_normalized is assumed like: "حسين|عفاف|وادعه"
-const childrenA = Array.isArray(a.children_normalized) ? a.children_normalized : [];
-
-const childrenB = Array.isArray(b.children_normalized) ? b.children_normalized : [];
+// children_normalized is an array of strings
+const childrenA = a.children_normalized || [];
+const childrenB = b.children_normalized || [];
 
 // fast exit
 if (husbandExact && (childrenA.length || childrenB.length)) {
@@ -709,7 +723,10 @@ const buildEdges = async (
 
     // 5️⃣ WOMAN + HUSBAND CORE COMPOSITE
     if (row.parts.length >= 3 && row.husbandParts.length >= 3) {
-      addToken(`W_H_CORE:${row.parts[0]}|${row.parts[1]}|${row.parts[2]}::${row.husbandParts[0]}|${row.husbandParts[1]}|${row.husbandParts[2]}`, i);
+      addToken(
+        `W_H_CORE:${row.parts[0]}|${row.parts[1]}|${row.parts[2]}::${row.husbandParts[0]}|${row.husbandParts[1]}|${row.husbandParts[2]}`,
+        i
+      );
     }
     
     // 6️⃣ CHILDREN ROOT KEY
@@ -724,6 +741,11 @@ const buildEdges = async (
     // 7️⃣ HOUSEHOLD / POLYGAMY KEY
     if (row.husbandParts.length >= 2 && row.village_normalized) {
       addToken(`HOUSE:${row.husbandParts[0]}|${row.husbandParts[1]}|${row.village_normalized}`, i);
+    }
+
+    // 8️⃣ NEW: WOMAN 1 + HUSBAND 3 CORE
+    if (row.parts.length >= 1 && row.husbandParts.length >= 3) {
+      addToken(`W1_H3_CORE:${row.parts[0]}|${row.husbandParts[0]}|${row.husbandParts[1]}|${row.husbandParts[2]}`, i);
     }
 
     // Update UI occasionally during indexing
@@ -770,7 +792,9 @@ const buildEdges = async (
       }
     }
     if (row.husbandParts.length >= 2 && row.village_normalized) keysToCheck.push(`HOUSE:${row.husbandParts[0]}|${row.husbandParts[1]}|${row.village_normalized}`);
-
+    if (row.parts.length >= 1 && row.husbandParts.length >= 3) {
+      keysToCheck.push(`W1_H3_CORE:${row.parts[0]}|${row.husbandParts[0]}|${row.husbandParts[1]}|${row.husbandParts[2]}`);
+    }
 
     for (const key of keysToCheck) {
       const matches = tokenMap.get(key);
@@ -1230,3 +1254,5 @@ const mergeDedupPairScores = (target: any[], source: any[]) => {
   source.forEach(addEdge);
   return Array.from(map.values());
 };
+
+    
