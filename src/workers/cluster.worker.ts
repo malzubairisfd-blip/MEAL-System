@@ -1,5 +1,6 @@
 
 
+
 // --- Constants & Helpers ---
 
 function baseArabicNormalize(value: any): string {
@@ -108,7 +109,7 @@ const yieldToEventLoop = () => new Promise<void>((resolve) => setTimeout(resolve
 
 // --- Similarity Functions ---
 
-const jaroWinkler = (a: string, b: string) => {
+export const jaroWinkler = (a: string, b: string) => {
   const sanitizedA = String(a || "");
   const sanitizedB = String(b || "");
   if (!sanitizedA || !sanitizedB) return 0;
