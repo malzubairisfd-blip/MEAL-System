@@ -666,94 +666,116 @@ export function totalAverageNameScore(
   };
 }
 
-// --- Cluster Confidence Logic from clusterConfidence.ts ---
+/* =========================================================
+   FULL CLUSTER CONFIDENCE CALCULATION – PRODUCTION READY
+   ========================================================= */
 
-function buildPairwiseMatrix(
-  cluster: PreprocessedRow[],
-  opts: WorkerOptions
-) {
-  const scores: {
-    womanAvg: number;
-    husbandAvg: number;
-    totalAvg: number;
-  }[] = [];
-  const audit: any[] = [];
-  const firedRules = new Set<string>();
-  const keysUsed = new Set<string>();
+/* ---------------------------------------------------------
+   TYPES
+--------------------------------------------------------- */
 
-  for (let i = 0; i < cluster.length; i++) {
-    for (let j = i + 1; j < cluster.length; j++) {
-      const r = computePairScore(cluster[i], cluster[j], opts);
-      const nameScores = totalAverageNameScore(cluster[i], cluster[j]);
-      scores.push(nameScores);
+type PairScore = {
+  a: string;            // record internal id
+  b: string;            // record internal id
+  womanScore: number;   // 0..1
+  husbandScore: number; // 0..1
+  totalAvg: number;     // 0..1  ( (woman + husband) / 2 )
+};
 
-      (r.reasons || []).forEach((x: string) => firedRules.add(x));
+type ClusterConfidenceResult = {
+  avgWomanScore: number;
+  avgHusbandScore: number;
+  totalAverageScore: number;
+  standardDeviation: number;
+  sizePenalty: number;
+  confidencePercent: number;
+  confidenceLabel: string;
+};
 
-      if (r.breakdown) {
-          Object.keys(r.breakdown).forEach(k => {
-            if ((r.breakdown as any)[k] > 0.85) keysUsed.add(k);
-          });
-      }
+/* ---------------------------------------------------------
+   BASIC MATH HELPERS
+--------------------------------------------------------- */
 
-      audit.push({
-        a: cluster[i]._internalId,
-        b: cluster[j]._internalId,
-        score: r.score,
-        ...nameScores,
-        reasons: r.reasons || [],
-        breakdown: r.breakdown
-      });
-    }
-  }
-
-  const safeAvg = (arr: number[]) => arr.length > 0 ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
-  const avgScores = {
-    womanAvg: safeAvg(scores.map(s => s.womanAvg)),
-    husbandAvg: safeAvg(scores.map(s => s.husbandAvg)),
-    totalAvg: safeAvg(scores.map(s => s.totalAvg)),
-  }
-
-  return { scores: avgScores, audit, firedRules: [...firedRules], keysUsed: [...keysUsed] };
+function mean(values: number[]): number {
+  if (!values.length) return 0;
+  return values.reduce((a, b) => a + b, 0) / values.length;
 }
 
+function standardDeviation(values: number[]): number {
+  if (values.length < 2) return 0;
+  const m = mean(values);
+  const variance =
+    values.reduce((sum, v) => sum + Math.pow(v - m, 2), 0) / values.length;
+  return Math.sqrt(variance);
+}
 
-// --- Main Confidence Calculation Function ---
+/* ---------------------------------------------------------
+   ADAPTIVE CLUSTER SIZE PENALTY
+--------------------------------------------------------- */
 
-export function calculateClusterConfidence(
-  cluster: PreprocessedRow[],
-  opts: WorkerOptions
-) {
-  if (cluster.length < 2) {
-    return {
-      confidencePercent: 100,
-      confidenceLevel: "SINGLE_RECORD",
-      auditTable: [],
-      summary: "Single record cluster"
-    };
-  }
+function clusterSizePenalty(clusterSize: number): number {
+  if (clusterSize <= 2) return 0;
 
-  const { scores, audit, firedRules, keysUsed } = buildPairwiseMatrix(cluster, opts);
-  
-  const confidencePercent = Math.round(scores.totalAvg * 100);
+  // logarithmic growth (safe for large clusters)
+  return Math.min(0.12, Math.log(clusterSize - 1) * 0.03);
+}
 
-  const confidenceLevel =
-    confidencePercent >= 92
-    ? "CONFIRMED"
-    : confidencePercent >= 85
-    ? "STRONG_SUSPECT"
-    : confidencePercent >= 70
-    ? "SUSPECT"
-    : "POSSIBLE";
+/* ---------------------------------------------------------
+   ARABIC CONFIDENCE LABELS (4 LEVELS)
+--------------------------------------------------------- */
+
+function arabicConfidenceLabel(percent: number): string {
+  if (percent >= 90) return "تكرار مؤكد";
+  if (percent >= 75) return "اشتباه تكرار مؤكد";
+  if (percent >= 60) return "اشتباه تكرار";
+  return "إحتمالية تكرار";
+}
+
+/* ---------------------------------------------------------
+   MAIN CONFIDENCE CALCULATION
+--------------------------------------------------------- */
+
+function calculateClusterConfidence(
+  pairScores: PairScore[],
+  clusterSize: number
+): ClusterConfidenceResult {
+
+  // ---- Collect Scores ----
+  const womanScores = pairScores.map(p => p.womanScore);
+  const husbandScores = pairScores.map(p => p.husbandScore);
+  const totalScores = pairScores.map(p => p.totalAvg);
+
+  // ---- Averages ----
+  const avgWomanScore = mean(womanScores);
+  const avgHusbandScore = mean(husbandScores);
+
+  // combined average (woman + husband)
+  const totalAverageScore =
+    (avgWomanScore + avgHusbandScore) / 2;
+
+  // ---- Consistency ----
+  const deviation = standardDeviation(totalScores);
+
+  // ---- Size Penalty ----
+  const sizePenalty = clusterSizePenalty(clusterSize);
+
+  // ---- FINAL CONFIDENCE FORMULA ----
+  let confidence =
+    totalAverageScore
+    - deviation
+    - sizePenalty;
+
+  confidence = Math.max(0, Math.min(1, confidence));
+  const confidencePercent = Math.round(confidence * 100);
 
   return {
+    avgWomanScore,
+    avgHusbandScore,
+    totalAverageScore,
+    standardDeviation: deviation,
+    sizePenalty,
     confidencePercent,
-    confidenceLevel,
-    avgWomanNameScore: scores.womanAvg,
-    avgHusbandNameScore: scores.husbandAvg,
-    avgFinalScore: scores.totalAvg,
-    firedRules,
-    keysUsed,
-    auditTable: audit,
+    confidenceLabel: arabicConfidenceLabel(confidencePercent),
   };
 }
 
@@ -783,27 +805,40 @@ self.onmessage = (event) => {
           ...cluster,
           records,
           pairScores: [],
-          confidenceScore: 100, // Or some default for single-record clusters
-          avgWomanNameScore: 1,
-          avgHusbandNameScore: 1,
-          avgFinalScore: 1,
+          confidenceScore: 0,
+          avgWomanNameScore: 0,
+          avgHusbandNameScore: 0,
+          avgFinalScore: 0,
         };
       }
       
-      const confidenceResult = calculateClusterConfidence(records, options || {});
-      const { confidencePercent, auditTable, avgWomanNameScore, avgHusbandNameScore, avgFinalScore } = confidenceResult;
+      const pairScores: PairScore[] = [];
+      for (let i = 0; i < records.length; i++) {
+        for (let j = i + 1; j < records.length; j++) {
+            const pairDetails = totalAverageNameScore(records[i], records[j]);
+            pairScores.push({
+                a: records[i]._internalId,
+                b: records[j]._internalId,
+                womanScore: pairDetails.womanAvg,
+                husbandScore: pairDetails.husbandAvg,
+                totalAvg: pairDetails.totalAvg,
+            });
+        }
+      }
 
-      const safeAvg = (arr: (number | null | undefined)[]) => {
-          const valid = arr.filter(v => typeof v === 'number' && isFinite(v)) as number[];
-          return valid.length > 0 ? valid.reduce((a, b) => a + b, 0) / valid.length : 0;
-      };
-
+      const confidenceResult = calculateClusterConfidence(pairScores, records.length);
+      
       const recordsWithAvgScores = records.map(record => {
-        const relatedPairs = auditTable.filter((p: any) => p.a === record._internalId || p.b === record._internalId);
+        const relatedPairs = pairScores.filter((p: any) => p.a === record._internalId || p.b === record._internalId);
         
+        const safeAvg = (arr: (number | null | undefined)[]) => {
+            const valid = arr.filter(v => typeof v === 'number' && isFinite(v)) as number[];
+            return valid.length > 0 ? valid.reduce((a, b) => a + b, 0) / valid.length : 0;
+        };
+
         return {
           ...record,
-          avgPairScore: safeAvg(relatedPairs.map((p: any) => p.score)),
+          avgPairScore: safeAvg(relatedPairs.map((p: any) => p.totalAvg)),
           avgFirstNameScore: safeAvg(relatedPairs.map((p: any) => p.breakdown?.firstNameScore)),
           avgFamilyNameScore: safeAvg(relatedPairs.map((p: any) => p.breakdown?.familyNameScore)),
           avgAdvancedNameScore: safeAvg(relatedPairs.map((p: any) => p.breakdown?.advancedNameScore)),
@@ -814,11 +849,11 @@ self.onmessage = (event) => {
       return {
         ...cluster,
         records: recordsWithAvgScores,
-        pairScores: auditTable, 
-        confidenceScore: confidencePercent,
-        avgWomanNameScore,
-        avgHusbandNameScore,
-        avgFinalScore
+        pairScores: pairScores, // Use the newly constructed detailed pairs
+        confidenceScore: confidenceResult.confidencePercent,
+        avgWomanNameScore: confidenceResult.avgWomanScore,
+        avgHusbandNameScore: confidenceResult.avgHusbandScore,
+        avgFinalScore: confidenceResult.totalAverageScore,
       };
     });
 
