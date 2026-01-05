@@ -1,4 +1,3 @@
-
 // --- Constants & Helpers ---
 
 function baseArabicNormalize(value: any): string {
@@ -158,11 +157,15 @@ const jaroWinkler = (a: string, b: string) => {
   return jaro + prefix * 0.1 * (1 - jaro);
 };
 
-const tokenJaccard = (aTokens: string[], bTokens: string[]) => {
+const tokenJaccard = (aTokens: any, bTokens: any) => {
   if (!aTokens || !bTokens) return 0;
-  if (!aTokens.length && !bTokens.length) return 0;
-  const setA = new Set(aTokens);
-  const setB = new Set(bTokens);
+
+  const aTokensArr = Array.isArray(aTokens) ? aTokens : String(aTokens).split("|").filter(Boolean);
+  const bTokensArr = Array.isArray(bTokens) ? bTokens : String(bTokens).split("|").filter(Boolean);
+  
+  if (!aTokensArr.length && !bTokensArr.length) return 0;
+  const setA = new Set(aTokensArr);
+  const setB = new Set(bTokensArr);
   let intersection = 0;
   for (const token of setA) {
     if (setB.has(token)) intersection++;
@@ -239,22 +242,6 @@ const applyAdditionalRules = (
 /* =========================================================
    TIER 0.5 — CORE LINEAGE GUARANTEE (4–5 PART SAFE)
    ========================================================= */
-
-const firstNameMatch =
-  A.length > 0 &&
-  B.length > 0 &&
-  jw(A[0], B[0]) >= 0.93;
-
-const husbandStrongMatch =
-  jw(a.husbandName_normalized, b.husbandName_normalized) >= 0.96;
-
-if (firstNameMatch && husbandStrongMatch) {
-  return {
-    score: 1.0,
-    reasons: ["SAME_WOMAN_FIRSTNAME_EXACT_HUSBAND"],
-  };
-}
-
 if (
   // ---- WOMAN CORE (First / Father / Grandfather) ----
   A.length >= 3 &&
@@ -317,11 +304,55 @@ if (
     };
   }
 
+/* =========================================================
+   TIER X — SAME HUSBAND + CHILDREN OVERLAP (GUARANTEED)
+   Detects Groups 1, 2, 3
+   ========================================================= */
+
+const husbandExact =
+  jw(a.husbandName_normalized, b.husbandName_normalized) >= 0.97;
+
+// children_normalized is assumed like: "حسين|عفاف|وادعه"
+const childrenA = a.children_normalized
+  ? (a.children_normalized as any).split("|").filter(Boolean)
+  : [];
+
+const childrenB = b.children_normalized
+  ? (b.children_normalized as any).split("|").filter(Boolean)
+  : [];
+
+// fast exit
+if (husbandExact && (childrenA.length || childrenB.length)) {
+  let childMatches = 0;
+
+  for (const ca of childrenA) {
+    for (const cb of childrenB) {
+      if (jw(ca, cb) >= 0.90) {
+        childMatches++;
+        break;
+      }
+    }
+  }
+
+  // ✅ at least ONE child matches OR strong overall similarity
+  const childrenOverlap =
+    childMatches >= 1 ||
+    tokenJaccard(a.children_normalized, b.children_normalized) >= 0.6;
+
+  if (childrenOverlap) {
+    return {
+      score: 1.0,
+      reasons: ["SAME_HUSBAND_CHILDREN_OVERLAP"],
+    };
+  }
+}
+
   /* =========================================================
      TIER 3 — STRONG LINEAGE (ORDER FREE)
      ========================================================= */
 
   // DUPLICATED_HUSBAND_LINEAGE
+  const firstNameMatch = A.length && B.length && jw(A[0], B[0]) >= 0.93;
   const husbandStrong =
     jw(a.husbandName_normalized, b.husbandName_normalized) >= 0.9 ||
     nameOrderFreeScore(HA, HB) >= 0.9;
