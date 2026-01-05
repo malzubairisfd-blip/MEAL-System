@@ -1,33 +1,10 @@
 // src/workers/scoring.worker.ts
-import { computePairScore } from "@/lib/scoringClient";
+import { computePairScore, type PreprocessedRow, type WorkerOptions } from "@/lib/scoringClient";
+import { calculateClusterConfidence } from "@/lib/clusterConfidence";
 
-const safeAvg = (values: (number | null | undefined)[]) => {
-  const numerics = values.filter(
-    (value): value is number => typeof value === "number" && Number.isFinite(value)
-  );
-  if (!numerics.length) return 0;
-  const total = numerics.reduce((sum, value) => sum + value, 0);
-  return total / numerics.length;
-};
-
-const variance = (values: number[]) => {
-  if (!values.length) return 0;
-  const mean = safeAvg(values);
-  return safeAvg(values.map((value) => (value - mean) ** 2));
-};
-
-const calculateConfidenceScore = (pairScores: any[], clusterSize: number) => {
-  if (!pairScores.length) return 0;
-  const finalScores = pairScores.map((pair) => pair.score);
-  const avgPairScore = safeAvg(finalScores);
-  const consistencyScore = Math.max(0, 1 - variance(finalScores));
-  const sizeBoost = Math.min(0.1, Math.max(0, (clusterSize - 2) * 0.03));
-  const confidence = avgPairScore * 0.7 + consistencyScore * 0.2 + sizeBoost;
-  return Math.round(Math.min(1, Math.max(0, confidence)) * 100);
-};
 
 self.onmessage = (event) => {
-  const { rawClusters } = event.data;
+  const { rawClusters, options } = event.data;
   if (!rawClusters) {
     postMessage({ type: "error", error: "No clusters provided to scoring worker." });
     return;
@@ -35,101 +12,34 @@ self.onmessage = (event) => {
 
   try {
     const totalClusters = rawClusters.length;
-    // BATCH UPDATES: Sending a message for every cluster kills performance on 500k rows
     const UPDATE_BATCH_SIZE = Math.max(10, Math.floor(totalClusters / 100)); 
 
     const enrichedClusters = rawClusters.map((cluster: any, index: number) => {
-      // Only post message occasionally
       if (index % UPDATE_BATCH_SIZE === 0) {
         const progress = Math.round((index / totalClusters) * 100);
         postMessage({ type: "progress", progress });
       }
 
-      const records = cluster.records || [];
+      const records = (cluster.records || []) as PreprocessedRow[];
       if (records.length < 2) {
         return {
           ...cluster,
           records,
           pairScores: [],
-          avgWomanNameScore: 0,
-          avgHusbandNameScore: 0,
-          avgFinalScore: 0,
-          confidenceScore: 0,
-          clusterSize: records.length,
+          confidenceScore: 100, // Or some default for single-record clusters
         };
       }
-
-      const pairScores: any[] = [];
-      for (let i = 0; i < records.length; i++) {
-        for (let j = i + 1; j < records.length; j++) {
-          const result = computePairScore(records[i], records[j], {});
-          if (!result || !result.breakdown) continue;
-          pairScores.push({
-            aId: records[i]._internalId,
-            bId: records[j]._internalId,
-            score: result.score,
-            ...result.breakdown,
-          });
-        }
-      }
-
-      const avgWomanNameScore = safeAvg(
-        pairScores.map((pair) => (pair.firstNameScore + pair.familyNameScore) / 2)
-      );
-      const avgHusbandNameScore = safeAvg(pairScores.map((pair) => pair.husbandScore));
-      const avgFinalScore = avgWomanNameScore * 0.4 + avgHusbandNameScore * 0.6;
-      const confidenceScore = calculateConfidenceScore(pairScores, records.length);
-
-      const perRecord = records.reduce<Record<string, Record<string, number[]>>>((acc, record) => {
-        acc[record._internalId] = {
-          nameScore: [],
-          husbandScore: [],
-          childrenScore: [],
-          idScore: [],
-          phoneScore: [],
-          locationScore: [],
-        };
-        return acc;
-      }, {});
-
-      pairScores.forEach((pair) => {
-        const entryA = perRecord[pair.aId];
-        const entryB = perRecord[pair.bId];
-        if (!entryA || !entryB) return;
-        const womanNameScore = (pair.firstNameScore + pair.familyNameScore) / 2;
-        entryA.nameScore.push(womanNameScore);
-        entryB.nameScore.push(womanNameScore);
-        entryA.husbandScore.push(pair.husbandScore);
-        entryB.husbandScore.push(pair.husbandScore);
-        entryA.childrenScore.push(pair.childrenScore);
-        entryB.childrenScore.push(pair.childrenScore);
-        entryA.idScore.push(pair.idScore);
-        entryB.idScore.push(pair.idScore);
-        entryA.phoneScore.push(pair.phoneScore);
-        entryB.phoneScore.push(pair.phoneScore);
-        entryA.locationScore.push(pair.locationScore);
-        entryB.locationScore.push(pair.locationScore);
-      });
-
-      const enrichedRecords = records.map((record: any) => ({
-        ...record,
-        nameScore: safeAvg(perRecord[record._internalId].nameScore),
-        husbandScore: safeAvg(perRecord[record._internalId].husbandScore),
-        childrenScore: safeAvg(perRecord[record._internalId].childrenScore),
-        idScore: safeAvg(perRecord[record._internalId].idScore),
-        phoneScore: safeAvg(perRecord[record._internalId].phoneScore),
-        locationScore: safeAvg(perRecord[record._internalId].locationScore),
-      }));
+      
+      const confidenceResult = calculateClusterConfidence(records, options || {});
+      const { confidencePercent, auditTable } = confidenceResult;
 
       return {
         ...cluster,
-        records: enrichedRecords,
-        pairScores,
-        avgWomanNameScore,
-        avgHusbandNameScore,
-        avgFinalScore,
-        confidenceScore,
-        clusterSize: records.length,
+        records: cluster.records, // Pass through original records
+        pairScores: auditTable, // The detailed audit table serves as pairScores
+        confidenceScore: confidencePercent,
+        // We no longer need to calculate these averages here
+        // avgWomanNameScore, avgHusbandNameScore, avgFinalScore are implicitly part of the confidence calc
       };
     });
 
