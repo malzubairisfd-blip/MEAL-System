@@ -1,3 +1,4 @@
+
 // --- Constants & Helpers ---
 
 function baseArabicNormalize(value: any): string {
@@ -242,6 +243,7 @@ const applyAdditionalRules = (
 /* =========================================================
    TIER 0.5 — CORE LINEAGE GUARANTEE (4–5 PART SAFE)
    ========================================================= */
+
 if (
   // ---- WOMAN CORE (First / Father / Grandfather) ----
   A.length >= 3 &&
@@ -691,6 +693,47 @@ const buildEdges = async (
       if (last.length > 2) addToken(`W_L:${last}`, i);
     }
 
+    // --- NEW KEYS ---
+
+    // 1️⃣ WOMAN CORE LINEAGE KEY
+    if (row.parts.length >= 3) {
+      addToken(`W_CORE:${row.parts[0]}|${row.parts[1]}|${row.parts[2]}`, i);
+    }
+    
+    // 2️⃣ WOMAN CORE + LAST
+    if (row.parts.length >= 4) {
+      addToken(`W_CORE_L:${row.parts[0]}|${row.parts[1]}|${row.parts[2]}|${row.parts[row.parts.length - 1]}`, i);
+    }
+
+    // 3️⃣ HUSBAND CORE LINEAGE KEY
+    if (row.husbandParts.length >= 3) {
+      addToken(`H_CORE:${row.husbandParts[0]}|${row.husbandParts[1]}|${row.husbandParts[2]}`, i);
+    }
+
+    // 4️⃣ FULL HUSBAND LINEAGE
+    if (row.husbandParts.length >= 4) {
+      addToken(`H_FULL:${row.husbandParts.slice(0, 4).join("|")}`, i);
+    }
+
+    // 5️⃣ WOMAN + HUSBAND CORE COMPOSITE
+    if (row.parts.length >= 3 && row.husbandParts.length >= 3) {
+      addToken(`W_H_CORE:${row.parts[0]}|${row.parts[1]}|${row.parts[2]}::${row.husbandParts[0]}|${row.husbandParts[1]}|${row.husbandParts[2]}`, i);
+    }
+    
+    // 6️⃣ CHILDREN ROOT KEY
+    const husbandCore = row.husbandParts.length >= 3 ? `${row.husbandParts[0]}|${row.husbandParts[1]}|${row.husbandParts[2]}` : null;
+    const childRoots = row.children_normalized.map(c => c.slice(0, 3)).sort();
+    if (husbandCore && childRoots.length) {
+      for (const root of new Set(childRoots)) {
+        addToken(`H_CH_ONE:${husbandCore}::${root}`, i);
+      }
+    }
+    
+    // 7️⃣ HOUSEHOLD / POLYGAMY KEY
+    if (row.husbandParts.length >= 2 && row.village_normalized) {
+      addToken(`HOUSE:${row.husbandParts[0]}|${row.husbandParts[1]}|${row.village_normalized}`, i);
+    }
+
     // Update UI occasionally during indexing
     if (i % 25000 === 0) {
       postMessage({ type: "progress", status: "indexing", progress: 10 + Math.round((i / n) * 10), completed: i, total: n });
@@ -720,6 +763,22 @@ const buildEdges = async (
       const last = row.parts[row.parts.length - 1];
       if (last.length > 2) keysToCheck.push(`W_L:${last}`);
     }
+    
+    // Add new keys to check
+    if (row.parts.length >= 3) keysToCheck.push(`W_CORE:${row.parts[0]}|${row.parts[1]}|${row.parts[2]}`);
+    if (row.parts.length >= 4) keysToCheck.push(`W_CORE_L:${row.parts[0]}|${row.parts[1]}|${row.parts[2]}|${row.parts[row.parts.length - 1]}`);
+    if (row.husbandParts.length >= 3) keysToCheck.push(`H_CORE:${row.husbandParts[0]}|${row.husbandParts[1]}|${row.husbandParts[2]}`);
+    if (row.husbandParts.length >= 4) keysToCheck.push(`H_FULL:${row.husbandParts.slice(0, 4).join("|")}`);
+    if (row.parts.length >= 3 && row.husbandParts.length >= 3) keysToCheck.push(`W_H_CORE:${row.parts[0]}|${row.parts[1]}|${row.parts[2]}::${row.husbandParts[0]}|${row.husbandParts[1]}|${row.husbandParts[2]}`);
+    const husbandCoreCheck = row.husbandParts.length >= 3 ? `${row.husbandParts[0]}|${row.husbandParts[1]}|${row.husbandParts[2]}` : null;
+    const childRootsCheck = row.children_normalized.map(c => c.slice(0, 3)).sort();
+    if (husbandCoreCheck && childRootsCheck.length) {
+      for (const root of new Set(childRootsCheck)) {
+        keysToCheck.push(`H_CH_ONE:${husbandCoreCheck}::${root}`);
+      }
+    }
+    if (row.husbandParts.length >= 2 && row.village_normalized) keysToCheck.push(`HOUSE:${row.husbandParts[0]}|${row.husbandParts[1]}|${row.village_normalized}`);
+
 
     for (const key of keysToCheck) {
       const matches = tokenMap.get(key);
