@@ -1,15 +1,16 @@
 
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import type { RecordRow } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { Loader2, Search, ChevronLeft, AlertTriangle, ChevronRight, PieChart, Microscope } from "lucide-react";
+import { Loader2, Search, ChevronLeft, AlertTriangle, ChevronRight, PieChart, Microscope, Wrench } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
 import { PairwiseModal } from "@/components/PairwiseModal";
+import { DataCorrectionModal } from "@/components/DataCorrectionModal";
 import { generateArabicClusterSummary, getDecisionAndNote } from "@/lib/arabicClusterSummary";
 import { useTranslation } from "@/hooks/use-translation";
 import { DecisionPieChart } from "@/components/DecisionPieChart";
@@ -28,11 +29,13 @@ type Cluster = {
 
 export default function ReviewPage() {
   const { t } = useTranslation();
+  const [allRecords, setAllRecords] = useState<RecordRow[]>([]);
   const [allClusters, setAllClusters] = useState<Cluster[]>([]);
   const [filteredClusters, setFilteredClusters] = useState<Cluster[]>([]);
   const [selectedCluster, setSelectedCluster] = useState<Cluster | null>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [isCorrectionModalOpen, setIsCorrectionModalOpen] = useState(false);
   const { toast } = useToast();
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -44,6 +47,7 @@ export default function ReviewPage() {
       const result = await loadCachedResult();
 
       if (result && result.clusters) {
+        setAllRecords(result.rows || []);
         const clusters = result.clusters || [];
         setAllClusters(clusters);
 
@@ -139,6 +143,10 @@ export default function ReviewPage() {
                         {t('review.buttons.backToUpload')}
                     </Link>
                 </Button>
+                <Button variant="secondary" onClick={() => setIsCorrectionModalOpen(true)}>
+                    <Wrench className="mr-2 h-4 w-4" />
+                    Data Correction
+                </Button>
                 <Button asChild>
                     <Link href="/audit">
                         {t('review.buttons.goToAudit')}
@@ -228,6 +236,14 @@ export default function ReviewPage() {
           cluster={selectedCluster}
           isOpen={!!selectedCluster}
           onClose={() => setSelectedCluster(null)}
+        />
+      )}
+
+      {isCorrectionModalOpen && (
+        <DataCorrectionModal
+          allRecords={allRecords}
+          isOpen={isCorrectionModalOpen}
+          onClose={() => setIsCorrectionModalOpen(false)}
         />
       )}
     </div>
