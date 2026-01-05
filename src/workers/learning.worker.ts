@@ -1,6 +1,6 @@
 
 // src/workers/learning.worker.ts
-import { jaroWinkler } from './cluster.worker';
+import { jaroWinkler, normalizeArabicWithCompounds, preprocessRow } from './cluster.worker';
 import type { PreprocessedRow, WorkerOptions } from './cluster.worker';
 
 // This worker does not need the full clustering logic, only the learning part.
@@ -13,11 +13,6 @@ type LineageDiff = {
   lengthDiff: number;
   firstNameMinJW: number;
   familyNameStable: boolean;
-};
-
-type RuleResult = {
-  score: number;
-  reasons: string[];
 };
 
 type AutoRule = {
@@ -36,18 +31,6 @@ function collapseDuplicateAncestors(parts: string[]): string[] {
   }
   return result;
 }
-
-function alignLineage(arr: string[], targetLength: number): string[] {
-    if (arr.length >= targetLength) {
-      return arr;
-    }
-    const result = [...arr];
-    while (result.length < targetLength) {
-      result.push(""); // Pad with empty strings
-    }
-    return result;
-}
-
 
 function analyzeClusterPattern(cluster: FailureCluster): LineageDiff {
   let minFirstNameJW = 1;
@@ -98,14 +81,24 @@ function generateRuleFromPattern(pattern: LineageDiff): AutoRule {
 
 
 self.onmessage = async (event: MessageEvent) => {
-    const { failureCluster } = event.data;
+    const { rawRecords, mapping } = event.data;
 
-    if (!Array.isArray(failureCluster) || failureCluster.length < 2) {
+    if (!Array.isArray(rawRecords) || rawRecords.length < 2) {
         postMessage({ type: 'learning_error', payload: { error: "A failure cluster must contain at least two records." } });
         return;
     }
 
     try {
+        // Preprocess the raw records using the provided mapping
+        const failureCluster: FailureCluster = rawRecords.map((record: any) => {
+            const mappedRecord: any = {};
+            for (const key in mapping) {
+                mappedRecord[key] = record[mapping[key]];
+            }
+            mappedRecord._internalId = record._internalId;
+            return preprocessRow(mappedRecord);
+        });
+
         const pattern = analyzeClusterPattern(failureCluster);
         const newRule = generateRuleFromPattern(pattern);
         

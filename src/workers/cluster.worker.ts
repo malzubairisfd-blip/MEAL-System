@@ -60,7 +60,7 @@ const PREFIX_COMPOUND_RULES: RegExp[] = [
   /^[ء-ي]{3,}\s+الله$/
 ];
 
-function normalizeArabicWithCompounds(value: any): string {
+export function normalizeArabicWithCompounds(value: any): string {
   let s = baseArabicNormalize(value);
 
   // Step 1: apply fixed compounds
@@ -658,7 +658,7 @@ export type PreprocessedRow = {
   husbandParts: string[];
 };
 
-const preprocessRow = (raw: any): PreprocessedRow => {
+export const preprocessRow = (raw: any): PreprocessedRow => {
   const row = {
     ...raw,
     womanName: raw.womanName || "",
@@ -1423,3 +1423,4 @@ const mergeDedupPairScores = (target: any[], source: any[]) => {
   source.forEach(addEdge);
   return Array.from(map.values());
 };
+

@@ -55,10 +55,10 @@ export function DataCorrectionModal({ allRecords, mapping, isOpen, onClose, lear
     }
     
     setIsLearning(true);
-    const failureCluster = allRecords.filter(r => selectedRecordIds.has(r._internalId!));
+    const rawRecords = allRecords.filter(r => selectedRecordIds.has(r._internalId!));
     
-    // Offload learning to the worker
-    learningWorker.postMessage({ failureCluster });
+    // Offload learning to the worker, sending raw records and mapping
+    learningWorker.postMessage({ rawRecords, mapping });
 
     toast({
       title: "Learning in Progress",
