@@ -1,4 +1,3 @@
-
 // src/workers/cluster.worker.ts
 
 // --- Constants & Helpers ---
@@ -160,7 +159,7 @@ export const jaroWinkler = (a: string, b: string) => {
   return jaro + prefix * 0.1 * (1 - jaro);
 };
 
-const tokenJaccard = (aTokens: string[], bTokens: string[]) => {
+export const tokenJaccard = (aTokens: string[], bTokens: string[]) => {
   if (!aTokens || !bTokens) return 0;
   if (!aTokens.length && !bTokens.length) return 0;
   const setA = new Set(aTokens);
@@ -173,7 +172,7 @@ const tokenJaccard = (aTokens: string[], bTokens: string[]) => {
   return union === 0 ? 0 : intersection / union;
 };
 
-const nameOrderFreeScore = (aTokens: string[], bTokens: string[]) => {
+export const nameOrderFreeScore = (aTokens: string[], bTokens: string[]) => {
   if (!aTokens.length || !bTokens.length) return 0;
   const setA = new Set(aTokens);
   const setB = new Set(bTokens);
@@ -222,7 +221,11 @@ type RuleResult = {
 type LineageDiff = {
   duplicateAncestor: boolean;
   lengthDiff: number;
-  firstNameMinJW: number;
+  minWomanJW: number;
+  minWomanOrderFree: number;
+  minHusbandJW: number;
+  minHusbandOrderFree: number;
+  minChildrenJaccard: number;
   familyNameStable: boolean;
 };
 
@@ -255,41 +258,37 @@ function applyAutoRule(
     opts: WorkerOptions
 ): RuleResult | null {
     const { pattern } = rule;
-    let A = a.parts;
-    let B = b.parts;
+    const minPair = opts.thresholds.minPair;
+
+    let aWomanParts = a.parts;
+    let bWomanParts = b.parts;
 
     if (pattern.duplicateAncestor) {
-        A = collapseDuplicateAncestors(A);
-        B = collapseDuplicateAncestors(B);
+        aWomanParts = collapseDuplicateAncestors(aWomanParts);
+        bWomanParts = collapseDuplicateAncestors(bWomanParts);
+    }
+    
+    // Check Woman Name
+    if (jaroWinkler(a.womanName_normalized, b.womanName_normalized) < pattern.minWomanJW - 0.02) return null;
+    if (nameOrderFreeScore(aWomanParts, bWomanParts) < pattern.minWomanOrderFree - 0.02) return null;
+    
+    // Check Husband Name
+    if (jaroWinkler(a.husbandName_normalized, b.husbandName_normalized) < pattern.minHusbandJW - 0.02) return null;
+    if (nameOrderFreeScore(a.husbandParts, b.husbandParts) < pattern.minHusbandOrderFree - 0.02) return null;
+
+    // Check Children
+    if (tokenJaccard(a.children_normalized, b.children_normalized) < pattern.minChildrenJaccard - 0.02) return null;
+    
+    // Check Family Name Stability if the pattern requires it
+    if (pattern.familyNameStable) {
+        if (jaroWinkler(a.parts[a.parts.length-1], b.parts[b.parts.length-1]) < 0.95) return null;
     }
 
-    const maxLen = Math.max(A.length, B.length);
-    A = alignLineage(A, maxLen);
-    B = alignLineage(B, maxLen);
-
-    if (
-        pattern.familyNameStable &&
-        jaroWinkler(A[maxLen - 1], B[maxLen - 1]) < 0.95
-    ) return null;
-
-    if (
-        jaroWinkler(A[0], B[0]) <
-        Math.max(0.85, pattern.firstNameMinJW - 0.02)
-    ) return null;
-
-    let ok = 0;
-    for (let i = 1; i < maxLen - 1; i++) {
-        if (jaroWinkler(A[i], B[i]) >= 0.93) ok++;
-    }
-
-    if (ok >= maxLen - 3) {
-        return {
-            score: Math.min(1, opts.thresholds.minPair + 0.38),
-            reasons: [rule.id],
-        };
-    }
-
-    return null;
+    // If all checks pass, it's a match according to this learned rule
+    return {
+        score: Math.min(1, minPair + 0.42), // High boost for learned rules
+        reasons: [rule.id],
+    };
 }
 
 
@@ -1423,6 +1422,3 @@ const mergeDedupPairScores = (target: any[], source: any[]) => {
   source.forEach(addEdge);
   return Array.from(map.values());
 };
-
-
-    

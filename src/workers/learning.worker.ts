@@ -1,6 +1,5 @@
-
 // src/workers/learning.worker.ts
-import { jaroWinkler, normalizeArabicWithCompounds, preprocessRow } from './cluster.worker';
+import { jaroWinkler, normalizeArabicWithCompounds, preprocessRow, nameOrderFreeScore, tokenJaccard } from './cluster.worker';
 import type { PreprocessedRow, WorkerOptions } from './cluster.worker';
 
 // This worker does not need the full clustering logic, only the learning part.
@@ -9,17 +8,23 @@ import type { PreprocessedRow, WorkerOptions } from './cluster.worker';
 type FailureCluster = PreprocessedRow[];
 
 type LineageDiff = {
+  // Structure
   duplicateAncestor: boolean;
   lengthDiff: number;
-  firstNameMinJW: number;
+  // Woman Name
+  minWomanJW: number;
+  minWomanOrderFree: number;
+  // Husband Name
+  minHusbandJW: number;
+  minHusbandOrderFree: number;
+  // Other
+  minChildrenJaccard: number;
   familyNameStable: boolean;
 };
 
 type AutoRule = {
   id: string;
   pattern: LineageDiff;
-  // We serialize the apply function by storing its pattern.
-  // The main worker will reconstruct the function.
 };
 
 function collapseDuplicateAncestors(parts: string[]): string[] {
@@ -33,32 +38,38 @@ function collapseDuplicateAncestors(parts: string[]): string[] {
 }
 
 function analyzeClusterPattern(cluster: FailureCluster): LineageDiff {
-  let minFirstNameJW = 1;
+  let minWomanJW = 1;
+  let minWomanOrderFree = 1;
+  let minHusbandJW = 1;
+  let minHusbandOrderFree = 1;
+  let minChildrenJaccard = 1;
+  
   let duplicateAncestor = false;
-  let familyStable = true;
+  let familyNameStable = true;
 
   for (let i = 0; i < cluster.length; i++) {
     for (let j = i + 1; j < cluster.length; j++) {
-      const A = cluster[i].parts;
-      const B = cluster[j].parts;
+      const a = cluster[i];
+      const b = cluster[j];
 
-      minFirstNameJW = Math.min(
-        minFirstNameJW,
-        jaroWinkler(A[0], B[0])
-      );
+      // Woman Name Analysis
+      minWomanJW = Math.min(minWomanJW, jaroWinkler(a.womanName_normalized, b.womanName_normalized));
+      minWomanOrderFree = Math.min(minWomanOrderFree, nameOrderFreeScore(a.parts, b.parts));
 
-      if (A.some((v, k) => v === A[k + 1]) ||
-          B.some((v, k) => v === B[k + 1])) {
+      // Husband Name Analysis
+      minHusbandJW = Math.min(minHusbandJW, jaroWinkler(a.husbandName_normalized, b.husbandName_normalized));
+      minHusbandOrderFree = Math.min(minHusbandOrderFree, nameOrderFreeScore(a.husbandParts, b.husbandParts));
+      
+      // Children Analysis
+      minChildrenJaccard = Math.min(minChildrenJaccard, tokenJaccard(a.children_normalized, b.children_normalized));
+
+      // Structural Analysis
+      if (a.parts.some((v, k) => v === a.parts[k + 1]) || b.parts.some((v, k) => v === b.parts[k + 1])) {
         duplicateAncestor = true;
       }
-
-      if (
-        jaroWinkler(
-          A[A.length - 1],
-          B[B.length - 1]
-        ) < 0.95
-      ) {
-        familyStable = false;
+      
+      if (jaroWinkler(a.parts[a.parts.length - 1], b.parts[b.parts.length - 1]) < 0.95) {
+        familyNameStable = false;
       }
     }
   }
@@ -69,13 +80,18 @@ function analyzeClusterPattern(cluster: FailureCluster): LineageDiff {
   return {
     duplicateAncestor,
     lengthDiff,
-    firstNameMinJW: minFirstNameJW,
-    familyNameStable: familyStable,
+    minWomanJW,
+    minWomanOrderFree,
+    minHusbandJW,
+    minHusbandOrderFree,
+    minChildrenJaccard,
+    familyNameStable,
   };
 }
 
+
 function generateRuleFromPattern(pattern: LineageDiff): AutoRule {
-  const id = `AUTO_LINEAGE_RULE_${Date.now()}`;
+  const id = `AUTO_COMPLEX_RULE_${Date.now()}`;
   return { id, pattern };
 }
 
@@ -96,6 +112,7 @@ self.onmessage = async (event: MessageEvent) => {
                 mappedRecord[key] = record[mapping[key]];
             }
             mappedRecord._internalId = record._internalId;
+            // Use preprocessRow from cluster.worker to ensure consistency
             return preprocessRow(mappedRecord);
         });
 
