@@ -13,9 +13,19 @@ import { useTranslation } from "@/hooks/use-translation";
 type PairScore = {
   a: string;
   b: string;
-  womanScore: number;
-  husbandScore: number;
-  totalAvg: number;
+  score: number;
+  breakdown: {
+    firstNameScore: number;
+    familyNameScore: number;
+    advancedNameScore: number;
+    tokenReorderScore: number;
+    husbandScore: number;
+    childrenScore: number;
+    idScore: number;
+    phoneScore: number;
+    locationScore: number;
+  };
+  reasons: string[];
 };
 
 type EnrichedCluster = {
@@ -37,7 +47,7 @@ export function PairwiseModal({ cluster, isOpen, onClose }: PairwiseModalProps) 
   useEffect(() => {
     if (isOpen && cluster?.pairScores) {
       // Sort pairs by score, descending
-      const sortedPairs = [...cluster.pairScores].sort((a,b) => b.totalAvg - a.totalAvg);
+      const sortedPairs = [...cluster.pairScores].sort((a,b) => b.score - a.score);
       setPairs(sortedPairs);
     } else if (isOpen) {
       // Handle case where pairScores might be missing
@@ -82,8 +92,8 @@ export function PairwiseModal({ cluster, isOpen, onClose }: PairwiseModalProps) 
                       <CardHeader>
                         <CardTitle className="flex items-center justify-between text-lg">
                           <span>{recordA.womanName} ↔ {recordB.womanName}</span>
-                          <Badge variant={p.totalAvg > 0.85 ? "destructive" : p.totalAvg > 0.7 ? "default" : "secondary"}>
-                            {t('review.pairwiseModal.score')}: {p.totalAvg.toFixed(3)}
+                          <Badge variant={p.score > 0.85 ? "destructive" : p.score > 0.7 ? "default" : "secondary"}>
+                            {t('review.pairwiseModal.score')}: {p.score.toFixed(3)}
                           </Badge>
                         </CardTitle>
                       </CardHeader>
@@ -116,16 +126,28 @@ export function PairwiseModal({ cluster, isOpen, onClose }: PairwiseModalProps) 
                           </TableHeader>
                           <TableBody>
                             <TableRow>
-                                <TableCell className="font-medium">Woman Name Score</TableCell>
-                                <TableCell className="text-right font-mono">{p.womanScore.toFixed(4)}</TableCell>
+                                <TableCell className="font-medium">First Name Score</TableCell>
+                                <TableCell className="text-right font-mono">{p.breakdown.firstNameScore.toFixed(4)}</TableCell>
+                            </TableRow>
+                             <TableRow>
+                                <TableCell className="font-medium">Family Name Score</TableCell>
+                                <TableCell className="text-right font-mono">{p.breakdown.familyNameScore.toFixed(4)}</TableCell>
+                            </TableRow>
+                             <TableRow>
+                                <TableCell className="font-medium">Advanced Name Score</TableCell>
+                                <TableCell className="text-right font-mono">{p.breakdown.advancedNameScore.toFixed(4)}</TableCell>
+                            </TableRow>
+                            <TableRow>
+                                <TableCell className="font-medium">Token Reorder Score</TableCell>
+                                <TableCell className="text-right font-mono">{p.breakdown.tokenReorderScore.toFixed(4)}</TableCell>
                             </TableRow>
                              <TableRow>
                                 <TableCell className="font-medium">Husband Name Score</TableCell>
-                                <TableCell className="text-right font-mono">{p.husbandScore.toFixed(4)}</TableCell>
+                                <TableCell className="text-right font-mono">{p.breakdown.husbandScore.toFixed(4)}</TableCell>
                             </TableRow>
                              <TableRow>
-                                <TableCell className="font-medium">Total Average</TableCell>
-                                <TableCell className="text-right font-mono">{p.totalAvg.toFixed(4)}</TableCell>
+                                <TableCell className="font-medium">Final Score</TableCell>
+                                <TableCell className="text-right font-mono">{p.score.toFixed(4)}</TableCell>
                             </TableRow>
                           </TableBody>
                         </Table>

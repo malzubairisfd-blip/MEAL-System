@@ -680,6 +680,9 @@ type PairScore = {
   womanScore: number;   // 0..1
   husbandScore: number; // 0..1
   totalAvg: number;     // 0..1  ( (woman + husband) / 2 )
+  score: number;        // Final computed score
+  breakdown: any;
+  reasons: string[];
 };
 
 type ClusterConfidenceResult = {
@@ -815,13 +818,17 @@ self.onmessage = (event) => {
       const pairScores: PairScore[] = [];
       for (let i = 0; i < records.length; i++) {
         for (let j = i + 1; j < records.length; j++) {
-            const pairDetails = totalAverageNameScore(records[i], records[j]);
+            const result = computePairScore(records[i], records[j], options || {});
+            const nameAvgs = totalAverageNameScore(records[i], records[j]);
             pairScores.push({
                 a: records[i]._internalId,
                 b: records[j]._internalId,
-                womanScore: pairDetails.womanAvg,
-                husbandScore: pairDetails.husbandAvg,
-                totalAvg: pairDetails.totalAvg,
+                womanScore: nameAvgs.womanAvg,
+                husbandScore: nameAvgs.husbandAvg,
+                totalAvg: nameAvgs.totalAvg,
+                score: result.score,
+                breakdown: result.breakdown,
+                reasons: result.reasons,
             });
         }
       }
@@ -838,7 +845,7 @@ self.onmessage = (event) => {
 
         return {
           ...record,
-          avgPairScore: safeAvg(relatedPairs.map((p: any) => p.totalAvg)),
+          avgPairScore: safeAvg(relatedPairs.map((p: any) => p.score)),
           avgFirstNameScore: safeAvg(relatedPairs.map((p: any) => p.breakdown?.firstNameScore)),
           avgFamilyNameScore: safeAvg(relatedPairs.map((p: any) => p.breakdown?.familyNameScore)),
           avgAdvancedNameScore: safeAvg(relatedPairs.map((p: any) => p.breakdown?.advancedNameScore)),
@@ -849,7 +856,7 @@ self.onmessage = (event) => {
       return {
         ...cluster,
         records: recordsWithAvgScores,
-        pairScores: pairScores, // Use the newly constructed detailed pairs
+        pairScores: pairScores,
         confidenceScore: confidenceResult.confidencePercent,
         avgWomanNameScore: confidenceResult.avgWomanScore,
         avgHusbandNameScore: confidenceResult.avgHusbandScore,
