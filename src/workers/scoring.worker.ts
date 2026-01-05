@@ -1,6 +1,80 @@
+
 // src/workers/scoring.worker.ts
-import { computePairScore, type PreprocessedRow, type WorkerOptions } from "@/lib/scoringClient";
+import { computePairScore, type PreprocessedRow, type WorkerOptions, jaroWinkler } from "@/lib/scoringClient";
 import { calculateClusterConfidence } from "@/lib/clusterConfidence";
+
+
+// --- New Scoring Functions ---
+
+function averageWomanNameScore(a: PreprocessedRow, b: PreprocessedRow): number {
+  const A = a.parts;
+  const B = b.parts;
+  
+  const maxLen = Math.max(A.length, B.length);
+  if (maxLen === 0) return 0;
+
+  let sum = 0;
+  let count = 0;
+
+  for (let i = 0; i < maxLen; i++) {
+    if (A[i] && B[i]) {
+      sum += jaroWinkler(A[i], B[i]);
+      count++;
+    }
+  }
+
+  return count ? sum / count : 0;
+}
+
+function averageHusbandNameScore(a: PreprocessedRow, b: PreprocessedRow): number {
+  const HA = a.husbandParts;
+  const HB = b.husbandParts;
+  
+  if (!HA.length || !HB.length) return 0;
+
+  let sum = 0;
+  let count = 0;
+
+  const maxLen = Math.max(HA.length, HB.length);
+  for (let i = 0; i < maxLen; i++) {
+    if (HA[i] && HB[i]) {
+      sum += jaroWinkler(HA[i], HB[i]);
+      count++;
+    }
+  }
+
+  const partsAvg = count ? sum / count : 0;
+
+  const fullNameScore = jaroWinkler(
+    a.husbandName_normalized,
+    b.husbandName_normalized
+  );
+
+  // 🔥 Stronger confidence via fusion
+  return 0.6 * partsAvg + 0.4 * fullNameScore;
+}
+
+function totalAverageNameScore(
+  a: PreprocessedRow,
+  b: PreprocessedRow
+): {
+  womanAvg: number;
+  husbandAvg: number;
+  totalAvg: number;
+} {
+  const womanAvg = averageWomanNameScore(a, b);
+  const husbandAvg = averageHusbandNameScore(a, b);
+
+  const totalAvg =
+    0.45 * womanAvg +
+    0.55 * husbandAvg;
+
+  return {
+    womanAvg,
+    husbandAvg,
+    totalAvg,
+  };
+}
 
 
 self.onmessage = (event) => {
