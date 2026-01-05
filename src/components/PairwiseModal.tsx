@@ -11,8 +11,8 @@ import { Badge } from "@/components/ui/badge";
 import { useTranslation } from "@/hooks/use-translation";
 
 type PairScore = {
-  a: string;
-  b: string;
+  aId: string;
+  bId: string;
   score: number;
   breakdown: {
     firstNameScore: number;
@@ -82,8 +82,8 @@ export function PairwiseModal({ cluster, isOpen, onClose }: PairwiseModalProps) 
           ) : (
             <div className="space-y-4">
               {pairs.map((p, i) => {
-                const recordA = getRecordById(p.a);
-                const recordB = getRecordById(p.b);
+                const recordA = getRecordById(p.aId);
+                const recordB = getRecordById(p.bId);
 
                 if (!recordA || !recordB) return null;
 
@@ -126,27 +126,43 @@ export function PairwiseModal({ cluster, isOpen, onClose }: PairwiseModalProps) 
                           </TableHeader>
                           <TableBody>
                             <TableRow>
-                                <TableCell className="font-medium">First Name Score</TableCell>
+                                <TableCell className="font-medium">{t('review.pairwiseModal.firstNameScore')}</TableCell>
                                 <TableCell className="text-right font-mono">{p.breakdown.firstNameScore.toFixed(4)}</TableCell>
                             </TableRow>
                              <TableRow>
-                                <TableCell className="font-medium">Family Name Score</TableCell>
+                                <TableCell className="font-medium">{t('review.pairwiseModal.familyNameScore')}</TableCell>
                                 <TableCell className="text-right font-mono">{p.breakdown.familyNameScore.toFixed(4)}</TableCell>
                             </TableRow>
                              <TableRow>
-                                <TableCell className="font-medium">Advanced Name Score</TableCell>
+                                <TableCell className="font-medium">{t('review.pairwiseModal.advancedNameScore')}</TableCell>
                                 <TableCell className="text-right font-mono">{p.breakdown.advancedNameScore.toFixed(4)}</TableCell>
                             </TableRow>
                             <TableRow>
-                                <TableCell className="font-medium">Token Reorder Score</TableCell>
+                                <TableCell className="font-medium">{t('review.pairwiseModal.tokenReorderScore')}</TableCell>
                                 <TableCell className="text-right font-mono">{p.breakdown.tokenReorderScore.toFixed(4)}</TableCell>
                             </TableRow>
                              <TableRow>
-                                <TableCell className="font-medium">Husband Name Score</TableCell>
+                                <TableCell className="font-medium">{t('review.pairwiseModal.husbandScore')}</TableCell>
                                 <TableCell className="text-right font-mono">{p.breakdown.husbandScore.toFixed(4)}</TableCell>
                             </TableRow>
+                            <TableRow>
+                                <TableCell className="font-medium">{t('review.pairwiseModal.childrenScore')}</TableCell>
+                                <TableCell className="text-right font-mono">{p.breakdown.childrenScore.toFixed(4)}</TableCell>
+                            </TableRow>
+                            <TableRow>
+                                <TableCell className="font-medium">{t('review.pairwiseModal.idScore')}</TableCell>
+                                <TableCell className="text-right font-mono">{p.breakdown.idScore.toFixed(4)}</TableCell>
+                            </TableRow>
+                            <TableRow>
+                                <TableCell className="font-medium">{t('review.pairwiseModal.phoneScore')}</TableCell>
+                                <TableCell className="text-right font-mono">{p.breakdown.phoneScore.toFixed(4)}</TableCell>
+                            </TableRow>
+                            <TableRow>
+                                <TableCell className="font-medium">{t('review.pairwiseModal.locationScore')}</TableCell>
+                                <TableCell className="text-right font-mono">{p.breakdown.locationScore.toFixed(4)}</TableCell>
+                            </TableRow>
                              <TableRow>
-                                <TableCell className="font-medium">Final Score</TableCell>
+                                <TableCell className="font-medium">{t('review.pairwiseModal.finalScore')}</TableCell>
                                 <TableCell className="text-right font-mono">{p.score.toFixed(4)}</TableCell>
                             </TableRow>
                           </TableBody>

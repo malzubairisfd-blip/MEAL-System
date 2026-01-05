@@ -174,7 +174,17 @@
       "scoreBreakdown": "Score Breakdown",
       "component": "Component",
       "score": "Score",
-      "close": "Close"
+      "close": "Close",
+      "firstNameScore": "First Name Score",
+      "familyNameScore": "Family Name Score",
+      "advancedNameScore": "Advanced Name Score",
+      "tokenReorderScore": "Token Reorder Score",
+      "husbandScore": "Husband Name Score",
+      "childrenScore": "Children Score",
+      "idScore": "National ID Score",
+      "phoneScore": "Phone Score",
+      "locationScore": "Location Score",
+      "finalScore": "Final Score"
     },
     "toasts": {
       "calculatingScores": {

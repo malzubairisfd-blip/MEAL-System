@@ -174,7 +174,17 @@
       "scoreBreakdown": "تفصيل الدرجة",
       "component": "المكون",
       "score": "الدرجة",
-      "close": "إغلاق"
+      "close": "إغلاق",
+      "firstNameScore": "درجة الاسم الأول",
+      "familyNameScore": "درجة اسم العائلة",
+      "advancedNameScore": "درجة الاسم المتقدمة",
+      "tokenReorderScore": "درجة إعادة ترتيب الكلمات",
+      "husbandScore": "درجة الزوج",
+      "childrenScore": "درجة الأطفال",
+      "idScore": "درجة الرقم القومي",
+      "phoneScore": "درجة الهاتف",
+      "locationScore": "درجة الموقع",
+      "finalScore": "الدرجة النهائية"
     },
     "toasts": {
       "calculatingScores": {
