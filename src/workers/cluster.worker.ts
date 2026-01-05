@@ -1,6 +1,3 @@
-
-
-
 // --- Constants & Helpers ---
 
 function baseArabicNormalize(value: any): string {
@@ -202,13 +199,158 @@ function alignLineage(arr: string[], targetLength: number): string[] {
   return result;
 }
 
+const collapseDuplicateAncestors = (parts: string[]) => {
+  const out: string[] = [];
+  for (let i = 0; i < parts.length; i++) {
+    if (i === 0 || parts[i] !== parts[i - 1]) {
+      out.push(parts[i]);
+    }
+  }
+  return out;
+};
+
+
 // --- Rule Logic ---
+type RuleResult = {
+  score: number;
+  reasons: string[];
+};
+type FailureCluster = PreprocessedRow[];
+
+type LineageDiff = {
+  duplicateAncestor: boolean;
+  lengthDiff: number;
+  firstNameMinJW: number;
+  familyNameStable: boolean;
+};
+function analyzeClusterPattern(cluster: FailureCluster): LineageDiff {
+  let minFirstNameJW = 1;
+  let duplicateAncestor = false;
+  let familyStable = true;
+
+  for (let i = 0; i < cluster.length; i++) {
+    for (let j = i + 1; j < cluster.length; j++) {
+      const A = cluster[i].parts;
+      const B = cluster[j].parts;
+
+      minFirstNameJW = Math.min(
+        minFirstNameJW,
+        jaroWinkler(A[0], B[0])
+      );
+
+      if (A.some((v, k) => v === A[k + 1]) ||
+          B.some((v, k) => v === B[k + 1])) {
+        duplicateAncestor = true;
+      }
+
+      if (
+        jaroWinkler(
+          A[A.length - 1],
+          B[B.length - 1]
+        ) < 0.95
+      ) {
+        familyStable = false;
+      }
+    }
+  }
+
+  const lengths = cluster.map(r => r.parts.length);
+  const lengthDiff = Math.max(...lengths) - Math.min(...lengths);
+
+  return {
+    duplicateAncestor,
+    lengthDiff,
+    firstNameMinJW: minFirstNameJW,
+    familyNameStable: familyStable,
+  };
+}
+
+type AutoRule = {
+  id: string;
+  apply: (
+    a: PreprocessedRow,
+    b: PreprocessedRow,
+    opts: WorkerOptions
+  ) => RuleResult | null;
+};
+
+function generateRuleFromPattern(pattern: LineageDiff): AutoRule {
+  const id = `AUTO_LINEAGE_RULE_${Date.now()}`;
+
+  return {
+    id,
+
+    apply: (a, b, opts) => {
+      let A = a.parts;
+      let B = b.parts;
+
+      if (pattern.duplicateAncestor) {
+        A = collapseDuplicateAncestors(A);
+        B = collapseDuplicateAncestors(B);
+      }
+
+      const maxLen = Math.max(A.length, B.length);
+      A = alignLineage(A, maxLen);
+      B = alignLineage(B, maxLen);
+
+      // family anchor
+      if (
+        pattern.familyNameStable &&
+        jaroWinkler(
+          A[maxLen - 1],
+          B[maxLen - 1]
+        ) < 0.95
+      ) return null;
+
+      // first name tolerance learned from cluster
+      if (
+        jaroWinkler(A[0], B[0]) <
+        Math.max(0.85, pattern.firstNameMinJW - 0.02)
+      ) return null;
+
+      // lineage strength
+      let ok = 0;
+      for (let i = 1; i < maxLen - 1; i++) {
+        if (jaroWinkler(A[i], B[i]) >= 0.93) ok++;
+      }
+
+      if (ok >= maxLen - 3) {
+        return {
+          score: Math.min(1, opts.thresholds.minPair + 0.38),
+          reasons: [id],
+        };
+      }
+
+      return null;
+    }
+  };
+}
+
+const AUTO_RULES: AutoRule[] = [];
+
+function registerAutoRule(rule: AutoRule) {
+  AUTO_RULES.push(rule);
+}
+
+function learnFromFailure(cluster: FailureCluster) {
+  const pattern = analyzeClusterPattern(cluster);
+  const rule = generateRuleFromPattern(pattern);
+  registerAutoRule(rule);
+}
+
 
 const applyAdditionalRules = (
   a: PreprocessedRow,
   b: PreprocessedRow,
   opts: WorkerOptions
 ) => {
+
+  // Apply auto-generated rules first
+  for (const rule of AUTO_RULES) {
+    const r = rule.apply(a, b, opts);
+    if (r) return r;
+  }
+  
   const minPair = opts.thresholds.minPair;
   const jw = jaroWinkler;
 
@@ -219,6 +361,36 @@ const applyAdditionalRules = (
 
   const s93 = (x?: string, y?: string) => jw(x || "", y || "") >= 0.93;
   const s95 = (x?: string, y?: string) => jw(x || "", y || "") >= 0.95;
+
+  /* =========================================================
+     GUARANTEED DUPLICATE — COLLAPSED LINEAGE MATCH
+     Handles 4–5 parts, repeated ancestors
+     ========================================================= */
+  const collapsedA = collapseDuplicateAncestors(A);
+  const collapsedB = collapseDuplicateAncestors(B);
+
+  if (collapsedA.length >= 4 && collapsedB.length >= 4) {
+      const maxLen = Math.max(collapsedA.length, collapsedB.length);
+      const alignedA = alignLineage(collapsedA, maxLen);
+      const alignedB = alignLineage(collapsedB, maxLen);
+
+      const familyMatch = jw(alignedA[maxLen - 1], alignedB[maxLen - 1]) >= 0.95;
+      const firstNameMatch = jw(alignedA[0], alignedB[0]) >= 0.88;
+
+      if (familyMatch && firstNameMatch) {
+          let strongMatches = 0;
+          for (let i = 1; i < maxLen - 1; i++) {
+              if (jw(alignedA[i], alignedB[i]) >= 0.93) strongMatches++;
+          }
+          if (strongMatches >= maxLen - 3) {
+              return {
+                  score: Math.min(1, minPair + 0.40),
+                  reasons: ["COLLAPSED_LINEAGE_FULL_MATCH"],
+              };
+          }
+      }
+  }
+
 
   /* =========================================================
      TIER 0 — ABSOLUTE GUARANTEES (GROUP FIXES)
@@ -385,13 +557,13 @@ if (husbandExact && (childrenA.length || childrenB.length)) {
      ========================================================= */
 
   // DUPLICATED_HUSBAND_LINEAGE
-  const firstNameMatch = A.length && B.length && jw(A[0], B[0]) >= 0.93;
+  const strongFirstNameMatch = A.length && B.length && jw(A[0], B[0]) >= 0.93;
   const husbandStrong =
     jw(a.husbandName_normalized, b.husbandName_normalized) >= 0.9 ||
     nameOrderFreeScore(HA, HB) >= 0.9;
   const childrenMatch = tokenJaccard(a.children_normalized, b.children_normalized) >= 0.9;
 
-  if (firstNameMatch && husbandStrong && childrenMatch) {
+  if (strongFirstNameMatch && husbandStrong && childrenMatch) {
     return {
       score: Math.min(1, minPair + 0.25),
       reasons: ["DUPLICATED_HUSBAND_LINEAGE"],
