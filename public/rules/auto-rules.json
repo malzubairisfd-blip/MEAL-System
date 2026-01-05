@@ -1,2 +1,20 @@
-
-[]
+[
+  {
+    "id": "AUTO_LINEAGE_RULE_1767655601713",
+    "pattern": {
+      "duplicateAncestor": true,
+      "lengthDiff": 1,
+      "firstNameMinJW": 0.75,
+      "familyNameStable": true
+    }
+  },
+  {
+    "id": "AUTO_LINEAGE_RULE_1767655845703",
+    "pattern": {
+      "duplicateAncestor": false,
+      "lengthDiff": 0,
+      "firstNameMinJW": 0.8666666666666667,
+      "familyNameStable": true
+    }
+  }
+]
