@@ -3,7 +3,7 @@ import { z } from 'zod';
 export const IndicatorSchema = z.object({
   description: z.string().min(1, "Indicator description is required.").max(100),
   type: z.enum(['#', '%']),
-  target: z.number().min(0, "Target must be a positive number."),
+  target: z.coerce.number().min(0, "Target must be a positive number."),
   meansOfVerification: z.array(z.string()).min(1, "At least one mean of verification is required."),
 });
 
