@@ -1,5 +1,5 @@
 // src/workers/learning.worker.ts
-import { preprocessRow } from '@/workers/cluster.worker';
+import { preprocessRow } from '@/workers/preprocess';
 
 function generateRuleCode(pattern: Record<string, number>): string {
   if (Object.keys(pattern).length === 0) {

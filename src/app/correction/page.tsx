@@ -20,7 +20,7 @@ import { Loader2, Search, Sparkles, Sigma, Save } from "lucide-react";
 import { loadCachedResult } from "@/lib/cache";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { preprocessRow } from "@/workers/cluster.worker";
+import { preprocessRow } from "@/workers/preprocess";
 import { jaroWinkler, nameOrderFreeScore, tokenJaccard } from "@/lib/similarity";
 
 
