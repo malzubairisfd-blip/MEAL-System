@@ -1,5 +1,5 @@
 // src/workers/learning.worker.ts
-import { preprocessRow, PreprocessedRow } from '@/workers/cluster.worker';
+import { preprocessRow } from '@/workers/cluster.worker';
 
 function generateRuleCode(pattern: Record<string, number>): string {
   if (Object.keys(pattern).length === 0) {
@@ -21,29 +21,34 @@ function generateRuleCode(pattern: Record<string, number>): string {
       }
   }
 
-  // Generate conditions based on the pattern
+  // Generate conditions based on the pattern, skipping scores below 0.7
   Object.entries(pattern).forEach(([key, score]) => {
-      const threshold = Math.max(0.85, score - 0.05).toFixed(2); // Set a dynamic but high threshold
+      if (score < 0.70) return; // Skip scores below 70%
+
+      // Use the actual score as the threshold, minus a small tolerance
+      const threshold = (score - 0.02).toFixed(2);
+
       if (key.startsWith('woman_')) {
-          const partKey = key.split('_')[1];
           lines.push(`  jw(${getPart(key, 'A')}, ${getPart(key, 'B')}) >= ${threshold} &&`);
       } else if (key.startsWith('husband_')) {
-          const partKey = key.split('_')[1];
           lines.push(`  jw(${getPart(key, 'HA')}, ${getPart(key, 'HB')}) >= ${threshold} &&`);
-      } else if (key === 'orderFree' && score > 0.85) {
+      } else if (key === 'orderFree') {
           lines.push(`  nameOrderFreeScore(A, B) >= ${threshold} &&`);
-      } else if (key === 'phone' && score > 0) {
+      } else if (key === 'phone') {
           lines.push(`  (a.phone && b.phone && a.phone.slice(-6) === b.phone.slice(-6)) &&`);
-      } else if (key === 'children' && score > 0.6) {
+      } else if (key === 'children') {
           lines.push(`  tokenJaccard(a.children_normalized, b.children_normalized) >= ${threshold} &&`);
       }
   });
 
+  // If all conditions were skipped, return an empty rule
+  if (lines.length <= 1) {
+    return `// No pattern strong enough to generate a rule (all scores < 0.70).`
+  }
+
 
   // remove trailing &&
-  if (lines.length > 1) {
-    lines[lines.length - 1] = lines[lines.length - 1].replace(/ &&$/, "");
-  }
+  lines[lines.length - 1] = lines[lines.length - 1].replace(/ &&$/, "");
   
   lines.push(`) {`);
   lines.push(`  return { score: Math.min(1, minPair + 0.35), reasons: ["AUTO_LEARNED_STRUCTURAL"] };`);
