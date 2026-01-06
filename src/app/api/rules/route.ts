@@ -1,17 +1,17 @@
-
 // src/app/api/rules/route.ts
 import { NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
 
 // Use the 'public' directory for storing rules so they are fetchable by the client.
-const getRulesPath = () => path.join(process.cwd(), 'public', 'rules', 'auto-rules.json');
+const getRulesPath = () => path.join(process.cwd(), 'public', 'rules');
+const getRulesFile = () => path.join(getRulesPath(), 'auto-rules.json');
 
 async function getExistingRules() {
-    const RULES_PATH = getRulesPath();
+    const RULES_FILE = getRulesFile();
     try {
-        await fs.mkdir(path.dirname(RULES_PATH), { recursive: true });
-        const raw = await fs.readFile(RULES_PATH, 'utf-8');
+        await fs.mkdir(getRulesPath(), { recursive: true });
+        const raw = await fs.readFile(RULES_FILE, 'utf-8');
         const rules = JSON.parse(raw);
         return Array.isArray(rules) ? rules : [];
     } catch (e: any) {
@@ -22,17 +22,8 @@ async function getExistingRules() {
     }
 }
 
-export async function GET() {
-  try {
-    const rules = await getExistingRules();
-    return NextResponse.json({ ok: true, rules });
-  } catch (err: any) {
-    return NextResponse.json({ ok: false, error: "Missing or unreadable auto-rules.json" }, { status: 500 });
-  }
-}
-
 export async function POST(req: Request) {
-  const RULES_PATH = getRulesPath();
+  const RULES_FILE = getRulesFile();
   try {
     const body = await req.json();
 
@@ -46,7 +37,7 @@ export async function POST(req: Request) {
     if (body.action === 'delete' && Array.isArray(body.ids)) {
         const idsToDelete = new Set(body.ids);
         const filteredRules = existingRules.filter((r: any) => !idsToDelete.has(r.id));
-        await fs.writeFile(RULES_PATH, JSON.stringify(filteredRules, null, 2), "utf8");
+        await fs.writeFile(RULES_FILE, JSON.stringify(filteredRules, null, 2), "utf8");
         return NextResponse.json({ ok: true, message: `Deleted ${idsToDelete.size} rule(s).` });
     }
     
@@ -57,10 +48,14 @@ export async function POST(req: Request) {
     }
 
     if (!existingRules.some((r: any) => r.id === newRule.id)) {
-        existingRules.push(newRule);
+        existingRules.push({
+          ...newRule,
+          createdAt: new Date().toISOString(),
+          enabled: true,
+        });
     }
     
-    await fs.writeFile(RULES_PATH, JSON.stringify(existingRules, null, 2), "utf8");
+    await fs.writeFile(RULES_FILE, JSON.stringify(existingRules, null, 2), "utf8");
     return NextResponse.json({ ok: true, message: `Rule ${newRule.id} saved.` });
 
   } catch (err: any) {

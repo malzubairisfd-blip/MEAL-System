@@ -1,15 +1,1 @@
-[
-  {
-    "id": "AUTO_COMPLEX_RULE_1767657277866",
-    "pattern": {
-      "duplicateAncestor": false,
-      "lengthDiff": 0,
-      "minWomanJW": 0.8150887021475256,
-      "minWomanOrderFree": 0.5058459383753501,
-      "minHusbandJW": 0.7549736842105265,
-      "minHusbandOrderFree": 0.5016964912280701,
-      "minChildrenJaccard": 0.3333333333333333,
-      "familyNameStable": true
-    }
-  }
-]
+[]

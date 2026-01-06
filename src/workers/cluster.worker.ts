@@ -1,4 +1,5 @@
 // src/workers/cluster.worker.ts
+import { alignLineage, jaroWinkler, collapseDuplicateAncestors } from '@/lib/similarity';
 
 // --- Constants & Helpers ---
 
@@ -108,57 +109,6 @@ const yieldToEventLoop = () => new Promise<void>((resolve) => setTimeout(resolve
 
 // --- Similarity Functions ---
 
-export const jaroWinkler = (a: string, b: string) => {
-  const sanitizedA = String(a || "");
-  const sanitizedB = String(b || "");
-  if (!sanitizedA || !sanitizedB) return 0;
-  if (sanitizedA === sanitizedB) return 1;
-
-  const la = sanitizedA.length;
-  const lb = sanitizedB.length;
-  const matchDist = Math.floor(Math.max(la, lb) / 2) - 1;
-  const aMatches = Array(la).fill(false);
-  const bMatches = Array(lb).fill(false);
-  let matches = 0;
-
-  for (let i = 0; i < la; i++) {
-    const start = Math.max(0, i - matchDist);
-    const end = Math.min(i + matchDist + 1, lb);
-    for (let j = start; j < end; j++) {
-      if (bMatches[j]) continue;
-      if (sanitizedA[i] !== sanitizedB[j]) continue;
-      aMatches[i] = true;
-      bMatches[j] = true;
-      matches++;
-      break;
-    }
-  }
-
-  if (!matches) return 0;
-
-  let transpositions = 0;
-  let k = 0;
-  for (let i = 0; i < la; i++) {
-    if (!aMatches[i]) continue;
-    while (!bMatches[k]) k++;
-    if (sanitizedA[i] !== sanitizedB[k]) transpositions++;
-    k++;
-  }
-
-  transpositions /= 2;
-  const m = matches;
-  const jaro = (m / la + m / lb + (m - transpositions) / m) / 3;
-
-  let prefix = 0;
-  const maxPrefix = Math.min(4, la, lb);
-  for (let i = 0; i < maxPrefix; i++) {
-    if (sanitizedA[i] === sanitizedB[i]) prefix++;
-    else break;
-  }
-
-  return jaro + prefix * 0.1 * (1 - jaro);
-};
-
 export const tokenJaccard = (aTokens: string[], bTokens: string[]) => {
   if (!aTokens || !bTokens) return 0;
   if (!aTokens.length && !bTokens.length) return 0;
@@ -190,27 +140,6 @@ export const nameOrderFreeScore = (aTokens: string[], bTokens: string[]) => {
 const splitParts = (value: string) =>
   value ? value.split(/\s+/).filter(Boolean) : [];
 
-function alignLineage(arr: string[], targetLength: number): string[] {
-  if (arr.length >= targetLength) {
-    return arr;
-  }
-  const result = [...arr];
-  while (result.length < targetLength) {
-    result.push(""); // Pad with empty strings
-  }
-  return result;
-}
-
-const collapseDuplicateAncestors = (parts: string[]) => {
-  const out: string[] = [];
-  for (let i = 0; i < parts.length; i++) {
-    if (i === 0 || parts[i] !== parts[i - 1]) {
-      out.push(parts[i]);
-    }
-  }
-  return out;
-};
-
 
 // --- Rule Logic ---
 type RuleResult = {
@@ -218,23 +147,7 @@ type RuleResult = {
   reasons: string[];
 };
 
-type LineageDiff = {
-  duplicateAncestor: boolean;
-  lengthDiff: number;
-  minWomanJW: number;
-  minWomanOrderFree: number;
-  minHusbandJW: number;
-  minHusbandOrderFree: number;
-  minChildrenJaccard: number;
-  familyNameStable: boolean;
-};
-
-type AutoRule = {
-    id: string;
-    pattern: LineageDiff;
-};
-
-let AUTO_RULES: AutoRule[] = [];
+let AUTO_RULES: any[] = [];
 
 async function loadAutoRules() {
     try {
@@ -251,44 +164,47 @@ async function loadAutoRules() {
     }
 }
 
-function applyAutoRule(
-    rule: AutoRule,
-    a: PreprocessedRow,
-    b: PreprocessedRow,
-    opts: WorkerOptions
-): RuleResult | null {
-    const { pattern } = rule;
-    const minPair = opts.thresholds.minPair;
+function applyAutoRules(a: PreprocessedRow, b: PreprocessedRow) {
+  for (const rule of AUTO_RULES) {
+    if (!rule.enabled) continue;
 
-    let aWomanParts = a.parts;
-    let bWomanParts = b.parts;
+    let A = [...a.parts];
+    let B = [...b.parts];
 
-    if (pattern.duplicateAncestor) {
-        aWomanParts = collapseDuplicateAncestors(aWomanParts);
-        bWomanParts = collapseDuplicateAncestors(bWomanParts);
-    }
-    
-    // Check Woman Name
-    if (jaroWinkler(a.womanName_normalized, b.womanName_normalized) < pattern.minWomanJW - 0.02) return null;
-    if (nameOrderFreeScore(aWomanParts, bWomanParts) < pattern.minWomanOrderFree - 0.02) return null;
-    
-    // Check Husband Name
-    if (jaroWinkler(a.husbandName_normalized, b.husbandName_normalized) < pattern.minHusbandJW - 0.02) return null;
-    if (nameOrderFreeScore(a.husbandParts, b.husbandParts) < pattern.minHusbandOrderFree - 0.02) return null;
-
-    // Check Children
-    if (tokenJaccard(a.children_normalized, b.children_normalized) < pattern.minChildrenJaccard - 0.02) return null;
-    
-    // Check Family Name Stability if the pattern requires it
-    if (pattern.familyNameStable) {
-        if (jaroWinkler(a.parts[a.parts.length-1], b.parts[b.parts.length-1]) < 0.95) return null;
+    if (rule.params.allowDuplicateAncestor) {
+      A = collapseDuplicateAncestors(A);
+      B = collapseDuplicateAncestors(B);
     }
 
-    // If all checks pass, it's a match according to this learned rule
-    return {
-        score: Math.min(1, minPair + 0.42), // High boost for learned rules
-        reasons: [rule.id],
-    };
+    if (Math.abs(A.length - B.length) > rule.params.maxLengthDiff) continue;
+
+    const maxLen = Math.max(A.length, B.length);
+    A = alignLineage(A, maxLen);
+    B = alignLineage(B, maxLen);
+
+    if (
+      rule.params.familyAnchor &&
+      jaroWinkler(A[maxLen - 1], B[maxLen - 1]) < 0.95
+    ) continue;
+
+    if (
+      jaroWinkler(A[0], B[0]) < rule.params.minFirstNameJW
+    ) continue;
+
+    let ok = 0;
+    for (let i = 1; i < maxLen - 1; i++) {
+      if (jaroWinkler(A[i], B[i]) >= 0.93) ok++;
+    }
+
+    if (ok >= maxLen - 3) {
+      return {
+        score: 1.0,
+        reasons: [`AUTO:${rule.id}`],
+      };
+    }
+  }
+
+  return null;
 }
 
 
@@ -297,12 +213,9 @@ const applyAdditionalRules = (
   b: PreprocessedRow,
   opts: WorkerOptions
 ) => {
-
   // Apply auto-generated rules first
-  for (const rule of AUTO_RULES) {
-    const r = applyAutoRule(rule, a, b, opts);
-    if (r) return r;
-  }
+  const autoMatch = applyAutoRules(a, b);
+  if (autoMatch) return autoMatch;
   
   const minPair = opts.thresholds.minPair;
   const jw = jaroWinkler;
