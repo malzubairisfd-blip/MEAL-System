@@ -193,8 +193,8 @@ export default function CorrectionPage() {
                 </CardHeader>
             </Card>
 
-            <div className="grid grid-cols-3 gap-6 flex-1 overflow-hidden">
-                <div className="col-span-2 flex flex-col gap-4">
+            <div className="flex flex-col gap-6 flex-1 overflow-hidden">
+                <div className="flex flex-col gap-4">
                     <div className="relative">
                         <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                         <Input 
@@ -205,7 +205,7 @@ export default function CorrectionPage() {
                         />
                     </div>
                     <div className="flex-1 overflow-hidden border rounded-md">
-                        <ScrollArea className="h-full">
+                        <ScrollArea className="h-96">
                             <Table>
                                 <TableHeader>
                                 <TableRow>
@@ -236,38 +236,38 @@ export default function CorrectionPage() {
                         </ScrollArea>
                     </div>
                 </div>
-                <div className="col-span-1">
-                    <Card className="h-full flex flex-col">
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2"><Sparkles className="text-primary"/> Analysis Panel</CardTitle>
-                        </CardHeader>
-                        <CardContent className="flex-1 overflow-y-auto">
-                            {!analysis ? (
-                                <div className="flex items-center justify-center h-full text-muted-foreground">
-                                    <p>Select two records to begin analysis.</p>
+                
+                <Card className="flex-1 flex flex-col">
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2"><Sparkles className="text-primary"/> Analysis Panel</CardTitle>
+                    </CardHeader>
+                    <CardContent className="flex-1 overflow-y-auto">
+                        {!analysis ? (
+                            <div className="flex items-center justify-center h-full text-muted-foreground">
+                                <p>Select two records to begin analysis.</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-4 text-sm">
+                                <AnalysisSection title="Woman Name Analysis" data={analysis.woman} />
+                                <AnalysisSection title="Husband Name Analysis" data={analysis.husband} />
+                                <div className="space-y-2">
+                                    <h4 className="font-semibold">Other Factors</h4>
+                                    <ComparisonRow label="Order-Free Name Score" score={analysis.orderFree} />
+                                    <ComparisonRow label="Phone (Last 6 Digits)" score={analysis.phone} />
+                                    <ComparisonRow label="Children Fuzzy Match" score={analysis.children} />
                                 </div>
-                            ) : (
-                                <div className="space-y-4 text-sm">
-                                    <AnalysisSection title="Woman Name Analysis" data={analysis.woman} />
-                                    <AnalysisSection title="Husband Name Analysis" data={analysis.husband} />
-                                    <div className="space-y-2">
-                                        <h4 className="font-semibold">Other Factors</h4>
-                                        <ComparisonRow label="Order-Free Name Score" score={analysis.orderFree} />
-                                        <ComparisonRow label="Phone (Last 6 Digits)" score={analysis.phone} />
-                                        <ComparisonRow label="Children Fuzzy Match" score={analysis.children} />
-                                    </div>
-                                </div>
-                            )}
-                        </CardContent>
-                         <div className="p-6 border-t">
-                            <Button onClick={generateRuleFromPattern} disabled={isLearning || selectedRecordIds.size !== 2 || !analysis} className="w-full">
-                                {isLearning && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                <Sigma className="mr-2 h-4 w-4" />
-                                Generate Rule from Pattern
-                            </Button>
-                        </div>
-                    </Card>
-                </div>
+                            </div>
+                        )}
+                    </CardContent>
+                        <div className="p-6 border-t">
+                        <Button onClick={generateRuleFromPattern} disabled={isLearning || selectedRecordIds.size !== 2 || !analysis} className="w-full">
+                            {isLearning && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            <Sigma className="mr-2 h-4 w-4" />
+                            Generate Rule from Pattern
+                        </Button>
+                    </div>
+                </Card>
+                
             </div>
         </div>
     );
@@ -313,3 +313,5 @@ function ComparisonRow({ label, score }: { label: string, score: number }) {
         </div>
     );
 }
+
+    
