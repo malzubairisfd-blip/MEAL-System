@@ -16,7 +16,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Search, Sparkles, Sigma } from "lucide-react";
+import { Loader2, Search, Sparkles, Sigma, Save } from "lucide-react";
 import { loadCachedResult } from "@/lib/cache";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -50,6 +50,7 @@ export default function CorrectionPage() {
     const [isLearning, setIsLearning] = useState(false);
     const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
     const [loading, setLoading] = useState(true);
+    const [generatedRule, setGeneratedRule] = useState<any | null>(null);
 
     const learningWorkerRef = useRef<Worker | null>(null);
 
@@ -58,14 +59,13 @@ export default function CorrectionPage() {
         learningWorkerRef.current = worker;
         
         worker.onmessage = (event) => {
-            const { error, success, rule } = event.data;
+            const { error, rule } = event.data;
             setIsLearning(false);
             if (error) {
                 toast({ title: "Rule Generation Failed", description: error, variant: "destructive" });
-            } else if (success) {
-                toast({ title: "Rule Learned Successfully", description: `New rule ${rule.id} has been generated and saved. Please re-run clustering to apply it.` });
-                setSelectedRecordIds(new Set());
-                setAnalysis(null);
+            } else if (rule) {
+                setGeneratedRule(rule);
+                toast({ title: "Rule Generated", description: "Review the generated rule in the preview panel below." });
             }
         };
 
@@ -97,12 +97,12 @@ export default function CorrectionPage() {
 
     useEffect(() => {
         if (selectedRecordIds.size === 2) {
+            setGeneratedRule(null); // Clear previous rule on new selection
             const [idA, idB] = Array.from(selectedRecordIds);
             const recordA = allRecords.find(r => r._internalId === idA);
             const recordB = allRecords.find(r => r._internalId === idB);
 
-            if (recordA && recordB) {
-                // To perform analysis, we need the mapped data.
+            if (recordA && recordB && mapping.womanName) {
                 const mappedRecordA = {
                     womanName: recordA[mapping.womanName],
                     husbandName: recordA[mapping.husbandName],
@@ -183,20 +183,54 @@ export default function CorrectionPage() {
         });
     };
 
-    const generateRuleFromPattern = async () => {
-        if (selectedRecordIds.size !== 2) {
+    const generateRuleFromPattern = () => {
+        if (selectedRecordIds.size !== 2 || !analysis) {
             toast({ title: "Selection Required", description: "Please select exactly two records to generate a rule.", variant: "destructive" });
             return;
         }
-
         setIsLearning(true);
+
+        const pattern: Record<string, number> = {};
+        
+        // Collect all non-zero scores
+        Object.entries(analysis.woman.scores).forEach(([key, score]) => {
+            if (score > 0) pattern[`woman_${key}`] = score;
+        });
+        Object.entries(analysis.husband.scores).forEach(([key, score]) => {
+            if (score > 0) pattern[`husband_${key}`] = score;
+        });
+        if (analysis.orderFree > 0) pattern.orderFree = analysis.orderFree;
+        if (analysis.phone > 0) pattern.phone = analysis.phone;
+        if (analysis.children > 0) pattern.children = analysis.children;
+        
         const [idA, idB] = Array.from(selectedRecordIds);
-        const rawRecords = [
+        const records = [
             allRecords.find(r => r._internalId === idA),
             allRecords.find(r => r._internalId === idB)
         ];
 
-        learningWorkerRef.current?.postMessage({ rawRecords, mapping });
+        learningWorkerRef.current?.postMessage({ records, mapping, pattern });
+    };
+
+    const handleConfirmRule = async () => {
+        if (!generatedRule) return;
+
+        setIsLearning(true);
+        try {
+            await fetch('/api/rules', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(generatedRule)
+            });
+            toast({ title: "Rule Saved Successfully!", description: `Rule ${generatedRule.id} has been added.`});
+            setGeneratedRule(null);
+            setSelectedRecordIds(new Set());
+            setAnalysis(null);
+        } catch (error: any) {
+            toast({ title: "Failed to Save Rule", description: error.message, variant: "destructive" });
+        } finally {
+            setIsLearning(false);
+        }
     };
 
     if (loading) {
@@ -268,16 +302,12 @@ export default function CorrectionPage() {
                     </CardContent>
                 </Card>
                 
-                <Card className="flex-1 flex flex-col">
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2"><Sparkles className="text-primary"/> Analysis Panel</CardTitle>
-                    </CardHeader>
-                    <CardContent className="flex-1 overflow-y-auto">
-                        {!analysis ? (
-                            <div className="flex items-center justify-center h-full text-muted-foreground">
-                                <p>Select two records to begin analysis.</p>
-                            </div>
-                        ) : (
+                {analysis && (
+                    <Card className="flex-1 flex flex-col">
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2"><Sparkles className="text-primary"/> Analysis Panel</CardTitle>
+                        </CardHeader>
+                        <CardContent className="flex-1 overflow-y-auto">
                             <div className="space-y-4 text-sm">
                                 <AnalysisSection title="Woman Name Analysis" data={analysis.woman} />
                                 <AnalysisSection title="Husband Name Analysis" data={analysis.husband} />
@@ -288,16 +318,35 @@ export default function CorrectionPage() {
                                     <ComparisonRow label="Children Fuzzy Match" score={analysis.children} />
                                 </div>
                             </div>
-                        )}
-                    </CardContent>
-                        <div className="p-6 border-t">
-                        <Button onClick={generateRuleFromPattern} disabled={isLearning || selectedRecordIds.size !== 2} className="w-full">
-                            {isLearning && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            <Sigma className="mr-2 h-4 w-4" />
-                            Generate Rule from Pattern
-                        </Button>
-                    </div>
-                </Card>
+                        </CardContent>
+                            <div className="p-6 border-t">
+                            <Button onClick={generateRuleFromPattern} disabled={isLearning || selectedRecordIds.size !== 2} className="w-full">
+                                {isLearning ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sigma className="mr-2 h-4 w-4" />}
+                                Generate Rule from Pattern
+                            </Button>
+                        </div>
+                    </Card>
+                )}
+
+                {generatedRule && (
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Generated Rule Preview</CardTitle>
+                            <CardDescription>Review the generated rule below. If it looks correct, confirm to save it.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <pre className="p-4 bg-muted rounded-md text-xs font-mono overflow-x-auto">
+                                <code>
+                                    {generatedRule.code}
+                                </code>
+                            </pre>
+                            <Button onClick={handleConfirmRule} disabled={isLearning} className="w-full">
+                                {isLearning ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                                Confirm & Save Rule
+                            </Button>
+                        </CardContent>
+                    </Card>
+                )}
                 
             </div>
         </div>
