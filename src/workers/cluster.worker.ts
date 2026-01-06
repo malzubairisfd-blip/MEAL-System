@@ -125,18 +125,24 @@ type RuleResult = {
 
 async function loadAutoRules() {
     try {
-        const response = await fetch('/rules/auto-rules.json', { cache: 'no-store' });
+        // Fetch rules from the API endpoint, ensuring no caching issues.
+        const response = await fetch('/api/rules', { cache: 'no-store' });
         if (response.ok) {
             const rules = await response.json();
             if (Array.isArray(rules)) {
+                 // Filter for enabled rules and combine their code.
+                 const allRuleCode = rules
+                    .filter(r => r.enabled)
+                    .map(r => r.code)
+                    .join('\n');
+
                  // The Function constructor is a safer alternative to eval() in workers.
                  // It creates a function in the global scope of the worker but doesn't have access
-                 // to the local scope of the calling function unless variables are passed in.
-                const allRuleCode = rules.map(r => r.enabled ? r.code : '').join('\n');
-
+                 // to the local scope of the calling function unless variables are passed in as arguments.
                 executeLearnedRules = new Function(
                     'a', 'b', 'jw', 'nameOrderFreeScore', 'tokenJaccard', 'minPair',
                     `
+                    // 'a' and 'b' are the preprocessed records
                     const A = a.parts;
                     const B = b.parts;
                     const HA = a.husbandParts;
@@ -144,32 +150,36 @@ async function loadAutoRules() {
 
                     ${allRuleCode}
                     
-                    return null; // No rule matched
+                    return null; // Return null if no learned rule matched
                     `
                 );
             }
         }
     } catch (e) {
-        console.warn("Could not load or compile auto-rules.json, starting with none.");
-        executeLearnedRules = () => null; // If loading fails, it becomes a no-op
+        console.warn("Could not load or compile auto-rules.json. Continuing without learned rules.", e);
+        executeLearnedRules = () => null; // If loading fails, it becomes a no-op.
     }
 }
+
 
 const applyAdditionalRules = (
   a: PreprocessedRow,
   b: PreprocessedRow,
   opts: WorkerOptions
 ) => {
-  // Apply auto-generated rules first by executing the sandboxed function
+  // Execute the dynamically loaded learned rules first.
+  // These are given top priority.
   const autoResult = executeLearnedRules(a, b, jaroWinkler, nameOrderFreeScore, tokenJaccard, opts.thresholds.minPair);
   if (autoResult) {
-      return autoResult;
+      return autoResult; // A learned rule matched, so we return its result immediately.
   }
   
   // If only testing auto-rules, stop here.
   if (opts.autoRulesOnly) {
     return null;
   }
+
+  // --- Start of hardcoded rules if no learned rule matched ---
 
   const minPair = opts.thresholds.minPair;
   const jw = jaroWinkler;
@@ -982,7 +992,7 @@ const runClustering = async (rows: PreprocessedRow[], edges: any[], opts: Worker
 
   // Precompute id -> index map to avoid repeated findIndex calls and to ensure correct mapping
   const idToIndex = new Map<string, number>();
-  for (let i = 0; i < rows.length; i++) {
+  for (let i = 0; < rows.length; i++) {
     idToIndex.set(rows[i]._internalId, i);
   }
 
@@ -1293,4 +1303,3 @@ const mergeDedupPairScores = (target: any[], source: any[]) => {
   source.forEach(addEdge);
   return Array.from(map.values());
 };
-
