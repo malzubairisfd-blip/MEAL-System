@@ -42,7 +42,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { registerServiceWorker } from "@/lib/registerSW";
 import { setupWakeLockListener } from "@/lib/wakeLock";
 import { cacheRawData, cacheFinalResult, loadCachedResult } from "@/lib/cache";
-import { DataCorrectionModal } from "@/components/DataCorrectionModal";
 
 // --- Types ---
 type Mapping = {
@@ -140,14 +139,11 @@ export default function UploadPage() {
   const [fileReadProgress, setFileReadProgress] = useState(0);
   const [isMappingOpen, setIsMappingOpen] = useState(true);
   const [timeInfo, setTimeInfo] = useState<TimeInfo>({ elapsed: 0 });
-  const [isCorrectionModalOpen, setIsCorrectionModalOpen] = useState(false);
-
 
   // --- Refs ---
   const rawRowsRef = useRef<any[]>([]);
   const clusterWorkerRef = useRef<Worker | null>(null);
   const scoringWorkerRef = useRef<Worker | null>(null);
-  const learningWorkerRef = useRef<Worker | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const startTimeRef = useRef<number | null>(null);
   const notifiedAboutSaveRef = useRef(false);
@@ -180,12 +176,9 @@ export default function UploadPage() {
     registerServiceWorker();
     const clusterWorker = new Worker(new URL("@/workers/cluster.worker.ts", import.meta.url), { type: "module" });
     const scoringWorker = new Worker(new URL("@/workers/scoring.worker.ts", import.meta.url), { type: "module" });
-    const learningWorker = new Worker(new URL("@/workers/learning.worker.ts", import.meta.url), { type: "module" });
-
 
     clusterWorkerRef.current = clusterWorker;
     scoringWorkerRef.current = scoringWorker;
-    learningWorkerRef.current = learningWorker;
 
     const cleanupWakeLock = setupWakeLockListener();
 
@@ -270,31 +263,12 @@ export default function UploadPage() {
       }
     };
     
-     const handleLearningMessage = (event: MessageEvent) => {
-        const { type, payload } = event.data;
-        if (type === 'rule_learned') {
-            toast({
-                title: 'Rule Learned Successfully',
-                description: `New rule ${payload.id} has been generated and saved. Please re-run clustering to apply it.`,
-            });
-        } else if (type === 'learning_error') {
-            toast({
-                title: 'Learning Failed',
-                description: payload.error,
-                variant: 'destructive',
-            });
-        }
-    };
-
-
     clusterWorker.onmessage = (ev) => handleClusterMessage(ev.data);
     scoringWorker.onmessage = (ev) => handleScoringMessage(ev.data);
-    learningWorker.onmessage = handleLearningMessage;
 
     return () => {
       clusterWorker.terminate();
       scoringWorker.terminate();
-      learningWorker.terminate();
       cleanupWakeLock();
       if (timerRef.current) clearInterval(timerRef.current);
     };
@@ -736,26 +710,10 @@ export default function UploadPage() {
               <Button onClick={() => router.push("/review")} disabled={!clusters.length}>
                 {t("upload.buttons.goToReview")} <ChevronRight className="ml-2 h-4 w-4" />
               </Button>
-               <Button variant="secondary" onClick={() => setIsCorrectionModalOpen(true)} disabled={!isDataCached}>
-                  <Wrench className="mr-2 h-4 w-4" />
-                  Data Correction
-              </Button>
             </div>
           </CardContent>
         </Card>
       )}
-
-      {isCorrectionModalOpen && learningWorkerRef.current && (
-            <DataCorrectionModal
-                allRecords={rawRowsRef.current}
-                mapping={mapping}
-                isOpen={isCorrectionModalOpen}
-                onClose={() => setIsCorrectionModalOpen(false)}
-                learningWorker={learningWorkerRef.current}
-            />
-      )}
     </div>
   );
 }
-
-    
