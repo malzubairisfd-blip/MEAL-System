@@ -164,7 +164,7 @@ async function loadAutoRules() {
     }
 }
 
-function applyAutoRule(rule: any, a: PreprocessedRow, b: PreprocessedRow, opts: WorkerOptions): RuleResult | null {
+export function applyAutoRule(rule: any, a: PreprocessedRow, b: PreprocessedRow, opts: WorkerOptions): RuleResult | null {
   if (!rule.enabled || !rule.params) return null;
 
   const {
