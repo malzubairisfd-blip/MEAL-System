@@ -55,21 +55,23 @@ export default function CorrectionPage() {
     const learningWorkerRef = useRef<Worker | null>(null);
 
     useEffect(() => {
-        const worker = new Worker(new URL('@/workers/learning.worker.ts', import.meta.url));
-        learningWorkerRef.current = worker;
-        
-        worker.onmessage = (event) => {
-            const { error, rule } = event.data;
-            setIsLearning(false);
-            if (error) {
-                toast({ title: "Rule Generation Failed", description: error, variant: "destructive" });
-            } else if (rule) {
-                setGeneratedRule(rule);
-                toast({ title: "Rule Generated", description: "Review the generated rule in the preview panel below." });
-            }
-        };
+        if (typeof window !== 'undefined') {
+            const worker = new Worker(new URL('@/workers/learning.worker.ts', import.meta.url));
+            learningWorkerRef.current = worker;
 
-        return () => worker.terminate();
+            worker.onmessage = (event) => {
+                const { error, rule } = event.data;
+                setIsLearning(false);
+                if (error) {
+                    toast({ title: "Rule Generation Failed", description: error, variant: "destructive" });
+                } else if (rule) {
+                    setGeneratedRule(rule);
+                    toast({ title: "Rule Generated", description: "Review the generated rule in the preview panel below." });
+                }
+            };
+
+            return () => worker.terminate();
+        }
     }, [toast]);
 
     useEffect(() => {
