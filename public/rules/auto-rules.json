@@ -1,14 +1,8 @@
 [
   {
-    "id": "AUTO_RULE_1767659585124",
-    "type": "LINEAGE",
-    "params": {
-      "allowDuplicateAncestor": false,
-      "minFirstNameJW": 0.85,
-      "familyAnchor": true,
-      "maxLengthDiff": 0
-    },
-    "createdAt": "2026-01-06T00:33:05.318Z",
+    "id": "AUTO_RULE_1767663999807",
+    "code": "if (\n) {\n  return {\n    score: Math.min(1, minPair + 0.28),\n    reasons: [\"AUTO_4vs4_LINEAGE\"],\n  };\n}",
+    "createdAt": "2026-01-06T01:46:39.886Z",
     "enabled": true
   }
 ]

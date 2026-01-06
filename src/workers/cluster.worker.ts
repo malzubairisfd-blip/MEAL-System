@@ -1,3 +1,4 @@
+
 // src/workers/cluster.worker.ts
 import { alignLineage, jaroWinkler, collapseDuplicateAncestors, nameOrderFreeScore, tokenJaccard } from '@/lib/similarity';
 
@@ -184,36 +185,6 @@ const applyAdditionalRules = (
   // TIERS...
   
   /* =========================================================
-     GUARANTEED DUPLICATE — COLLAPSED LINEAGE MATCH
-     Handles 4–5 parts, repeated ancestors
-     ========================================================= */
-  const collapsedA = collapseDuplicateAncestors(a.parts);
-  const collapsedB = collapseDuplicateAncestors(b.parts);
-
-  if (collapsedA.length >= 4 && collapsedB.length >= 4) {
-      const maxLen = Math.max(collapsedA.length, collapsedB.length);
-      const alignedA = alignLineage(collapsedA, maxLen);
-      const alignedB = alignLineage(collapsedB, maxLen);
-
-      const familyMatch = jw(alignedA[maxLen - 1], alignedB[maxLen - 1]) >= 0.95;
-      const firstNameMatch = jw(alignedA[0], alignedB[0]) >= 0.88;
-
-      if (familyMatch && firstNameMatch) {
-          let strongMatches = 0;
-          for (let i = 1; i < maxLen - 1; i++) {
-              if (jw(alignedA[i], alignedB[i]) >= 0.93) strongMatches++;
-          }
-          if (strongMatches >= maxLen - 3) {
-              return {
-                  score: Math.min(1, minPair + 0.40),
-                  reasons: ["COLLAPSED_LINEAGE_FULL_MATCH"],
-              };
-          }
-      }
-  }
-
-
-  /* =========================================================
      TIER 0 — ABSOLUTE GUARANTEES (GROUP FIXES)
      ========================================================= */
   // === GUARANTEED DUPLICATE: FULL WOMAN LINEAGE ===
@@ -391,6 +362,35 @@ if (husbandExact && (childrenA.length || childrenB.length)) {
     };
   }
   
+  /* =========================================================
+     GUARANTEED DUPLICATE — COLLAPSED LINEAGE MATCH
+     Handles 4–5 parts, repeated ancestors
+     ========================================================= */
+  const collapsedA = collapseDuplicateAncestors(A);
+  const collapsedB = collapseDuplicateAncestors(B);
+
+  if (collapsedA.length >= 4 && collapsedB.length >= 4) {
+      const maxLen = Math.max(collapsedA.length, collapsedB.length);
+      const alignedA = alignLineage(collapsedA, maxLen);
+      const alignedB = alignLineage(collapsedB, maxLen);
+
+      const familyMatch = jw(alignedA[maxLen - 1], alignedB[maxLen - 1]) >= 0.95;
+      const firstNameMatch = jw(alignedA[0], alignedB[0]) >= 0.88;
+
+      if (familyMatch && firstNameMatch) {
+          let strongMatches = 0;
+          for (let i = 1; i < maxLen - 1; i++) {
+              if (jw(alignedA[i], alignedB[i]) >= 0.93) strongMatches++;
+          }
+          if (strongMatches >= maxLen - 3) {
+              return {
+                  score: Math.min(1, minPair + 0.40),
+                  reasons: ["COLLAPSED_LINEAGE_FULL_MATCH"],
+              };
+          }
+      }
+  }
+
   /* =========================================================
      TIER 4 — WOMAN ONLY LINEAGE (NO HUSBAND)
      ========================================================= */
@@ -1293,3 +1293,4 @@ const mergeDedupPairScores = (target: any[], source: any[]) => {
   source.forEach(addEdge);
   return Array.from(map.values());
 };
+
