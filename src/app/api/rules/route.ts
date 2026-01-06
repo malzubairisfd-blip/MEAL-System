@@ -1,3 +1,4 @@
+
 // src/app/api/rules/route.ts
 import { NextResponse } from "next/server";
 import fs from "fs";
@@ -23,6 +24,16 @@ function getExistingRules() {
         return [];
     }
 }
+
+export async function GET() {
+    try {
+        const rules = getExistingRules();
+        return NextResponse.json(rules);
+    } catch (err: any) {
+        return NextResponse.json({ ok: false, error: "Failed to read rules file.", details: String(err) }, { status: 500 });
+    }
+}
+
 
 export async function POST(req: Request) {
   const RULES_FILE = getRulesFile();

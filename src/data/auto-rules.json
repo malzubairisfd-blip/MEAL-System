@@ -32,5 +32,22 @@
     },
     "enabled": true,
     "createdAt": "2026-01-06T03:49:55.796Z"
+  },
+  {
+    "id": "AUTO_RULE_1767671770341",
+    "code": "if (\n  jw(A[0], B[0]) >= 0.73 &&\n  jw(A[1], B[1]) >= 0.98 &&\n  jw(A[A.length - 1], B[B.length - 1]) >= 0.98 &&\n  jw(HA[1], HB[1]) >= 0.98 &&\n  jw(HA[2], HB[2]) >= 0.98 &&\n  jw(HA[HA.length - 1], HB[HB.length - 1]) >= 0.98\n) {\n  return { score: Math.min(1, minPair + 0.35), reasons: [\"AUTO_LEARNED_STRUCTURAL\"] };\n}",
+    "params": {
+      "woman_first": 0.75,
+      "woman_father": 1,
+      "woman_grandfather": 0.5,
+      "woman_family": 1,
+      "husband_first": 0.5,
+      "husband_father": 1,
+      "husband_grandfather": 1,
+      "husband_family": 1,
+      "orderFree": 0.6805873015873016
+    },
+    "enabled": true,
+    "createdAt": "2026-01-06T03:56:36.039Z"
   }
 ]

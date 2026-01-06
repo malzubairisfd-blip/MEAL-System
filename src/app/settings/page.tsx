@@ -1,3 +1,4 @@
+
 // src/app/settings/page.tsx
 "use client";
 
@@ -31,7 +32,8 @@ type SavedProgressFile = {
 
 type AutoRule = {
   id: string;
-  pattern: any;
+  code: string;
+  params: any;
   [key: string]: any; // Allow other properties
 };
 
@@ -61,7 +63,7 @@ export default function SettingsPage() {
   const fetchRules = useCallback(async () => {
     setRulesLoading(true);
     try {
-      const res = await fetch('/rules/auto-rules.json', { cache: 'no-store' });
+      const res = await fetch('/api/rules', { cache: 'no-store' });
       if (res.ok) {
         const rules = await res.json();
         setAutoRules(Array.isArray(rules) ? rules : []);
@@ -367,7 +369,6 @@ export default function SettingsPage() {
     const res = computePairScore(testA, testB, settings);
     setLastResult({ source: 'Full Engine', ...res });
   }
-
   
   if (loading || !settings) {
     return (<div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin" /> <span className="ml-2">Loading settings...</span></div>);
@@ -514,8 +515,8 @@ export default function SettingsPage() {
                         />
                         <div className="flex-1">
                           <label htmlFor={`rule-${rule.id}`} className="font-mono text-xs font-semibold">{rule.id}</label>
-                          <pre className="text-xs font-mono mt-1 p-2 bg-background rounded text-muted-foreground">
-                            {JSON.stringify(rule.params || rule.pattern, null, 2)}
+                          <pre className="text-xs font-mono mt-1 p-2 bg-background rounded text-muted-foreground whitespace-pre-wrap">
+                            {rule.code}
                           </pre>
                         </div>
                       </div>
