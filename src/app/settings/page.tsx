@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useEffect, useState, useCallback } from "react";
-import { computePairScore, applyAutoRule, preprocessRow, PreprocessedRow } from "@/workers/cluster.worker";
+import { computePairScore, preprocessRow } from "@/workers/cluster.worker";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -362,34 +362,12 @@ export default function SettingsPage() {
 
   function runTestScoring() {
     if (!settings) { toast({ title: "Settings not loaded", variant: "destructive" }); return; }
+    // This is a simplified test; it won't have access to the full worker context.
+    // We create a minimal version of `computePairScore` on the client.
     const res = computePairScore(testA, testB, settings);
     setLastResult({ source: 'Full Engine', ...res });
   }
 
-  function testSelectedRule() {
-    if (!settings || selectedRules.length !== 1) {
-      toast({ title: "Please select exactly one rule to test.", variant: "destructive" });
-      return;
-    }
-    const rule = autoRules.find(r => r.id === selectedRules[0]);
-    if (!rule) {
-      toast({ title: "Selected rule not found.", variant: "destructive" });
-      return;
-    }
-    
-    // We need to preprocess the raw test records before applying the rule
-    const processedA = preprocessRow(testA);
-    const processedB = preprocessRow(testB);
-
-    const result = applyAutoRule(rule, processedA, processedB, settings);
-    
-    setLastResult({ 
-      source: `Auto-Rule: ${rule.id}`,
-      score: result?.score,
-      reasons: result?.reasons,
-      breakdown: result ? 'Rule Matched' : 'Rule Did Not Match'
-    });
-  }
   
   if (loading || !settings) {
     return (<div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin" /> <span className="ml-2">Loading settings...</span></div>);
@@ -511,10 +489,6 @@ export default function SettingsPage() {
                   </CardDescription>
                 </div>
                 <div className="flex gap-2">
-                    <Button variant="secondary" size="sm" onClick={testSelectedRule} disabled={selectedRules.length !== 1}>
-                        <TestTube2 className="mr-2 h-4 w-4" />
-                        Test Selected Rule
-                    </Button>
                     <Button variant="destructive" size="sm" onClick={handleDeleteRules} disabled={selectedRules.length === 0}>
                     <Trash2 className="mr-2 h-4 w-4" />
                     Delete Selected ({selectedRules.length})

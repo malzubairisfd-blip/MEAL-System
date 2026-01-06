@@ -164,7 +164,7 @@ async function loadAutoRules() {
     }
 }
 
-export function applyAutoRule(rule: any, a: PreprocessedRow, b: PreprocessedRow, opts: WorkerOptions): RuleResult | null {
+function applyAutoRule(rule: any, a: PreprocessedRow, b: PreprocessedRow): RuleResult | null {
   if (!rule.enabled || !rule.params) return null;
 
   const {
@@ -214,11 +214,17 @@ const applyAdditionalRules = (
   b: PreprocessedRow,
   opts: WorkerOptions
 ) => {
+  // Apply auto-generated rules first
   for (const rule of AUTO_RULES) {
-    const r = applyAutoRule(rule, a, b, opts);
+    const r = applyAutoRule(rule, a, b);
     if (r) return r;
   }
   
+  // If only testing auto-rules, stop here.
+  if (opts.autoRulesOnly) {
+    return null;
+  }
+
   const minPair = opts.thresholds.minPair;
   const jw = jaroWinkler;
 
@@ -529,6 +535,7 @@ export type WorkerOptions = {
   rules: {
     enablePolygamyRules: boolean;
   };
+  autoRulesOnly?: boolean;
 };
 
 const defaultOptions: WorkerOptions = {
@@ -551,6 +558,7 @@ const defaultOptions: WorkerOptions = {
   rules: {
     enablePolygamyRules: true,
   },
+  autoRulesOnly: false,
 };
 
 export type PreprocessedRow = {
@@ -972,6 +980,7 @@ self.onmessage = async (event) => {
     };
     options.thresholds = { ...defaultOptions.thresholds, ...(payload.options?.thresholds || {}) };
     options.rules = { ...defaultOptions.rules, ...(payload.options?.rules || {}) };
+    options.autoRulesOnly = payload.options?.autoRulesOnly ?? false;
     resumeState = payload.resumeState || null;
     progressKey = payload.progressKey || "";
     inbound = [];

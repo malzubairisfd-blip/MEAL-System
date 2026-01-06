@@ -26,6 +26,7 @@ import {
   ChevronsUpDown,
   Clock,
   Wrench,
+  TestTube2,
 } from "lucide-react";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -424,7 +425,7 @@ export default function UploadPage() {
     return {};
   }, []);
 
-  const startClustering = useCallback(async () => {
+  const startClustering = useCallback(async (autoRulesOnly = false) => {
     if (!clusterWorkerRef.current || !scoringWorkerRef.current) {
       toast({ title: t("upload.toasts.workerNotReady") });
       return;
@@ -444,6 +445,7 @@ export default function UploadPage() {
     startTimeRef.current = Date.now();
 
     const settings = await fetchSettings();
+    settings.autoRulesOnly = autoRulesOnly; // Add the flag here
 
     clusterWorkerRef.current.postMessage({
       type: "start",
@@ -503,6 +505,8 @@ export default function UploadPage() {
         return t("upload.buttons.idle");
     }
   }, [isTranslationLoading, t, workerStatus]);
+
+  const isProcessing = workerStatus !== "idle" && workerStatus !== "done" && workerStatus !== "error";
 
   return (
     <div className="space-y-6">
@@ -645,25 +649,25 @@ export default function UploadPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              <Button
-                onClick={startClustering}
-                disabled={
-                  !isMappingComplete ||
-                  !isDataCached ||
-                  !(workerStatus === "idle" || workerStatus === "done" || workerStatus === "error")
-                }
-              >
-                {workerStatus !== "idle" &&
-                  workerStatus !== "done" &&
-                  workerStatus !== "error" ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : null}
-                {getButtonText()}
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  onClick={() => startClustering(false)}
+                  disabled={!isMappingComplete || !isDataCached || isProcessing}
+                >
+                  {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  {getButtonText()}
+                </Button>
+                <Button
+                  onClick={() => startClustering(true)}
+                  disabled={!isMappingComplete || !isDataCached || isProcessing}
+                  variant="outline"
+                >
+                  {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <TestTube2 className="mr-2 h-4 w-4" />}
+                  Test Auto Rules
+                </Button>
+              </div>
 
-              {workerStatus !== "idle" &&
-                workerStatus !== "done" &&
-                workerStatus !== "error" && (
+              {isProcessing && (
                   <div className="space-y-2 mt-4">
                     <div className="flex justify-between items-center text-sm font-medium text-muted-foreground">
                       <span>{formattedStatus()}</span>
