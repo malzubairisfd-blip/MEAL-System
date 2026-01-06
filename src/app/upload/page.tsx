@@ -396,15 +396,21 @@ export default function UploadPage() {
     setMapping((prev) => ({ ...prev, [field]: value }));
   }, []);
 
-  const fetchSettings = useCallback(async () => {
+  const fetchSettingsAndRules = useCallback(async () => {
     try {
-      const response = await fetch("/api/settings");
-      const data = await response.json();
-      if (data.ok) return data.settings || {};
-    } catch {
-      // ignore
+      const [settingsRes, rulesRes] = await Promise.all([
+        fetch("/api/settings"),
+        fetch("/api/rules", { cache: 'no-store' })
+      ]);
+      const settingsData = await settingsRes.json();
+      const rulesData = await rulesRes.json();
+      const settings = settingsData.ok ? settingsData.settings : {};
+      const autoRules = Array.isArray(rulesData) ? rulesData : [];
+      return { settings, autoRules };
+    } catch (error) {
+      console.error("Failed to fetch settings or rules:", error);
+      return { settings: {}, autoRules: [] };
     }
-    return {};
   }, []);
 
   const startClustering = useCallback(async (autoRulesOnly = false) => {
@@ -426,12 +432,12 @@ export default function UploadPage() {
     setTimeInfo({ elapsed: 0 });
     startTimeRef.current = Date.now();
 
-    const settings = await fetchSettings();
-    settings.autoRulesOnly = autoRulesOnly; // Add the flag here
+    const { settings, autoRules } = await fetchSettingsAndRules();
+    settings.autoRulesOnly = autoRulesOnly;
 
     clusterWorkerRef.current.postMessage({
       type: "start",
-      payload: { mapping, options: settings },
+      payload: { mapping, options: settings, autoRules },
     });
 
     // Chunking to worker
@@ -442,12 +448,11 @@ export default function UploadPage() {
         type: "data",
         payload: { rows: chunk, total: totalRows },
       });
-      // Small pause to let UI breathe during heavy transfer
       await new Promise((resolve) => setTimeout(resolve, 5)); 
     }
     clusterWorkerRef.current.postMessage({ type: "end" });
 
-  }, [fetchSettings, isMappingComplete, mapping, t, toast]);
+  }, [fetchSettingsAndRules, isMappingComplete, mapping, t, toast]);
 
   const formatTime = useCallback((seconds: number) => {
     const h = Math.floor(seconds / 3600);
@@ -726,5 +731,3 @@ export default function UploadPage() {
     </div>
   );
 }
-
-    

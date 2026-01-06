@@ -19,13 +19,12 @@ let executeLearnedRules: (
   minPair: number
 ) => RuleResult | null = () => null;
 
-async function loadAutoRules() {
+function compileRules(rules: any[]) {
   try {
-    const response = await fetch('/api/rules', { cache: 'no-store' });
-    if (!response.ok) return;
-
-    const rules = await response.json();
-    if (!Array.isArray(rules)) return;
+    if (!Array.isArray(rules) || rules.length === 0) {
+      executeLearnedRules = () => null;
+      return;
+    }
 
     // Only enabled + non-empty rules
     const enabledRules = rules.filter(
@@ -73,7 +72,7 @@ async function loadAutoRules() {
 
   } catch (e) {
     console.warn(
-      "Could not load or compile auto-rules.json. Continuing without learned rules.",
+      "Could not load or compile auto-rules. Continuing without learned rules.",
       e
     );
     executeLearnedRules = () => null;
@@ -973,7 +972,7 @@ self.onmessage = async (event) => {
     resumeState = payload.resumeState || null;
     progressKey = payload.progressKey || "";
     inbound = [];
-    await loadAutoRules(); // Load learned rules
+    compileRules(payload.autoRules || []); // Compile rules from payload
     postMessage({ type: "progress", status: "worker-ready", progress: 1 });
     return;
   }
@@ -1334,5 +1333,3 @@ const mergeDedupPairScores = (target: any[], source: any[]) => {
   source.forEach(addEdge);
   return Array.from(map.values());
 };
-
-    
