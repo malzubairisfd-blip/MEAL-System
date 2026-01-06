@@ -1,6 +1,6 @@
-
 // src/workers/scoring.worker.ts
-import { computePairScore, jaroWinkler } from "./cluster.worker";
+import { computePairScore, type PreprocessedRow } from "./cluster.worker";
+import { jaroWinkler } from "@/lib/similarity";
 
 export function averageWomanNameScore(a: PreprocessedRow, b: PreprocessedRow): number {
   const A = a.parts;
@@ -190,7 +190,6 @@ function calculateClusterConfidence(
 
 // --- Worker Main Logic ---
 export type WorkerOptions = import("./cluster.worker").WorkerOptions;
-export type PreprocessedRow = import("./cluster.worker").PreprocessedRow;
 
 
 self.onmessage = (event) => {
