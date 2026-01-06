@@ -16,13 +16,12 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Search, Sparkles, Sigma, Wrench } from "lucide-react";
+import { Loader2, Search, Sparkles, Sigma } from "lucide-react";
 import { loadCachedResult } from "@/lib/cache";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { preprocessRow } from "@/workers/cluster.worker";
 import { jaroWinkler, nameOrderFreeScore, tokenJaccard } from "@/lib/similarity";
-import Link from "next/link";
 
 
 interface AnalysisResult {
@@ -40,10 +39,12 @@ const extractLineage = (parts: string[]) => ({
     family: parts[parts.length - 1] || '',
 });
 
+const LOCAL_STORAGE_KEY_PREFIX = "beneficiary-mapping-";
 
 export default function CorrectionPage() {
     const { toast } = useToast();
     const [allRecords, setAllRecords] = useState<RecordRow[]>([]);
+    const [mapping, setMapping] = useState<Record<string,string>>({});
     const [selectedRecordIds, setSelectedRecordIds] = useState<Set<string>>(new Set());
     const [searchTerm, setSearchTerm] = useState("");
     const [isLearning, setIsLearning] = useState(false);
@@ -77,6 +78,15 @@ export default function CorrectionPage() {
             const cached = await loadCachedResult();
             if (cached?.rows) {
                 setAllRecords(cached.rows);
+                 if (cached.originalHeaders) {
+                    const storageKey = LOCAL_STORAGE_KEY_PREFIX + cached.originalHeaders.join(',');
+                    const savedMapping = localStorage.getItem(storageKey);
+                    if (savedMapping) {
+                        try {
+                            setMapping(JSON.parse(savedMapping));
+                        } catch {}
+                    }
+                }
             } else {
                 toast({ title: "No Data Found", description: "Please upload a file on the Upload page first.", variant: "destructive" });
             }
@@ -92,8 +102,24 @@ export default function CorrectionPage() {
             const recordB = allRecords.find(r => r._internalId === idB);
 
             if (recordA && recordB) {
-                const a = preprocessRow(recordA);
-                const b = preprocessRow(recordB);
+                // To perform analysis, we need the mapped data.
+                const mappedRecordA = {
+                    womanName: recordA[mapping.womanName],
+                    husbandName: recordA[mapping.husbandName],
+                    children: recordA[mapping.children],
+                    phone: recordA[mapping.phone],
+                    _internalId: recordA._internalId,
+                }
+                const mappedRecordB = {
+                    womanName: recordB[mapping.womanName],
+                    husbandName: recordB[mapping.husbandName],
+                    children: recordB[mapping.children],
+                    phone: recordB[mapping.phone],
+                    _internalId: recordB._internalId,
+                }
+
+                const a = preprocessRow(mappedRecordA);
+                const b = preprocessRow(mappedRecordB);
                 
                 const lineageA = extractLineage(a.parts);
                 const lineageB = extractLineage(b.parts);
@@ -129,7 +155,7 @@ export default function CorrectionPage() {
         } else {
             setAnalysis(null);
         }
-    }, [selectedRecordIds, allRecords]);
+    }, [selectedRecordIds, allRecords, mapping]);
 
     const filteredRecords = useMemo(() => {
         if (!searchTerm) return allRecords;
@@ -158,19 +184,19 @@ export default function CorrectionPage() {
     };
 
     const generateRuleFromPattern = async () => {
-        if (!analysis) {
-            toast({ title: "Analysis Incomplete", description: "Cannot generate rule without a completed analysis.", variant: "destructive" });
+        if (selectedRecordIds.size !== 2) {
+            toast({ title: "Selection Required", description: "Please select exactly two records to generate a rule.", variant: "destructive" });
             return;
         }
-        
+
         setIsLearning(true);
         const [idA, idB] = Array.from(selectedRecordIds);
-        const records = [
+        const rawRecords = [
             allRecords.find(r => r._internalId === idA),
             allRecords.find(r => r._internalId === idB)
         ];
 
-        learningWorkerRef.current?.postMessage({ records });
+        learningWorkerRef.current?.postMessage({ rawRecords, mapping });
     };
 
     if (loading) {
@@ -230,9 +256,9 @@ export default function CorrectionPage() {
                                                     checked={selectedRecordIds.has(record._internalId!)}
                                                 />
                                                 </TableCell>
-                                                <TableCell>{record.womanName}</TableCell>
-                                                <TableCell>{record.husbandName}</TableCell>
-                                                <TableCell>{String(record.nationalId)}</TableCell>
+                                                <TableCell>{record[mapping.womanName]}</TableCell>
+                                                <TableCell>{record[mapping.husbandName]}</TableCell>
+                                                <TableCell>{String(record[mapping.nationalId])}</TableCell>
                                             </TableRow>
                                         ))}
                                     </TableBody>
@@ -265,7 +291,7 @@ export default function CorrectionPage() {
                         )}
                     </CardContent>
                         <div className="p-6 border-t">
-                        <Button onClick={generateRuleFromPattern} disabled={isLearning || selectedRecordIds.size !== 2 || !analysis} className="w-full">
+                        <Button onClick={generateRuleFromPattern} disabled={isLearning || selectedRecordIds.size !== 2} className="w-full">
                             {isLearning && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                             <Sigma className="mr-2 h-4 w-4" />
                             Generate Rule from Pattern
@@ -318,7 +344,3 @@ function ComparisonRow({ label, score }: { label: string, score: number }) {
         </div>
     );
 }
-
-    
-
-    
