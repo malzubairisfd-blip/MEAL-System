@@ -1,1 +1,14 @@
-[]
+[
+  {
+    "id": "AUTO_RULE_1767659585124",
+    "type": "LINEAGE",
+    "params": {
+      "allowDuplicateAncestor": false,
+      "minFirstNameJW": 0.85,
+      "familyAnchor": true,
+      "maxLengthDiff": 0
+    },
+    "createdAt": "2026-01-06T00:33:05.318Z",
+    "enabled": true
+  }
+]

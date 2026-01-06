@@ -164,58 +164,60 @@ async function loadAutoRules() {
     }
 }
 
-function applyAutoRules(a: PreprocessedRow, b: PreprocessedRow) {
-  for (const rule of AUTO_RULES) {
-    if (!rule.enabled) continue;
+function applyAutoRule(rule: any, a: PreprocessedRow, b: PreprocessedRow, opts: WorkerOptions): RuleResult | null {
+  if (!rule.enabled || !rule.params) return null;
 
-    let A = [...a.parts];
-    let B = [...b.parts];
+  const {
+    allowDuplicateAncestor,
+    minFirstNameJW,
+    familyAnchor,
+    maxLengthDiff,
+  } = rule.params;
 
-    if (rule.params.allowDuplicateAncestor) {
-      A = collapseDuplicateAncestors(A);
-      B = collapseDuplicateAncestors(B);
-    }
+  let A = [...a.parts];
+  let B = [...b.parts];
 
-    if (Math.abs(A.length - B.length) > rule.params.maxLengthDiff) continue;
-
-    const maxLen = Math.max(A.length, B.length);
-    A = alignLineage(A, maxLen);
-    B = alignLineage(B, maxLen);
-
-    if (
-      rule.params.familyAnchor &&
-      jaroWinkler(A[maxLen - 1], B[maxLen - 1]) < 0.95
-    ) continue;
-
-    if (
-      jaroWinkler(A[0], B[0]) < rule.params.minFirstNameJW
-    ) continue;
-
-    let ok = 0;
-    for (let i = 1; i < maxLen - 1; i++) {
-      if (jaroWinkler(A[i], B[i]) >= 0.93) ok++;
-    }
-
-    if (ok >= maxLen - 3) {
-      return {
-        score: 1.0,
-        reasons: [`AUTO:${rule.id}`],
-      };
-    }
+  if (allowDuplicateAncestor) {
+    A = collapseDuplicateAncestors(A);
+    B = collapseDuplicateAncestors(B);
   }
 
+  if (Math.abs(A.length - B.length) > maxLengthDiff) return null;
+
+  const maxLen = Math.max(A.length, B.length);
+  A = alignLineage(A, maxLen);
+  B = alignLineage(B, maxLen);
+
+  if (familyAnchor && jaroWinkler(A[maxLen - 1], B[maxLen - 1]) < 0.95) {
+    return null;
+  }
+
+  if (jaroWinkler(A[0], B[0]) < minFirstNameJW) return null;
+
+  let ok = 0;
+  for (let i = 1; i < maxLen - 1; i++) {
+    if (jaroWinkler(A[i], B[i]) >= 0.93) ok++;
+  }
+
+  if (ok >= maxLen - 3) {
+    return {
+      score: 1.0,
+      reasons: [`AUTO:${rule.id}`],
+    };
+  }
+  
   return null;
 }
-
 
 const applyAdditionalRules = (
   a: PreprocessedRow,
   b: PreprocessedRow,
   opts: WorkerOptions
 ) => {
-  // Apply auto-generated rules first
-  const autoMatch = applyAutoRules(a, b);
-  if (autoMatch) return autoMatch;
+  for (const rule of AUTO_RULES) {
+    const r = applyAutoRule(rule, a, b, opts);
+    if (r) return r;
+  }
   
   const minPair = opts.thresholds.minPair;
   const jw = jaroWinkler;
@@ -227,36 +229,6 @@ const applyAdditionalRules = (
 
   const s93 = (x?: string, y?: string) => jw(x || "", y || "") >= 0.93;
   const s95 = (x?: string, y?: string) => jw(x || "", y || "") >= 0.95;
-
-  /* =========================================================
-     GUARANTEED DUPLICATE — COLLAPSED LINEAGE MATCH
-     Handles 4–5 parts, repeated ancestors
-     ========================================================= */
-  const collapsedA = collapseDuplicateAncestors(A);
-  const collapsedB = collapseDuplicateAncestors(B);
-
-  if (collapsedA.length >= 4 && collapsedB.length >= 4) {
-      const maxLen = Math.max(collapsedA.length, collapsedB.length);
-      const alignedA = alignLineage(collapsedA, maxLen);
-      const alignedB = alignLineage(collapsedB, maxLen);
-
-      const familyMatch = jw(alignedA[maxLen - 1], alignedB[maxLen - 1]) >= 0.95;
-      const firstNameMatch = jw(alignedA[0], alignedB[0]) >= 0.88;
-
-      if (familyMatch && firstNameMatch) {
-          let strongMatches = 0;
-          for (let i = 1; i < maxLen - 1; i++) {
-              if (jw(alignedA[i], alignedB[i]) >= 0.93) strongMatches++;
-          }
-          if (strongMatches >= maxLen - 3) {
-              return {
-                  score: Math.min(1, minPair + 0.40),
-                  reasons: ["COLLAPSED_LINEAGE_FULL_MATCH"],
-              };
-          }
-      }
-  }
-
 
   /* =========================================================
      TIER 0 — ABSOLUTE GUARANTEES (GROUP FIXES)
@@ -434,6 +406,35 @@ if (husbandExact && (childrenA.length || childrenB.length)) {
       score: Math.min(1, minPair + 0.25),
       reasons: ["DUPLICATED_HUSBAND_LINEAGE"],
     };
+  }
+
+  /* =========================================================
+     GUARANTEED DUPLICATE — COLLAPSED LINEAGE MATCH
+     Handles 4–5 parts, repeated ancestors
+     ========================================================= */
+  const collapsedA = collapseDuplicateAncestors(a.parts);
+  const collapsedB = collapseDuplicateAncestors(b.parts);
+
+  if (collapsedA.length >= 4 && collapsedB.length >= 4) {
+      const maxLen = Math.max(collapsedA.length, collapsedB.length);
+      const alignedA = alignLineage(collapsedA, maxLen);
+      const alignedB = alignLineage(collapsedB, maxLen);
+
+      const familyMatch = jw(alignedA[maxLen - 1], alignedB[maxLen - 1]) >= 0.95;
+      const firstNameMatch = jw(alignedA[0], alignedB[0]) >= 0.88;
+
+      if (familyMatch && firstNameMatch) {
+          let strongMatches = 0;
+          for (let i = 1; i < maxLen - 1; i++) {
+              if (jw(alignedA[i], alignedB[i]) >= 0.93) strongMatches++;
+          }
+          if (strongMatches >= maxLen - 3) {
+              return {
+                  score: Math.min(1, minPair + 0.40),
+                  reasons: ["COLLAPSED_LINEAGE_FULL_MATCH"],
+              };
+          }
+      }
   }
 
   /* =========================================================
