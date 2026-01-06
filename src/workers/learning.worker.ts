@@ -4,8 +4,8 @@ import { jaroWinkler, nameOrderFreeScore, tokenJaccard } from '@/lib/similarity'
 import { PreprocessedRow, preprocessRow } from '@/workers/cluster.worker';
 
 // 1. ANALYZE FAILURE CLUSTER
-export type RulePattern = {
-  lengthPattern: "4vs4" | "4vs5" | "5vs5";
+
+type RulePattern = {
   womanCore: boolean;
   husbandCore: boolean;
   orderFree: boolean;
@@ -13,44 +13,66 @@ export type RulePattern = {
   childrenFuzzy: boolean;
 };
 
-function detectRulePattern(a: PreprocessedRow, b: PreprocessedRow): RulePattern | null {
-  const la = a.parts.length;
-  const lb = b.parts.length;
+function extractLineage(parts: string[]) {
+  return {
+    first: parts[0],
+    father: parts[1],
+    grandfather: parts[2],
+    family: parts[parts.length - 1],
+    middle: parts.slice(1, -1),
+  };
+}
 
-  let lengthPattern: RulePattern["lengthPattern"] | null = null;
-  if (la === 4 && lb === 4) lengthPattern = "4vs4";
-  else if ((la === 4 && lb === 5) || (la === 5 && lb === 4)) lengthPattern = "4vs5";
-  else if (la === 5 && lb === 5) lengthPattern = "5vs5";
-  else return null;
+function detectWomanCore(a: string[], b: string[]) {
+  if (a.length < 3 || b.length < 3) return false;
 
-  const womanCore =
-    jaroWinkler(a.parts[0], b.parts[0]) >= 0.93 &&
-    jaroWinkler(a.parts[1], b.parts[1]) >= 0.90 &&
-    jaroWinkler(a.parts[2], b.parts[2]) >= 0.93 &&
-    jaroWinkler(a.parts[a.parts.length - 1], b.parts[b.parts.length - 1]) >= 0.93;
+  const A = extractLineage(a);
+  const B = extractLineage(b);
 
+  const familyMatch = jaroWinkler(A.family, B.family) >= 0.93;
+
+  const fatherGrandMatch =
+    jaroWinkler(A.father, B.father) >= 0.93 ||
+    jaroWinkler(A.grandfather, B.grandfather) >= 0.93;
+
+  const firstVariant =
+    jaroWinkler(A.first, B.first) >= 0.88; // IMPORTANT: lowered
+
+  return familyMatch && (fatherGrandMatch || firstVariant);
+}
+
+function detectOrderFree(a: string[], b: string[]) {
+  return nameOrderFreeScore(a, b) >= 0.9;
+}
+
+function extractPattern(a: PreprocessedRow, b: PreprocessedRow): RulePattern | null {
+  const womanCore = detectWomanCore(a.parts, b.parts);
   const husbandCore =
-    jaroWinkler(a.husbandParts[0], b.husbandParts[0]) >= 0.93 &&
-    jaroWinkler(a.husbandParts[1], b.husbandParts[1]) >= 0.90 &&
-    jaroWinkler(a.husbandParts[2], b.husbandParts[2]) >= 0.93 &&
-    jaroWinkler(
-      a.husbandParts[a.husbandParts.length - 1],
-      b.husbandParts[b.husbandParts.length - 1]
-    ) >= 0.93;
+    a.husbandParts.length > 0 &&
+    b.husbandParts.length > 0 &&
+    detectWomanCore(a.husbandParts, b.husbandParts);
 
-  const orderFree =
-    nameOrderFreeScore(a.parts, b.parts) >= 0.9;
+  const orderFree = detectOrderFree(a.parts, b.parts);
 
   const phoneLast6 =
-    a.phone &&
-    b.phone &&
+    a.phone && b.phone &&
     a.phone.slice(-6) === b.phone.slice(-6);
 
   const childrenFuzzy =
     tokenJaccard(a.children_normalized, b.children_normalized) >= 0.6;
 
+  // 🚫 EMPTY-PATTERN PROTECTION
+  if (
+    !womanCore &&
+    !husbandCore &&
+    !orderFree &&
+    !phoneLast6 &&
+    !childrenFuzzy
+  ) {
+    return null;
+  }
+
   return {
-    lengthPattern,
     womanCore,
     husbandCore,
     orderFree,
@@ -82,6 +104,15 @@ function generateRuleCode(p: RulePattern): string | null {
     lines.push(`  (`);
     lines.push(`    jw(A[0], B[0]) >= 0.90 ||`);
     lines.push(`    (jw(A[1], B[1]) >= 0.93 && jw(A[2], B[2]) >= 0.93)`);
+    lines.push(`  ) &&`);
+  }
+  
+  if (p.husbandCore) {
+    lines.push(`  HA.length >= 3 && HB.length >= 3 &&`);
+     lines.push(`  jw(HA[HA.length - 1], HB[HB.length - 1]) >= 0.93 &&`);
+    lines.push(`  (`);
+    lines.push(`    jw(HA[0], HB[0]) >= 0.90 ||`);
+    lines.push(`    (jw(HA[1], HB[1]) >= 0.93 && jw(HA[2], HB[2]) >= 0.93)`);
     lines.push(`  ) &&`);
   }
 
@@ -141,7 +172,7 @@ self.onmessage = async (event: MessageEvent) => {
         });
 
         // Use the first pair to detect a representative pattern
-        const pattern = detectRulePattern(failureCluster[0], failureCluster[1]);
+        const pattern = extractPattern(failureCluster[0], failureCluster[1]);
         
         if (!pattern) {
              postMessage({ type: 'learning_error', payload: { error: "Could not detect a valid pattern from the selected records." } });
