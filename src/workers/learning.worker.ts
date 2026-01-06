@@ -157,7 +157,8 @@ self.onmessage = async (event: MessageEvent) => {
         const newRule = {
             id: `AUTO_RULE_${Date.now()}`,
             code: code,
-            pattern: pattern
+            params: pattern,
+            enabled: true
         };
         
         await submitRule(newRule);
