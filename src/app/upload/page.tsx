@@ -660,7 +660,6 @@ export default function UploadPage() {
                 <Button
                   onClick={() => startClustering(true)}
                   disabled={!isMappingComplete || !isDataCached || isProcessing}
-                  variant="outline"
                 >
                   {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <TestTube2 className="mr-2 h-4 w-4" />}
                   Test Auto Rules
@@ -758,3 +757,5 @@ export default function UploadPage() {
     </div>
   );
 }
+
+    

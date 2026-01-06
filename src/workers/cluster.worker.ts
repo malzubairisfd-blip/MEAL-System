@@ -1,3 +1,4 @@
+
 // src/workers/cluster.worker.ts
 import { alignLineage, jaroWinkler, collapseDuplicateAncestors } from '@/lib/similarity';
 
@@ -1345,3 +1346,5 @@ const mergeDedupPairScores = (target: any[], source: any[]) => {
   source.forEach(addEdge);
   return Array.from(map.values());
 };
+
+    
