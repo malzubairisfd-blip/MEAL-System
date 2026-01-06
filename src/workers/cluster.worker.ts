@@ -992,7 +992,7 @@ const runClustering = async (rows: PreprocessedRow[], edges: any[], opts: Worker
 
   // Precompute id -> index map to avoid repeated findIndex calls and to ensure correct mapping
   const idToIndex = new Map<string, number>();
-  for (let i = 0; < rows.length; i++) {
+  for (let i = 0; i < rows.length; i++) {
     idToIndex.set(rows[i]._internalId, i);
   }
 
