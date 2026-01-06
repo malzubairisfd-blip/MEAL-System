@@ -1,3 +1,4 @@
+
 // src/workers/learning.worker.ts
 import { jaroWinkler, nameOrderFreeScore, tokenJaccard } from '@/lib/similarity';
 import { PreprocessedRow, preprocessRow } from '@/workers/cluster.worker';
@@ -38,8 +39,7 @@ function detectRulePattern(a: PreprocessedRow, b: PreprocessedRow): RulePattern 
     ) >= 0.93;
 
   const orderFree =
-    nameOrderFreeScore(a.parts, b.parts) >= 0.9 ||
-    nameOrderFreeScore(a.husbandParts, b.husbandParts) >= 0.9;
+    nameOrderFreeScore(a.parts, b.parts) >= 0.9;
 
   const phoneLast6 =
     a.phone &&
@@ -61,25 +61,28 @@ function detectRulePattern(a: PreprocessedRow, b: PreprocessedRow): RulePattern 
 
 
 // 2. RULE CODE GENERATOR
-function generateRuleCode(p: RulePattern): string {
+function generateRuleCode(p: RulePattern): string | null {
   const lines: string[] = [];
+
+  if (
+    !p.womanCore &&
+    !p.husbandCore &&
+    !p.orderFree &&
+    !p.phoneLast6 &&
+    !p.childrenFuzzy
+  ) {
+    return null; // 🚫 never generate empty rule
+  }
 
   lines.push(`if (`);
 
   if (p.womanCore) {
     lines.push(`  A.length >= 3 && B.length >= 3 &&`);
-    lines.push(`  jw(A[0], B[0]) >= 0.93 &&`);
-    lines.push(`  jw(A[1], B[1]) >= 0.90 &&`);
-    lines.push(`  jw(A[2], B[2]) >= 0.93 &&`);
     lines.push(`  jw(A[A.length - 1], B[B.length - 1]) >= 0.93 &&`);
-  }
-
-  if (p.husbandCore) {
-    lines.push(`  HA.length >= 3 && HB.length >= 3 &&`);
-    lines.push(`  jw(HA[0], HB[0]) >= 0.93 &&`);
-    lines.push(`  jw(HA[1], HB[1]) >= 0.90 &&`);
-    lines.push(`  jw(HA[2], HB[2]) >= 0.93 &&`);
-    lines.push(`  jw(HA[HA.length - 1], HB[HB.length - 1]) >= 0.93 &&`);
+    lines.push(`  (`);
+    lines.push(`    jw(A[0], B[0]) >= 0.90 ||`);
+    lines.push(`    (jw(A[1], B[1]) >= 0.93 && jw(A[2], B[2]) >= 0.93)`);
+    lines.push(`  ) &&`);
   }
 
   if (p.orderFree) {
@@ -95,14 +98,13 @@ function generateRuleCode(p: RulePattern): string {
   }
 
   // remove trailing &&
-  if (lines.length > 1) {
-    lines[lines.length - 1] = lines[lines.length - 1].replace(/&&$/, "");
-  }
+  lines[lines.length - 1] =
+    lines[lines.length - 1].replace(/&&$/, "");
 
   lines.push(`) {`);
   lines.push(`  return {`);
-  lines.push(`    score: Math.min(1, minPair + 0.28),`);
-  lines.push(`    reasons: ["AUTO_${p.lengthPattern}_LINEAGE"],`);
+  lines.push(`    score: Math.min(1, minPair + 0.30),`);
+  lines.push(`    reasons: ["AUTO_STRUCTURAL_LINEAGE"],`);
   lines.push(`  };`);
   lines.push(`}`);
 
@@ -147,9 +149,15 @@ self.onmessage = async (event: MessageEvent) => {
         }
 
         const code = generateRuleCode(pattern);
+        if (!code) {
+          postMessage({ type: 'learning_error', payload: { error: "Detected pattern was empty and could not generate a rule." } });
+          return;
+        }
+
         const newRule = {
             id: `AUTO_RULE_${Date.now()}`,
-            code: code
+            code: code,
+            pattern: pattern
         };
         
         await submitRule(newRule);
