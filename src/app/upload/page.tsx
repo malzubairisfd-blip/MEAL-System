@@ -645,13 +645,6 @@ export default function UploadPage() {
                   {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                   {getButtonText()}
                 </Button>
-                <Button
-                  onClick={() => startClustering(true)}
-                  disabled={!isMappingComplete || !isDataCached || isProcessing}
-                >
-                  {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <TestTube2 className="mr-2 h-4 w-4" />}
-                  Test Auto Rules
-                </Button>
               </div>
 
               {isProcessing && (

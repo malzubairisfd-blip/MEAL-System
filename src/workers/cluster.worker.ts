@@ -197,13 +197,6 @@ const applyAdditionalRules = (
   b: PreprocessedRow,
   opts: WorkerOptions
 ) => {
-  // Execute the dynamically loaded learned rules first.
-  // These are given top priority.
-  const autoResult = executeLearnedRules(a, b, jaroWinkler, nameOrderFreeScore, tokenJaccard, opts.thresholds.minPair);
-  if (autoResult) {
-      return autoResult; // A learned rule matched, so we return its result immediately.
-  }
-  
   // If only testing auto-rules, stop here.
   if (opts.autoRulesOnly) {
     return null;
@@ -447,6 +440,13 @@ if (husbandExact && (childrenA.length || childrenB.length)) {
       score: Math.min(1, minPair + 0.2),
       reasons: ["WOMAN_LINEAGE_ONLY"],
     };
+  }
+  
+  // Execute the dynamically loaded learned rules here.
+  // This gives priority to the hardcoded Tiers above, but runs before the more general rules below.
+  const autoResult = executeLearnedRules(a, b, jaroWinkler, nameOrderFreeScore, tokenJaccard, opts.thresholds.minPair);
+  if (autoResult) {
+      return autoResult; // A learned rule matched, so we return its result.
   }
 
   /* =========================================================
@@ -1333,4 +1333,5 @@ const mergeDedupPairScores = (target: any[], source: any[]) => {
   source.forEach(addEdge);
   return Array.from(map.values());
 };
+
 
