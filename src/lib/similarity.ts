@@ -1,3 +1,4 @@
+
 // src/lib/similarity.ts
 
 export const jaroWinkler = (a: string, b: string) => {
@@ -72,3 +73,22 @@ export const collapseDuplicateAncestors = (parts: string[]) => {
   }
   return out;
 };
+
+export function tokenJaccard(aTokens: string[], bTokens: string[]) {
+  if (!aTokens.length && !bTokens.length) return 0;
+  const A = new Set(aTokens);
+  const B = new Set(bTokens);
+  let inter = 0;
+  for (const x of A) if (B.has(x)) inter++;
+  const uni = new Set([...A, ...B]).size;
+  return uni === 0 ? 0 : inter / uni;
+}
+
+export function nameOrderFreeScore(aTokens: string[], bTokens: string[]) {
+    if (!aTokens.length || !bTokens.length) return 0;
+    const jacc = tokenJaccard(aTokens, bTokens);
+    const aSorted = aTokens.slice().sort().join(" ");
+    const bSorted = bTokens.slice().sort().join(" ");
+    const sj = jaroWinkler(aSorted, bSorted);
+    return 0.7 * jacc + 0.3 * sj;
+}
