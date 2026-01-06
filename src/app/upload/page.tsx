@@ -26,7 +26,6 @@ import {
   ChevronsUpDown,
   Clock,
   Wrench,
-  TestTube2,
 } from "lucide-react";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -413,7 +412,7 @@ export default function UploadPage() {
     }
   }, []);
 
-  const startClustering = useCallback(async (autoRulesOnly = false) => {
+  const startClustering = useCallback(async () => {
     if (!clusterWorkerRef.current || !scoringWorkerRef.current) {
       toast({ title: t("upload.toasts.workerNotReady") });
       return;
@@ -433,7 +432,6 @@ export default function UploadPage() {
     startTimeRef.current = Date.now();
 
     const { settings, autoRules } = await fetchSettingsAndRules();
-    settings.autoRulesOnly = autoRulesOnly;
 
     clusterWorkerRef.current.postMessage({
       type: "start",
@@ -639,7 +637,7 @@ export default function UploadPage() {
             <div className="space-y-4">
               <div className="flex flex-wrap gap-2">
                 <Button
-                  onClick={() => startClustering(false)}
+                  onClick={() => startClustering()}
                   disabled={!isMappingComplete || !isDataCached || isProcessing}
                 >
                   {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
@@ -716,6 +714,9 @@ export default function UploadPage() {
             <div className="flex gap-2">
               <Button onClick={() => router.push("/review")} disabled={!clusters.length}>
                 {t("upload.buttons.goToReview")} <ChevronRight className="ml-2 h-4 w-4" />
+              </Button>
+               <Button variant="outline" onClick={() => router.push("/correction")} disabled={!clusters.length}>
+                <Wrench className="mr-2 h-4 w-4" /> Go to Data Correction
               </Button>
             </div>
           </CardContent>
