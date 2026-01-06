@@ -115,25 +115,43 @@ export default function AddProjectPage() {
     const { toast } = useToast();
     const [isSubmitting, setIsSubmitting] = useState(false);
     
-    const [admin1Data, setAdmin1Data] = useState<string[]>([]);
-    const [admin2Data, setAdmin2Data] = useState<string[]>([]);
-    const [admin3Data, setAdmin3Data] = useState<string[]>([]);
+    const [governorateOptions, setGovernorateOptions] = useState<{ value: string; label: string }[]>([]);
+    const [districtOptions, setDistrictOptions] = useState<{ value: string; label: string }[]>([]);
+    const [subDistrictOptions, setSubDistrictOptions] = useState<{ value: string; label: string }[]>([]);
 
     useEffect(() => {
-      const fetchData = async (path: string, setter: React.Dispatch<React.SetStateAction<string[]>>, key: string) => {
+      const fetchAdminData = async () => {
         try {
-          const res = await fetch(path);
+          const res = await fetch('/data/yemen_admin3.geojson');
           const geojson: FeatureCollection = await res.json();
-          const names = new Set(geojson.features.map(f => f.properties?.[key]).filter(Boolean));
-          setter(Array.from(names) as string[]);
+          
+          const governorates = new Set<string>();
+          const districts = new Set<string>();
+          const subDistricts = new Set<string>();
+
+          geojson.features.forEach(feature => {
+            if (feature.properties) {
+              if (feature.properties.ADM1_AR) governorates.add(feature.properties.ADM1_AR);
+              if (feature.properties.ADM2_AR) districts.add(feature.properties.ADM2_AR);
+              if (feature.properties.ADM3_AR) subDistricts.add(feature.properties.ADM3_AR);
+            }
+          });
+
+          setGovernorateOptions(Array.from(governorates).sort().map(g => ({ value: g, label: g })));
+          setDistrictOptions(Array.from(districts).sort().map(d => ({ value: d, label: d })));
+          setSubDistrictOptions(Array.from(subDistricts).sort().map(s => ({ value: s, label: s })));
+          
         } catch (error) {
-          console.error(`Failed to load ${path}`, error);
+          console.error("Failed to load administrative data from yemen_admin3.geojson", error);
+          toast({
+              title: "Error Loading Data",
+              description: "Could not load location options for the form.",
+              variant: "destructive",
+          });
         }
       };
-      fetchData('/data/yemen_admin1.geojson', setAdmin1Data, 'ADM1_AR');
-      fetchData('/data/yemen_admin2.geojson', setAdmin2Data, 'ADM2_AR');
-      fetchData('/data/yemen_admin3.geojson', setAdmin3Data, 'ADM3_AR');
-    }, []);
+      fetchAdminData();
+    }, [toast]);
 
     const form = useForm<ProjectFormValues>({
         resolver: zodResolver(projectSchema),
@@ -222,21 +240,21 @@ export default function AddProjectPage() {
                             <FormField control={form.control} name="governorates" render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Governorate(s)</FormLabel>
-                                    <MultiSelectCombobox options={admin1Data.map(g => ({ value: g, label: g }))} value={field.value} onChange={field.onChange} placeholder="Select governorates..." />
+                                    <MultiSelectCombobox options={governorateOptions} value={field.value} onChange={field.onChange} placeholder="Select governorates..." />
                                     <FormMessage />
                                 </FormItem>
                             )} />
                             <FormField control={form.control} name="districts" render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>District(s)</FormLabel>
-                                    <MultiSelectCombobox options={admin2Data.map(d => ({ value: d, label: d }))} value={field.value} onChange={field.onChange} placeholder="Select districts..." />
+                                    <MultiSelectCombobox options={districtOptions} value={field.value} onChange={field.onChange} placeholder="Select districts..." />
                                     <FormMessage />
                                 </FormItem>
                             )} />
                             <FormField control={form.control} name="subDistricts" render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Sub-District(s)</FormLabel>
-                                    <MultiSelectCombobox options={admin3Data.map(s => ({ value: s, label: s }))} value={field.value} onChange={field.onChange} placeholder="Select sub-districts..." />
+                                    <MultiSelectCombobox options={subDistrictOptions} value={field.value} onChange={field.onChange} placeholder="Select sub-districts..." />
                                     <FormMessage />
                                 </FormItem>
                             )} />
