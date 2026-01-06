@@ -194,48 +194,53 @@ export default function CorrectionPage() {
             </Card>
 
             <div className="flex flex-col gap-6 flex-1 overflow-hidden">
-                <div className="flex flex-col gap-4">
-                    <div className="relative">
-                        <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                        <Input 
-                            placeholder="Search all records..."
-                            className="pl-10"
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                        />
-                    </div>
-                    <div className="flex-1 overflow-hidden border rounded-md">
-                        <ScrollArea className="h-96">
-                            <Table>
-                                <TableHeader>
-                                <TableRow>
-                                    <TableHead className="w-[50px]">Select</TableHead>
-                                    <TableHead>Woman Name</TableHead>
-                                    <TableHead>Husband Name</TableHead>
-                                    <TableHead>National ID</TableHead>
-                                </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {filteredRecords.map(record => (
-                                        <TableRow key={record._internalId}
-                                            className={`cursor-pointer ${selectedRecordIds.has(record._internalId!) ? 'bg-blue-100 hover:bg-blue-200' : 'hover:bg-muted'}`}
-                                            onClick={() => handleSelect(record._internalId!)}
-                                        >
-                                            <TableCell>
-                                            <Checkbox
-                                                checked={selectedRecordIds.has(record._internalId!)}
-                                            />
-                                            </TableCell>
-                                            <TableCell>{record.womanName}</TableCell>
-                                            <TableCell>{record.husbandName}</TableCell>
-                                            <TableCell>{String(record.nationalId)}</TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </ScrollArea>
-                    </div>
-                </div>
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Select Records</CardTitle>
+                    </CardHeader>
+                    <CardContent className="flex flex-col gap-4">
+                        <div className="relative">
+                            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                            <Input 
+                                placeholder="Search all records..."
+                                className="pl-10"
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                            />
+                        </div>
+                        <div className="flex-1 overflow-hidden border rounded-md">
+                            <ScrollArea className="h-96">
+                                <Table>
+                                    <TableHeader>
+                                    <TableRow>
+                                        <TableHead className="w-[50px]">Select</TableHead>
+                                        <TableHead>Woman Name</TableHead>
+                                        <TableHead>Husband Name</TableHead>
+                                        <TableHead>National ID</TableHead>
+                                    </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {filteredRecords.map(record => (
+                                            <TableRow key={record._internalId}
+                                                className={`cursor-pointer ${selectedRecordIds.has(record._internalId!) ? 'bg-blue-100 hover:bg-blue-200' : 'hover:bg-muted'}`}
+                                                onClick={() => handleSelect(record._internalId!)}
+                                            >
+                                                <TableCell>
+                                                <Checkbox
+                                                    checked={selectedRecordIds.has(record._internalId!)}
+                                                />
+                                                </TableCell>
+                                                <TableCell>{record.womanName}</TableCell>
+                                                <TableCell>{record.husbandName}</TableCell>
+                                                <TableCell>{String(record.nationalId)}</TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </ScrollArea>
+                        </div>
+                    </CardContent>
+                </Card>
                 
                 <Card className="flex-1 flex flex-col">
                     <CardHeader>
@@ -313,5 +318,7 @@ function ComparisonRow({ label, score }: { label: string, score: number }) {
         </div>
     );
 }
+
+    
 
     
