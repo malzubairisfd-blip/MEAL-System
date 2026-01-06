@@ -715,7 +715,7 @@ export default function UploadPage() {
               <Button onClick={() => router.push("/review")} disabled={!clusters.length}>
                 {t("upload.buttons.goToReview")} <ChevronRight className="ml-2 h-4 w-4" />
               </Button>
-               <Button variant="outline" onClick={() => router.push("/correction")} disabled={!clusters.length}>
+               <Button onClick={() => router.push("/correction")} disabled={!clusters.length}>
                 <Wrench className="mr-2 h-4 w-4" /> Go to Data Correction
               </Button>
             </div>
