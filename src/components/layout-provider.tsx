@@ -15,7 +15,7 @@ import {
   SidebarTrigger,
   SidebarInset,
 } from "@/components/ui/sidebar";
-import { FileBarChart2, Upload, Microscope, ClipboardList, Home, Settings, FileDown, Globe, BarChartHorizontal, Wrench } from "lucide-react";
+import { FileBarChart2, Upload, Microscope, ClipboardList, Home, Settings, FileDown, Globe, BarChartHorizontal, Wrench, Briefcase } from "lucide-react";
 import { useTranslation } from "@/hooks/use-translation";
 import { useLanguage } from "@/context/language-context";
 import {
@@ -76,6 +76,7 @@ export function LayoutProvider({ children, year }: { children: React.ReactNode, 
 
   const sidebarLinks = [
     { href: "/", icon: <Home />, label: t("sidebar.dashboard") },
+    { href: "/meal-system", icon: <Briefcase />, label: "MEAL System" },
     { href: "/upload", icon: <Upload />, label: t("sidebar.upload") },
     { href: "/correction", icon: <Wrench />, label: 'Correction' },
     { href: "/review", icon: <Microscope />, label: t("sidebar.review") },
