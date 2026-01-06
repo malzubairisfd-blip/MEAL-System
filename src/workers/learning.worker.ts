@@ -1,67 +1,116 @@
 // src/workers/learning.worker.ts
-import { jaroWinkler, alignLineage } from '@/lib/similarity';
+import { jaroWinkler, nameOrderFreeScore, tokenJaccard } from '@/lib/similarity';
 import { PreprocessedRow, preprocessRow } from '@/workers/cluster.worker';
 
-export type LearnedPattern = {
-  allowDuplicateAncestor: boolean;
-  minFirstNameJW: number;
-  familyAnchor: boolean;
-  maxLengthDiff: number;
+// 1. ANALYZE FAILURE CLUSTER
+export type RulePattern = {
+  lengthPattern: "4vs4" | "4vs5" | "5vs5";
+  womanCore: boolean;
+  husbandCore: boolean;
+  orderFree: boolean;
+  phoneLast6: boolean;
+  childrenFuzzy: boolean;
 };
 
-export function analyzeFailureCluster(cluster: PreprocessedRow[]): LearnedPattern {
-  let minFN = 1;
-  let allowDup = false;
-  let familyAnchor = true;
+function detectRulePattern(a: PreprocessedRow, b: PreprocessedRow): RulePattern | null {
+  const la = a.parts.length;
+  const lb = b.parts.length;
 
-  for (let i = 0; i < cluster.length; i++) {
-    for (let j = i + 1; j < cluster.length; j++) {
-      const A = cluster[i].parts;
-      const B = cluster[j].parts;
+  let lengthPattern: RulePattern["lengthPattern"] | null = null;
+  if (la === 4 && lb === 4) lengthPattern = "4vs4";
+  else if ((la === 4 && lb === 5) || (la === 5 && lb === 4)) lengthPattern = "4vs5";
+  else if (la === 5 && lb === 5) lengthPattern = "5vs5";
+  else return null;
 
-      minFN = Math.min(minFN, jaroWinkler(A[0], B[0]));
+  const womanCore =
+    jaroWinkler(a.parts[0], b.parts[0]) >= 0.93 &&
+    jaroWinkler(a.parts[1], b.parts[1]) >= 0.90 &&
+    jaroWinkler(a.parts[2], b.parts[2]) >= 0.93 &&
+    jaroWinkler(a.parts[a.parts.length - 1], b.parts[b.parts.length - 1]) >= 0.93;
 
-      if (A.some((v, k) => v === A[k + 1]) ||
-          B.some((v, k) => v === B[k + 1])) {
-        allowDup = true;
-      }
+  const husbandCore =
+    jaroWinkler(a.husbandParts[0], b.husbandParts[0]) >= 0.93 &&
+    jaroWinkler(a.husbandParts[1], b.husbandParts[1]) >= 0.90 &&
+    jaroWinkler(a.husbandParts[2], b.husbandParts[2]) >= 0.93 &&
+    jaroWinkler(
+      a.husbandParts[a.husbandParts.length - 1],
+      b.husbandParts[b.husbandParts.length - 1]
+    ) >= 0.93;
 
-      if (
-        jaroWinkler(
-          A[A.length - 1],
-          B[B.length - 1]
-        ) < 0.95
-      ) familyAnchor = false;
-    }
+  const orderFree =
+    nameOrderFreeScore(a.parts, b.parts) >= 0.9 ||
+    nameOrderFreeScore(a.husbandParts, b.husbandParts) >= 0.9;
+
+  const phoneLast6 =
+    a.phone &&
+    b.phone &&
+    a.phone.slice(-6) === b.phone.slice(-6);
+
+  const childrenFuzzy =
+    tokenJaccard(a.children_normalized, b.children_normalized) >= 0.6;
+
+  return {
+    lengthPattern,
+    womanCore,
+    husbandCore,
+    orderFree,
+    phoneLast6,
+    childrenFuzzy,
+  };
+}
+
+
+// 2. RULE CODE GENERATOR
+function generateRuleCode(p: RulePattern): string {
+  const lines: string[] = [];
+
+  lines.push(`if (`);
+
+  if (p.womanCore) {
+    lines.push(`  A.length >= 3 && B.length >= 3 &&`);
+    lines.push(`  jw(A[0], B[0]) >= 0.93 &&`);
+    lines.push(`  jw(A[1], B[1]) >= 0.90 &&`);
+    lines.push(`  jw(A[2], B[2]) >= 0.93 &&`);
+    lines.push(`  jw(A[A.length - 1], B[B.length - 1]) >= 0.93 &&`);
   }
 
-  const lengths = cluster.map(r => r.parts.length);
+  if (p.husbandCore) {
+    lines.push(`  HA.length >= 3 && HB.length >= 3 &&`);
+    lines.push(`  jw(HA[0], HB[0]) >= 0.93 &&`);
+    lines.push(`  jw(HA[1], HB[1]) >= 0.90 &&`);
+    lines.push(`  jw(HA[2], HB[2]) >= 0.93 &&`);
+    lines.push(`  jw(HA[HA.length - 1], HB[HB.length - 1]) >= 0.93 &&`);
+  }
 
-  return {
-    allowDuplicateAncestor: allowDup,
-    minFirstNameJW: Math.max(0.85, minFN - 0.02),
-    familyAnchor,
-    maxLengthDiff: Math.max(...lengths) - Math.min(...lengths),
-  };
+  if (p.orderFree) {
+    lines.push(`  nameOrderFreeScore(A, B) >= 0.9 &&`);
+  }
+
+  if (p.phoneLast6) {
+    lines.push(`  a.phone && b.phone && a.phone.slice(-6) === b.phone.slice(-6) &&`);
+  }
+
+  if (p.childrenFuzzy) {
+    lines.push(`  tokenJaccard(a.children_normalized, b.children_normalized) >= 0.6 &&`);
+  }
+
+  // remove trailing &&
+  if (lines.length > 1) {
+    lines[lines.length - 1] = lines[lines.length - 1].replace(/&&$/, "");
+  }
+
+  lines.push(`) {`);
+  lines.push(`  return {`);
+  lines.push(`    score: Math.min(1, minPair + 0.28),`);
+  lines.push(`    reasons: ["AUTO_${p.lengthPattern}_LINEAGE"],`);
+  lines.push(`  };`);
+  lines.push(`}`);
+
+  return lines.join("\n");
 }
 
 
-export function synthesizeRule(pattern: LearnedPattern) {
-  return {
-    id: `AUTO_RULE_${Date.now()}`,
-    type: "LINEAGE",
-
-    params: {
-      allowDuplicateAncestor: pattern.allowDuplicateAncestor,
-      minFirstNameJW: pattern.minFirstNameJW,
-      familyAnchor: pattern.familyAnchor,
-      maxLengthDiff: pattern.maxLengthDiff,
-    }
-  };
-}
-
-
-export async function submitRule(rule: any) {
+async function submitRule(rule: any) {
   const apiUrl = new URL('/api/rules', self.location.origin).toString();
   await fetch(apiUrl, {
     method: "POST",
@@ -80,7 +129,6 @@ self.onmessage = async (event: MessageEvent) => {
     }
 
     try {
-        // Preprocess the raw records using the provided mapping
         const failureCluster: PreprocessedRow[] = rawRecords.map((record: any) => {
             const mappedRecord: any = {};
             for (const key in mapping) {
@@ -90,8 +138,19 @@ self.onmessage = async (event: MessageEvent) => {
             return preprocessRow(mappedRecord);
         });
 
-        const pattern = analyzeFailureCluster(failureCluster);
-        const newRule = synthesizeRule(pattern);
+        // Use the first pair to detect a representative pattern
+        const pattern = detectRulePattern(failureCluster[0], failureCluster[1]);
+        
+        if (!pattern) {
+             postMessage({ type: 'learning_error', payload: { error: "Could not detect a valid pattern from the selected records." } });
+             return;
+        }
+
+        const code = generateRuleCode(pattern);
+        const newRule = {
+            id: `AUTO_RULE_${Date.now()}`,
+            code: code
+        };
         
         await submitRule(newRule);
         

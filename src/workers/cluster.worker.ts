@@ -1,6 +1,10 @@
-
 // src/workers/cluster.worker.ts
-import { alignLineage, jaroWinkler, collapseDuplicateAncestors } from '@/lib/similarity';
+import { alignLineage, jaroWinkler, collapseDuplicateAncestors, nameOrderFreeScore, tokenJaccard } from '@/lib/similarity';
+
+
+// --- Executor for Learned Rules ---
+let executeLearnedRules: Function = () => null;
+
 
 // --- Constants & Helpers ---
 
@@ -108,36 +112,6 @@ const normalizeChildrenField = (value: any) => {
 
 const yieldToEventLoop = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
-// --- Similarity Functions ---
-
-export const tokenJaccard = (aTokens: string[], bTokens: string[]) => {
-  if (!aTokens || !bTokens) return 0;
-  if (!aTokens.length && !bTokens.length) return 0;
-  const setA = new Set(aTokens);
-  const setB = new Set(bTokens);
-  let intersection = 0;
-  for (const token of setA) {
-    if (setB.has(token)) intersection++;
-  }
-  const union = new Set([...setA, ...setB]).size;
-  return union === 0 ? 0 : intersection / union;
-};
-
-export const nameOrderFreeScore = (aTokens: string[], bTokens: string[]) => {
-  if (!aTokens.length || !bTokens.length) return 0;
-  const setA = new Set(aTokens);
-  const setB = new Set(bTokens);
-  let intersection = 0;
-  for (const token of setA) {
-    if (setB.has(token)) intersection++;
-  }
-  const union = new Set([...setA, ...setB]).size;
-  const jaccard = union === 0 ? 0 : intersection / union;
-  const sortedA = aTokens.slice().sort().join(" ");
-  const sortedB = bTokens.slice().sort().join(" ");
-  return 0.7 * jaccard + 0.3 * jaroWinkler(sortedA, sortedB);
-};
-
 const splitParts = (value: string) =>
   value ? value.split(/\s+/).filter(Boolean) : [];
 
@@ -148,66 +122,36 @@ type RuleResult = {
   reasons: string[];
 };
 
-let AUTO_RULES: any[] = [];
-
 async function loadAutoRules() {
     try {
         const response = await fetch('/rules/auto-rules.json', { cache: 'no-store' });
         if (response.ok) {
             const rules = await response.json();
             if (Array.isArray(rules)) {
-                AUTO_RULES = rules;
+                 // The Function constructor is a safer alternative to eval() in workers.
+                 // It creates a function in the global scope of the worker but doesn't have access
+                 // to the local scope of the calling function unless variables are passed in.
+                const allRuleCode = rules.map(r => r.enabled ? r.code : '').join('\n');
+
+                executeLearnedRules = new Function(
+                    'a', 'b', 'jw', 'nameOrderFreeScore', 'tokenJaccard', 'minPair',
+                    `
+                    const A = a.parts;
+                    const B = b.parts;
+                    const HA = a.husbandParts;
+                    const HB = b.husbandParts;
+
+                    ${allRuleCode}
+                    
+                    return null; // No rule matched
+                    `
+                );
             }
         }
     } catch (e) {
-        console.warn("Could not load auto-rules.json, starting with none.");
-        AUTO_RULES = [];
+        console.warn("Could not load or compile auto-rules.json, starting with none.");
+        executeLearnedRules = () => null; // If loading fails, it becomes a no-op
     }
-}
-
-function applyAutoRule(rule: any, a: PreprocessedRow, b: PreprocessedRow): RuleResult | null {
-  if (!rule.enabled || !rule.params) return null;
-
-  const {
-    allowDuplicateAncestor,
-    minFirstNameJW,
-    familyAnchor,
-    maxLengthDiff,
-  } = rule.params;
-
-  let A = [...a.parts];
-  let B = [...b.parts];
-
-  if (allowDuplicateAncestor) {
-    A = collapseDuplicateAncestors(A);
-    B = collapseDuplicateAncestors(B);
-  }
-
-  if (Math.abs(A.length - B.length) > maxLengthDiff) return null;
-
-  const maxLen = Math.max(A.length, B.length);
-  A = alignLineage(A, maxLen);
-  B = alignLineage(B, maxLen);
-
-  if (familyAnchor && jaroWinkler(A[maxLen - 1], B[maxLen - 1]) < 0.95) {
-    return null;
-  }
-
-  if (jaroWinkler(A[0], B[0]) < minFirstNameJW) return null;
-
-  let ok = 0;
-  for (let i = 1; i < maxLen - 1; i++) {
-    if (jaroWinkler(A[i], B[i]) >= 0.93) ok++;
-  }
-
-  if (ok >= maxLen - 3) {
-    return {
-      score: 1.0,
-      reasons: [`AUTO:${rule.id}`],
-    };
-  }
-  
-  return null;
 }
 
 const applyAdditionalRules = (
@@ -215,10 +159,10 @@ const applyAdditionalRules = (
   b: PreprocessedRow,
   opts: WorkerOptions
 ) => {
-  // Apply auto-generated rules first
-  for (const rule of AUTO_RULES) {
-    const r = applyAutoRule(rule, a, b);
-    if (r) return r;
+  // Apply auto-generated rules first by executing the sandboxed function
+  const autoResult = executeLearnedRules(a, b, jaroWinkler, nameOrderFreeScore, tokenJaccard, opts.thresholds.minPair);
+  if (autoResult) {
+      return autoResult;
   }
   
   // If only testing auto-rules, stop here.
@@ -236,6 +180,38 @@ const applyAdditionalRules = (
 
   const s93 = (x?: string, y?: string) => jw(x || "", y || "") >= 0.93;
   const s95 = (x?: string, y?: string) => jw(x || "", y || "") >= 0.95;
+
+  // TIERS...
+  
+  /* =========================================================
+     GUARANTEED DUPLICATE — COLLAPSED LINEAGE MATCH
+     Handles 4–5 parts, repeated ancestors
+     ========================================================= */
+  const collapsedA = collapseDuplicateAncestors(a.parts);
+  const collapsedB = collapseDuplicateAncestors(b.parts);
+
+  if (collapsedA.length >= 4 && collapsedB.length >= 4) {
+      const maxLen = Math.max(collapsedA.length, collapsedB.length);
+      const alignedA = alignLineage(collapsedA, maxLen);
+      const alignedB = alignLineage(collapsedB, maxLen);
+
+      const familyMatch = jw(alignedA[maxLen - 1], alignedB[maxLen - 1]) >= 0.95;
+      const firstNameMatch = jw(alignedA[0], alignedB[0]) >= 0.88;
+
+      if (familyMatch && firstNameMatch) {
+          let strongMatches = 0;
+          for (let i = 1; i < maxLen - 1; i++) {
+              if (jw(alignedA[i], alignedB[i]) >= 0.93) strongMatches++;
+          }
+          if (strongMatches >= maxLen - 3) {
+              return {
+                  score: Math.min(1, minPair + 0.40),
+                  reasons: ["COLLAPSED_LINEAGE_FULL_MATCH"],
+              };
+          }
+      }
+  }
+
 
   /* =========================================================
      TIER 0 — ABSOLUTE GUARANTEES (GROUP FIXES)
@@ -414,36 +390,7 @@ if (husbandExact && (childrenA.length || childrenB.length)) {
       reasons: ["DUPLICATED_HUSBAND_LINEAGE"],
     };
   }
-
-  /* =========================================================
-     GUARANTEED DUPLICATE — COLLAPSED LINEAGE MATCH
-     Handles 4–5 parts, repeated ancestors
-     ========================================================= */
-  const collapsedA = collapseDuplicateAncestors(a.parts);
-  const collapsedB = collapseDuplicateAncestors(b.parts);
-
-  if (collapsedA.length >= 4 && collapsedB.length >= 4) {
-      const maxLen = Math.max(collapsedA.length, collapsedB.length);
-      const alignedA = alignLineage(collapsedA, maxLen);
-      const alignedB = alignLineage(collapsedB, maxLen);
-
-      const familyMatch = jw(alignedA[maxLen - 1], alignedB[maxLen - 1]) >= 0.95;
-      const firstNameMatch = jw(alignedA[0], alignedB[0]) >= 0.88;
-
-      if (familyMatch && firstNameMatch) {
-          let strongMatches = 0;
-          for (let i = 1; i < maxLen - 1; i++) {
-              if (jw(alignedA[i], alignedB[i]) >= 0.93) strongMatches++;
-          }
-          if (strongMatches >= maxLen - 3) {
-              return {
-                  score: Math.min(1, minPair + 0.40),
-                  reasons: ["COLLAPSED_LINEAGE_FULL_MATCH"],
-              };
-          }
-      }
-  }
-
+  
   /* =========================================================
      TIER 4 — WOMAN ONLY LINEAGE (NO HUSBAND)
      ========================================================= */
@@ -634,7 +581,7 @@ export function computePairScore(rawA: any, rawB: any, opts: WorkerOptions) {
     if (!rootA || !rootB) return 0;
     return Math.min(0.5, jaroWinkler(rootA, rootB));
   })();
-  const tokenReorderScore = nameOrderFreeScore(A, B);
+  const tokenReorderScore = nameOrderFreeScore(rowA.parts, rowB.parts);
   const husbandScore = Math.max(
     jaroWinkler(rowA.husbandName_normalized, rowB.husbandName_normalized),
     nameOrderFreeScore(rowA.husbandParts, rowB.husbandParts)
@@ -1346,5 +1293,3 @@ const mergeDedupPairScores = (target: any[], source: any[]) => {
   source.forEach(addEdge);
   return Array.from(map.values());
 };
-
-    

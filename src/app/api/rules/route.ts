@@ -41,10 +41,10 @@ export async function POST(req: Request) {
         return NextResponse.json({ ok: true, message: `Deleted ${idsToDelete.size} rule(s).` });
     }
     
-    // Handle Addition (the original logic)
+    // Handle Addition: Expecting body to be the new rule { id, code }
     const newRule = body;
-    if (!newRule.id) {
-        return NextResponse.json({ ok: false, error: "Invalid rule payload, missing id" }, { status: 400 });
+    if (!newRule.id || !newRule.code) {
+        return NextResponse.json({ ok: false, error: "Invalid rule payload, missing id or code" }, { status: 400 });
     }
 
     if (!existingRules.some((r: any) => r.id === newRule.id)) {
