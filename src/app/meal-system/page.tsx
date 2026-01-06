@@ -28,7 +28,7 @@ export default function MealSystemPage() {
     { href: "#", icon: <FileText className="h-8 w-8 text-slate-500" />, title: "Reporting Page" },
     { href: "#", icon: <ShieldAlert className="h-8 w-8 text-red-500" />, title: "Risk Page" },
     { href: "#", icon: <MessageSquareWarning className="h-8 w-8 text-yellow-500" />, title: "Compliant Page" },
-    { href: "#", icon: <ListChecks className="h-8 w-8 text-cyan-500" />, title: "Logframe page" },
+    { href: "/logframe", icon: <ListChecks className="h-8 w-8 text-cyan-500" />, title: "Logical Framework page" },
     { href: "#", icon: <Target className="h-8 w-8 text-orange-500" />, title: "Indicator Page" },
   ];
 

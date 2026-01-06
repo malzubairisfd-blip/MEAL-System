@@ -1,0 +1,184 @@
+"use client";
+
+import React, { useEffect, useState, useMemo } from 'react';
+import Link from 'next/link';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Plus, Loader2, ArrowLeft } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Logframe } from '@/lib/logframe';
+
+interface Project {
+  projectId: string;
+  projectName: string;
+}
+
+export default function LogicalFrameworkDashboardPage() {
+    const [projects, setProjects] = useState<Project[]>([]);
+    const [logframes, setLogframes] = useState<Logframe[]>([]);
+    const [selectedProject, setSelectedProject] = useState<string>('');
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchData = async () => {
+            try {
+                const [projRes, logRes] = await Promise.all([
+                    fetch('/api/projects'),
+                    fetch('/api/logframe')
+                ]);
+                if (projRes.ok) {
+                    const data = await projRes.json();
+                    setProjects(Array.isArray(data) ? data : []);
+                }
+                if (logRes.ok) {
+                    const data = await logRes.json();
+                    setLogframes(Array.isArray(data) ? data : []);
+                }
+            } catch (error) {
+                console.error("Failed to fetch data", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchData();
+    }, []);
+
+    const selectedLogframe = useMemo(() => {
+        if (!selectedProject) return null;
+        return logframes.find(lf => lf.projectId === selectedProject);
+    }, [selectedProject, logframes]);
+
+    const renderTextWithLineBreaks = (text: string) => {
+        return text.split('\n').map((line, index) => (
+            <React.Fragment key={index}>
+                {line}
+                <br />
+            </React.Fragment>
+        ));
+    };
+
+    return (
+        <div className="space-y-6">
+            <div className="flex justify-between items-center">
+                 <div>
+                    <h1 className="text-3xl font-bold">Logical Framework</h1>
+                    <p className="text-muted-foreground">View existing frameworks or create a new one.</p>
+                </div>
+                 <div className='flex gap-2'>
+                    <Button variant="outline" asChild>
+                        <Link href="/meal-system">
+                            <ArrowLeft className="mr-2 h-4 w-4" /> Back to MEAL System
+                        </Link>
+                    </Button>
+                    <Button asChild>
+                        <Link href="/logframe/add">
+                            <Plus className="mr-2 h-4 w-4" /> Add New Logical Framework
+                        </Link>
+                    </Button>
+                </div>
+            </div>
+
+            <Card>
+                <CardHeader>
+                    <CardTitle>Select a Project to View its Logframe</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    {loading ? (
+                        <div className='flex items-center gap-2 text-muted-foreground'>
+                            <Loader2 className="h-4 w-4 animate-spin"/> Loading projects...
+                        </div>
+                    ) : (
+                        <Select onValueChange={setSelectedProject} value={selectedProject}>
+                            <SelectTrigger className="w-full md:w-1/2">
+                                <SelectValue placeholder="Select a project..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {projects.map(p => (
+                                    <SelectItem key={p.projectId} value={p.projectId}>{p.projectName}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    )}
+                </CardContent>
+            </Card>
+
+            {selectedProject && (
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Logical Framework Details</CardTitle>
+                        <CardDescription>Displaying the logical framework for the selected project.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        {loading ? (
+                            <div className='flex items-center justify-center h-40'><Loader2 className="h-8 w-8 animate-spin"/></div>
+                        ) : selectedLogframe ? (
+                             <div className="border rounded-lg">
+                                <table className="w-full text-sm">
+                                    <thead className="bg-muted">
+                                        <tr>
+                                            <th className="p-3 text-left w-1/4 font-semibold">Title</th>
+                                            <th className="p-3 text-left font-semibold">Description</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr className="border-b">
+                                            <td className="p-3 font-semibold bg-green-100 align-top">PROJECT GOAL</td>
+                                            <td className="p-3">{renderTextWithLineBreaks(selectedLogframe.goal.description)}</td>
+                                        </tr>
+                                        <tr className="border-b">
+                                            <td className="p-3 font-semibold bg-green-100 align-top">OUTCOME</td>
+                                            <td className="p-3">{renderTextWithLineBreaks(selectedLogframe.outcome.description)}</td>
+                                        </tr>
+                                        {selectedLogframe.outputs.map((output, oIdx) => (
+                                            <React.Fragment key={oIdx}>
+                                                <tr className="border-b">
+                                                    <td className="p-3 font-semibold bg-green-100 align-top">OUTPUT {oIdx + 1}</td>
+                                                    <td className="p-3">{renderTextWithLineBreaks(output.description)}</td>
+                                                </tr>
+                                                {output.activities.map((activity, aIdx) => (
+                                                     <React.Fragment key={aIdx}>
+                                                        <tr className="border-b bg-gray-50">
+                                                            <td className="p-3 pl-8 font-semibold align-top">ACTIVITY {oIdx + 1}.{aIdx + 1}</td>
+                                                            <td className="p-3">{renderTextWithLineBreaks(activity.description)}</td>
+                                                        </tr>
+                                                         {activity.indicators.map((indicator, iIdx) => (
+                                                            <tr key={iIdx} className="border-b text-xs">
+                                                                <td className="p-2 pl-12 align-top text-muted-foreground">INDICATOR</td>
+                                                                <td className="p-2">
+                                                                    <div><strong>Description:</strong> {indicator.description}</div>
+                                                                    <div><strong>Target:</strong> {indicator.target} ({indicator.type})</div>
+                                                                    <div><strong>MoV:</strong> {indicator.meansOfVerification.join(', ')}</div>
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                        {activity.risksAndAssumptions.map((risk, rIdx) => (
+                                                            <React.Fragment key={rIdx}>
+                                                                <tr className="border-b text-xs">
+                                                                    <td className="p-2 pl-12 align-top text-muted-foreground">RISK</td>
+                                                                    <td className="p-2">{risk.risk}</td>
+                                                                </tr>
+                                                                <tr className="border-b text-xs">
+                                                                    <td className="p-2 pl-12 align-top text-muted-foreground">ASSUMPTION</td>
+                                                                    <td className="p-2">{risk.assumption}</td>
+                                                                </tr>
+                                                             </React.Fragment>
+                                                        ))}
+                                                    </React.Fragment>
+                                                ))}
+                                            </React.Fragment>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        ) : (
+                            <div className="text-center text-muted-foreground py-10">
+                                <p>No logical framework found for this project.</p>
+                                <Button variant="link" asChild><Link href="/logframe/add">Create one now</Link></Button>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+            )}
+        </div>
+    );
+}
