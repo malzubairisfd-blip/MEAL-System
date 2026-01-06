@@ -3,8 +3,7 @@
 "use client";
 
 import React, { useEffect, useState, useCallback } from "react";
-import { computePairScore } from "@/workers/cluster.worker";
-import { preprocessRow } from "@/workers/preprocess";
+import { computePairScore } from "@/lib/scoringClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -368,7 +367,7 @@ export default function SettingsPage() {
     // This is a simplified test; it won't have access to the full worker context.
     // We create a minimal version of `computePairScore` on the client.
     const res = computePairScore(testA, testB, settings);
-    setLastResult({ source: 'Full Engine', ...res });
+    setLastResult({ source: 'Client Test', ...res });
   }
   
   if (loading || !settings) {
