@@ -238,7 +238,7 @@ let AUTO_RULES: AutoRule[] = [];
 
 async function loadAutoRules() {
     try {
-        const response = await fetch('/rules/auto-rules.json');
+        const response = await fetch('/rules/auto-rules.json', { cache: 'no-store' });
         if (response.ok) {
             const rules = await response.json();
             if (Array.isArray(rules)) {
