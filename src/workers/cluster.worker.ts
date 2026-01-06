@@ -32,6 +32,11 @@ async function loadAutoRules() {
       r => r.enabled && typeof r.code === 'string' && r.code.trim().length > 0
     );
 
+    postMessage({
+      type: 'rules_loaded',
+      count: enabledRules.length,
+    });
+
     if (enabledRules.length === 0) {
       executeLearnedRules = () => null;
       return;
@@ -1330,4 +1335,4 @@ const mergeDedupPairScores = (target: any[], source: any[]) => {
   return Array.from(map.values());
 };
 
-
+    

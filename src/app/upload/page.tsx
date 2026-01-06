@@ -186,9 +186,17 @@ export default function UploadPage() {
       if (!msg?.type) return;
       if (msg.type === "progress") {
         setWorkerStatus(msg.status);
-        // Use functional update to avoid stale closures, but also throttle UI slightly if needed
         setProgressInfo(msg);
         return;
+      }
+      if (msg.type === 'rules_loaded') {
+          toast({
+              title: "Auto-Rules Imported",
+              description: `Successfully imported ${msg.count} rules.`,
+          });
+          setWorkerStatus('rules_loaded');
+          setProgressInfo(prev => ({ ...prev, status: 'rules_loaded' }));
+          return;
       }
       if (msg.type === "done") {
         const rawClusters = msg.payload?.clusters ?? [];
@@ -468,6 +476,7 @@ export default function UploadPage() {
       case "merging-edges":
       case "annotating":
       case "calculating_scores":
+      case "rules_loaded":
         return t("upload.buttons.processing");
       case "caching":
         return t("upload.buttons.caching");
@@ -717,3 +726,5 @@ export default function UploadPage() {
     </div>
   );
 }
+
+    
