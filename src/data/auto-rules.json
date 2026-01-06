@@ -15,5 +15,21 @@
     },
     "enabled": true,
     "createdAt": "2026-01-06T03:56:36.039Z"
+  },
+  {
+    "id": "AUTO_RULE_1767674933686",
+    "code": "if (\n  jw(A[0], B[0]) >= 0.85 &&\n  jw(A[A.length - 1], B[B.length - 1]) >= 0.98 &&\n  jw(HA[HA.length - 1], HB[HB.length - 1]) >= 0.98\n) {\n  return { score: Math.min(1, minPair + 0.35), reasons: [\"AUTO_LEARNED_STRUCTURAL\"] };\n}",
+    "params": {
+      "woman_first": 0.8666666666666667,
+      "woman_grandfather": 0.5,
+      "woman_family": 1,
+      "husband_first": 0.575,
+      "husband_father": 0.5277777777777778,
+      "husband_family": 1,
+      "orderFree": 0.5058459383753501,
+      "children": 0.3333333333333333
+    },
+    "enabled": true,
+    "createdAt": "2026-01-06T04:49:15.243Z"
   }
 ]

@@ -1048,7 +1048,7 @@ const runClustering = async (rows: PreprocessedRow[], edges: any[], opts: Worker
       continue;
     }
 
-    if (uf.size[rootA] + uf.size[rootB] <= 5) {
+    if (uf.size[rootA] + uf.size[rootB] <= 4) {
       const mergedRoot = uf.merge(rootA, rootB);
       const aggregatedReasons = new Set([...(rootReasons.get(rootA) || []), ...(rootReasons.get(rootB) || [])]);
       rootReasons.set(mergedRoot, aggregatedReasons);
@@ -1237,7 +1237,7 @@ const splitCluster = (rowsSubset: PreprocessedRow[], minInternal: number, opts: 
     }
   }
 
-  if (rowsSubset.length <= 5) {
+  if (rowsSubset.length <= 4) {
     const reasons = Array.from(new Set(localEdges.flatMap((edge) => edge.reasons || [])));
     return [{ records: rowsSubset, reasons, pairScores: localEdges }];
   }
@@ -1248,7 +1248,7 @@ const splitCluster = (rowsSubset: PreprocessedRow[], minInternal: number, opts: 
     const ra = uf.find(edge.a);
     const rb = uf.find(edge.b);
     if (ra === rb) return;
-    if (uf.size[ra] + uf.size[rb] <= 5) {
+    if (uf.size[ra] + uf.size[rb] <= 4) {
       uf.merge(ra, rb);
     }
   });
@@ -1267,7 +1267,7 @@ const splitCluster = (rowsSubset: PreprocessedRow[], minInternal: number, opts: 
     const subset = indices.map((idx) => rowsSubset[idx]);
     const subEdges = localEdges.filter((edge) => indices.includes(edge.a) && indices.includes(edge.b));
     const reasons = Array.from(new Set(subEdges.flatMap((edge) => edge.reasons || [])));
-    if (subset.length <= 5) {
+    if (subset.length <= 4) {
       result.push({ records: subset, reasons, pairScores: subEdges });
     } else {
       result.push(...splitCluster(subset, Math.max(minInternal, 0.45), opts));
@@ -1333,3 +1333,4 @@ const mergeDedupPairScores = (target: any[], source: any[]) => {
   source.forEach(addEdge);
   return Array.from(map.values());
 };
+
