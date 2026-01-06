@@ -57,6 +57,8 @@ export default function LogicalFrameworkDashboardPage() {
         ));
     };
 
+    const hasProjects = projects.length > 0;
+
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center">
@@ -70,7 +72,7 @@ export default function LogicalFrameworkDashboardPage() {
                             <ArrowLeft className="mr-2 h-4 w-4" /> Back to MEAL System
                         </Link>
                     </Button>
-                    <Button asChild>
+                    <Button asChild disabled={!hasProjects} title={!hasProjects ? "Please create a project first" : ""}>
                         <Link href="/logframe/add">
                             <Plus className="mr-2 h-4 w-4" /> Add New Logical Framework
                         </Link>
@@ -87,7 +89,7 @@ export default function LogicalFrameworkDashboardPage() {
                         <div className='flex items-center gap-2 text-muted-foreground'>
                             <Loader2 className="h-4 w-4 animate-spin"/> Loading projects...
                         </div>
-                    ) : (
+                    ) : hasProjects ? (
                         <Select onValueChange={setSelectedProject} value={selectedProject}>
                             <SelectTrigger className="w-full md:w-1/2">
                                 <SelectValue placeholder="Select a project..." />
@@ -98,6 +100,8 @@ export default function LogicalFrameworkDashboardPage() {
                                 ))}
                             </SelectContent>
                         </Select>
+                    ) : (
+                        <p className="text-muted-foreground">No projects found. Please add a project from the Project Dashboard to begin.</p>
                     )}
                 </CardContent>
             </Card>
