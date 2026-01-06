@@ -1,24 +1,26 @@
 // src/app/api/rules/route.ts
 import { NextResponse } from "next/server";
-import fs from "fs/promises";
+import fs from "fs";
 import path from "path";
 
-// Use the 'public' directory for storing rules so they are fetchable by the client.
-const getRulesPath = () => path.join(process.cwd(), 'public', 'rules');
-const getRulesFile = () => path.join(getRulesPath(), 'auto-rules.json');
+const getDataPath = () => path.join(process.cwd(), 'src/data');
+const getRulesFile = () => path.join(getDataPath(), 'auto-rules.json');
 
-async function getExistingRules() {
+function getExistingRules() {
     const RULES_FILE = getRulesFile();
     try {
-        await fs.mkdir(getRulesPath(), { recursive: true });
-        const raw = await fs.readFile(RULES_FILE, 'utf-8');
+        if (!fs.existsSync(RULES_FILE)) {
+            fs.mkdirSync(getDataPath(), { recursive: true });
+            fs.writeFileSync(RULES_FILE, "[]", "utf8");
+            return [];
+        }
+        const raw = fs.readFileSync(RULES_FILE, 'utf-8');
         const rules = JSON.parse(raw);
         return Array.isArray(rules) ? rules : [];
-    } catch (e: any) {
-        if (e.code === 'ENOENT') {
-            return []; // File doesn't exist, return empty array
-        }
-        throw e; // Re-throw other errors
+    } catch (e) {
+        console.error("Error reading or creating rules file:", e);
+        // If parsing fails or any other error, start with a fresh array
+        return [];
     }
 }
 
@@ -31,13 +33,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "Invalid payload" }, { status: 400 });
     }
 
-    let existingRules = await getExistingRules();
+    let existingRules = getExistingRules();
 
     // Handle Deletion
     if (body.action === 'delete' && Array.isArray(body.ids)) {
         const idsToDelete = new Set(body.ids);
         const filteredRules = existingRules.filter((r: any) => !idsToDelete.has(r.id));
-        await fs.writeFile(RULES_FILE, JSON.stringify(filteredRules, null, 2), "utf8");
+        fs.writeFileSync(RULES_FILE, JSON.stringify(filteredRules, null, 2), "utf8");
         return NextResponse.json({ ok: true, message: `Deleted ${idsToDelete.size} rule(s).` });
     }
     
@@ -55,7 +57,7 @@ export async function POST(req: Request) {
         });
     }
     
-    await fs.writeFile(RULES_FILE, JSON.stringify(existingRules, null, 2), "utf8");
+    fs.writeFileSync(RULES_FILE, JSON.stringify(existingRules, null, 2), "utf8");
     return NextResponse.json({ ok: true, message: `Rule ${newRule.id} saved.` });
 
   } catch (err: any) {
