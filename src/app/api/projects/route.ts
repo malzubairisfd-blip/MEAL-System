@@ -19,8 +19,24 @@ async function getExistingProjects() {
     }
 }
 
+async function ensureDataFile() {
+    const DATA_PATH = getDataPath();
+    const PROJECTS_FILE = getProjectsFile();
+    try {
+        await fs.access(DATA_PATH);
+    } catch {
+        await fs.mkdir(DATA_PATH, { recursive: true });
+    }
+    try {
+        await fs.access(PROJECTS_FILE);
+    } catch {
+        await fs.writeFile(PROJECTS_FILE, "[]", "utf-8");
+    }
+}
+
 export async function GET() {
     try {
+        await ensureDataFile();
         const projects = await getExistingProjects();
         return NextResponse.json(projects);
     } catch (err: any) {
@@ -29,8 +45,8 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-    const PROJECTS_FILE = getProjectsFile();
     try {
+        await ensureDataFile();
         const newProject = await req.json();
 
         if (!newProject || typeof newProject !== "object") {
@@ -46,8 +62,7 @@ export async function POST(req: Request) {
 
         existingProjects.push(newProject);
         
-        await fs.mkdir(getDataPath(), { recursive: true });
-        await fs.writeFile(PROJECTS_FILE, JSON.stringify(existingProjects, null, 2), "utf8");
+        await fs.writeFile(getProjectsFile(), JSON.stringify(existingProjects, null, 2), "utf8");
         
         return NextResponse.json({ ok: true, message: `Project ${newProject.projectId} saved successfully.` });
 
