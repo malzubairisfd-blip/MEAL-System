@@ -1,4 +1,3 @@
-
 "use client";
 
 import { Card } from "@/components/ui/card";
@@ -21,16 +20,16 @@ import Link from "next/link";
 
 export default function MealSystemPage() {
   const mealFeatures = [
-    { icon: <Briefcase className="h-8 w-8 text-indigo-500" />, title: "Project Page" },
-    { icon: <Monitor className="h-8 w-8 text-blue-500" />, title: "Monitoring Page" },
-    { icon: <ClipboardCheck className="h-8 w-8 text-green-500" />, title: "Evaluation Page" },
-    { icon: <Database className="h-8 w-8 text-sky-500" />, title: "Data Collection Page" },
-    { icon: <PieChart className="h-8 w-8 text-purple-500" />, title: "Analysis Page" },
-    { icon: <FileText className="h-8 w-8 text-slate-500" />, title: "Reporting Page" },
-    { icon: <ShieldAlert className="h-8 w-8 text-red-500" />, title: "Risk Page" },
-    { icon: <MessageSquareWarning className="h-8 w-8 text-yellow-500" />, title: "Compliant Page" },
-    { icon: <ListChecks className="h-8 w-8 text-cyan-500" />, title: "Logframe page" },
-    { icon: <Target className="h-8 w-8 text-orange-500" />, title: "Indicator Page" },
+    { href: "/project", icon: <Briefcase className="h-8 w-8 text-indigo-500" />, title: "Project Page" },
+    { href: "#", icon: <Monitor className="h-8 w-8 text-blue-500" />, title: "Monitoring Page" },
+    { href: "#", icon: <ClipboardCheck className="h-8 w-8 text-green-500" />, title: "Evaluation Page" },
+    { href: "#", icon: <Database className="h-8 w-8 text-sky-500" />, title: "Data Collection Page" },
+    { href: "#", icon: <PieChart className="h-8 w-8 text-purple-500" />, title: "Analysis Page" },
+    { href: "#", icon: <FileText className="h-8 w-8 text-slate-500" />, title: "Reporting Page" },
+    { href: "#", icon: <ShieldAlert className="h-8 w-8 text-red-500" />, title: "Risk Page" },
+    { href: "#", icon: <MessageSquareWarning className="h-8 w-8 text-yellow-500" />, title: "Compliant Page" },
+    { href: "#", icon: <ListChecks className="h-8 w-8 text-cyan-500" />, title: "Logframe page" },
+    { href: "#", icon: <Target className="h-8 w-8 text-orange-500" />, title: "Indicator Page" },
   ];
 
   return (
@@ -52,8 +51,10 @@ export default function MealSystemPage() {
               {feature.icon}
             </div>
             <h3 className="font-semibold text-sm mb-2">{feature.title}</h3>
-            <Button variant="secondary" size="sm" className="w-full mt-auto group">
-              Go <ArrowRight className="ml-1 h-4 w-4 transition-transform group-hover:translate-x-1" />
+            <Button variant="secondary" size="sm" className="w-full mt-auto group" asChild>
+                <Link href={feature.href}>
+                    Go <ArrowRight className="ml-1 h-4 w-4 transition-transform group-hover:translate-x-1" />
+                </Link>
             </Button>
           </Card>
         ))}
