@@ -4,7 +4,76 @@ import { alignLineage, jaroWinkler, collapseDuplicateAncestors, nameOrderFreeSco
 
 
 // --- Executor for Learned Rules ---
-let executeLearnedRules: Function = () => null;
+type RuleResult = {
+  score: number;
+  reasons: string[];
+};
+
+// Default no-op executor (safe fallback)
+let executeLearnedRules: (
+  a: any,
+  b: any,
+  jw: Function,
+  nameOrderFreeScore: Function,
+  tokenJaccard: Function,
+  minPair: number
+) => RuleResult | null = () => null;
+
+async function loadAutoRules() {
+  try {
+    const response = await fetch('/api/rules', { cache: 'no-store' });
+    if (!response.ok) return;
+
+    const rules = await response.json();
+    if (!Array.isArray(rules)) return;
+
+    // Only enabled + non-empty rules
+    const enabledRules = rules.filter(
+      r => r.enabled && typeof r.code === 'string' && r.code.trim().length > 0
+    );
+
+    if (enabledRules.length === 0) {
+      executeLearnedRules = () => null;
+      return;
+    }
+
+    // Wrap every rule defensively so one bad rule doesn't kill all
+    const wrappedRules = enabledRules.map((r, idx) => `
+      try {
+        ${r.code}
+      } catch (e) {
+        // AUTO_RULE_${idx} failed silently
+      }
+    `).join('\n');
+
+    executeLearnedRules = new Function(
+      'a',
+      'b',
+      'jw',
+      'nameOrderFreeScore',
+      'tokenJaccard',
+      'minPair',
+      `
+      // Pre-bind commonly used tokens
+      const A = a.parts || [];
+      const B = b.parts || [];
+      const HA = a.husbandParts || [];
+      const HB = b.husbandParts || [];
+
+      ${wrappedRules}
+
+      return null;
+      `
+    ) as any;
+
+  } catch (e) {
+    console.warn(
+      "Could not load or compile auto-rules.json. Continuing without learned rules.",
+      e
+    );
+    executeLearnedRules = () => null;
+  }
+}
 
 
 // --- Constants & Helpers ---
@@ -118,49 +187,6 @@ const splitParts = (value: string) =>
 
 
 // --- Rule Logic ---
-type RuleResult = {
-  score: number;
-  reasons: string[];
-};
-
-async function loadAutoRules() {
-    try {
-        // Fetch rules from the API endpoint, ensuring no caching issues.
-        const response = await fetch('/api/rules', { cache: 'no-store' });
-        if (response.ok) {
-            const rules = await response.json();
-            if (Array.isArray(rules)) {
-                 // Filter for enabled rules and combine their code.
-                 const allRuleCode = rules
-                    .filter(r => r.enabled)
-                    .map(r => r.code)
-                    .join('\n');
-
-                 // The Function constructor is a safer alternative to eval() in workers.
-                 // It creates a function in the global scope of the worker but doesn't have access
-                 // to the local scope of the calling function unless variables are passed in as arguments.
-                executeLearnedRules = new Function(
-                    'a', 'b', 'jw', 'nameOrderFreeScore', 'tokenJaccard', 'minPair',
-                    `
-                    // 'a' and 'b' are the preprocessed records
-                    const A = a.parts;
-                    const B = b.parts;
-                    const HA = a.husbandParts;
-                    const HB = b.husbandParts;
-
-                    ${allRuleCode}
-                    
-                    return null; // Return null if no learned rule matched
-                    `
-                );
-            }
-        }
-    } catch (e) {
-        console.warn("Could not load or compile auto-rules.json. Continuing without learned rules.", e);
-        executeLearnedRules = () => null; // If loading fails, it becomes a no-op.
-    }
-}
-
 
 const applyAdditionalRules = (
   a: PreprocessedRow,
@@ -1303,4 +1329,5 @@ const mergeDedupPairScores = (target: any[], source: any[]) => {
   source.forEach(addEdge);
   return Array.from(map.values());
 };
+
 
