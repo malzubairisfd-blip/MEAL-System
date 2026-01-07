@@ -1,1 +1,88 @@
-[]
+[
+  {
+    "projectId": "200-23596",
+    "tasks": [
+      {
+        "id": "task-1767827548322",
+        "title": "اختيار وتدريب المثقفات المجتمعيات المنسقون الميدانيون\t",
+        "progress": 4,
+        "status": "IN_PROGRESS",
+        "hasSubTasks": "yes",
+        "subTasks": [
+          {
+            "id": "sub-task-1767827558188",
+            "title": "توزيع وتعليق  الإعلان في جميع قرى ومناطق المديريات المستهدفة",
+            "startDay": "01",
+            "startMonth": "01",
+            "startYear": "2025",
+            "endDay": "07",
+            "endMonth": "01",
+            "endYear": "2025",
+            "progress": 20,
+            "status": "PLANNED",
+            "start": "2025-01-01",
+            "end": "2025-01-07"
+          },
+          {
+            "id": "sub-task-1767827582085",
+            "title": "استلام وفرز ملفات المتقدمات ",
+            "startDay": "10",
+            "startMonth": "01",
+            "startYear": "2025",
+            "endDay": "17",
+            "endMonth": "01",
+            "endYear": "2025",
+            "progress": 0,
+            "status": "PLANNED",
+            "start": "2025-01-10",
+            "end": "2025-01-17"
+          },
+          {
+            "id": "sub-task-1767827615375",
+            "title": "اجراء المقابلة الشخصية للمتقدمات والمؤهلات",
+            "startDay": "19",
+            "startMonth": "01",
+            "startYear": "2025",
+            "endDay": "25",
+            "endMonth": "01",
+            "endYear": "2025",
+            "progress": 0,
+            "status": "PLANNED",
+            "start": "2025-01-19",
+            "end": "2025-01-25"
+          },
+          {
+            "id": "sub-task-1767827648413",
+            "title": "تدريب للمثقفات المجتمعيات",
+            "startDay": "01",
+            "startMonth": "02",
+            "startYear": "2025",
+            "endDay": "16",
+            "endMonth": "02",
+            "endYear": "2025",
+            "progress": 0,
+            "status": "PLANNED",
+            "start": "2025-02-01",
+            "end": "2025-02-16"
+          },
+          {
+            "id": "sub-task-1767827675369",
+            "title": "توقيع العقود مع المثقفات المحتمعيات",
+            "startDay": "18",
+            "startMonth": "02",
+            "startYear": "2025",
+            "endDay": "20",
+            "endMonth": "02",
+            "endYear": "2025",
+            "progress": 0,
+            "status": "PLANNED",
+            "start": "2025-02-18",
+            "end": "2025-02-20"
+          }
+        ],
+        "start": "2024-12-31",
+        "end": "2025-02-19"
+      }
+    ]
+  }
+]

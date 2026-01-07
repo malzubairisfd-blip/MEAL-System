@@ -96,7 +96,7 @@ export const TaskListItem = ({ task, onDelete, onUpdateStatus, onUpdateProgress,
                     type="number"
                     min="0"
                     max="100"
-                    value={task.progress}
+                    value={isNaN(task.progress) ? 0 : task.progress}
                     onChange={(e) => onUpdateProgress(task.id, parseInt(e.target.value))}
                     className="w-16 h-7 text-center bg-slate-700 border-slate-600"
                 />
@@ -110,7 +110,7 @@ export const TaskListItem = ({ task, onDelete, onUpdateStatus, onUpdateProgress,
         progressElement = (
             <div className="flex items-center gap-2 w-full">
                 <Progress value={avgProgress} className="h-2 w-full" />
-                <span className="text-xs w-8 text-right">{Math.round(avgProgress)}%</span>
+                <span className="text-xs w-8 text-right">{Math.round(isNaN(avgProgress) ? 0 : avgProgress)}%</span>
             </div>
         )
     }
