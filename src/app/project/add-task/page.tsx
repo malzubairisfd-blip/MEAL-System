@@ -97,7 +97,7 @@ export default function AddTaskPage() {
             toast({ title: "Tasks Added!", description: "The new tasks have been added to the project plan." });
             router.push(`/project/plan`);
 
-        } catch (error: any) => {
+        } catch (error: any) {
             toast({ title: "Save Failed", description: error.message, variant: "destructive" });
         } finally {
             setIsSaving(false);
