@@ -9,27 +9,8 @@ import { GanttRow, TaskListItem } from "./GanttRow";
 import { calculateWorkingDays } from '@/lib/ganttUtils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
+import { Activity, Sigma } from 'lucide-react';
 
-interface Props {
-  tasks: GanttTask[];
-  projectStart: string;
-  projectEnd: string;
-  onDeleteTask: (taskId: string) => void;
-  onUpdateTaskStatus: (taskId: string, status: TaskStatus) => void;
-  onUpdateTaskProgress: (taskId: string, progress: number) => void;
-}
-
-const KPICard = ({ title, value, footer }: { title: string, value: React.ReactNode, footer?: string }) => (
-    <Card className="bg-slate-800 border-slate-700 text-white">
-        <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">{title}</CardTitle>
-        </CardHeader>
-        <CardContent>
-            <div className="text-2xl font-bold">{value}</div>
-            {footer && <p className="text-xs text-muted-foreground">{footer}</p>}
-        </CardContent>
-    </Card>
-);
 
 export function GanttChart({
   tasks,
@@ -38,7 +19,14 @@ export function GanttChart({
   onDeleteTask,
   onUpdateTaskStatus,
   onUpdateTaskProgress
-}: Props) {
+}: {
+  tasks: GanttTask[];
+  projectStart: string;
+  projectEnd: string;
+  onDeleteTask: (taskId: string) => void;
+  onUpdateTaskStatus: (taskId: string, status: TaskStatus) => void;
+  onUpdateTaskProgress: (taskId: string, progress: number) => void;
+}) {
   const dayWidth = 32;
 
     const { overallProgress, totalWorkingDays } = useMemo(() => {
@@ -65,17 +53,21 @@ export function GanttChart({
 
   return (
     <>
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-        <KPICard 
-            title="Overall Progress"
-            value={
-                <div className="flex items-center gap-2">
-                    <Progress value={overallProgress} className="h-1"/>
-                    <span className="text-lg">{Math.round(overallProgress)}%</span>
-                </div>
-            }
-        />
-        <KPICard title="Total Working Days" value={totalWorkingDays.toLocaleString()} />
+    <div className="flex items-center gap-6 mb-4 bg-slate-800 border border-slate-700 rounded-lg p-4 text-white">
+        <div className="flex items-center gap-3">
+            <Activity className="h-6 w-6 text-blue-400" />
+            <div>
+                <div className="text-sm text-slate-300">Overall Progress</div>
+                <div className="text-2xl font-bold">{Math.round(overallProgress)}%</div>
+            </div>
+        </div>
+        <div className="flex items-center gap-3">
+            <Sigma className="h-6 w-6 text-green-400" />
+             <div>
+                <div className="text-sm text-slate-300">Total Working Days</div>
+                <div className="text-2xl font-bold">{totalWorkingDays.toLocaleString()}</div>
+            </div>
+        </div>
     </div>
 
     <div className="flex bg-slate-900 text-slate-200 rounded-lg overflow-hidden border border-slate-700 shadow-xl">
