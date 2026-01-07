@@ -25,11 +25,9 @@ export function GanttRow({ task, projectStart, dayWidth, isSubTask = false }: Ro
   const width = duration * dayWidth;
 
   return (
-    // ✅ remove fixed height
-    <div className="relative border-b border-slate-800 py-2">
+    <div className="relative border-b border-slate-800 h-auto min-h-10 py-1 flex items-center">
       <div
-        // ✅ remove h-6, allow auto height
-        className="absolute top-2 rounded text-xs text-white px-2 py-1 shadow-md flex items-start"
+        className="absolute top-1/2 -translate-y-1/2 rounded text-xs text-white px-2 py-1 shadow-md flex items-start"
         style={{
           left: offset,
           width,
@@ -44,7 +42,6 @@ export function GanttRow({ task, projectStart, dayWidth, isSubTask = false }: Ro
           style={{ width: `${task.progress}%` }}
         />
 
-        {/* ✅ wrapped text */}
         <span
           className="relative z-10 whitespace-normal break-words leading-snug"
           style={{ wordBreak: "break-word" }}
@@ -126,7 +123,7 @@ export const TaskListItem = ({ task, onDelete, onUpdateStatus, onUpdateProgress,
     }
 
     return (
-        <div className={`h-auto min-h-10 border-b border-slate-800 px-3 flex items-center justify-between text-sm hover:bg-slate-800/20 group ${isSubTask ? 'pl-8 bg-slate-900/50' : ''}`}>
+        <div className={cn("h-auto min-h-10 border-b border-slate-800 px-3 flex items-center justify-between text-sm hover:bg-slate-800/20 group py-1", isSubTask ? 'pl-8 bg-slate-900/50' : '')}>
             <div className="flex items-center gap-1 flex-1 py-1">
                  {task.hasSubTasks === 'yes' && onToggleCollapse && (
                     <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onToggleCollapse(task.id)}>

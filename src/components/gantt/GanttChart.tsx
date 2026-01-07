@@ -83,7 +83,7 @@ export function GanttChart({
 
     <div className="flex bg-slate-900 text-slate-200 rounded-lg overflow-hidden border border-slate-700 shadow-xl">
       {/* LEFT TASK LIST */}
-      <div className="w-[500px] border-r border-slate-700 flex-shrink-0">
+      <div className="w-[600px] border-r border-slate-700 flex-shrink-0">
         <div className="h-20 border-b border-slate-700 font-semibold px-3 flex items-center justify-between">
           <div className='flex-1'>Task</div>
           <div className='w-32 text-center'>Progress</div>
