@@ -81,73 +81,86 @@ export function GanttChart({
         </div>
     </div>
 
-    <div className="flex bg-slate-900 text-slate-200 rounded-lg overflow-hidden border border-slate-700 shadow-xl">
-      {/* LEFT TASK LIST */}
-      <div className="w-[600px] border-r border-slate-700 flex-shrink-0">
-        <div className="h-20 border-b border-slate-700 font-semibold px-3 flex items-center justify-between">
-          <div className='flex-1'>Task</div>
-          <div className='w-32 text-center'>Progress</div>
-          <div className='w-24 text-center'>Working Days</div>
-          <div className='w-32 text-center'>Status</div>
-          <div className='w-8'></div>
-        </div>
-        {tasks.map(task => {
-            const isCollapsed = collapsedTasks.has(task.id);
-            return (
-                <React.Fragment key={task.id}>
-                <TaskListItem 
-                    task={task} 
-                    onDelete={onDeleteTask}
-                    onUpdateStatus={onUpdateTaskStatus}
-                    onUpdateProgress={onUpdateTaskProgress}
-                    isCollapsed={isCollapsed}
-                    onToggleCollapse={toggleCollapse}
+    <div className="bg-slate-900 text-slate-200 rounded-lg overflow-hidden border border-slate-700 shadow-xl">
+        <div className="flex sticky top-0 z-20 bg-slate-900">
+            {/* LEFT HEADER */}
+             <div className="w-[600px] border-r border-slate-700 flex-shrink-0">
+                <div className="h-20 border-b border-slate-700 font-semibold px-3 flex items-center justify-between">
+                    <div className='flex-1'>Task</div>
+                    <div className='w-32 text-center'>Progress</div>
+                    <div className='w-24 text-center'>Working Days</div>
+                    <div className='w-32 text-center'>Status</div>
+                    <div className='w-8'></div>
+                </div>
+            </div>
+            {/* RIGHT HEADER */}
+            <div className="overflow-x-auto flex-1">
+                <GanttHeader
+                start={projectStart}
+                end={projectEnd}
+                dayWidth={dayWidth}
                 />
-                {!isCollapsed && task.hasSubTasks === 'yes' && task.subTasks?.map(subTask => (
-                    <TaskListItem 
-                            key={subTask.id} 
-                            task={subTask}
+            </div>
+        </div>
+        
+        <div className='relative'>
+             {tasks.map(task => {
+                const isCollapsed = collapsedTasks.has(task.id);
+                return (
+                    <React.Fragment key={task.id}>
+                    {/* MAIN TASK ROW */}
+                    <div className="flex border-b border-slate-800">
+                        {/* LEFT */}
+                        <div className="w-[600px] flex-shrink-0">
+                        <TaskListItem
+                            task={task}
                             onDelete={onDeleteTask}
                             onUpdateStatus={onUpdateTaskStatus}
                             onUpdateProgress={onUpdateTaskProgress}
-                            isSubTask={true}
+                            isCollapsed={isCollapsed}
+                            onToggleCollapse={toggleCollapse}
                         />
-                ))}
-                </React.Fragment>
-            )
-        })}
-      </div>
+                        </div>
 
-      {/* TIMELINE */}
-      <div className="overflow-x-auto flex-1">
-        <GanttHeader
-          start={projectStart}
-          end={projectEnd}
-          dayWidth={dayWidth}
-        />
+                        {/* RIGHT */}
+                        <div className="flex-1 relative">
+                        <GanttRow
+                            task={task}
+                            projectStart={projectStart}
+                            dayWidth={dayWidth}
+                        />
+                        </div>
+                    </div>
 
-        {tasks.map(task => {
-          const isCollapsed = collapsedTasks.has(task.id);
-          return (
-            <React.Fragment key={task.id}>
-             <GanttRow
-                task={task}
-                projectStart={projectStart}
-                dayWidth={dayWidth}
-             />
-             {!isCollapsed && task.hasSubTasks === 'yes' && task.subTasks?.map(subTask => (
-                <GanttRow
-                    key={subTask.id}
-                    task={subTask}
-                    projectStart={projectStart}
-                    dayWidth={dayWidth}
-                    isSubTask={true}
-                />
-             ))}
-            </React.Fragment>
-          )
-        })}
-      </div>
+                    {/* SUBTASKS */}
+                    {!isCollapsed && task.hasSubTasks === "yes" &&
+                        task.subTasks?.map(subTask => (
+                        <div key={subTask.id} className="flex border-b border-slate-800">
+                            <div className="w-[600px] flex-shrink-0">
+                            <TaskListItem
+                                task={subTask}
+                                onDelete={onDeleteTask}
+                                onUpdateStatus={onUpdateTaskStatus}
+                                onUpdateProgress={onUpdateTaskProgress}
+                                isSubTask
+                            />
+                            </div>
+
+                            <div className="flex-1 relative">
+                            <GanttRow
+                                task={subTask}
+                                projectStart={projectStart}
+                                dayWidth={dayWidth}
+                                isSubTask
+                            />
+                            </div>
+                        </div>
+                        ))}
+                    </React.Fragment>
+                );
+            })}
+        </div>
+
     </div>
     </>
   );

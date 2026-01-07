@@ -5,7 +5,7 @@ import dayjs from "dayjs";
 import { GanttTask, TaskStatus } from "@/types/gantt";
 import { STATUS_COLORS } from "@/lib/statusStyles";
 import { calculateWorkingDays } from "@/lib/ganttUtils";
-import { ChevronDown, Trash2, Edit, Check, ChevronRight } from "lucide-react";
+import { ChevronDown, Trash2, Edit, ChevronRight } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Input } from "../ui/input";
@@ -25,7 +25,7 @@ export function GanttRow({ task, projectStart, dayWidth, isSubTask = false }: Ro
   const width = duration * dayWidth;
 
   return (
-    <div className="relative border-b border-slate-800 h-auto min-h-10 py-1 flex items-center">
+    <div className="relative py-2 h-full">
       <div
         className="absolute top-1/2 -translate-y-1/2 rounded text-xs text-white px-2 py-1 shadow-md flex items-start"
         style={{
@@ -123,7 +123,7 @@ export const TaskListItem = ({ task, onDelete, onUpdateStatus, onUpdateProgress,
     }
 
     return (
-        <div className={cn("h-auto min-h-10 border-b border-slate-800 px-3 flex items-center justify-between text-sm hover:bg-slate-800/20 group py-1", isSubTask ? 'pl-8 bg-slate-900/50' : '')}>
+        <div className={cn("h-full px-3 flex items-center justify-between text-sm group py-1", isSubTask ? 'pl-8 bg-slate-900/50' : '')}>
             <div className="flex items-center gap-1 flex-1 py-1">
                  {task.hasSubTasks === 'yes' && onToggleCollapse && (
                     <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onToggleCollapse(task.id)}>
