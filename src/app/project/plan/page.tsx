@@ -13,12 +13,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Textarea } from "@/components/ui/textarea";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 import { ArrowLeft, Loader2, Save, Calendar, Plus, ChevronDown, Filter, Trash2, Edit } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { GanttChart } from '@/components/gantt/GanttChart';
-import { GanttTask, TaskStatus, GanttTaskSchema } from '@/types/gantt';
+import { GanttTask, TaskStatus, GanttTaskSchema, SubTaskSchema } from '@/types/gantt';
 
 interface Project {
   projectId: string;
@@ -45,12 +45,12 @@ export default function ProjectPlanPage() {
     const [isSaving, setIsSaving] = useState(false);
     const [isModalOpen, setIsModalOpen] = useState(false);
 
-    const form = useForm({
+    const form = useForm<z.infer<typeof AddTasksFormSchema>>({
         resolver: zodResolver(AddTasksFormSchema),
-        defaultValues: { tasks: [] as GanttTask[] },
+        defaultValues: { tasks: [] },
     });
 
-    const { fields, append, remove, update } = useFieldArray({
+    const { fields, append, remove, control } = useFieldArray({
       control: form.control,
       name: "tasks",
     });
@@ -133,7 +133,7 @@ export default function ProjectPlanPage() {
     }
     
     const handleDeleteTask = (taskId: string) => {
-        setTasks(prev => prev.filter(t => t.id !== taskId && t.parentId !== taskId));
+        setTasks(prev => prev.filter(t => t.id !== taskId));
     }
     
     const updateTaskStatus = (taskId: string, status: TaskStatus) => {
@@ -206,46 +206,11 @@ export default function ProjectPlanPage() {
                                         <form onSubmit={form.handleSubmit(onAddTaskSubmit)} className="space-y-6">
                                             <div className="space-y-4 max-h-[60vh] overflow-y-auto p-4">
                                             {fields.map((field, index) => {
-                                                const title = form.watch(`tasks.${index}.title`);
                                                 return (
-                                                <Card key={field.id} className="p-4 relative">
-                                                    <Button type="button" variant="ghost" size="icon" className="absolute top-2 right-2" onClick={() => remove(index)}>
-                                                        <Trash2 className="h-4 w-4"/>
-                                                    </Button>
-                                                    <div className="grid grid-cols-2 gap-4">
-                                                        <FormField
-                                                            control={form.control}
-                                                            name={`tasks.${index}.title`}
-                                                            render={({ field }) => (
-                                                                <FormItem className="col-span-2">
-                                                                    <FormLabel>Main Task {index + 1}</FormLabel>
-                                                                    <FormControl><Input {...field} maxLength={100} /></FormControl>
-                                                                    <FormMessage />
-                                                                     <div className="text-xs text-right text-muted-foreground">{title?.length || 0}/100</div>
-                                                                </FormItem>
-                                                            )}
-                                                        />
-                                                         <div className="grid grid-cols-2 gap-2">
-                                                            <FormField control={form.control} name={`tasks.${index}.startMonth`} render={({ field }) => (
-                                                                <FormItem><FormLabel>Start</FormLabel><Select onValueChange={field.onChange}><FormControl><SelectTrigger><SelectValue placeholder="Month" /></SelectTrigger></FormControl><SelectContent>{months.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>
-                                                            )} />
-                                                            <FormField control={form.control} name={`tasks.${index}.startYear`} render={({ field }) => (
-                                                                <FormItem><FormLabel>&nbsp;</FormLabel><Select onValueChange={field.onChange}><FormControl><SelectTrigger><SelectValue placeholder="Year" /></SelectTrigger></FormControl><SelectContent>{years.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>
-                                                            )} />
-                                                        </div>
-                                                        <div className="grid grid-cols-2 gap-2">
-                                                            <FormField control={form.control} name={`tasks.${index}.endMonth`} render={({ field }) => (
-                                                                <FormItem><FormLabel>End</FormLabel><Select onValueChange={field.onChange}><FormControl><SelectTrigger><SelectValue placeholder="Month" /></SelectTrigger></FormControl><SelectContent>{months.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>
-                                                            )} />
-                                                            <FormField control={form.control} name={`tasks.${index}.endYear`} render={({ field }) => (
-                                                                <FormItem><FormLabel>&nbsp;</FormLabel><Select onValueChange={field.onChange}><FormControl><SelectTrigger><SelectValue placeholder="Year" /></SelectTrigger></FormControl><SelectContent>{years.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>
-                                                            )} />
-                                                        </div>
-                                                    </div>
-                                                </Card>
-                                            )})}
+                                                  <MainTaskItem key={field.id} control={control} index={index} remove={remove} />
+                                                )})}
                                             </div>
-                                            <Button type="button" variant="outline" onClick={() => append({ id: `new-task-${Date.now()}`, title: "", start: "", end: "", status: "PLANNED", startMonth: '', startYear: '', endMonth: '', endYear: '' })}>
+                                            <Button type="button" variant="outline" onClick={() => append({ id: `new-task-${Date.now()}`, title: "", startMonth: '', startYear: '', endMonth: '', endYear: '', status: "PLANNED", hasSubTasks: 'no', subTasks: [] })}>
                                                 <Plus className="mr-2 h-4 w-4"/> Add Another Task
                                             </Button>
                                             <DialogFooter>
@@ -286,4 +251,110 @@ export default function ProjectPlanPage() {
             )}
         </div>
     );
+}
+
+
+function MainTaskItem({ control, index, remove }: { control: any; index: number; remove: (index: number) => void }) {
+    const title = useForm().watch(`tasks.${index}.title`);
+    const hasSubTasks = useForm({control}).watch(`tasks.${index}.hasSubTasks`);
+    const { fields: subTaskFields, append: appendSubTask, remove: removeSubTask } = useFieldArray({
+        control,
+        name: `tasks.${index}.subTasks`,
+    });
+
+    return (
+        <Card className="p-4 relative">
+            <Button type="button" variant="ghost" size="icon" className="absolute top-2 right-2" onClick={() => remove(index)}>
+                <Trash2 className="h-4 w-4"/>
+            </Button>
+            <div className="grid grid-cols-2 gap-4">
+                <FormField
+                    control={control}
+                    name={`tasks.${index}.title`}
+                    render={({ field }) => (
+                        <FormItem className="col-span-2">
+                            <FormLabel>Main Task {index + 1}</FormLabel>
+                            <FormControl><Input {...field} maxLength={100} /></FormControl>
+                            <FormMessage />
+                            <div className="text-xs text-right text-muted-foreground">{field.value?.length || 0}/100</div>
+                        </FormItem>
+                    )}
+                />
+                 <div className="grid grid-cols-2 gap-2">
+                    <FormField control={control} name={`tasks.${index}.startMonth`} render={({ field }) => (
+                        <FormItem><FormLabel>Start</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Month" /></SelectTrigger></FormControl><SelectContent>{months.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>
+                    )} />
+                    <FormField control={control} name={`tasks.${index}.startYear`} render={({ field }) => (
+                        <FormItem><FormLabel>&nbsp;</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Year" /></SelectTrigger></FormControl><SelectContent>{years.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>
+                    )} />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                    <FormField control={control} name={`tasks.${index}.endMonth`} render={({ field }) => (
+                        <FormItem><FormLabel>End</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Month" /></SelectTrigger></FormControl><SelectContent>{months.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>
+                    )} />
+                    <FormField control={control} name={`tasks.${index}.endYear`} render={({ field }) => (
+                        <FormItem><FormLabel>&nbsp;</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Year" /></SelectTrigger></FormControl><SelectContent>{years.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>
+                    )} />
+                </div>
+                 <FormField
+                    control={control}
+                    name={`tasks.${index}.hasSubTasks`}
+                    render={({ field }) => (
+                        <FormItem className="col-span-2 space-y-3">
+                            <FormLabel>Include Sub-Tasks?</FormLabel>
+                            <FormControl>
+                                <RadioGroup
+                                    onValueChange={field.onChange}
+                                    defaultValue={field.value}
+                                    className="flex space-x-4"
+                                >
+                                    <FormItem className="flex items-center space-x-2 space-y-0">
+                                        <FormControl><RadioGroupItem value="yes" /></FormControl>
+                                        <FormLabel className="font-normal">Yes</FormLabel>
+                                    </FormItem>
+                                    <FormItem className="flex items-center space-x-2 space-y-0">
+                                        <FormControl><RadioGroupItem value="no" /></FormControl>
+                                        <FormLabel className="font-normal">No</FormLabel>
+                                    </FormItem>
+                                </RadioGroup>
+                            </FormControl>
+                            <FormMessage />
+                        </FormItem>
+                    )}
+                />
+            </div>
+            
+            {hasSubTasks === 'yes' && (
+                <div className="col-span-2 mt-4 pl-4 border-l-2 space-y-4">
+                    {subTaskFields.map((subField, subIndex) => {
+                        const subTaskTitle = useForm({control}).watch(`tasks.${index}.subTasks.${subIndex}.title`);
+                        return (
+                            <div key={subField.id} className="relative">
+                                <FormField
+                                    control={control}
+                                    name={`tasks.${index}.subTasks.${subIndex}.title`}
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Sub-Task {subIndex + 1}</FormLabel>
+                                            <div className="flex items-center gap-2">
+                                                <FormControl><Input {...field} maxLength={100} /></FormControl>
+                                                <Button type="button" variant="ghost" size="icon" onClick={() => removeSubTask(subIndex)}>
+                                                    <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                            </div>
+                                             <div className="text-xs text-right text-muted-foreground">{field.value?.length || 0}/100</div>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                            </div>
+                        )
+                    })}
+                    <Button type="button" variant="secondary" size="sm" onClick={() => appendSubTask({ id: `sub-task-${Date.now()}`, title: '' })}>
+                        <Plus className="mr-2 h-4 w-4" /> Add Sub-Task
+                    </Button>
+                </div>
+            )}
+        </Card>
+    )
 }

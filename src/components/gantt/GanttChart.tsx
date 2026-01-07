@@ -1,6 +1,7 @@
 // components/gantt/GanttChart.tsx
 "use client";
 
+import React from 'react';
 import { GanttTask, TaskStatus } from "@/types/gantt";
 import { GanttHeader } from "./GanttHeader";
 import { GanttRow, TaskListItem } from "./GanttRow";
@@ -30,12 +31,22 @@ export function GanttChart({
           {/* This space is for the top-left controls */}
         </div>
         {tasks.map(task => (
-          <TaskListItem 
-            key={task.id} 
-            task={task} 
-            onDelete={onDeleteTask}
-            onUpdateStatus={onUpdateTaskStatus}
-          />
+            <React.Fragment key={task.id}>
+              <TaskListItem 
+                task={task} 
+                onDelete={onDeleteTask}
+                onUpdateStatus={onUpdateTaskStatus}
+              />
+              {task.subTasks?.map(subTask => (
+                   <TaskListItem 
+                        key={subTask.id} 
+                        task={{...subTask, start: task.start, end: task.end, status: task.status}}
+                        onDelete={onDeleteTask}
+                        onUpdateStatus={onUpdateTaskStatus}
+                        isSubTask={true}
+                    />
+              ))}
+            </React.Fragment>
         ))}
       </div>
 
@@ -48,12 +59,22 @@ export function GanttChart({
         />
 
         {tasks.map(task => (
-          <GanttRow
-            key={task.id}
-            task={task}
-            projectStart={projectStart}
-            dayWidth={dayWidth}
-          />
+          <React.Fragment key={task.id}>
+             <GanttRow
+                task={task}
+                projectStart={projectStart}
+                dayWidth={dayWidth}
+             />
+             {task.subTasks?.map(subTask => (
+                <GanttRow
+                    key={subTask.id}
+                    task={{...subTask, start: task.start, end: task.end, status: task.status}}
+                    projectStart={projectStart}
+                    dayWidth={dayWidth}
+                    isSubTask={true}
+                />
+             ))}
+          </React.Fragment>
         ))}
       </div>
     </div>

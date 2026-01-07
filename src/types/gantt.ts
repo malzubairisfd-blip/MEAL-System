@@ -8,20 +8,10 @@ export type TaskStatus =
   | "BLOCKED"
   | "EXPECTS_PLANNING";
 
-export interface GanttTask {
-  id: string;
-  title: string;
-  start: string; // ISO date string (YYYY-MM-DD)
-  end: string;   // ISO date string (YYYY-MM-DD)
-  status: TaskStatus;
-  parentId?: string;
-  // Temporary fields for the form
-  startMonth?: string;
-  startYear?: string;
-  endMonth?: string;
-  endYear?: string;
-}
-
+export const SubTaskSchema = z.object({
+  id: z.string(),
+  title: z.string().min(1, "Sub-task title is required.").max(100),
+});
 
 export const GanttTaskSchema = z.object({
     id: z.string(),
@@ -31,18 +21,43 @@ export const GanttTaskSchema = z.object({
     endMonth: z.string().min(1, "End month is required."),
     endYear: z.string().min(1, "End year is required."),
     status: z.enum(["DONE", "IN_PROGRESS", "PLANNED", "BLOCKED", "EXPECTS_PLANNING"]),
-    parentId: z.string().optional(),
+    hasSubTasks: z.enum(['yes', 'no']),
+    subTasks: z.array(SubTaskSchema).optional(),
 }).refine(data => {
     const start = new Date(Number(data.startYear), Number(data.startMonth) - 1);
     const end = new Date(Number(data.endYear), Number(data.endMonth) -1);
     return end >= start;
 }, {
     message: "End date must be after or the same as start date.",
-    path: ["endMonth"], // Attach error to a relevant field
+    path: ["endMonth"],
+}).refine(data => {
+    if (data.hasSubTasks === 'yes') {
+        return data.subTasks && data.subTasks.length > 0;
+    }
+    return true;
+}, {
+    message: "Please add at least one sub-task.",
+    path: ["subTasks"],
 }).transform(data => ({
     ...data,
     start: `${data.startYear}-${data.startMonth.padStart(2, '0')}-01`,
     end: `${data.endYear}-${data.endMonth.padStart(2, '0')}-${new Date(Number(data.endYear), Number(data.endMonth), 0).getDate()}`
 }));
+
+export interface GanttTask {
+  id: string;
+  title: string;
+  start: string;
+  end: string;
+  status: TaskStatus;
+  parentId?: string;
+  subTasks?: { id: string; title: string; }[];
+  // Form-only fields
+  startMonth?: string;
+  startYear?: string;
+  endMonth?: string;
+  endYear?: string;
+  hasSubTasks?: 'yes' | 'no';
+}
 
 export type GanttTaskFormValues = z.infer<typeof GanttTaskSchema>;

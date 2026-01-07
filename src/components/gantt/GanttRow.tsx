@@ -12,9 +12,10 @@ interface RowProps {
   task: GanttTask;
   projectStart: string;
   dayWidth: number;
+  isSubTask?: boolean;
 }
 
-export function GanttRow({ task, projectStart, dayWidth }: RowProps) {
+export function GanttRow({ task, projectStart, dayWidth, isSubTask = false }: RowProps) {
   const offset = dayjs(task.start).diff(dayjs(projectStart), "day") * dayWidth;
   const duration = dayjs(task.end).diff(dayjs(task.start), "day") + 1;
   const width = duration * dayWidth;
@@ -29,6 +30,7 @@ export function GanttRow({ task, projectStart, dayWidth }: RowProps) {
           left: offset,
           width,
           backgroundColor: STATUS_COLORS[task.status],
+          opacity: isSubTask ? 0.75 : 1,
         }}
         title={`${task.title} (${task.start} → ${task.end})`}
       >
@@ -71,10 +73,11 @@ interface ListItemProps {
     task: GanttTask;
     onDelete: (taskId: string) => void;
     onUpdateStatus: (taskId: string, status: TaskStatus) => void;
+    isSubTask?: boolean;
 }
 
-export const TaskListItem = ({ task, onDelete, onUpdateStatus }: ListItemProps) => (
-    <div className="h-10 border-b border-slate-800 px-3 flex items-center justify-between text-sm hover:bg-slate-800/20 group">
+export const TaskListItem = ({ task, onDelete, onUpdateStatus, isSubTask = false }: ListItemProps) => (
+    <div className={`h-10 border-b border-slate-800 px-3 flex items-center justify-between text-sm hover:bg-slate-800/20 group ${isSubTask ? 'pl-8 bg-slate-900/50' : ''}`}>
         <span className="truncate">{task.title}</span>
         <div className="flex items-center gap-2">
             <TaskStatusBadge status={task.status} onUpdateStatus={(newStatus) => onUpdateStatus(task.id, newStatus)} />
