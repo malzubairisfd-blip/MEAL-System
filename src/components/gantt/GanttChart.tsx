@@ -70,8 +70,8 @@ export function GanttChart({
             title="Overall Progress"
             value={
                 <div className="flex items-center gap-2">
-                    <Progress value={overallProgress} className="h-2"/>
-                    <span>{Math.round(overallProgress)}%</span>
+                    <Progress value={overallProgress} className="h-1"/>
+                    <span className="text-lg">{Math.round(overallProgress)}%</span>
                 </div>
             }
         />
