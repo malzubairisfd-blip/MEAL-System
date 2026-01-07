@@ -3,6 +3,10 @@
 
 import dayjs from "dayjs";
 import { useMemo } from "react";
+import { cn } from "@/lib/utils";
+import isoWeek from 'dayjs/plugin/isoWeek';
+
+dayjs.extend(isoWeek);
 
 interface Props {
   start: string;
@@ -11,36 +15,66 @@ interface Props {
 }
 
 export function GanttHeader({ start, end, dayWidth }: Props) {
-  const { months, totalWidth, days } = useMemo(() => {
+  const { months, totalWidth, days, weeks } = useMemo(() => {
     const startDate = dayjs(start);
     const endDate = dayjs(end);
-    const days = endDate.diff(startDate, "day") + 1;
-    const totalWidth = days * dayWidth;
+    const totalDays = endDate.diff(startDate, "day") + 1;
+    const totalWidth = totalDays * dayWidth;
 
     const months = [];
     let currentMonth = startDate.clone();
     while (currentMonth.isBefore(endDate) || currentMonth.isSame(endDate, 'month')) {
-      const daysInMonth = currentMonth.daysInMonth();
       const firstDayOfMonth = currentMonth.startOf('month');
       const lastDayOfMonth = currentMonth.endOf('month');
 
       const startOffset = Math.max(0, firstDayOfMonth.diff(startDate, 'day'));
-      const endOffset = Math.min(days, lastDayOfMonth.diff(startDate, 'day') + 1);
+      const endOffset = Math.min(totalDays, lastDayOfMonth.diff(startDate, 'day') + 1);
 
       const width = (endOffset - startOffset) * dayWidth;
-
-      months.push({
-        name: currentMonth.format("MMMM YYYY"),
-        width: width,
-      });
+      
+      if (width > 0) {
+        months.push({
+          name: currentMonth.format("MMMM YYYY"),
+          width: width,
+        });
+      }
       currentMonth = currentMonth.add(1, 'month');
     }
 
-    return { months, totalWidth, days };
+    const weeks = [];
+    let currentDay = startDate.clone();
+    let weekNumber = 1;
+    while(currentDay.isBefore(endDate) || currentDay.isSame(endDate, 'day')) {
+        const remainingDaysInView = endDate.diff(currentDay, 'day') + 1;
+        const daysInThisWeek = Math.min(7, remainingDaysInView);
+
+        weeks.push({
+            name: `Week ${weekNumber}`,
+            width: daysInThisWeek * dayWidth,
+        });
+        currentDay = currentDay.add(7, 'day');
+        weekNumber++;
+    }
+
+
+    return { months, totalWidth, days: totalDays, weeks };
   }, [start, end, dayWidth]);
 
   return (
     <div className="sticky top-0 z-20 bg-slate-900 select-none">
+      {/* Week Row */}
+      <div className="flex border-b border-slate-700">
+        {weeks.map((week, i) => (
+          <div
+            key={i}
+            style={{ width: week.width }}
+            className="text-xs font-semibold text-slate-300 text-center py-1 border-r border-slate-800"
+          >
+            {week.name}
+          </div>
+        ))}
+      </div>
+
       {/* Month Row */}
       <div className="flex border-b border-slate-700">
         {months.map((month, i) => (
@@ -57,11 +91,17 @@ export function GanttHeader({ start, end, dayWidth }: Props) {
       <div className="flex">
         {Array.from({ length: days }).map((_, i) => {
           const date = dayjs(start).add(i, "day");
+          const dayOfWeek = date.day(); // 0 (Sun) to 6 (Sat)
+          const isWeekend = dayOfWeek === 5 || dayOfWeek === 6; // Friday or Saturday
+
           return (
             <div
               key={i}
               style={{ width: dayWidth }}
-              className="text-[10px] text-slate-400 text-center border-l border-slate-800"
+              className={cn(
+                "text-[10px] text-slate-400 text-center border-l border-slate-800",
+                 isWeekend && "bg-slate-800/50"
+              )}
             >
               {date.format("DD")}
             </div>
