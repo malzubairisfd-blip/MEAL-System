@@ -4,9 +4,12 @@
 import dayjs from "dayjs";
 import { GanttTask, TaskStatus } from "@/types/gantt";
 import { STATUS_COLORS } from "@/lib/statusStyles";
-import { ChevronDown, Trash2, Edit } from "lucide-react";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { calculateWorkingDays } from "@/lib/ganttUtils";
+import { ChevronDown, Trash2, Edit, Check } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
+import { Input } from "../ui/input";
+import { Progress } from "../ui/progress";
 
 interface RowProps {
   task: GanttTask;
@@ -17,8 +20,10 @@ interface RowProps {
 
 export function GanttRow({ task, projectStart, dayWidth, isSubTask = false }: RowProps) {
   const offset = dayjs(task.start).diff(dayjs(projectStart), "day") * dayWidth;
-  const duration = dayjs(task.end).diff(dayjs(task.start), "day") + 1;
+  const duration = calculateWorkingDays(task.start, task.end);
   const width = duration * dayWidth;
+
+  const progressWidth = (task.progress / 100) * width;
 
   return (
     <div className="relative h-10 border-b border-slate-800">
@@ -32,7 +37,11 @@ export function GanttRow({ task, projectStart, dayWidth, isSubTask = false }: Ro
         }}
         title={`${task.title} (${task.start} → ${task.end})`}
       >
-        <span className="truncate">{task.title}</span>
+        <div 
+          className="absolute left-0 top-0 h-full bg-black/20 rounded"
+          style={{ width: `${task.progress}%`}}
+        />
+        <span className="truncate relative z-10">{task.title}</span>
       </div>
     </div>
   );
@@ -45,7 +54,7 @@ const TaskStatusBadge = ({ status, onUpdateStatus }: { status: TaskStatus, onUpd
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
                 <div
-                    className="flex items-center justify-center gap-1 rounded px-2 py-0.5 text-xs font-semibold cursor-pointer"
+                    className="flex items-center justify-center gap-1 rounded px-2 py-0.5 text-xs font-semibold cursor-pointer w-full"
                     style={{ backgroundColor: STATUS_COLORS[status] + '33', color: STATUS_COLORS[status] }}
                 >
                     <span>{statusText}</span>
@@ -71,23 +80,57 @@ interface ListItemProps {
     task: GanttTask;
     onDelete: (taskId: string) => void;
     onUpdateStatus: (taskId: string, status: TaskStatus) => void;
+    onUpdateProgress: (taskId: string, progress: number) => void;
     isSubTask?: boolean;
 }
 
-export const TaskListItem = ({ task, onDelete, onUpdateStatus, isSubTask = false }: ListItemProps) => (
-    <div className={`h-10 border-b border-slate-800 px-3 flex items-center justify-between text-sm hover:bg-slate-800/20 group ${isSubTask ? 'pl-8 bg-slate-900/50' : ''}`}>
-        <span className="truncate">{task.title}</span>
-        <div className="flex items-center gap-2">
-            <TaskStatusBadge status={task.status} onUpdateStatus={(newStatus) => onUpdateStatus(task.id, newStatus)} />
-             <DropdownMenu>
+export const TaskListItem = ({ task, onDelete, onUpdateStatus, onUpdateProgress, isSubTask = false }: ListItemProps) => {
+    const workingDays = calculateWorkingDays(task.start, task.end);
+
+    let progressElement;
+    if (isSubTask) {
+        progressElement = (
+            <div className="flex items-center gap-2">
+                <Input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={task.progress}
+                    onChange={(e) => onUpdateProgress(task.id, parseInt(e.target.value))}
+                    className="w-16 h-7 text-center bg-slate-700 border-slate-600"
+                />
+                <span>%</span>
+            </div>
+        )
+    } else {
+         const avgProgress = task.hasSubTasks === 'yes' && task.subTasks && task.subTasks.length > 0 
+            ? task.subTasks.reduce((sum, st) => sum + st.progress, 0) / task.subTasks.length
+            : task.progress;
+        progressElement = (
+            <div className="flex items-center gap-2 w-full">
+                <Progress value={avgProgress} className="h-2 w-full" />
+                <span className="text-xs w-8 text-right">{Math.round(avgProgress)}%</span>
+            </div>
+        )
+    }
+
+    return (
+        <div className={`h-10 border-b border-slate-800 px-3 flex items-center justify-between text-sm hover:bg-slate-800/20 group ${isSubTask ? 'pl-8 bg-slate-900/50' : ''}`}>
+            <span className="truncate w-48">{task.title}</span>
+            <div className="w-24 flex justify-center">{progressElement}</div>
+            <div className="w-24 text-center">{workingDays}</div>
+            <div className="w-32 flex justify-center">
+                 <TaskStatusBadge status={task.status} onUpdateStatus={(newStatus) => onUpdateStatus(task.id, newStatus)} />
+            </div>
+            
+            <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                    <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100">
                         <Edit className="h-4 w-4"/>
                     </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent>
-                    <DropdownMenuItem>Edit Task</DropdownMenuItem>
-                    <DropdownMenuSeparator />
+                    <DropdownMenuItem disabled>Edit Task</DropdownMenuItem>
                     <DropdownMenuItem className="text-red-500" onClick={() => onDelete(task.id)}>
                         <Trash2 className="mr-2 h-4 w-4"/>
                         Delete Task
@@ -95,5 +138,5 @@ export const TaskListItem = ({ task, onDelete, onUpdateStatus, isSubTask = false
                 </DropdownMenuContent>
             </DropdownMenu>
         </div>
-    </div>
-);
+    );
+};
