@@ -46,10 +46,10 @@ export function GanttChart({
         let overallProgress = 0;
         if (mainTasksWithSubtasks.length > 0) {
             const totalProgress = mainTasksWithSubtasks.reduce((sum, task) => {
-                const subTaskProgressAvg = task.subTasks!.reduce((acc, st) => acc + st.progress, 0) / task.subTasks!.length;
+                const subTaskProgressAvg = task.subTasks!.reduce((acc, st) => acc + (st.progress || 0), 0) / (task.subTasks!.length || 1);
                 return sum + subTaskProgressAvg;
             }, 0);
-            overallProgress = totalProgress / mainTasksWithSubtasks.length;
+            overallProgress = totalProgress / (mainTasksWithSubtasks.length || 1);
         }
 
         const totalWorkingDays = tasks.reduce((sum, task) => {
@@ -69,7 +69,7 @@ export function GanttChart({
             <Activity className="h-6 w-6 text-blue-400" />
             <div>
                 <div className="text-sm text-slate-300">Overall Progress</div>
-                <div className="text-2xl font-bold">{Math.round(overallProgress)}%</div>
+                <div className="text-2xl font-bold">{Math.round(isNaN(overallProgress) ? 0 : overallProgress)}%</div>
             </div>
         </div>
         <div className="flex items-center gap-3">
@@ -83,9 +83,9 @@ export function GanttChart({
 
     <div className="flex bg-slate-900 text-slate-200 rounded-lg overflow-hidden border border-slate-700 shadow-xl">
       {/* LEFT TASK LIST */}
-      <div className="w-[500px] border-r border-slate-700 flex-shrink-0">
+      <div className="w-[600px] border-r border-slate-700 flex-shrink-0">
         <div className="h-20 border-b border-slate-700 font-semibold px-3 flex items-center justify-between">
-          <div className='w-48'>Task</div>
+          <div className='w-72'>Task</div>
           <div className='w-24 text-center'>Progress</div>
           <div className='w-24 text-center'>Working Days</div>
           <div className='w-32 text-center'>Status</div>

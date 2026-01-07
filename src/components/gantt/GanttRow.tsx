@@ -105,7 +105,7 @@ export const TaskListItem = ({ task, onDelete, onUpdateStatus, onUpdateProgress,
         )
     } else {
          const avgProgress = task.hasSubTasks === 'yes' && task.subTasks && task.subTasks.length > 0 
-            ? task.subTasks.reduce((sum, st) => sum + st.progress, 0) / task.subTasks.length
+            ? task.subTasks.reduce((sum, st) => sum + (st.progress || 0), 0) / (task.subTasks.length || 1)
             : task.progress;
         progressElement = (
             <div className="flex items-center gap-2 w-full">
@@ -117,13 +117,13 @@ export const TaskListItem = ({ task, onDelete, onUpdateStatus, onUpdateProgress,
 
     return (
         <div className={`h-10 border-b border-slate-800 px-3 flex items-center justify-between text-sm hover:bg-slate-800/20 group ${isSubTask ? 'pl-8 bg-slate-900/50' : ''}`}>
-            <div className="flex items-center gap-1 truncate w-48">
+            <div className="flex items-center gap-1 truncate w-72">
                  {task.hasSubTasks === 'yes' && onToggleCollapse && (
                     <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onToggleCollapse(task.id)}>
                         {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                     </Button>
                 )}
-                <span className={cn("truncate", { 'ml-7': task.hasSubTasks !== 'yes' })}>{task.title}</span>
+                <span className={cn("truncate whitespace-normal", { 'ml-7': task.hasSubTasks !== 'yes' })}>{task.title}</span>
             </div>
             <div className="w-24 flex justify-center">{progressElement}</div>
             <div className="w-24 text-center">{workingDays}</div>
