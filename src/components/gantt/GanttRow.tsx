@@ -31,7 +31,7 @@ export function GanttRow({ task, projectStart, dayWidth, isSubTask = false }: Ro
         style={{
           left: offset,
           width,
-          backgroundColor: STATUS_COLORS[task.status],
+          backgroundColor: STATUS_COLORS[task.status] || STATUS_COLORS['PLANNED'],
           opacity: isSubTask ? 0.75 : 1,
         }}
         title={`${task.title} (${task.start} → ${task.end})`}
@@ -54,7 +54,7 @@ const TaskStatusBadge = ({ status, onUpdateStatus }: { status: TaskStatus, onUpd
             <DropdownMenuTrigger asChild>
                 <div
                     className="flex items-center justify-center gap-1 rounded px-2 py-0.5 text-xs font-semibold cursor-pointer w-full"
-                    style={{ backgroundColor: STATUS_COLORS[status] + '33', color: STATUS_COLORS[status] }}
+                    style={{ backgroundColor: (STATUS_COLORS[status] || STATUS_COLORS['PLANNED']) + '33', color: STATUS_COLORS[status] || STATUS_COLORS['PLANNED'] }}
                 >
                     <span>{statusText}</span>
                     <ChevronDown className="h-3 w-3" />
@@ -116,35 +116,37 @@ export const TaskListItem = ({ task, onDelete, onUpdateStatus, onUpdateProgress,
     }
 
     return (
-        <div className={`h-10 border-b border-slate-800 px-3 flex items-center justify-between text-sm hover:bg-slate-800/20 group ${isSubTask ? 'pl-8 bg-slate-900/50' : ''}`}>
-            <div className="flex items-center gap-1 truncate w-72">
+        <div className={`h-auto min-h-10 border-b border-slate-800 px-3 flex items-center justify-between text-sm hover:bg-slate-800/20 group ${isSubTask ? 'pl-8 bg-slate-900/50' : ''}`}>
+            <div className="flex items-center gap-1 flex-1 py-1">
                  {task.hasSubTasks === 'yes' && onToggleCollapse && (
                     <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onToggleCollapse(task.id)}>
                         {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                     </Button>
                 )}
-                <span className={cn("truncate whitespace-normal", { 'ml-7': task.hasSubTasks !== 'yes' })}>{task.title}</span>
+                <span className={cn("whitespace-normal break-words", { 'ml-7': task.hasSubTasks !== 'yes' })}>{task.title}</span>
             </div>
-            <div className="w-24 flex justify-center">{progressElement}</div>
-            <div className="w-24 text-center">{workingDays}</div>
-            <div className="w-32 flex justify-center">
+            <div className="w-32 flex-shrink-0 flex justify-center">{progressElement}</div>
+            <div className="w-24 flex-shrink-0 text-center">{workingDays}</div>
+            <div className="w-32 flex-shrink-0 flex justify-center">
                  <TaskStatusBadge status={task.status} onUpdateStatus={(newStatus) => onUpdateStatus(task.id, newStatus)} />
             </div>
             
-            <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                   <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100">
-                        <Edit className="h-4 w-4"/>
-                    </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent>
-                    <DropdownMenuItem disabled>Edit Task</DropdownMenuItem>
-                    <DropdownMenuItem className="text-red-500" onClick={() => onDelete(task.id)}>
-                        <Trash2 className="mr-2 h-4 w-4"/>
-                        Delete Task
-                    </DropdownMenuItem>
-                </DropdownMenuContent>
-            </DropdownMenu>
+            <div className="w-8 flex-shrink-0">
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100">
+                            <Edit className="h-4 w-4"/>
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent>
+                        <DropdownMenuItem disabled>Edit Task</DropdownMenuItem>
+                        <DropdownMenuItem className="text-red-500" onClick={() => onDelete(task.id)}>
+                            <Trash2 className="mr-2 h-4 w-4"/>
+                            Delete Task
+                        </DropdownMenuItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
+            </div>
         </div>
     );
 };

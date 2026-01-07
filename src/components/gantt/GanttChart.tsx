@@ -69,26 +69,27 @@ export function GanttChart({
             <Activity className="h-6 w-6 text-blue-400" />
             <div>
                 <div className="text-sm text-slate-300">Overall Progress</div>
-                <div className="text-2xl font-bold">{Math.round(isNaN(overallProgress) ? 0 : overallProgress)}%</div>
+                <div className="text-xl font-bold">{Math.round(isNaN(overallProgress) ? 0 : overallProgress)}%</div>
             </div>
         </div>
         <div className="flex items-center gap-3">
             <Sigma className="h-6 w-6 text-green-400" />
              <div>
                 <div className="text-sm text-slate-300">Total Working Days</div>
-                <div className="text-2xl font-bold">{totalWorkingDays.toLocaleString()}</div>
+                <div className="text-xl font-bold">{totalWorkingDays.toLocaleString()}</div>
             </div>
         </div>
     </div>
 
     <div className="flex bg-slate-900 text-slate-200 rounded-lg overflow-hidden border border-slate-700 shadow-xl">
       {/* LEFT TASK LIST */}
-      <div className="w-[600px] border-r border-slate-700 flex-shrink-0">
+      <div className="flex-1 border-r border-slate-700 flex-shrink-0">
         <div className="h-20 border-b border-slate-700 font-semibold px-3 flex items-center justify-between">
-          <div className='w-72'>Task</div>
-          <div className='w-24 text-center'>Progress</div>
+          <div className='flex-1'>Task</div>
+          <div className='w-32 text-center'>Progress</div>
           <div className='w-24 text-center'>Working Days</div>
           <div className='w-32 text-center'>Status</div>
+          <div className='w-8'></div>
         </div>
         {tasks.map(task => {
             const isCollapsed = collapsedTasks.has(task.id);
