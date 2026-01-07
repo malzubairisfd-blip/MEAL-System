@@ -25,22 +25,32 @@ export function GanttRow({ task, projectStart, dayWidth, isSubTask = false }: Ro
   const width = duration * dayWidth;
 
   return (
-    <div className="relative h-10 border-b border-slate-800">
+    // ✅ remove fixed height
+    <div className="relative border-b border-slate-800 py-2">
       <div
-        className="absolute h-6 top-2 rounded text-xs text-white px-2 flex items-center shadow-md"
+        // ✅ remove h-6, allow auto height
+        className="absolute top-2 rounded text-xs text-white px-2 py-1 shadow-md flex items-start"
         style={{
           left: offset,
           width,
-          backgroundColor: STATUS_COLORS[task.status] || STATUS_COLORS['PLANNED'],
+          backgroundColor: STATUS_COLORS[task.status] || STATUS_COLORS["PLANNED"],
           opacity: isSubTask ? 0.75 : 1,
         }}
         title={`${task.title} (${task.start} → ${task.end})`}
       >
-        <div 
+        {/* progress overlay */}
+        <div
           className="absolute left-0 top-0 h-full bg-black/20 rounded"
-          style={{ width: `${task.progress}%`}}
+          style={{ width: `${task.progress}%` }}
         />
-        <span className="truncate relative z-10">{task.title}</span>
+
+        {/* ✅ wrapped text */}
+        <span
+          className="relative z-10 whitespace-normal break-words leading-snug"
+          style={{ wordBreak: "break-word" }}
+        >
+          {task.title}
+        </span>
       </div>
     </div>
   );
