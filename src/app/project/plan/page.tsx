@@ -3,13 +3,22 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
+import { useForm, useFieldArray, Controller } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Loader2, Save, Calendar, Plus, ChevronDown, Filter } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Textarea } from "@/components/ui/textarea";
+
+import { ArrowLeft, Loader2, Save, Calendar, Plus, ChevronDown, Filter, Trash2, Edit } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { GanttChart } from '@/components/gantt/GanttChart';
-import { GanttTask, TaskStatus } from '@/types/gantt';
+import { GanttTask, TaskStatus, GanttTaskSchema } from '@/types/gantt';
 
 interface Project {
   projectId: string;
@@ -20,17 +29,12 @@ interface Project {
   endDateYear: string;
 }
 
-const initialTasks: GanttTask[] = [
-    { id: "task-1", title: "Planning design course", start: "2024-03-01", end: "2024-03-10", status: "DONE" },
-    { id: "task-1.1", parentId: "task-1", title: "Create a roadmap", start: "2024-03-08", end: "2024-03-15", status: "DONE" },
-    { id: "task-1.2", parentId: "task-1", title: "Find an editor", start: "2024-03-12", end: "2024-03-18", status: "DONE" },
-    { id: "task-2", title: "Planning design course", start: "2024-03-15", end: "2024-04-12", status: "IN_PROGRESS" },
-    { id: "task-2.1", parentId: "task-2", title: "Shoot 1-12 lessons", start: "2024-03-25", end: "2024-05-12", status: "IN_PROGRESS" },
-    { id: "task-2.2", parentId: "task-2", title: "Prepare assignments for 1-12 lessons", start: "2024-04-15", end: "2024-04-28", status: "DONE" },
-    { id: "task-3", title: "Finding ways to sell my course", start: "2024-05-10", end: "2024-06-20", status: "PLANNED" },
-    { id: "task-4", title: "Plan a budget", start: "2024-04-20", end: "2024-04-30", status: "EXPECTS_PLANNING"},
-    { id: "task-5", title: "Buy AD on instagram w/Sasha", start: "2024-05-01", end: "2024-05-15", status: "BLOCKED"},
-];
+const AddTasksFormSchema = z.object({
+  tasks: z.array(GanttTaskSchema)
+});
+
+const months = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'));
+const years = Array.from({ length: 21 }, (_, i) => String(new Date().getFullYear() - 10 + i));
 
 export default function ProjectPlanPage() {
     const { toast } = useToast();
@@ -39,6 +43,17 @@ export default function ProjectPlanPage() {
     const [tasks, setTasks] = useState<GanttTask[]>([]);
     const [loading, setLoading] = useState({ projects: true, plan: false });
     const [isSaving, setIsSaving] = useState(false);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+
+    const form = useForm({
+        resolver: zodResolver(AddTasksFormSchema),
+        defaultValues: { tasks: [] as GanttTask[] },
+    });
+
+    const { fields, append, remove, update } = useFieldArray({
+      control: form.control,
+      name: "tasks",
+    });
 
     useEffect(() => {
         const fetchProjects = async () => {
@@ -71,15 +86,15 @@ export default function ProjectPlanPage() {
                 if (data.tasks && data.tasks.length > 0) {
                     setTasks(data.tasks);
                 } else {
-                    setTasks(initialTasks);
+                    setTasks([]);
                 }
             } else {
-                setTasks(initialTasks);
-                toast({ title: "New Plan", description: "No existing plan found. Starting with a template."});
+                setTasks([]);
+                toast({ title: "New Plan", description: "No existing plan found. Add tasks to create one."});
             }
         } catch (error) {
             console.error("Failed to fetch project plan", error);
-            setTasks(initialTasks);
+            setTasks([]);
         } finally {
             setLoading(prev => ({...prev, plan: false}));
         }
@@ -88,10 +103,6 @@ export default function ProjectPlanPage() {
     const handleSavePlan = async () => {
         if (!selectedProject) {
             toast({ title: "No Project Selected", description: "Please select a project before saving.", variant: "destructive"});
-            return;
-        }
-        if (tasks.some(t => !t.id || !t.title || !t.start || !t.end || !t.status)) {
-            toast({ title: "Incomplete Data", description: "One or more tasks are missing required fields.", variant: "destructive"});
             return;
         }
 
@@ -114,6 +125,20 @@ export default function ProjectPlanPage() {
             setIsSaving(false);
         }
     };
+    
+    const onAddTaskSubmit = (data: z.infer<typeof AddTasksFormSchema>) => {
+        setTasks(prev => [...prev, ...data.tasks]);
+        setIsModalOpen(false);
+        form.reset({ tasks: [] });
+    }
+    
+    const handleDeleteTask = (taskId: string) => {
+        setTasks(prev => prev.filter(t => t.id !== taskId && t.parentId !== taskId));
+    }
+    
+    const updateTaskStatus = (taskId: string, status: TaskStatus) => {
+        setTasks(prev => prev.map(t => t.id === taskId ? {...t, status} : t));
+    }
 
     const projectDateRange = useMemo(() => {
         if (!selectedProject) return { start: "2024-01-01", end: "2024-12-31" };
@@ -165,10 +190,72 @@ export default function ProjectPlanPage() {
                             <Button variant="outline" className="bg-slate-800 border-slate-700 hover:bg-slate-700 text-white">
                                 Today
                             </Button>
-                            <Button className="bg-blue-600 hover:bg-blue-700 text-white">
-                                <Plus className="mr-2 h-4 w-4" />
-                                Add a new task
-                            </Button>
+                            
+                             <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+                                <DialogTrigger asChild>
+                                   <Button className="bg-blue-600 hover:bg-blue-700 text-white">
+                                        <Plus className="mr-2 h-4 w-4" />
+                                        Add a new task
+                                    </Button>
+                                </DialogTrigger>
+                                <DialogContent className="max-w-4xl">
+                                    <DialogHeader>
+                                        <DialogTitle>Add New Tasks</DialogTitle>
+                                    </DialogHeader>
+                                    <Form {...form}>
+                                        <form onSubmit={form.handleSubmit(onAddTaskSubmit)} className="space-y-6">
+                                            <div className="space-y-4 max-h-[60vh] overflow-y-auto p-4">
+                                            {fields.map((field, index) => {
+                                                const title = form.watch(`tasks.${index}.title`);
+                                                return (
+                                                <Card key={field.id} className="p-4 relative">
+                                                    <Button type="button" variant="ghost" size="icon" className="absolute top-2 right-2" onClick={() => remove(index)}>
+                                                        <Trash2 className="h-4 w-4"/>
+                                                    </Button>
+                                                    <div className="grid grid-cols-2 gap-4">
+                                                        <FormField
+                                                            control={form.control}
+                                                            name={`tasks.${index}.title`}
+                                                            render={({ field }) => (
+                                                                <FormItem className="col-span-2">
+                                                                    <FormLabel>Main Task {index + 1}</FormLabel>
+                                                                    <FormControl><Input {...field} maxLength={100} /></FormControl>
+                                                                    <FormMessage />
+                                                                     <div className="text-xs text-right text-muted-foreground">{title?.length || 0}/100</div>
+                                                                </FormItem>
+                                                            )}
+                                                        />
+                                                         <div className="grid grid-cols-2 gap-2">
+                                                            <FormField control={form.control} name={`tasks.${index}.startMonth`} render={({ field }) => (
+                                                                <FormItem><FormLabel>Start</FormLabel><Select onValueChange={field.onChange}><FormControl><SelectTrigger><SelectValue placeholder="Month" /></SelectTrigger></FormControl><SelectContent>{months.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>
+                                                            )} />
+                                                            <FormField control={form.control} name={`tasks.${index}.startYear`} render={({ field }) => (
+                                                                <FormItem><FormLabel>&nbsp;</FormLabel><Select onValueChange={field.onChange}><FormControl><SelectTrigger><SelectValue placeholder="Year" /></SelectTrigger></FormControl><SelectContent>{years.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>
+                                                            )} />
+                                                        </div>
+                                                        <div className="grid grid-cols-2 gap-2">
+                                                            <FormField control={form.control} name={`tasks.${index}.endMonth`} render={({ field }) => (
+                                                                <FormItem><FormLabel>End</FormLabel><Select onValueChange={field.onChange}><FormControl><SelectTrigger><SelectValue placeholder="Month" /></SelectTrigger></FormControl><SelectContent>{months.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>
+                                                            )} />
+                                                            <FormField control={form.control} name={`tasks.${index}.endYear`} render={({ field }) => (
+                                                                <FormItem><FormLabel>&nbsp;</FormLabel><Select onValueChange={field.onChange}><FormControl><SelectTrigger><SelectValue placeholder="Year" /></SelectTrigger></FormControl><SelectContent>{years.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>
+                                                            )} />
+                                                        </div>
+                                                    </div>
+                                                </Card>
+                                            )})}
+                                            </div>
+                                            <Button type="button" variant="outline" onClick={() => append({ id: `new-task-${Date.now()}`, title: "", start: "", end: "", status: "PLANNED", startMonth: '', startYear: '', endMonth: '', endYear: '' })}>
+                                                <Plus className="mr-2 h-4 w-4"/> Add Another Task
+                                            </Button>
+                                            <DialogFooter>
+                                                <Button type="submit">Save Tasks</Button>
+                                            </DialogFooter>
+                                        </form>
+                                    </Form>
+                                </DialogContent>
+                            </Dialog>
+
                              <Button variant="outline" className="bg-slate-800 border-slate-700 hover:bg-slate-700 text-white">
                                 <span>Export</span>
                                 <ChevronDown className="ml-2 h-4 w-4" />
@@ -191,6 +278,8 @@ export default function ProjectPlanPage() {
                             tasks={tasks}
                             projectStart={projectDateRange.start}
                             projectEnd={projectDateRange.end}
+                            onDeleteTask={handleDeleteTask}
+                            onUpdateTaskStatus={updateTaskStatus}
                         />
                     )}
                 </div>

@@ -1,7 +1,7 @@
 // components/gantt/GanttChart.tsx
 "use client";
 
-import { GanttTask } from "@/types/gantt";
+import { GanttTask, TaskStatus } from "@/types/gantt";
 import { GanttHeader } from "./GanttHeader";
 import { GanttRow, TaskListItem } from "./GanttRow";
 
@@ -9,12 +9,16 @@ interface Props {
   tasks: GanttTask[];
   projectStart: string;
   projectEnd: string;
+  onDeleteTask: (taskId: string) => void;
+  onUpdateTaskStatus: (taskId: string, status: TaskStatus) => void;
 }
 
 export function GanttChart({
   tasks,
   projectStart,
   projectEnd,
+  onDeleteTask,
+  onUpdateTaskStatus,
 }: Props) {
   const dayWidth = 32;
 
@@ -26,7 +30,12 @@ export function GanttChart({
           {/* This space is for the top-left controls */}
         </div>
         {tasks.map(task => (
-          <TaskListItem key={task.id} task={task} />
+          <TaskListItem 
+            key={task.id} 
+            task={task} 
+            onDelete={onDeleteTask}
+            onUpdateStatus={onUpdateTaskStatus}
+          />
         ))}
       </div>
 
