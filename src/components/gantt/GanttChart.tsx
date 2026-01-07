@@ -2,9 +2,13 @@
 "use client";
 
 import React from 'react';
+import dayjs from "dayjs";
+import minMax from "dayjs/plugin/minMax";
 import { GanttTask, TaskStatus } from "@/types/gantt";
 import { GanttHeader } from "./GanttHeader";
 import { GanttRow, TaskListItem } from "./GanttRow";
+
+dayjs.extend(minMax);
 
 interface Props {
   tasks: GanttTask[];
@@ -37,12 +41,12 @@ export function GanttChart({
                 onDelete={onDeleteTask}
                 onUpdateStatus={onUpdateTaskStatus}
               />
-              {task.subTasks?.map(subTask => (
+              {task.hasSubTasks === 'yes' && task.subTasks?.map(subTask => (
                    <TaskListItem 
                         key={subTask.id} 
-                        task={{...subTask, start: task.start, end: task.end, status: task.status}}
-                        onDelete={onDeleteTask}
-                        onUpdateStatus={onUpdateTaskStatus}
+                        task={subTask}
+                        onDelete={onDeleteTask} // This might need to be adjusted to delete sub-tasks
+                        onUpdateStatus={(status) => onUpdateTaskStatus(subTask.id, status)}
                         isSubTask={true}
                     />
               ))}
@@ -65,10 +69,10 @@ export function GanttChart({
                 projectStart={projectStart}
                 dayWidth={dayWidth}
              />
-             {task.subTasks?.map(subTask => (
+             {task.hasSubTasks === 'yes' && task.subTasks?.map(subTask => (
                 <GanttRow
                     key={subTask.id}
-                    task={{...subTask, start: task.start, end: task.end, status: task.status}}
+                    task={subTask}
                     projectStart={projectStart}
                     dayWidth={dayWidth}
                     isSubTask={true}

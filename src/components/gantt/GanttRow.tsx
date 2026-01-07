@@ -20,8 +20,6 @@ export function GanttRow({ task, projectStart, dayWidth, isSubTask = false }: Ro
   const duration = dayjs(task.end).diff(dayjs(task.start), "day") + 1;
   const width = duration * dayWidth;
 
-  const statusText = task.status.replace(/_/g, " ");
-
   return (
     <div className="relative h-10 border-b border-slate-800">
       <div
