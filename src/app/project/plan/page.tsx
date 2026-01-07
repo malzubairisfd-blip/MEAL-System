@@ -1,13 +1,15 @@
 // src/app/project/plan/page.tsx
 "use client";
 
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import Link from 'next/link';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Loader2, Save, Calendar, Plus, ChevronDown, Filter } from 'lucide-react';
+import { ArrowLeft, Loader2, Save, Calendar, Plus, ChevronDown, Filter, FileDown } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { GanttChart } from '@/components/gantt/GanttChart';
 import { GanttTask, TaskStatus } from '@/types/gantt';
@@ -35,6 +37,9 @@ export default function ProjectPlanPage() {
     const [tasks, setTasks] = useState<GanttTask[]>([]);
     const [loading, setLoading] = useState({ projects: true, plan: false });
     const [isSaving, setIsSaving] = useState(false);
+    const [isExporting, setIsExporting] = useState(false);
+    const ganttChartRef = useRef<HTMLDivElement>(null);
+
 
     useEffect(() => {
         const fetchProjects = async () => {
@@ -154,7 +159,7 @@ export default function ProjectPlanPage() {
                         const updatedSubTasks = [...task.subTasks];
                         updatedSubTasks[subTaskIndex] = { ...updatedSubTasks[subTaskIndex], progress: newProgress };
                         
-                        const avgProgress = updatedSubTasks.reduce((acc, st) => acc + st.progress, 0) / updatedSubTasks.length;
+                        const avgProgress = updatedSubTasks.reduce((acc, st) => acc + st.progress, 0) / (updatedSubTasks.length || 1);
 
                         return {
                             ...task,
@@ -198,6 +203,46 @@ export default function ProjectPlanPage() {
         return { start: minDate.startOf('month').format('YYYY-MM-DD'), end: maxDate.endOf('month').format('YYYY-MM-DD') };
         
     }, [selectedProject, tasks]);
+
+    const handleExportToPDF = async () => {
+        if (!ganttChartRef.current) {
+            toast({ title: "Error", description: "Chart element not found.", variant: "destructive" });
+            return;
+        }
+
+        setIsExporting(true);
+        toast({ title: "Exporting...", description: "Please wait while the PDF is being generated." });
+
+        try {
+            const canvas = await html2canvas(ganttChartRef.current, {
+                allowTaint: true,
+                useCORS: true,
+                scale: 2, // Increase scale for better resolution
+            });
+
+            const imgData = canvas.toDataURL('image/png');
+            const pdf = new jsPDF({
+                orientation: 'landscape',
+                unit: 'px',
+                format: [canvas.width, canvas.height],
+            });
+
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfHeight = pdf.internal.pageSize.getHeight();
+            pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+            
+            const fileName = selectedProject ? `${selectedProject.projectName}-plan.pdf` : 'project-plan.pdf';
+            pdf.save(fileName);
+            
+            toast({ title: "Export Successful", description: "Your PDF has been downloaded." });
+
+        } catch (error) {
+            console.error("PDF export failed:", error);
+            toast({ title: "Export Failed", description: "Could not generate PDF.", variant: "destructive" });
+        } finally {
+            setIsExporting(false);
+        }
+    };
 
 
     return (
@@ -249,9 +294,9 @@ export default function ProjectPlanPage() {
                                 </Link>
                             </Button>
 
-                             <Button variant="outline" className="bg-slate-800 border-slate-700 hover:bg-slate-700 text-white">
+                             <Button variant="outline" className="bg-slate-800 border-slate-700 hover:bg-slate-700 text-white" onClick={handleExportToPDF} disabled={isExporting}>
+                                {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4"/>}
                                 <span>Export</span>
-                                <ChevronDown className="ml-2 h-4 w-4" />
                             </Button>
                         </div>
                         {/* Top Right Controls */}
@@ -267,6 +312,7 @@ export default function ProjectPlanPage() {
                             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                         </div>
                     ) : (
+                       <div ref={ganttChartRef}>
                         <GanttChart 
                             tasks={tasks}
                             projectStart={projectDateRange.start}
@@ -275,6 +321,7 @@ export default function ProjectPlanPage() {
                             onUpdateTaskStatus={handleUpdateTaskStatus}
                             onUpdateTaskProgress={handleUpdateTaskProgress}
                         />
+                       </div>
                     )}
                 </div>
             )}

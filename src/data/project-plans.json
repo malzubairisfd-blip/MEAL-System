@@ -5,7 +5,7 @@
       {
         "id": "task-1767827548322",
         "title": "اختيار وتدريب المثقفات المجتمعيات المنسقون الميدانيون\t",
-        "progress": 4,
+        "progress": 60,
         "status": "IN_PROGRESS",
         "hasSubTasks": "yes",
         "subTasks": [
@@ -18,8 +18,8 @@
             "endDay": "07",
             "endMonth": "01",
             "endYear": "2025",
-            "progress": 20,
-            "status": "PLANNED",
+            "progress": 100,
+            "status": "IN_PROGRESS",
             "start": "2025-01-01",
             "end": "2025-01-07"
           },
@@ -32,8 +32,8 @@
             "endDay": "17",
             "endMonth": "01",
             "endYear": "2025",
-            "progress": 0,
-            "status": "PLANNED",
+            "progress": 100,
+            "status": "DONE",
             "start": "2025-01-10",
             "end": "2025-01-17"
           },
@@ -46,8 +46,8 @@
             "endDay": "25",
             "endMonth": "01",
             "endYear": "2025",
-            "progress": 0,
-            "status": "PLANNED",
+            "progress": 100,
+            "status": "DONE",
             "start": "2025-01-19",
             "end": "2025-01-25"
           },
@@ -61,7 +61,7 @@
             "endMonth": "02",
             "endYear": "2025",
             "progress": 0,
-            "status": "PLANNED",
+            "status": "DONE",
             "start": "2025-02-01",
             "end": "2025-02-16"
           },
