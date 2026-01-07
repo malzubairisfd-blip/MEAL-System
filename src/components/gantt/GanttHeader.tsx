@@ -42,17 +42,23 @@ export function GanttHeader({ start, end, dayWidth }: Props) {
     }
 
     const weeks = [];
-    let currentDay = startDate.clone();
+    let currentDayForWeeks = startDate.clone();
     let weekNumber = 1;
-    while(currentDay.isBefore(endDate) || currentDay.isSame(endDate, 'day')) {
-        const remainingDaysInView = endDate.diff(currentDay, 'day') + 1;
-        const daysInThisWeek = Math.min(7, remainingDaysInView);
+    while(currentDayForWeeks.isBefore(endDate) || currentDayForWeeks.isSame(endDate, 'day')) {
+        const startOfWeek = currentDayForWeeks;
+        const endOfWeek = currentDayForWeeks.endOf('isoWeek'); // Assuming Monday is start of week
+        
+        let daysInThisWeek = endOfWeek.diff(startOfWeek, 'day') + 1;
+        if(endOfWeek.isAfter(endDate)) {
+            daysInThisWeek = endDate.diff(startOfWeek, 'day') + 1;
+        }
 
         weeks.push({
             name: `Week ${weekNumber}`,
             width: daysInThisWeek * dayWidth,
         });
-        currentDay = currentDay.add(7, 'day');
+
+        currentDayForWeeks = endOfWeek.add(1, 'day');
         weekNumber++;
     }
 
@@ -62,6 +68,19 @@ export function GanttHeader({ start, end, dayWidth }: Props) {
 
   return (
     <div className="sticky top-0 z-20 bg-slate-900 select-none">
+      {/* Month Row */}
+      <div className="flex border-b border-slate-700">
+        {months.map((month, i) => (
+          <div
+            key={i}
+            style={{ width: month.width }}
+            className="text-sm font-semibold text-slate-200 text-center py-1 border-r border-slate-800"
+          >
+            {month.name}
+          </div>
+        ))}
+      </div>
+
       {/* Week Row */}
       <div className="flex border-b border-slate-700">
         {weeks.map((week, i) => (
@@ -75,18 +94,6 @@ export function GanttHeader({ start, end, dayWidth }: Props) {
         ))}
       </div>
 
-      {/* Month Row */}
-      <div className="flex border-b border-slate-700">
-        {months.map((month, i) => (
-          <div
-            key={i}
-            style={{ width: month.width }}
-            className="text-sm font-semibold text-slate-200 text-center py-1 border-r border-slate-800"
-          >
-            {month.name}
-          </div>
-        ))}
-      </div>
       {/* Day Row */}
       <div className="flex">
         {Array.from({ length: days }).map((_, i) => {
