@@ -45,8 +45,8 @@ export function GanttChart({
                    <TaskListItem 
                         key={subTask.id} 
                         task={subTask}
-                        onDelete={onDeleteTask} // This might need to be adjusted to delete sub-tasks
-                        onUpdateStatus={(status) => onUpdateTaskStatus(subTask.id, status)}
+                        onDelete={onDeleteTask}
+                        onUpdateStatus={onUpdateTaskStatus}
                         isSubTask={true}
                     />
               ))}

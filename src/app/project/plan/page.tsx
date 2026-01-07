@@ -152,12 +152,44 @@ export default function ProjectPlanPage() {
     }
     
     const handleDeleteTask = (taskId: string) => {
-        setTasks(prev => prev.filter(t => t.id !== taskId));
-    }
+      setTasks(prevTasks => {
+        // Try to find and remove the task at the top level
+        const updatedTasks = prevTasks.filter(t => t.id !== taskId);
+
+        // If no top-level task was removed, search within sub-tasks
+        if (updatedTasks.length === prevTasks.length) {
+            return prevTasks.map(mainTask => {
+                if (mainTask.subTasks) {
+                    return {
+                        ...mainTask,
+                        subTasks: mainTask.subTasks.filter(st => st.id !== taskId),
+                    };
+                }
+                return mainTask;
+            });
+        }
+        return updatedTasks;
+      });
+    };
     
-    const updateTaskStatus = (taskId: string, status: TaskStatus) => {
-        setTasks(prev => prev.map(t => t.id === taskId ? {...t, status} : t));
-    }
+    const handleUpdateTaskStatus = (taskId: string, status: TaskStatus) => {
+        setTasks(prevTasks => 
+            prevTasks.map(task => {
+                if (task.id === taskId) {
+                    return { ...task, status };
+                }
+                if (task.subTasks) {
+                    return {
+                        ...task,
+                        subTasks: task.subTasks.map(subTask => 
+                            subTask.id === taskId ? { ...subTask, status } : subTask
+                        )
+                    };
+                }
+                return task;
+            })
+        );
+    };
 
     const projectDateRange = useMemo(() => {
         if (!selectedProject) return { start: dayjs().startOf('year').format('YYYY-MM-DD'), end: dayjs().endOf('year').format('YYYY-MM-DD') };
@@ -283,7 +315,7 @@ export default function ProjectPlanPage() {
                             projectStart={projectDateRange.start}
                             projectEnd={projectDateRange.end}
                             onDeleteTask={handleDeleteTask}
-                            onUpdateTaskStatus={updateTaskStatus}
+                            onUpdateTaskStatus={handleUpdateTaskStatus}
                         />
                     )}
                 </div>
