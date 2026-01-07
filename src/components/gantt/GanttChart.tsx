@@ -1,14 +1,12 @@
 // components/gantt/GanttChart.tsx
 "use client";
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
 import dayjs from "dayjs";
 import { GanttTask, TaskStatus } from "@/types/gantt";
 import { GanttHeader } from "./GanttHeader";
 import { GanttRow, TaskListItem } from "./GanttRow";
 import { calculateWorkingDays } from '@/lib/ganttUtils';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Progress } from '@/components/ui/progress';
 import { Activity, Sigma } from 'lucide-react';
 
 
@@ -28,6 +26,19 @@ export function GanttChart({
   onUpdateTaskProgress: (taskId: string, progress: number) => void;
 }) {
   const dayWidth = 32;
+  const [collapsedTasks, setCollapsedTasks] = useState<Set<string>>(new Set());
+
+  const toggleCollapse = useCallback((taskId: string) => {
+    setCollapsedTasks(prev => {
+        const newSet = new Set(prev);
+        if (newSet.has(taskId)) {
+            newSet.delete(taskId);
+        } else {
+            newSet.add(taskId);
+        }
+        return newSet;
+    });
+  }, []);
 
     const { overallProgress, totalWorkingDays } = useMemo(() => {
         const mainTasksWithSubtasks = tasks.filter(t => t.hasSubTasks === 'yes' && t.subTasks && t.subTasks.length > 0);
@@ -79,26 +90,31 @@ export function GanttChart({
           <div className='w-24 text-center'>Working Days</div>
           <div className='w-32 text-center'>Status</div>
         </div>
-        {tasks.map(task => (
-            <React.Fragment key={task.id}>
-              <TaskListItem 
-                task={task} 
-                onDelete={onDeleteTask}
-                onUpdateStatus={onUpdateTaskStatus}
-                onUpdateProgress={onUpdateTaskProgress}
-              />
-              {task.hasSubTasks === 'yes' && task.subTasks?.map(subTask => (
-                   <TaskListItem 
-                        key={subTask.id} 
-                        task={subTask}
-                        onDelete={onDeleteTask}
-                        onUpdateStatus={onUpdateTaskStatus}
-                        onUpdateProgress={onUpdateTaskProgress}
-                        isSubTask={true}
-                    />
-              ))}
-            </React.Fragment>
-        ))}
+        {tasks.map(task => {
+            const isCollapsed = collapsedTasks.has(task.id);
+            return (
+                <React.Fragment key={task.id}>
+                <TaskListItem 
+                    task={task} 
+                    onDelete={onDeleteTask}
+                    onUpdateStatus={onUpdateTaskStatus}
+                    onUpdateProgress={onUpdateTaskProgress}
+                    isCollapsed={isCollapsed}
+                    onToggleCollapse={toggleCollapse}
+                />
+                {!isCollapsed && task.hasSubTasks === 'yes' && task.subTasks?.map(subTask => (
+                    <TaskListItem 
+                            key={subTask.id} 
+                            task={subTask}
+                            onDelete={onDeleteTask}
+                            onUpdateStatus={onUpdateTaskStatus}
+                            onUpdateProgress={onUpdateTaskProgress}
+                            isSubTask={true}
+                        />
+                ))}
+                </React.Fragment>
+            )
+        })}
       </div>
 
       {/* TIMELINE */}
@@ -109,14 +125,16 @@ export function GanttChart({
           dayWidth={dayWidth}
         />
 
-        {tasks.map(task => (
-          <React.Fragment key={task.id}>
+        {tasks.map(task => {
+          const isCollapsed = collapsedTasks.has(task.id);
+          return (
+            <React.Fragment key={task.id}>
              <GanttRow
                 task={task}
                 projectStart={projectStart}
                 dayWidth={dayWidth}
              />
-             {task.hasSubTasks === 'yes' && task.subTasks?.map(subTask => (
+             {!isCollapsed && task.hasSubTasks === 'yes' && task.subTasks?.map(subTask => (
                 <GanttRow
                     key={subTask.id}
                     task={subTask}
@@ -125,8 +143,9 @@ export function GanttChart({
                     isSubTask={true}
                 />
              ))}
-          </React.Fragment>
-        ))}
+            </React.Fragment>
+          )
+        })}
       </div>
     </div>
     </>

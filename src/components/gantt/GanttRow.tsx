@@ -5,11 +5,12 @@ import dayjs from "dayjs";
 import { GanttTask, TaskStatus } from "@/types/gantt";
 import { STATUS_COLORS } from "@/lib/statusStyles";
 import { calculateWorkingDays } from "@/lib/ganttUtils";
-import { ChevronDown, Trash2, Edit, Check } from "lucide-react";
+import { ChevronDown, Trash2, Edit, Check, ChevronRight } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Input } from "../ui/input";
 import { Progress } from "../ui/progress";
+import { cn } from "@/lib/utils";
 
 interface RowProps {
   task: GanttTask;
@@ -22,8 +23,6 @@ export function GanttRow({ task, projectStart, dayWidth, isSubTask = false }: Ro
   const offset = dayjs(task.start).diff(dayjs(projectStart), "day") * dayWidth;
   const duration = calculateWorkingDays(task.start, task.end);
   const width = duration * dayWidth;
-
-  const progressWidth = (task.progress / 100) * width;
 
   return (
     <div className="relative h-10 border-b border-slate-800">
@@ -82,9 +81,11 @@ interface ListItemProps {
     onUpdateStatus: (taskId: string, status: TaskStatus) => void;
     onUpdateProgress: (taskId: string, progress: number) => void;
     isSubTask?: boolean;
+    isCollapsed?: boolean;
+    onToggleCollapse?: (taskId: string) => void;
 }
 
-export const TaskListItem = ({ task, onDelete, onUpdateStatus, onUpdateProgress, isSubTask = false }: ListItemProps) => {
+export const TaskListItem = ({ task, onDelete, onUpdateStatus, onUpdateProgress, isSubTask = false, isCollapsed, onToggleCollapse }: ListItemProps) => {
     const workingDays = calculateWorkingDays(task.start, task.end);
 
     let progressElement;
@@ -116,7 +117,14 @@ export const TaskListItem = ({ task, onDelete, onUpdateStatus, onUpdateProgress,
 
     return (
         <div className={`h-10 border-b border-slate-800 px-3 flex items-center justify-between text-sm hover:bg-slate-800/20 group ${isSubTask ? 'pl-8 bg-slate-900/50' : ''}`}>
-            <span className="truncate w-48">{task.title}</span>
+            <div className="flex items-center gap-1 truncate w-48">
+                 {task.hasSubTasks === 'yes' && onToggleCollapse && (
+                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onToggleCollapse(task.id)}>
+                        {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                    </Button>
+                )}
+                <span className={cn("truncate", { 'ml-7': task.hasSubTasks !== 'yes' })}>{task.title}</span>
+            </div>
             <div className="w-24 flex justify-center">{progressElement}</div>
             <div className="w-24 text-center">{workingDays}</div>
             <div className="w-32 flex justify-center">
