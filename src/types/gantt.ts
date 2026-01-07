@@ -3,7 +3,8 @@ export type TaskStatus =
   | "DONE"
   | "IN_PROGRESS"
   | "PLANNED"
-  | "BLOCKED";
+  | "BLOCKED"
+  | "EXPECTS_PLANNING";
 
 export interface GanttTask {
   id: string;
