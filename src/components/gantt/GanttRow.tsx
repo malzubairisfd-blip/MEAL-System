@@ -39,7 +39,7 @@ export function GanttRow({ task, projectStart, dayWidth, isSubTask = false }: Ro
 }
 
 const TaskStatusBadge = ({ status, onUpdateStatus }: { status: TaskStatus, onUpdateStatus: (status: TaskStatus) => void }) => {
-    const statusText = status.replace(/_/g, " ");
+    const statusText = (status || 'PLANNED').replace(/_/g, " ");
     const statuses: TaskStatus[] = ["DONE", "IN_PROGRESS", "PLANNED", "BLOCKED", "EXPECTS_PLANNING"];
     return (
         <DropdownMenu>

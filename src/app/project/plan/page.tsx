@@ -7,6 +7,7 @@ import { useForm, useFieldArray, Controller, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import dayjs from "dayjs";
+import minMax from "dayjs/plugin/minMax";
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -20,6 +21,9 @@ import { ArrowLeft, Loader2, Save, Calendar, Plus, ChevronDown, Filter, Trash2, 
 import { useToast } from '@/hooks/use-toast';
 import { GanttChart } from '@/components/gantt/GanttChart';
 import { GanttTask, TaskStatus, GanttTaskSchema } from '@/types/gantt';
+
+dayjs.extend(minMax);
+
 
 interface Project {
   projectId: string;
@@ -165,7 +169,17 @@ export default function ProjectPlanPage() {
             return { start, end };
         }
 
-        const allDates = tasks.flatMap(task => [dayjs(task.start), dayjs(task.end)]);
+        const allDates = tasks.flatMap(task => {
+            const dates = [dayjs(task.start), dayjs(task.end)];
+            if (task.subTasks) {
+                task.subTasks.forEach(st => {
+                    dates.push(dayjs(st.start));
+                    dates.push(dayjs(st.end));
+                });
+            }
+            return dates;
+        });
+
         const minDate = dayjs.min(allDates) || dayjs(selectedProject.startDateYear);
         const maxDate = dayjs.max(allDates) || dayjs(selectedProject.endDateYear);
 
@@ -400,7 +414,7 @@ function SubTaskArray({ control, taskIndex }: { control: any; taskIndex: number 
                     </div>
                 </Card>
             ))}
-             <Button type="button" variant="secondary" size="sm" onClick={() => append({ id: `sub-task-${Date.now()}`, title: '' })}>
+             <Button type="button" variant="secondary" size="sm" onClick={() => append({ id: `sub-task-${Date.now()}`, title: '', status: 'PLANNED' })}>
                 <Plus className="mr-2 h-4 w-4" /> Add Sub-Task
             </Button>
         </div>
