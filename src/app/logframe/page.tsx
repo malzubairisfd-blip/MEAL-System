@@ -1,12 +1,26 @@
+
 "use client";
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Plus, Loader2, ArrowLeft } from 'lucide-react';
+import { Plus, Loader2, ArrowLeft, Edit, Trash2 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Logframe } from '@/lib/logframe';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { useToast } from '@/hooks/use-toast';
+
 
 interface Project {
   projectId: string;
@@ -18,30 +32,65 @@ export default function LogicalFrameworkDashboardPage() {
     const [logframes, setLogframes] = useState<Logframe[]>([]);
     const [selectedProject, setSelectedProject] = useState<string>('');
     const [loading, setLoading] = useState(true);
+    const { toast } = useToast();
+
+    const fetchData = useCallback(async () => {
+        setLoading(true);
+        try {
+            const [projRes, logRes] = await Promise.all([
+                fetch('/api/projects'),
+                fetch('/api/logframe')
+            ]);
+            if (projRes.ok) {
+                const data = await projRes.json();
+                setProjects(Array.isArray(data) ? data : []);
+            }
+            if (logRes.ok) {
+                const data = await logRes.json();
+                setLogframes(Array.isArray(data) ? data : []);
+            }
+        } catch (error) {
+            console.error("Failed to fetch data", error);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
 
     useEffect(() => {
-        const fetchData = async () => {
-            try {
-                const [projRes, logRes] = await Promise.all([
-                    fetch('/api/projects'),
-                    fetch('/api/logframe')
-                ]);
-                if (projRes.ok) {
-                    const data = await projRes.json();
-                    setProjects(Array.isArray(data) ? data : []);
-                }
-                if (logRes.ok) {
-                    const data = await logRes.json();
-                    setLogframes(Array.isArray(data) ? data : []);
-                }
-            } catch (error) {
-                console.error("Failed to fetch data", error);
-            } finally {
-                setLoading(false);
-            }
-        };
         fetchData();
-    }, []);
+    }, [fetchData]);
+
+    const handleDelete = async () => {
+        if (!selectedProject) return;
+        try {
+            const response = await fetch(`/api/logframe`, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ projectId: selectedProject })
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.error || 'Failed to delete logframe');
+            }
+
+            toast({
+                title: "Logframe Deleted",
+                description: "The logical framework has been successfully deleted.",
+            });
+            
+            setSelectedProject(''); // Reset selection
+            fetchData(); // Refetch data
+        } catch (error: any) {
+            toast({
+                title: "Deletion Failed",
+                description: error.message,
+                variant: 'destructive',
+            });
+        }
+    };
+
 
     const selectedLogframe = useMemo(() => {
         if (!selectedProject) return null;
@@ -90,16 +139,48 @@ export default function LogicalFrameworkDashboardPage() {
                             <Loader2 className="h-4 w-4 animate-spin"/> Loading projects...
                         </div>
                     ) : hasProjects ? (
-                        <Select onValueChange={setSelectedProject} value={selectedProject}>
-                            <SelectTrigger className="w-full md:w-1/2">
-                                <SelectValue placeholder="Select a project..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {projects.map(p => (
-                                    <SelectItem key={p.projectId} value={p.projectId}>{p.projectName}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                        <div className="flex items-center gap-4">
+                            <Select onValueChange={setSelectedProject} value={selectedProject}>
+                                <SelectTrigger className="w-full md:w-1/2">
+                                    <SelectValue placeholder="Select a project..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {projects.map(p => (
+                                        <SelectItem key={p.projectId} value={p.projectId}>{p.projectName}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            {selectedLogframe && (
+                                <div className="flex gap-2">
+                                    <Button asChild variant="outline">
+                                        <Link href={`/logframe/edit?projectId=${selectedProject}`}>
+                                            <Edit className="h-4 w-4 mr-2" />
+                                            Edit
+                                        </Link>
+                                    </Button>
+                                    <AlertDialog>
+                                        <AlertDialogTrigger asChild>
+                                            <Button variant="destructive">
+                                                <Trash2 className="h-4 w-4 mr-2" />
+                                                Delete
+                                            </Button>
+                                        </AlertDialogTrigger>
+                                        <AlertDialogContent>
+                                            <AlertDialogHeader>
+                                                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                                                <AlertDialogDescription>
+                                                    This action cannot be undone. This will permanently delete the logical framework for this project.
+                                                </AlertDialogDescription>
+                                            </AlertDialogHeader>
+                                            <AlertDialogFooter>
+                                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                <AlertDialogAction onClick={handleDelete}>Continue</AlertDialogAction>
+                                            </AlertDialogFooter>
+                                        </AlertDialogContent>
+                                    </AlertDialog>
+                                </div>
+                            )}
+                        </div>
                     ) : (
                         <p className="text-muted-foreground">No projects found. Please add a project from the Project Dashboard to begin.</p>
                     )}
