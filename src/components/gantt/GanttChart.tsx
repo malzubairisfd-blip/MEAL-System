@@ -130,6 +130,8 @@ export function GanttChart({
         });
         return Array.from(groups.values());
     }, [tasks]);
+  
+  let mainActivityCounter = 0;
 
   return (
     <>
@@ -183,22 +185,25 @@ export function GanttChart({
                             <div className="bg-slate-800/50 text-slate-300 font-semibold p-2 px-8 flex items-center gap-2 border-b border-slate-700">
                                 <LocateFixed className="h-4 w-4" /> {outputKey}
                             </div>
-                            {outputTasks.map((task, index) => (
-                                <GanttTaskRow
-                                    key={task.id}
-                                    task={task}
-                                    level={0}
-                                    taskNumber={`${index + 1}`}
-                                    projectId={projectId}
-                                    projectStart={projectStart}
-                                    dayWidth={dayWidth}
-                                    collapsedTasks={collapsedTasks}
-                                    onToggleCollapse={toggleCollapse}
-                                    onDeleteTask={onDeleteTask}
-                                    onUpdateTaskStatus={onUpdateTaskStatus}
-                                    onUpdateTaskProgress={onUpdateTaskProgress}
-                                />
-                            ))}
+                            {outputTasks.map((task) => {
+                                mainActivityCounter++;
+                                return (
+                                    <GanttTaskRow
+                                        key={task.id}
+                                        task={task}
+                                        level={0}
+                                        taskNumber={`${mainActivityCounter}`}
+                                        projectId={projectId}
+                                        projectStart={projectStart}
+                                        dayWidth={dayWidth}
+                                        collapsedTasks={collapsedTasks}
+                                        onToggleCollapse={toggleCollapse}
+                                        onDeleteTask={onDeleteTask}
+                                        onUpdateTaskStatus={onUpdateTaskStatus}
+                                        onUpdateTaskProgress={onUpdateTaskProgress}
+                                    />
+                                );
+                            })}
                         </React.Fragment>
                      ))}
                  </React.Fragment>
