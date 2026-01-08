@@ -1,14 +1,12 @@
 // components/gantt/GanttChart.tsx
 "use client";
 
-import React, { useMemo, useState, useCallback, useRef } from 'react';
-import dayjs from "dayjs";
-import { GanttTask, TaskStatus, GanttSubTask } from "@/types/gantt";
+import React, { useMemo, useState, useCallback } from 'react';
+import { GanttTask, TaskStatus } from "@/types/gantt";
 import { GanttHeader } from "./GanttHeader";
 import { GanttRow, TaskListItem } from "./GanttRow";
 import { calculateWorkingDays } from '@/lib/ganttUtils';
 import { Activity, Sigma } from 'lucide-react';
-
 
 const GanttTaskRow = ({
   task,
@@ -16,7 +14,7 @@ const GanttTaskRow = ({
   taskNumber,
   ...props
 }: {
-  task: GanttTask | GanttSubTask;
+  task: GanttTask;
   level?: number;
   taskNumber: string;
   projectId: string;
@@ -29,11 +27,8 @@ const GanttTaskRow = ({
   onUpdateTaskProgress: (taskId: string, progress: number) => void;
 }) => {
   const isCollapsed = props.collapsedTasks.has(task.id);
-  const hasSubTasks = 'hasSubTasks' in task ? task.hasSubTasks === 'yes' && task.subTasks && task.subTasks.length > 0 : false;
-  const hasSubOfSubTasks = 'hasSubOfSubTasks' in task ? task.hasSubOfSubTasks === 'yes' && task.subOfSubTasks && task.subOfSubTasks.length > 0 : false;
+  const hasSubTasks = task.hasSubTasks === 'yes' && task.subTasks && task.subTasks.length > 0;
   
-  const canCollapse = hasSubTasks || hasSubOfSubTasks;
-
   return (
     <React.Fragment>
        <div className="flex border-b border-slate-800">
@@ -46,7 +41,7 @@ const GanttTaskRow = ({
               onUpdateStatus={props.onUpdateTaskStatus}
               onUpdateProgress={props.onUpdateTaskProgress}
               level={level}
-              canCollapse={canCollapse}
+              canCollapse={hasSubTasks}
               taskNumber={taskNumber}
               projectId={props.projectId}
             />
@@ -60,16 +55,9 @@ const GanttTaskRow = ({
             />
           </div>
         </div>
-      {!isCollapsed && canCollapse && (
-        <>
-          {hasSubTasks && 'subTasks' in task && task.subTasks?.map((subTask, subIndex) => (
+      {!isCollapsed && hasSubTasks && task.subTasks?.map((subTask, subIndex) => (
             <GanttTaskRow key={subTask.id} task={subTask} level={level + 1} taskNumber={`${taskNumber}.${subIndex + 1}`} {...props} />
-          ))}
-          {hasSubOfSubTasks && 'subOfSubTasks' in task && task.subOfSubTasks?.map((subOfSubTask, sssIndex) => (
-             <GanttTaskRow key={subOfSubTask.id} task={subOfSubTask} level={level + 2} taskNumber={`${taskNumber}.${sssIndex + 1}`} {...props} />
-          ))}
-        </>
-      )}
+       ))}
     </React.Fragment>
   );
 };

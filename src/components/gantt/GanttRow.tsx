@@ -1,10 +1,10 @@
 // components/gantt/GanttRow.tsx
 "use client";
 
-import React, { useMemo, useState, useCallback, useRef } from 'react';
+import React from 'react';
 import Link from 'next/link';
 import dayjs from "dayjs";
-import { GanttTask, TaskStatus, GanttSubTask } from "@/types/gantt";
+import { GanttTask, TaskStatus } from "@/types/gantt";
 import { STATUS_COLORS } from "@/lib/statusStyles";
 import { calculateWorkingDays } from '@/lib/ganttUtils';
 import { ChevronDown, Trash2, Edit, ChevronRight } from "lucide-react";
@@ -15,13 +15,14 @@ import { Progress } from "../ui/progress";
 import { cn } from "@/lib/utils";
 
 interface RowProps {
-  task: GanttTask | GanttSubTask;
+  task: GanttTask;
   projectStart: string;
   dayWidth: number;
   taskNumber: string;
 }
 
-export function GanttRow({ task, projectStart, dayWidth, taskNumber }: RowProps) {
+export function GanttRow({ task, projectStart, dayWidth }: RowProps) {
+  if (!task.start || !task.end) return null;
   const offset = dayjs(task.start).diff(dayjs(projectStart), "day") * dayWidth;
   const duration = calculateWorkingDays(task.start, task.end);
   const width = duration * dayWidth;
@@ -81,7 +82,7 @@ const TaskStatusBadge = ({ status, onUpdateStatus }: { status: TaskStatus, onUpd
 
 
 interface ListItemProps {
-    task: GanttTask | GanttSubTask;
+    task: GanttTask;
     onDelete: (taskId: string) => void;
     onUpdateStatus: (taskId: string, status: TaskStatus) => void;
     onUpdateProgress: (taskId: string, progress: number) => void;
@@ -95,12 +96,9 @@ interface ListItemProps {
 
 export const TaskListItem = ({ task, onDelete, onUpdateStatus, onUpdateProgress, isCollapsed, onToggleCollapse, level, canCollapse, taskNumber, projectId }: ListItemProps) => {
 
-    const getTotalWorkingDays = (t: GanttTask | GanttSubTask): number => {
-        if ('hasSubTasks' in t && t.hasSubTasks === 'yes' && t.subTasks) {
+    const getTotalWorkingDays = (t: GanttTask): number => {
+        if (t.hasSubTasks === 'yes' && t.subTasks) {
             return t.subTasks.reduce((sum, st) => sum + getTotalWorkingDays(st), 0);
-        }
-        if ('hasSubOfSubTasks' in t && t.hasSubOfSubTasks === 'yes' && t.subOfSubTasks) {
-            return t.subOfSubTasks.reduce((sum, sst) => sum + calculateWorkingDays(sst.start, sst.end), 0);
         }
         return calculateWorkingDays(t.start, t.end);
     };
@@ -108,7 +106,7 @@ export const TaskListItem = ({ task, onDelete, onUpdateStatus, onUpdateProgress,
     const workingDays = getTotalWorkingDays(task);
 
     let progressElement;
-    const hasChildren = ('hasSubTasks' in task && task.hasSubTasks === 'yes') || ('hasSubOfSubTasks' in task && task.hasSubOfSubTasks === 'yes');
+    const hasChildren = ('hasSubTasks' in task && task.hasSubTasks === 'yes');
 
     if (hasChildren) {
         const avgProgress = task.progress || 0;
@@ -125,7 +123,7 @@ export const TaskListItem = ({ task, onDelete, onUpdateStatus, onUpdateProgress,
                     type="number"
                     min="0"
                     max="100"
-                    value={isNaN(task.progress) ? 0 : task.progress}
+                    value={isNaN(task.progress!) ? 0 : task.progress}
                     onChange={(e) => onUpdateProgress(task.id, parseInt(e.target.value))}
                     className="w-16 h-7 text-center bg-slate-700 border-slate-600"
                 />

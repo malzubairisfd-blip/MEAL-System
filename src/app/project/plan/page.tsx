@@ -1,12 +1,11 @@
 // src/app/project/plan/page.tsx
 "use client";
 
-import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import Link from 'next/link';
-import jsPDF from 'jspdf';
-import { toPng } from 'html-to-image';
-import { exportGanttToExcel } from "@/lib/exportGanttToExcel";
-
+import { GanttTask, TaskStatus, GanttTaskSchema } from '@/types/gantt';
+import dayjs from "dayjs";
+import minMax from "dayjs/plugin/minMax";
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -14,9 +13,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ArrowLeft, Loader2, Save, Calendar, Plus, ChevronDown, Filter, FileDown } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { GanttChart } from '@/components/gantt/GanttChart';
-import { GanttTask, TaskStatus, GanttTaskSchema } from '@/types/gantt';
-import dayjs from "dayjs";
-import minMax from "dayjs/plugin/minMax";
+import { exportGanttToExcel } from "@/lib/exportGanttToExcel";
+import { exportGanttToPDF } from '@/lib/exportGanttToPDF';
+
 
 dayjs.extend(minMax);
 
@@ -40,8 +39,6 @@ export default function ProjectPlanPage() {
     const [loading, setLoading] = useState({ projects: true, plan: false });
     const [isSaving, setIsSaving] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
-    const ganttChartRef = useRef<HTMLDivElement>(null);
-
 
     useEffect(() => {
         const fetchProjects = async () => {
@@ -120,47 +117,30 @@ export default function ProjectPlanPage() {
         }
     };
     
-    const handleDeleteTask = useCallback((taskId: string) => {
-      setTasks(prevTasks => {
-        const updatedTasks = prevTasks.filter(t => t.id !== taskId);
-        if (updatedTasks.length < prevTasks.length) {
-          return updatedTasks;
-        }
-        return prevTasks.map(mainTask => {
-          if (mainTask.subTasks) {
-            const newSubTasks = mainTask.subTasks.filter(st => st.id !== taskId);
-            if (newSubTasks.length < mainTask.subTasks.length) {
-              return { ...mainTask, subTasks: newSubTasks };
+     const handleDeleteTask = useCallback((taskId: string) => {
+        const removeRecursively = (tasks: GanttTask[]): GanttTask[] => {
+            const filtered = tasks.filter(t => t.id !== taskId);
+            if (filtered.length < tasks.length) {
+                return filtered;
             }
-            return {
-              ...mainTask,
-              subTasks: mainTask.subTasks.map(subTask => {
-                if (subTask.subOfSubTasks) {
-                  return {
-                    ...subTask,
-                    subOfSubTasks: subTask.subOfSubTasks.filter(sst => sst.id !== taskId)
-                  };
+            return tasks.map(task => {
+                if (task.subTasks) {
+                    return { ...task, subTasks: removeRecursively(task.subTasks) };
                 }
-                return subTask;
-              })
-            };
-          }
-          return mainTask;
-        });
-      });
+                return task;
+            });
+        };
+        setTasks(prevTasks => removeRecursively(prevTasks));
     }, []);
     
     const handleUpdateTaskStatus = useCallback((taskId: string, status: TaskStatus) => {
-        const updateStatusRecursively = (tasks: (GanttTask | any)[]): (GanttTask | any)[] => {
-            return tasks.map(task => {
+        const updateStatusRecursively = (tasksToUpdate: GanttTask[]): GanttTask[] => {
+            return tasksToUpdate.map(task => {
                 if (task.id === taskId) {
                     return { ...task, status };
                 }
                 if (task.subTasks) {
                     return { ...task, subTasks: updateStatusRecursively(task.subTasks) };
-                }
-                if (task.subOfSubTasks) {
-                    return { ...task, subOfSubTasks: updateStatusRecursively(task.subOfSubTasks) };
                 }
                 return task;
             });
@@ -173,38 +153,22 @@ export default function ProjectPlanPage() {
 
         const updateNestedTasks = (tasksToUpdate: GanttTask[]): GanttTask[] => {
             return tasksToUpdate.map(task => {
+                // If it's the task we're looking for and it has no children, update it.
                 if (task.id === taskId && task.hasSubTasks === 'no') {
                     return { ...task, progress: newProgress };
                 }
-
+                
+                // If it has children, recurse.
                 if (task.subTasks) {
-                    let subTaskUpdated = false;
-                    const updatedSubTasks = task.subTasks.map(subTask => {
-                        if (subTask.id === taskId && subTask.hasSubOfSubTasks === 'no') {
-                            subTaskUpdated = true;
-                            return { ...subTask, progress: newProgress };
-                        }
-                        if (subTask.subOfSubTasks) {
-                            let subOfSubTaskUpdated = false;
-                            const updatedSubOfSubTasks = subTask.subOfSubTasks.map(sst => {
-                                if (sst.id === taskId) {
-                                    subOfSubTaskUpdated = true;
-                                    return { ...sst, progress: newProgress };
-                                }
-                                return sst;
-                            });
-                            if (subOfSubTaskUpdated) {
-                                subTaskUpdated = true;
-                                const subTaskProgress = updatedSubOfSubTasks.reduce((acc, sst) => acc + (sst.progress || 0), 0) / (updatedSubOfSubTasks.length || 1);
-                                return { ...subTask, subOfSubTasks: updatedSubOfSubTasks, progress: Math.round(subTaskProgress) };
-                            }
-                        }
-                        return subTask;
-                    });
+                    const updatedSubTasks = updateNestedTasks(task.subTasks);
                     
-                    if (subTaskUpdated) {
-                        const taskProgress = updatedSubTasks.reduce((acc, st) => acc + (st.progress || 0), 0) / (updatedSubTasks.length || 1);
-                        return { ...task, subTasks: updatedSubTasks, progress: Math.round(taskProgress) };
+                    // If any subtask was updated, recalculate parent progress.
+                    if (updatedSubTasks !== task.subTasks) {
+                        const totalWeight = updatedSubTasks.reduce((acc, st) => acc + calculateWorkingDays(st.start, st.end), 0);
+                        const weightedProgress = updatedSubTasks.reduce((acc, st) => acc + (st.progress || 0) * calculateWorkingDays(st.start, st.end), 0);
+                        const newParentProgress = totalWeight > 0 ? weightedProgress / totalWeight : 0;
+                        
+                        return { ...task, subTasks: updatedSubTasks, progress: Math.round(newParentProgress) };
                     }
                 }
 
@@ -217,13 +181,6 @@ export default function ProjectPlanPage() {
 
     const projectDateRange = useMemo(() => {
         if (!selectedProject) return { start: dayjs().startOf('year').format('YYYY-MM-DD'), end: dayjs().endOf('year').format('YYYY-MM-DD') };
-
-        if (tasks.length === 0) {
-            const start = `${selectedProject.startDateYear}-${selectedProject.startDateMonth.padStart(2, '0')}-01`;
-            const endDay = new Date(Number(selectedProject.endDateYear), Number(selectedProject.endDateMonth), 0).getDate();
-            const end = `${selectedProject.endDateYear}-${selectedProject.endDateMonth.padStart(2, '0')}-${String(endDay).padStart(2, '0')}`;
-            return { start, end };
-        }
 
         const allDates: dayjs.Dayjs[] = [];
         const collectDates = (tasksToScan: GanttTask[]) => {
@@ -248,49 +205,7 @@ export default function ProjectPlanPage() {
         return { start: minDate.startOf('month').format('YYYY-MM-DD'), end: maxDate.endOf('month').format('YYYY-MM-DD') };
         
     }, [selectedProject, tasks]);
-
-    const handleExportToPDF = async () => {
-        if (!ganttChartRef.current) {
-            toast({ title: "Error", description: "Chart element not found.", variant: "destructive" });
-            return;
-        }
-
-        setIsExporting(true);
-        toast({ title: "Exporting...", description: "Please wait while the PDF is being generated." });
-
-        try {
-            const imgData = await toPng(ganttChartRef.current, {
-                cacheBust: true,
-                pixelRatio: 2,
-                style: {
-                    backgroundColor: 'white',
-                }
-            });
-            const pdf = new jsPDF({
-                orientation: 'landscape',
-                unit: 'pt',
-                format: 'a4',
-            });
-
-            const pdfWidth = pdf.internal.pageSize.getWidth();
-            const pdfHeight = pdf.internal.pageSize.getHeight();
-            
-            pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-            
-            const fileName = selectedProject ? `${selectedProject.projectName}-plan.pdf` : 'project-plan.pdf';
-            pdf.save(fileName);
-            
-            toast({ title: "Export Successful", description: "Your PDF has been downloaded." });
-
-        } catch (error) {
-            console.error("PDF export failed:", error);
-            toast({ title: "Export Failed", description: "Could not generate PDF.", variant: "destructive" });
-        } finally {
-            setIsExporting(false);
-        }
-    };
-
-
+    
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center">
@@ -339,7 +254,7 @@ export default function ProjectPlanPage() {
                                 </Link>
                             </Button>
 
-                             <Button variant="outline" className="bg-slate-800 border-slate-700 hover:bg-slate-700 text-white" onClick={handleExportToPDF} disabled={isExporting}>
+                             <Button variant="outline" className="bg-slate-800 border-slate-700 hover:bg-slate-700 text-white" onClick={() => exportGanttToPDF(tasks, projectDateRange.start, projectDateRange.end)} disabled={isExporting}>
                                 {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4"/>}
                                 <span>Export PDF</span>
                             </Button>
@@ -360,8 +275,7 @@ export default function ProjectPlanPage() {
                             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                         </div>
                     ) : (
-                       <div ref={ganttChartRef}>
-                        <GanttChart 
+                       <GanttChart 
                             tasks={tasks}
                             projectId={selectedProject.projectId}
                             projectStart={projectDateRange.start}
@@ -370,7 +284,6 @@ export default function ProjectPlanPage() {
                             onUpdateTaskStatus={handleUpdateTaskStatus}
                             onUpdateTaskProgress={handleUpdateTaskProgress}
                         />
-                       </div>
                     )}
                 </div>
             )}
