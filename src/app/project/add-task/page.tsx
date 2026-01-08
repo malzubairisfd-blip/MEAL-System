@@ -95,7 +95,7 @@ export default function AddTaskPage() {
 
             if (!saveRes.ok) throw new Error("Failed to save the new tasks.");
 
-            toast({ title: "Tasks Added!", description: "The new tasks have been added to the project plan." });
+            toast({ title: "Activities Added!", description: "The new activities have been added to the project plan." });
             router.push(`/project/plan`);
 
         } catch (error: any) {
@@ -108,7 +108,7 @@ export default function AddTaskPage() {
     return (
         <div className="space-y-6">
              <div className="flex justify-between items-center">
-                <h1 className="text-3xl font-bold">Add New Tasks</h1>
+                <h1 className="text-3xl font-bold">Add New Activities</h1>
                 <Button variant="outline" asChild>
                     <Link href="/project/plan">
                         <ArrowLeft className="mr-2 h-4 w-4" /> Back to Project Plan
@@ -146,11 +146,11 @@ export default function AddTaskPage() {
 
                     <div className="flex justify-between">
                         <Button type="button" variant="outline" onClick={() => append({ id: `task-${Date.now()}`, title: "", hasSubTasks: 'no', status: 'PLANNED', progress: 0, subTasks: [] })}>
-                            <Plus className="mr-2 h-4 w-4"/> Add Another Task
+                            <Plus className="mr-2 h-4 w-4"/> Add Another Activity
                         </Button>
                         <Button type="submit" disabled={isSaving}>
                             {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Save className="mr-2 h-4 w-4" />}
-                            Save All Tasks
+                            Save All Activities
                         </Button>
                     </div>
                 </form>
@@ -166,7 +166,7 @@ function MainTaskItem({ control, index, remove }: { control: any; index: number;
     return (
         <Card className="p-4 relative bg-slate-50 border-slate-200">
             <div className="flex justify-between items-start mb-4">
-                <h3 className="text-lg font-semibold">Main Task {index + 1}: <span className="font-normal text-muted-foreground">{title}</span></h3>
+                <h3 className="text-lg font-semibold">Activity {index + 1}: <span className="font-normal text-muted-foreground">{title}</span></h3>
                 <Button type="button" variant="ghost" size="icon" onClick={() => remove(index)}>
                     <Trash2 className="h-4 w-4 text-destructive"/>
                 </Button>
@@ -177,7 +177,7 @@ function MainTaskItem({ control, index, remove }: { control: any; index: number;
                     name={`tasks.${index}.title`}
                     render={({ field }) => (
                         <FormItem className="col-span-2">
-                            <FormLabel>Main Task Title</FormLabel>
+                            <FormLabel>Activity Title</FormLabel>
                             <FormControl><Input {...field} maxLength={1000} /></FormControl>
                             <FormMessage />
                             <div className="text-xs text-right text-muted-foreground">{field.value?.length || 0}/1000</div>
@@ -209,7 +209,7 @@ function MainTaskItem({ control, index, remove }: { control: any; index: number;
                     name={`tasks.${index}.hasSubTasks`}
                     render={({ field }) => (
                         <FormItem className="col-span-2 space-y-3">
-                            <FormLabel>Include Sub-Tasks?</FormLabel>
+                            <FormLabel>Include Sub-Activities?</FormLabel>
                             <FormControl>
                                 <RadioGroup
                                     onValueChange={field.onChange}
@@ -251,7 +251,7 @@ function SubTaskArray({ control, taskIndex }: { control: any; taskIndex: number 
                 <SubTaskItem key={subField.id} control={control} taskIndex={taskIndex} subIndex={subIndex} remove={remove} />
             ))}
              <Button type="button" variant="secondary" size="sm" onClick={() => append({ id: `sub-task-${Date.now()}`, title: '', status: 'PLANNED', progress: 0, hasSubOfSubTasks: 'no' })}>
-                <Plus className="mr-2 h-4 w-4" /> Add Sub-Task
+                <Plus className="mr-2 h-4 w-4" /> Add Sub-Activity
             </Button>
         </div>
     );
@@ -264,13 +264,13 @@ function SubTaskItem({ control, taskIndex, subIndex, remove }: { control: any; t
     return (
         <Card className="p-4 bg-white relative">
              <div className="flex justify-between items-start mb-4">
-                <h4 className="text-md font-semibold">Sub-Task {subIndex + 1}: <span className="font-normal text-muted-foreground">{title}</span></h4>
+                <h4 className="text-md font-semibold">Activity {taskIndex + 1}.{subIndex + 1}: <span className="font-normal text-muted-foreground">{title}</span></h4>
                 <Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={() => remove(subIndex)}>
                     <Trash2 className="h-4 w-4 text-destructive"/>
                 </Button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField control={control} name={`tasks.${taskIndex}.subTasks.${subIndex}.title`} render={({ field }) => (<FormItem className="col-span-2"><FormLabel>Sub-Task Title</FormLabel><FormControl><Input {...field} maxLength={1000} /></FormControl><FormMessage /><div className="text-xs text-right text-muted-foreground">{field.value?.length || 0}/1000</div></FormItem>)} />
+                <FormField control={control} name={`tasks.${taskIndex}.subTasks.${subIndex}.title`} render={({ field }) => (<FormItem className="col-span-2"><FormLabel>Sub-Activity Title</FormLabel><FormControl><Input {...field} maxLength={1000} /></FormControl><FormMessage /><div className="text-xs text-right text-muted-foreground">{field.value?.length || 0}/1000</div></FormItem>)} />
                 
                  {hasSubOfSubTasks === 'no' && (
                     <div className="col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -299,7 +299,7 @@ function SubTaskItem({ control, taskIndex, subIndex, remove }: { control: any; t
                     name={`tasks.${taskIndex}.subTasks.${subIndex}.hasSubOfSubTasks`}
                     render={({ field }) => (
                         <FormItem className="col-span-2 space-y-3">
-                            <FormLabel>Include Sub-of-Sub-Tasks?</FormLabel>
+                            <FormLabel>Include Sub-of-Sub-Activities?</FormLabel>
                             <FormControl>
                                 <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex space-x-4">
                                     <FormItem className="flex items-center space-x-2 space-y-0"><FormControl><RadioGroupItem value="yes" /></FormControl><FormLabel className="font-normal">Yes</FormLabel></FormItem>
@@ -334,7 +334,7 @@ function SubOfSubTaskArray({ control, taskIndex, subIndex }: { control: any, tas
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <FormField control={control} name={`tasks.${taskIndex}.subTasks.${subIndex}.subOfSubTasks.${sssIndex}.title`} render={({ field }) => (
               <FormItem className="col-span-2">
-                <FormLabel>Sub-of-Sub-Task {sssIndex + 1}</FormLabel>
+                <FormLabel>Activity {taskIndex + 1}.{subIndex + 1}.{sssIndex + 1}</FormLabel>
                 <FormControl><Input {...field} maxLength={1000} /></FormControl>
                 <FormMessage />
                 <div className="text-xs text-right text-muted-foreground">{field.value?.length || 0}/1000</div>
@@ -369,7 +369,7 @@ function SubOfSubTaskArray({ control, taskIndex, subIndex }: { control: any, tas
         </Card>
       ))}
       <Button type="button" variant="ghost" size="sm" onClick={() => append({ id: `sss-task-${Date.now()}`, title: '', status: 'PLANNED', progress: 0 })}>
-        <Plus className="mr-2 h-4 w-4" /> Add Sub-of-Sub-Task
+        <Plus className="mr-2 h-4 w-4" /> Add Sub-of-Sub-Activity
       </Button>
     </div>
   );

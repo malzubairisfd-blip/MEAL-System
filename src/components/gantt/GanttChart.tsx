@@ -149,7 +149,7 @@ export function GanttChart({
              <div className="w-[600px] border-r border-slate-700 flex-shrink-0">
                 <div className="h-20 border-b border-slate-700 font-semibold px-3 flex items-center">
                     <div className='w-12'>#</div>
-                    <div className='flex-1'>Task & Progress</div>
+                    <div className='flex-1'>Activity & Progress</div>
                     <div className='w-24 text-center'>Working Days</div>
                     <div className='w-32 text-center'>Status</div>
                     <div className='w-8'></div>

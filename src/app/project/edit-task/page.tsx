@@ -139,7 +139,7 @@ export default function EditTaskPage() {
 
             if (!saveRes.ok) throw new Error("Failed to save the updated task.");
 
-            toast({ title: "Task Updated!", description: "The task has been successfully updated." });
+            toast({ title: "Activity Updated!", description: "The activity has been successfully updated." });
             router.push(`/project/plan`);
 
         } catch (error: any) {
@@ -157,8 +157,8 @@ export default function EditTaskPage() {
         <div className="space-y-6">
              <div className="flex justify-between items-center">
                 <div>
-                    <h1 className="text-3xl font-bold">Edit Task</h1>
-                    <p className="text-muted-foreground">Editing task for project: {project?.projectName}</p>
+                    <h1 className="text-3xl font-bold">Edit Activity</h1>
+                    <p className="text-muted-foreground">Editing activity for project: {project?.projectName}</p>
                 </div>
                 <Button variant="outline" asChild>
                     <Link href="/project/plan">
@@ -191,7 +191,7 @@ function MainTaskItem({ control, index, remove, isEditMode }: { control: any; in
     return (
         <Card className="p-4 relative bg-slate-50 border-slate-200">
             <div className="flex justify-between items-start mb-4">
-                <h3 className="text-lg font-semibold">Task Details: <span className="font-normal text-muted-foreground">{title}</span></h3>
+                <h3 className="text-lg font-semibold">Activity Details: <span className="font-normal text-muted-foreground">{title}</span></h3>
                 {!isEditMode && (
                     <Button type="button" variant="ghost" size="icon" onClick={() => remove(index)}>
                         <Trash2 className="h-4 w-4 text-destructive"/>
@@ -204,7 +204,7 @@ function MainTaskItem({ control, index, remove, isEditMode }: { control: any; in
                     name={`title`}
                     render={({ field }) => (
                         <FormItem className="col-span-2">
-                            <FormLabel>Task Title</FormLabel>
+                            <FormLabel>Activity Title</FormLabel>
                             <FormControl><Input {...field} maxLength={1000} /></FormControl>
                             <FormMessage />
                             <div className="text-xs text-right text-muted-foreground">{field.value?.length || 0}/1000</div>
@@ -236,7 +236,7 @@ function MainTaskItem({ control, index, remove, isEditMode }: { control: any; in
                     name={`hasSubTasks`}
                     render={({ field }) => (
                         <FormItem className="col-span-2 space-y-3">
-                            <FormLabel>Include Sub-Tasks?</FormLabel>
+                            <FormLabel>Include Sub-Activities?</FormLabel>
                             <FormControl>
                                 <RadioGroup
                                     onValueChange={field.onChange}
@@ -278,7 +278,7 @@ function SubTaskArray({ control, taskIndex }: { control: any; taskIndex: number 
                 <SubTaskItem key={subField.id} control={control} taskIndex={taskIndex} subIndex={subIndex} remove={remove} />
             ))}
              <Button type="button" variant="secondary" size="sm" onClick={() => append({ id: `sub-task-${Date.now()}`, title: '', status: 'PLANNED', progress: 0, hasSubOfSubTasks: 'no' })}>
-                <Plus className="mr-2 h-4 w-4" /> Add Sub-Task
+                <Plus className="mr-2 h-4 w-4" /> Add Sub-Activity
             </Button>
         </div>
     );
@@ -291,13 +291,13 @@ function SubTaskItem({ control, taskIndex, subIndex, remove }: { control: any; t
     return (
         <Card className="p-4 bg-white relative">
              <div className="flex justify-between items-start mb-4">
-                <h4 className="text-md font-semibold">Sub-Task {subIndex + 1}: <span className="font-normal text-muted-foreground">{title}</span></h4>
+                <h4 className="text-md font-semibold">Activity {taskIndex + 1}.{subIndex + 1}: <span className="font-normal text-muted-foreground">{title}</span></h4>
                 <Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={() => remove(subIndex)}>
                     <Trash2 className="h-4 w-4 text-destructive"/>
                 </Button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField control={control} name={`subTasks.${subIndex}.title`} render={({ field }) => (<FormItem className="col-span-2"><FormLabel>Sub-Task Title</FormLabel><FormControl><Input {...field} maxLength={1000} /></FormControl><FormMessage /><div className="text-xs text-right text-muted-foreground">{field.value?.length || 0}/1000</div></FormItem>)} />
+                <FormField control={control} name={`subTasks.${subIndex}.title`} render={({ field }) => (<FormItem className="col-span-2"><FormLabel>Sub-Activity Title</FormLabel><FormControl><Input {...field} maxLength={1000} /></FormControl><FormMessage /><div className="text-xs text-right text-muted-foreground">{field.value?.length || 0}/1000</div></FormItem>)} />
                 
                  {hasSubOfSubTasks === 'no' && (
                     <div className="col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -326,7 +326,7 @@ function SubTaskItem({ control, taskIndex, subIndex, remove }: { control: any; t
                     name={`subTasks.${subIndex}.hasSubOfSubTasks`}
                     render={({ field }) => (
                         <FormItem className="col-span-2 space-y-3">
-                            <FormLabel>Include Sub-of-Sub-Tasks?</FormLabel>
+                            <FormLabel>Include Sub-of-Sub-Activities?</FormLabel>
                             <FormControl>
                                 <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex space-x-4">
                                     <FormItem className="flex items-center space-x-2 space-y-0"><FormControl><RadioGroupItem value="yes" /></FormControl><FormLabel className="font-normal">Yes</FormLabel></FormItem>
@@ -361,7 +361,7 @@ function SubOfSubTaskArray({ control, taskIndex, subIndex }: { control: any, tas
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <FormField control={control} name={`subTasks.${subIndex}.subOfSubTasks.${sssIndex}.title`} render={({ field }) => (
               <FormItem className="col-span-2">
-                <FormLabel>Sub-of-Sub-Task {sssIndex + 1}</FormLabel>
+                <FormLabel>Activity {taskIndex + 1}.{subIndex + 1}.{sssIndex + 1}</FormLabel>
                 <FormControl><Input {...field} maxLength={1000} /></FormControl>
                 <FormMessage />
                 <div className="text-xs text-right text-muted-foreground">{field.value?.length || 0}/1000</div>
@@ -396,7 +396,7 @@ function SubOfSubTaskArray({ control, taskIndex, subIndex }: { control: any, tas
         </Card>
       ))}
       <Button type="button" variant="ghost" size="sm" onClick={() => append({ id: `sss-task-${Date.now()}`, title: '', status: 'PLANNED', progress: 0 })}>
-        <Plus className="mr-2 h-4 w-4" /> Add Sub-of-Sub-Task
+        <Plus className="mr-2 h-4 w-4" /> Add Sub-of-Sub-Activity
       </Button>
     </div>
   );

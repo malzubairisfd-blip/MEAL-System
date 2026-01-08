@@ -84,7 +84,7 @@ export default function ProjectPlanPage() {
         } catch (error: any) {
             console.error("Failed to fetch project plan", error);
             if (error.issues) {
-                 toast({ title: "Data Validation Error", description: `Could not load plan: ${error.issues.map((i:any) => i.message).join(', ')}`, variant: "destructive" });
+                 toast({ title: "Data Validation Error", description: `Could not load plan: ${''\'\'' + error.issues.map((i:any) => i.message).join(', ') + ''\'\''}`, variant: "destructive" });
             } else {
                 toast({ title: "Error", description: "Could not load project plan.", variant: "destructive" });
             }
@@ -335,7 +335,7 @@ export default function ProjectPlanPage() {
                              <Button className="bg-blue-600 hover:bg-blue-700 text-white" asChild>
                                 <Link href={`/project/add-task?projectId=${selectedProject.projectId}`}>
                                     <Plus className="mr-2 h-4 w-4" />
-                                    Add a new task
+                                    Add a new activity
                                 </Link>
                             </Button>
 

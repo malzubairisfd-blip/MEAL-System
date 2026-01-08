@@ -139,10 +139,10 @@ export const TaskListItem = ({ task, onDelete, onUpdateStatus, onUpdateProgress,
           className={cn("h-full px-3 flex items-start text-sm group py-2 min-h-[4rem]", level > 0 && 'bg-slate-900/50')} 
           style={{ paddingLeft: `${0.75 + level * 1.5}rem`}}
         >
-            {/* Column 1: Task Number */}
+            {/* Column 1: Activity Number */}
             <div className='w-12 flex-shrink-0 font-mono text-slate-400 pt-1'>{taskNumber}</div>
 
-            {/* Container for Task & Progress */}
+            {/* Container for Activity & Progress */}
             <div className="flex-1 flex flex-col min-w-0 pr-2">
                 <div className="flex items-start gap-1 py-1">
                     {canCollapse && onToggleCollapse ? (
@@ -188,12 +188,12 @@ export const TaskListItem = ({ task, onDelete, onUpdateStatus, onUpdateProgress,
                         <DropdownMenuItem asChild>
                            <Link href={`/project/edit-task?projectId=${projectId}&taskId=${task.id}`}>
                                 <Edit className="mr-2 h-4 w-4"/>
-                                Edit Task
+                                Edit Activity
                            </Link>
                         </DropdownMenuItem>
                         <DropdownMenuItem className="text-red-500" onClick={() => onDelete(task.id)}>
                             <Trash2 className="mr-2 h-4 w-4"/>
-                            Delete Task
+                            Delete Activity
                         </DropdownMenuItem>
                     </DropdownMenuContent>
                 </DropdownMenu>
