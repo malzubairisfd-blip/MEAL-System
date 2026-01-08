@@ -27,7 +27,7 @@ interface RowProps {
   taskNumber: string;
 }
 
-export function GanttRow({ task, projectStart, dayWidth }: RowProps) {
+export function GanttRow({ task, projectStart, dayWidth, taskNumber }: RowProps) {
   if (!task.start || !task.end) return null;
   const offset = dayjs(task.start).diff(dayjs(projectStart), "day") * dayWidth;
   const duration = calculateWorkingDays(task.start, task.end);
