@@ -1,7 +1,7 @@
 // components/gantt/GanttChart.tsx
 "use client";
 
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useState, useCallback, useRef } from 'react';
 import dayjs from "dayjs";
 import { GanttTask, TaskStatus, GanttSubTask } from "@/types/gantt";
 import { GanttHeader } from "./GanttHeader";
@@ -13,10 +13,12 @@ import { Activity, Sigma } from 'lucide-react';
 const GanttTaskRow = ({
   task,
   level = 0,
+  taskNumber,
   ...props
 }: {
   task: GanttTask | GanttSubTask;
   level?: number;
+  taskNumber: string;
   projectStart: string;
   dayWidth: number;
   collapsedTasks: Set<string>;
@@ -33,34 +35,36 @@ const GanttTaskRow = ({
 
   return (
     <React.Fragment>
-      <div className="flex border-b border-slate-800">
-        <div className="w-[600px] flex-shrink-0">
-          <TaskListItem
-            task={task}
-            isCollapsed={isCollapsed}
-            onToggleCollapse={props.onToggleCollapse}
-            onDelete={props.onDeleteTask}
-            onUpdateStatus={props.onUpdateTaskStatus}
-            onUpdateProgress={props.onUpdateTaskProgress}
-            level={level}
-            canCollapse={canCollapse}
-          />
+       <div className="flex border-b border-slate-800">
+          <div className="w-[600px] flex-shrink-0">
+            <TaskListItem
+              task={task}
+              isCollapsed={isCollapsed}
+              onToggleCollapse={props.onToggleCollapse}
+              onDelete={props.onDeleteTask}
+              onUpdateStatus={props.onUpdateTaskStatus}
+              onUpdateProgress={props.onUpdateTaskProgress}
+              level={level}
+              canCollapse={canCollapse}
+              taskNumber={taskNumber}
+            />
+          </div>
+          <div className="flex-1 relative">
+            <GanttRow
+              task={task}
+              projectStart={props.projectStart}
+              dayWidth={props.dayWidth}
+              taskNumber={taskNumber}
+            />
+          </div>
         </div>
-        <div className="flex-1 relative">
-          <GanttRow
-            task={task}
-            projectStart={props.projectStart}
-            dayWidth={props.dayWidth}
-          />
-        </div>
-      </div>
       {!isCollapsed && canCollapse && (
         <>
-          {hasSubTasks && 'subTasks' in task && task.subTasks?.map(subTask => (
-            <GanttTaskRow key={subTask.id} task={subTask} level={level + 1} {...props} />
+          {hasSubTasks && 'subTasks' in task && task.subTasks?.map((subTask, subIndex) => (
+            <GanttTaskRow key={subTask.id} task={subTask} level={level + 1} taskNumber={`${taskNumber}.${subIndex + 1}`} {...props} />
           ))}
-          {hasSubOfSubTasks && 'subOfSubTasks' in task && task.subOfSubTasks?.map(subOfSubTask => (
-             <GanttTaskRow key={subOfSubTask.id} task={subOfSubTask} level={level + 2} {...props} />
+          {hasSubOfSubTasks && 'subOfSubTasks' in task && task.subOfSubTasks?.map((subOfSubTask, sssIndex) => (
+             <GanttTaskRow key={subOfSubTask.id} task={subOfSubTask} level={level + 2} taskNumber={`${taskNumber}.${sssIndex + 1}`} {...props} />
           ))}
         </>
       )}
@@ -145,6 +149,7 @@ export function GanttChart({
             {/* LEFT HEADER */}
              <div className="w-[600px] border-r border-slate-700 flex-shrink-0">
                 <div className="h-20 border-b border-slate-700 font-semibold px-3 flex items-center justify-between">
+                    <div className='w-12'>#</div>
                     <div className='flex-1'>Task</div>
                     <div className='w-32 text-center'>Progress</div>
                     <div className='w-24 text-center'>Working Days</div>
@@ -163,11 +168,12 @@ export function GanttChart({
         </div>
         
         <div className='relative'>
-             {tasks.map(task => (
+             {tasks.map((task, index) => (
                 <GanttTaskRow
                   key={task.id}
                   task={task}
                   level={0}
+                  taskNumber={`${index + 1}`}
                   projectStart={projectStart}
                   dayWidth={dayWidth}
                   collapsedTasks={collapsedTasks}

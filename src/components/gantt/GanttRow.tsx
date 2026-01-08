@@ -16,9 +16,10 @@ interface RowProps {
   task: GanttTask | GanttSubTask;
   projectStart: string;
   dayWidth: number;
+  taskNumber: string;
 }
 
-export function GanttRow({ task, projectStart, dayWidth }: RowProps) {
+export function GanttRow({ task, projectStart, dayWidth, taskNumber }: RowProps) {
   const offset = dayjs(task.start).diff(dayjs(projectStart), "day") * dayWidth;
   const duration = calculateWorkingDays(task.start, task.end);
   const width = duration * dayWidth;
@@ -26,7 +27,7 @@ export function GanttRow({ task, projectStart, dayWidth }: RowProps) {
   return (
     <div className="relative py-2 h-full">
       <div
-        className="absolute top-1/2 -translate-y-1/2 rounded text-xs text-white px-2 py-1 shadow-md flex items-start"
+        className="absolute top-1/2 -translate-y-1/2 rounded text-xs text-white px-2 py-1 shadow-md flex items-center justify-center"
         style={{
           left: offset,
           width,
@@ -40,12 +41,8 @@ export function GanttRow({ task, projectStart, dayWidth }: RowProps) {
           className="absolute left-0 top-0 h-full bg-black/20 rounded"
           style={{ width: `${task.progress}%` }}
         />
-
-        <span
-          className="relative z-10 whitespace-normal break-words leading-snug"
-          style={{ wordBreak: "break-word" }}
-        >
-          {task.title}
+        <span className="relative z-10 font-mono font-bold">
+          {taskNumber}
         </span>
       </div>
     </div>
@@ -90,9 +87,10 @@ interface ListItemProps {
     onToggleCollapse?: (taskId: string) => void;
     level: number;
     canCollapse: boolean;
+    taskNumber: string;
 }
 
-export const TaskListItem = ({ task, onDelete, onUpdateStatus, onUpdateProgress, isCollapsed, onToggleCollapse, level, canCollapse }: ListItemProps) => {
+export const TaskListItem = ({ task, onDelete, onUpdateStatus, onUpdateProgress, isCollapsed, onToggleCollapse, level, canCollapse, taskNumber }: ListItemProps) => {
     const workingDays = calculateWorkingDays(task.start, task.end);
 
     let progressElement;
@@ -122,6 +120,7 @@ export const TaskListItem = ({ task, onDelete, onUpdateStatus, onUpdateProgress,
 
     return (
         <div className={cn("h-full px-3 flex items-center justify-between text-sm group py-1", level > 0 && 'bg-slate-900/50')} style={{ paddingLeft: `${0.75 + level * 1.5}rem`}}>
+            <div className='w-12 flex-shrink-0 font-mono text-slate-400'>{taskNumber}</div>
             <div className="flex items-center gap-1 flex-1 py-1 min-w-0">
                  {canCollapse && onToggleCollapse ? (
                     <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onToggleCollapse(task.id)}>
