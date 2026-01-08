@@ -178,9 +178,9 @@ function MainTaskItem({ control, index, remove }: { control: any; index: number;
                     render={({ field }) => (
                         <FormItem className="col-span-2">
                             <FormLabel>Main Task Title</FormLabel>
-                            <FormControl><Input {...field} maxLength={100} /></FormControl>
+                            <FormControl><Input {...field} maxLength={1000} /></FormControl>
                             <FormMessage />
-                            <div className="text-xs text-right text-muted-foreground">{field.value?.length || 0}/100</div>
+                            <div className="text-xs text-right text-muted-foreground">{field.value?.length || 0}/1000</div>
                         </FormItem>
                     )}
                 />
@@ -270,7 +270,7 @@ function SubTaskItem({ control, taskIndex, subIndex, remove }: { control: any; t
                 </Button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField control={control} name={`tasks.${taskIndex}.subTasks.${subIndex}.title`} render={({ field }) => (<FormItem className="col-span-2"><FormLabel>Sub-Task Title</FormLabel><FormControl><Input {...field} maxLength={100} /></FormControl><FormMessage /><div className="text-xs text-right text-muted-foreground">{field.value?.length || 0}/100</div></FormItem>)} />
+                <FormField control={control} name={`tasks.${taskIndex}.subTasks.${subIndex}.title`} render={({ field }) => (<FormItem className="col-span-2"><FormLabel>Sub-Task Title</FormLabel><FormControl><Input {...field} maxLength={1000} /></FormControl><FormMessage /><div className="text-xs text-right text-muted-foreground">{field.value?.length || 0}/1000</div></FormItem>)} />
                 
                  {hasSubOfSubTasks === 'no' && (
                     <div className="col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -335,9 +335,9 @@ function SubOfSubTaskArray({ control, taskIndex, subIndex }: { control: any, tas
             <FormField control={control} name={`tasks.${taskIndex}.subTasks.${subIndex}.subOfSubTasks.${sssIndex}.title`} render={({ field }) => (
               <FormItem className="col-span-2">
                 <FormLabel>Sub-of-Sub-Task {sssIndex + 1}</FormLabel>
-                <FormControl><Input {...field} maxLength={100} /></FormControl>
+                <FormControl><Input {...field} maxLength={1000} /></FormControl>
                 <FormMessage />
-                <div className="text-xs text-right text-muted-foreground">{field.value?.length || 0}/100</div>
+                <div className="text-xs text-right text-muted-foreground">{field.value?.length || 0}/1000</div>
               </FormItem>
             )} />
             <div className="space-y-2">

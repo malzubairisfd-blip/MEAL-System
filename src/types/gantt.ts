@@ -13,7 +13,7 @@ export type TaskStatus =
 
 export const SubOfSubTaskSchema = z.object({
   id: z.string(),
-  title: z.string().min(1, "Title is required.").max(100),
+  title: z.string().min(1, "Title is required.").max(1000),
   startDay: z.string().min(1, "Start day is required."),
   startMonth: z.string().min(1, "Start month is required."),
   startYear: z.string().min(1, "Start year is required."),
@@ -33,7 +33,7 @@ export const SubOfSubTaskSchema = z.object({
 
 export const SubTaskSchema = z.object({
   id: z.string(),
-  title: z.string().min(1, "Sub-task title is required.").max(100),
+  title: z.string().min(1, "Sub-task title is required.").max(1000),
   hasSubOfSubTasks: z.enum(['yes', 'no']),
   startDay: z.string().optional(),
   startMonth: z.string().optional(),
@@ -74,7 +74,7 @@ export const SubTaskSchema = z.object({
 
 export const GanttTaskSchema = z.object({
     id: z.string(),
-    title: z.string().min(1, "Title is required.").max(100),
+    title: z.string().min(1, "Title is required.").max(1000),
     startDay: z.string().optional(),
     startMonth: z.string().optional(),
     startYear: z.string().optional(),
