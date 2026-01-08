@@ -185,7 +185,7 @@ function MainTaskItem({ control, index, remove }: { control: any; index: number;
                     )}
                 />
                  {hasSubTasks === 'no' && (
-                    <div className="col-span-2 space-y-4">
+                    <div className="col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label>Start Date</Label>
                             <div className="grid grid-cols-3 gap-2">
@@ -248,39 +248,127 @@ function SubTaskArray({ control, taskIndex }: { control: any; taskIndex: number 
     return (
         <div className="col-span-2 mt-4 pl-4 border-l-2 space-y-4">
             {fields.map((subField, subIndex) => (
-                <Card key={subField.id} className="p-4 bg-white relative">
-                     <Button type="button" variant="ghost" size="icon" className="absolute top-2 right-2 h-6 w-6" onClick={() => remove(subIndex)}>
-                        <Trash2 className="h-4 w-4 text-destructive"/>
-                    </Button>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <FormField control={control} name={`tasks.${taskIndex}.subTasks.${subIndex}.title`} render={({ field }) => (<FormItem className="col-span-2"><FormLabel>Sub-Task {subIndex + 1}</FormLabel><FormControl><Input {...field} maxLength={100} /></FormControl><FormMessage /><div className="text-xs text-right text-muted-foreground">{field.value?.length || 0}/100</div></FormItem>)} />
-                        
-                        <div className="col-span-2 space-y-4">
-                            <div className="space-y-2">
-                                <Label>Start Date</Label>
-                                <div className="grid grid-cols-3 gap-2">
-                                    <FormField control={control} name={`tasks.${taskIndex}.subTasks.${subIndex}.startDay`} render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Day" /></SelectTrigger></FormControl><SelectContent>{days.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
-                                    <FormField control={control} name={`tasks.${taskIndex}.subTasks.${subIndex}.startMonth`} render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Month" /></SelectTrigger></FormControl><SelectContent>{months.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
-                                    <FormField control={control} name={`tasks.${taskIndex}.subTasks.${subIndex}.startYear`} render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Year" /></SelectTrigger></FormControl><SelectContent>{years.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
-                                </div>
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label>End Date</Label>
-                                <div className="grid grid-cols-3 gap-2">
-                                    <FormField control={control} name={`tasks.${taskIndex}.subTasks.${subIndex}.endDay`} render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Day" /></SelectTrigger></FormControl><SelectContent>{days.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
-                                    <FormField control={control} name={`tasks.${taskIndex}.subTasks.${subIndex}.endMonth`} render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Month" /></SelectTrigger></FormControl><SelectContent>{months.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
-                                    <FormField control={control} name={`tasks.${taskIndex}.subTasks.${subIndex}.endYear`} render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Year" /></SelectTrigger></FormControl><SelectContent>{years.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
-                                </div>
-                            </div>
-                        </div>
-                        <FormField control={control} name={`tasks.${taskIndex}.subTasks.${subIndex}.progress`} render={({ field }) => (<FormItem><FormLabel>Progress (%)</FormLabel><FormControl><Input type="number" min="0" max="100" {...field} className="w-24" /></FormControl><FormMessage /></FormItem>)} />
-                    </div>
-                </Card>
+                <SubTaskItem key={subField.id} control={control} taskIndex={taskIndex} subIndex={subIndex} remove={remove} />
             ))}
-             <Button type="button" variant="secondary" size="sm" onClick={() => append({ id: `sub-task-${Date.now()}`, title: '', status: 'PLANNED', progress: 0 })}>
+             <Button type="button" variant="secondary" size="sm" onClick={() => append({ id: `sub-task-${Date.now()}`, title: '', status: 'PLANNED', progress: 0, hasSubOfSubTasks: 'no' })}>
                 <Plus className="mr-2 h-4 w-4" /> Add Sub-Task
             </Button>
         </div>
     );
+}
+
+function SubTaskItem({ control, taskIndex, subIndex, remove }: { control: any; taskIndex: number; subIndex: number; remove: (index: number) => void; }) {
+    const hasSubOfSubTasks = useWatch({ control, name: `tasks.${taskIndex}.subTasks.${subIndex}.hasSubOfSubTasks` });
+    const title = useWatch({ control, name: `tasks.${taskIndex}.subTasks.${subIndex}.title` });
+
+    return (
+        <Card className="p-4 bg-white relative">
+             <div className="flex justify-between items-start mb-4">
+                <h4 className="text-md font-semibold">Sub-Task {subIndex + 1}: <span className="font-normal text-muted-foreground">{title}</span></h4>
+                <Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={() => remove(subIndex)}>
+                    <Trash2 className="h-4 w-4 text-destructive"/>
+                </Button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField control={control} name={`tasks.${taskIndex}.subTasks.${subIndex}.title`} render={({ field }) => (<FormItem className="col-span-2"><FormLabel>Sub-Task Title</FormLabel><FormControl><Input {...field} maxLength={100} /></FormControl><FormMessage /><div className="text-xs text-right text-muted-foreground">{field.value?.length || 0}/100</div></FormItem>)} />
+                
+                 {hasSubOfSubTasks === 'no' && (
+                    <div className="col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label>Start Date</Label>
+                            <div className="grid grid-cols-3 gap-2">
+                                <FormField control={control} name={`tasks.${taskIndex}.subTasks.${subIndex}.startDay`} render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Day" /></SelectTrigger></FormControl><SelectContent>{days.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                                <FormField control={control} name={`tasks.${taskIndex}.subTasks.${subIndex}.startMonth`} render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Month" /></SelectTrigger></FormControl><SelectContent>{months.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                                <FormField control={control} name={`tasks.${taskIndex}.subTasks.${subIndex}.startYear`} render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Year" /></SelectTrigger></FormControl><SelectContent>{years.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                            </div>
+                        </div>
+                         <div className="space-y-2">
+                            <Label>End Date</Label>
+                            <div className="grid grid-cols-3 gap-2">
+                                <FormField control={control} name={`tasks.${taskIndex}.subTasks.${subIndex}.endDay`} render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Day" /></SelectTrigger></FormControl><SelectContent>{days.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                                <FormField control={control} name={`tasks.${taskIndex}.subTasks.${subIndex}.endMonth`} render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Month" /></SelectTrigger></FormControl><SelectContent>{months.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                                <FormField control={control} name={`tasks.${taskIndex}.subTasks.${subIndex}.endYear`} render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Year" /></SelectTrigger></FormControl><SelectContent>{years.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                            </div>
+                        </div>
+                        <FormField control={control} name={`tasks.${taskIndex}.subTasks.${subIndex}.progress`} render={({ field }) => (<FormItem><FormLabel>Progress (%)</FormLabel><FormControl><Input type="number" min="0" max="100" {...field} className="w-24" /></FormControl><FormMessage /></FormItem>)} />
+                    </div>
+                )}
+
+                 <FormField
+                    control={control}
+                    name={`tasks.${taskIndex}.subTasks.${subIndex}.hasSubOfSubTasks`}
+                    render={({ field }) => (
+                        <FormItem className="col-span-2 space-y-3">
+                            <FormLabel>Include Sub-of-Sub-Tasks?</FormLabel>
+                            <FormControl>
+                                <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex space-x-4">
+                                    <FormItem className="flex items-center space-x-2 space-y-0"><FormControl><RadioGroupItem value="yes" /></FormControl><FormLabel className="font-normal">Yes</FormLabel></FormItem>
+                                    <FormItem className="flex items-center space-x-2 space-y-0"><FormControl><RadioGroupItem value="no" /></FormControl><FormLabel className="font-normal">No</FormLabel></FormItem>
+                                </RadioGroup>
+                            </FormControl>
+                            <FormMessage />
+                        </FormItem>
+                    )}
+                />
+            </div>
+             {hasSubOfSubTasks === 'yes' && (
+                <SubOfSubTaskArray control={control} taskIndex={taskIndex} subIndex={subIndex} />
+            )}
+        </Card>
+    );
+}
+
+function SubOfSubTaskArray({ control, taskIndex, subIndex }: { control: any, taskIndex: number, subIndex: number }) {
+  const { fields, append, remove } = useFieldArray({
+    control,
+    name: `tasks.${taskIndex}.subTasks.${subIndex}.subOfSubTasks`
+  });
+
+  return (
+    <div className="col-span-2 mt-4 pl-4 border-l-2 space-y-4">
+      {fields.map((item, sssIndex) => (
+        <Card key={item.id} className="p-4 bg-slate-50 relative">
+          <Button type="button" variant="ghost" size="icon" className="absolute top-2 right-2 h-6 w-6" onClick={() => remove(sssIndex)}>
+            <Trash2 className="h-4 w-4 text-destructive" />
+          </Button>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <FormField control={control} name={`tasks.${taskIndex}.subTasks.${subIndex}.subOfSubTasks.${sssIndex}.title`} render={({ field }) => (
+              <FormItem className="col-span-2">
+                <FormLabel>Sub-of-Sub-Task {sssIndex + 1}</FormLabel>
+                <FormControl><Input {...field} maxLength={100} /></FormControl>
+                <FormMessage />
+                <div className="text-xs text-right text-muted-foreground">{field.value?.length || 0}/100</div>
+              </FormItem>
+            )} />
+            <div className="space-y-2">
+              <Label>Start Date</Label>
+              <div className="grid grid-cols-3 gap-2">
+                <FormField control={control} name={`tasks.${taskIndex}.subTasks.${subIndex}.subOfSubTasks.${sssIndex}.startDay`} render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Day" /></SelectTrigger></FormControl><SelectContent>{days.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                <FormField control={control} name={`tasks.${taskIndex}.subTasks.${subIndex}.subOfSubTasks.${sssIndex}.startMonth`} render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Month" /></SelectTrigger></FormControl><SelectContent>{months.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                <FormField control={control} name={`tasks.${taskIndex}.subTasks.${subIndex}.subOfSubTasks.${sssIndex}.startYear`} render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Year" /></SelectTrigger></FormControl><SelectContent>{years.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>End Date</Label>
+              <div className="grid grid-cols-3 gap-2">
+                <FormField control={control} name={`tasks.${taskIndex}.subTasks.${subIndex}.subOfSubTasks.${sssIndex}.endDay`} render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Day" /></SelectTrigger></FormControl><SelectContent>{days.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                <FormField control={control} name={`tasks.${taskIndex}.subTasks.${subIndex}.subOfSubTasks.${sssIndex}.endMonth`} render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Month" /></SelectTrigger></FormControl><SelectContent>{months.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+                <FormField control={control} name={`tasks.${taskIndex}.subTasks.${subIndex}.subOfSubTasks.${sssIndex}.endYear`} render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Year" /></SelectTrigger></FormControl><SelectContent>{years.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
+              </div>
+            </div>
+            <FormField control={control} name={`tasks.${taskIndex}.subTasks.${subIndex}.subOfSubTasks.${sssIndex}.progress`} render={({ field }) => (
+              <FormItem>
+                <FormLabel>Progress (%)</FormLabel>
+                <FormControl><Input type="number" min="0" max="100" {...field} className="w-24" /></FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+          </div>
+        </Card>
+      ))}
+      <Button type="button" variant="ghost" size="sm" onClick={() => append({ id: `sss-task-${Date.now()}`, title: '', status: 'PLANNED', progress: 0 })}>
+        <Plus className="mr-2 h-4 w-4" /> Add Sub-of-Sub-Task
+      </Button>
+    </div>
+  );
 }
