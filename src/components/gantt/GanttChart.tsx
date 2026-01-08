@@ -104,22 +104,20 @@ export function GanttChart({
   }, []);
 
     const { overallProgress, totalWorkingDays } = useMemo(() => {
-        let totalProgressSum = 0;
-        let totalProgressWeight = 0;
-        let totalDays = 0;
+        let totalWeightedProgress = 0;
+        let totalDuration = 0;
         
         tasks.forEach(task => {
             const taskWorkingDays = calculateWorkingDays(task.start, task.end);
-            totalDays += taskWorkingDays;
-
-            // Use parent task progress directly as it should be rolled up
-            totalProgressSum += (task.progress || 0) * taskWorkingDays;
-            totalProgressWeight += taskWorkingDays;
+            if (taskWorkingDays > 0) {
+                totalWeightedProgress += (task.progress || 0) * taskWorkingDays;
+                totalDuration += taskWorkingDays;
+            }
         });
 
-        const overallProgress = totalProgressWeight > 0 ? totalProgressSum / totalProgressWeight : 0;
+        const overallProgress = totalDuration > 0 ? totalWeightedProgress / totalDuration : 0;
         
-        return { overallProgress, totalWorkingDays: totalDays };
+        return { overallProgress, totalWorkingDays: totalDuration };
     }, [tasks]);
 
   return (

@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ArrowLeft, Loader2, Save, Calendar, Plus, ChevronDown, Filter, FileDown } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { GanttChart } from '@/components/gantt/GanttChart';
-import { GanttTask, TaskStatus } from '@/types/gantt';
+import { GanttTask, TaskStatus, GanttTaskSchema } from '@/types/gantt';
 import dayjs from "dayjs";
 import minMax from "dayjs/plugin/minMax";
 
@@ -71,7 +71,8 @@ export default function ProjectPlanPage() {
             if (res.ok) {
                 const data = await res.json();
                 if (data.tasks && data.tasks.length > 0) {
-                    setTasks(data.tasks);
+                     const parsedTasks = data.tasks.map((task: any) => GanttTaskSchema.parse(task));
+                    setTasks(parsedTasks);
                 } else {
                     setTasks([]);
                 }
@@ -79,8 +80,13 @@ export default function ProjectPlanPage() {
                 setTasks([]);
                 toast({ title: "New Plan", description: "No existing plan found. Add tasks to create one."});
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error("Failed to fetch project plan", error);
+            if (error.issues) {
+                 toast({ title: "Data Validation Error", description: `Could not load plan: ${error.issues.map((i:any) => i.message).join(', ')}`, variant: "destructive" });
+            } else {
+                toast({ title: "Error", description: "Could not load project plan.", variant: "destructive" });
+            }
             setTasks([]);
         } finally {
             setLoading(prev => ({...prev, plan: false}));
@@ -156,7 +162,7 @@ export default function ProjectPlanPage() {
         const updateNestedTasks = (tasks: GanttTask[]): GanttTask[] => {
             return tasks.map(task => {
                 // Direct match on main task
-                if (task.id === taskId && !task.hasSubTasks) {
+                if (task.id === taskId && task.hasSubTasks === 'no') {
                     return { ...task, progress: newProgress };
                 }
 
@@ -182,8 +188,8 @@ export default function ProjectPlanPage() {
                             }
                         }
 
-                        // Direct match on sub-task
-                        if (subTask.id === taskId) {
+                        // Direct match on sub-task without its own children
+                        if (subTask.id === taskId && subTask.hasSubOfSubTasks === 'no') {
                             subTaskUpdated = true;
                             return { ...subTask, progress: newProgress };
                         }
@@ -249,19 +255,16 @@ export default function ProjectPlanPage() {
                     backgroundColor: 'white',
                 }
             });
-
-            // Get the dimensions from the generated image
-            const img = new Image();
-            img.src = imgData;
-            await new Promise(resolve => { img.onload = resolve; });
-            
             const pdf = new jsPDF({
                 orientation: 'landscape',
-                unit: 'px',
-                format: [img.width, img.height],
+                unit: 'pt',
+                format: 'a4',
             });
 
-            pdf.addImage(imgData, 'PNG', 0, 0, img.width, img.height);
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfHeight = pdf.internal.pageSize.getHeight();
+            
+            pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
             
             const fileName = selectedProject ? `${selectedProject.projectName}-plan.pdf` : 'project-plan.pdf';
             pdf.save(fileName);

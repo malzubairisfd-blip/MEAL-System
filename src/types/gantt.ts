@@ -115,45 +115,66 @@ export const GanttTaskSchema = z.object({
     let finalProgress = data.progress ?? 0;
     let earliestStart: Date | null = null;
     let latestEnd: Date | null = null;
+    let totalWeightedProgress = 0;
+    let totalWeight = 0;
+
+    const calculateWeightedProgress = (tasks: any[], level: number) => {
+        let levelWeightedProgress = 0;
+        let levelTotalWeight = 0;
+
+        tasks.forEach(task => {
+            const hasChildren = (level === 0 && task.hasSubTasks === 'yes' && task.subTasks) || 
+                                (level === 1 && task.hasSubOfSubTasks === 'yes' && task.subOfSubTasks);
+            
+            if (hasChildren) {
+                const children = level === 0 ? task.subTasks : task.subOfSubTasks;
+                const { weightedProgress: childrenWeightedProgress, totalWeight: childrenTotalWeight } = calculateWeightedProgress(children, level + 1);
+                
+                if (childrenTotalWeight > 0) {
+                    task.progress = childrenWeightedProgress / childrenTotalWeight;
+                } else {
+                    task.progress = 0;
+                }
+
+                // Roll up dates
+                let taskEarliestStart: Date | null = null;
+                let taskLatestEnd: Date | null = null;
+                children.forEach((child: any) => {
+                    const childStart = dayjs(child.start).toDate();
+                    const childEnd = dayjs(child.end).toDate();
+                    if (!taskEarliestStart || childStart < taskEarliestStart) taskEarliestStart = childStart;
+                    if (!taskLatestEnd || childEnd > taskLatestEnd) taskLatestEnd = childEnd;
+                });
+                task.start = dayjs(taskEarliestStart).format('YYYY-MM-DD');
+                task.end = dayjs(taskLatestEnd).format('YYYY-MM-DD');
+                
+            } else {
+                task.start = `${task.startYear}-${String(task.startMonth).padStart(2, '0')}-${String(task.startDay).padStart(2, '0')}`;
+                task.end = `${task.endYear}-${String(task.endMonth).padStart(2, '0')}-${String(task.endDay).padStart(2, '0')}`;
+            }
+            
+            const workingDays = calculateWorkingDays(task.start, task.end);
+            levelWeightedProgress += (task.progress || 0) * workingDays;
+            levelTotalWeight += workingDays;
+
+            // Also track earliest/latest for the top-level parent
+            const taskStart = dayjs(task.start).toDate();
+            const taskEnd = dayjs(task.end).toDate();
+            if (!earliestStart || taskStart < earliestStart) earliestStart = taskStart;
+            if (!latestEnd || taskEnd > latestEnd) latestEnd = taskEnd;
+        });
+
+        return { weightedProgress: levelWeightedProgress, totalWeight: levelTotalWeight };
+    };
 
     if (data.hasSubTasks === 'yes' && data.subTasks && data.subTasks.length > 0) {
-        const transformedSubTasks = data.subTasks.map(st => {
-             // Roll-up for sub-of-sub-tasks
-            if (st.hasSubOfSubTasks === 'yes' && st.subOfSubTasks && st.subOfSubTasks.length > 0) {
-                 let subEarliest: Date | null = null;
-                 let subLatest: Date | null = null;
-                 st.subOfSubTasks.forEach(sst => {
-                    const sstStart = dayjs(`${sst.startYear}-${sst.startMonth}-${sst.startDay}`).toDate();
-                    const sstEnd = dayjs(`${sst.endYear}-${sst.endMonth}-${sst.endDay}`).toDate();
-                    if (!subEarliest || sstStart < subEarliest) subEarliest = sstStart;
-                    if (!subLatest || sstEnd > subLatest) subLatest = sstEnd;
-                 });
-                 const subProgress = st.subOfSubTasks.reduce((acc, sst) => acc + (sst.progress || 0), 0) / (st.subOfSubTasks.length || 1);
-                 return { 
-                     ...st, 
-                     start: dayjs(subEarliest).format('YYYY-MM-DD'), 
-                     end: dayjs(subLatest).format('YYYY-MM-DD'),
-                     progress: subProgress
-                };
-            }
-             // For sub-tasks without their own children
-            return {
-                ...st,
-                start: `${st.startYear}-${String(st.startMonth).padStart(2, '0')}-${String(st.startDay).padStart(2, '0')}`,
-                end: `${st.endYear}-${String(st.endMonth).padStart(2, '0')}-${String(st.endDay).padStart(2, '0')}`
-            };
-        });
+        const { weightedProgress, totalWeight } = calculateWeightedProgress(data.subTasks, 1);
+        totalWeightedProgress = weightedProgress;
+        totalWeight = totalWeight;
 
-        // Roll-up for the main task
-        transformedSubTasks.forEach(st => {
-            const subStart = dayjs(st.start).toDate();
-            const subEnd = dayjs(st.end).toDate();
-            if (!earliestStart || subStart < earliestStart) earliestStart = subStart;
-            if (!latestEnd || subEnd > latestEnd) latestEnd = subEnd;
-        });
-
-        finalProgress = transformedSubTasks.reduce((acc, st) => acc + (st.progress || 0), 0) / (transformedSubTasks.length || 1);
-        data.subTasks = transformedSubTasks;
+        if (totalWeight > 0) {
+            finalProgress = totalWeightedProgress / totalWeight;
+        }
     }
 
     return {
@@ -187,3 +208,4 @@ export interface GanttSubOfSubTask extends Omit<GanttTask, 'subTasks' | 'hasSubT
 export type GanttTaskFormValues = z.infer<typeof GanttTaskSchema>;
 export type SubTaskFormValues = z.infer<typeof SubTaskSchema>;
 export type SubOfSubTaskFormValues = z.infer<typeof SubOfSubTaskSchema>;
+
