@@ -91,10 +91,31 @@ interface ListItemProps {
 }
 
 export const TaskListItem = ({ task, onDelete, onUpdateStatus, onUpdateProgress, isCollapsed, onToggleCollapse, level, canCollapse, taskNumber }: ListItemProps) => {
-    const workingDays = calculateWorkingDays(task.start, task.end);
+
+    const getTotalWorkingDays = (t: GanttTask | GanttSubTask): number => {
+        if ('hasSubTasks' in t && t.hasSubTasks === 'yes' && t.subTasks) {
+            return t.subTasks.reduce((sum, st) => sum + getTotalWorkingDays(st), 0);
+        }
+        if ('hasSubOfSubTasks' in t && t.hasSubOfSubTasks === 'yes' && t.subOfSubTasks) {
+            return t.subOfSubTasks.reduce((sum, sst) => sum + calculateWorkingDays(sst.start, sst.end), 0);
+        }
+        return calculateWorkingDays(t.start, t.end);
+    };
+
+    const workingDays = getTotalWorkingDays(task);
 
     let progressElement;
-    if (level > 0) { // Sub-tasks and sub-of-sub-tasks get an input
+    const hasChildren = ('hasSubTasks' in task && task.hasSubTasks === 'yes') || ('hasSubOfSubTasks' in task && task.hasSubOfSubTasks === 'yes');
+
+    if (hasChildren) {
+        const avgProgress = task.progress || 0;
+        progressElement = (
+            <div className="flex items-center gap-2 w-full">
+                <Progress value={avgProgress} className="h-2 w-full" />
+                <span className="text-xs w-8 text-right">{Math.round(isNaN(avgProgress) ? 0 : avgProgress)}%</span>
+            </div>
+        )
+    } else {
         progressElement = (
             <div className="flex items-center gap-2">
                 <Input
@@ -106,14 +127,6 @@ export const TaskListItem = ({ task, onDelete, onUpdateStatus, onUpdateProgress,
                     className="w-16 h-7 text-center bg-slate-700 border-slate-600"
                 />
                 <span>%</span>
-            </div>
-        )
-    } else { // Main tasks get a progress bar
-         const avgProgress = task.progress || 0;
-        progressElement = (
-            <div className="flex items-center gap-2 w-full">
-                <Progress value={avgProgress} className="h-2 w-full" />
-                <span className="text-xs w-8 text-right">{Math.round(isNaN(avgProgress) ? 0 : avgProgress)}%</span>
             </div>
         )
     }

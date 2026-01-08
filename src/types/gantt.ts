@@ -1,5 +1,8 @@
 // types/gantt.ts
 import { z } from 'zod';
+import dayjs from "dayjs";
+import { calculateWorkingDays } from '@/lib/ganttUtils';
+
 
 export type TaskStatus =
   | "DONE"
@@ -115,23 +118,25 @@ export const GanttTaskSchema = z.object({
 
     if (data.hasSubTasks === 'yes' && data.subTasks && data.subTasks.length > 0) {
         const transformedSubTasks = data.subTasks.map(st => {
+             // Roll-up for sub-of-sub-tasks
             if (st.hasSubOfSubTasks === 'yes' && st.subOfSubTasks && st.subOfSubTasks.length > 0) {
                  let subEarliest: Date | null = null;
                  let subLatest: Date | null = null;
                  st.subOfSubTasks.forEach(sst => {
-                    const sstStart = new Date(Number(sst.startYear), Number(sst.startMonth) - 1, Number(sst.startDay));
-                    const sstEnd = new Date(Number(sst.endYear), Number(sst.endMonth) - 1, Number(sst.endDay));
+                    const sstStart = dayjs(`${sst.startYear}-${sst.startMonth}-${sst.startDay}`).toDate();
+                    const sstEnd = dayjs(`${sst.endYear}-${sst.endMonth}-${sst.endDay}`).toDate();
                     if (!subEarliest || sstStart < subEarliest) subEarliest = sstStart;
                     if (!subLatest || sstEnd > subLatest) subLatest = sstEnd;
                  });
                  const subProgress = st.subOfSubTasks.reduce((acc, sst) => acc + (sst.progress || 0), 0) / (st.subOfSubTasks.length || 1);
                  return { 
                      ...st, 
-                     start: subEarliest!.toISOString().split('T')[0], 
-                     end: subLatest!.toISOString().split('T')[0],
+                     start: dayjs(subEarliest).format('YYYY-MM-DD'), 
+                     end: dayjs(subLatest).format('YYYY-MM-DD'),
                      progress: subProgress
                 };
             }
+             // For sub-tasks without their own children
             return {
                 ...st,
                 start: `${st.startYear}-${String(st.startMonth).padStart(2, '0')}-${String(st.startDay).padStart(2, '0')}`,
@@ -139,9 +144,10 @@ export const GanttTaskSchema = z.object({
             };
         });
 
+        // Roll-up for the main task
         transformedSubTasks.forEach(st => {
-            const subStart = new Date(st.start as string);
-            const subEnd = new Date(st.end as string);
+            const subStart = dayjs(st.start).toDate();
+            const subEnd = dayjs(st.end).toDate();
             if (!earliestStart || subStart < earliestStart) earliestStart = subStart;
             if (!latestEnd || subEnd > latestEnd) latestEnd = subEnd;
         });
@@ -153,8 +159,8 @@ export const GanttTaskSchema = z.object({
     return {
         ...data,
         progress: finalProgress,
-        start: earliestStart ? earliestStart.toISOString().split('T')[0] : `${data.startYear}-${String(data.startMonth).padStart(2, '0')}-${String(data.startDay).padStart(2, '0')}`,
-        end: latestEnd ? latestEnd.toISOString().split('T')[0] : `${data.endYear}-${String(data.endMonth).padStart(2, '0')}-${String(data.endDay).padStart(2, '0')}`
+        start: earliestStart ? dayjs(earliestStart).format('YYYY-MM-DD') : `${data.startYear}-${String(data.startMonth).padStart(2, '0')}-${String(data.startDay).padStart(2, '0')}`,
+        end: latestEnd ? dayjs(latestEnd).format('YYYY-MM-DD') : `${data.endYear}-${String(data.endMonth).padStart(2, '0')}-${String(data.endDay).padStart(2, '0')}`
     };
 });
 
