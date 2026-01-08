@@ -2,8 +2,13 @@
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 import dayjs from "dayjs";
+import isSameOrAfter from 'dayjs/plugin/isSameOrAfter';
+import isSameOrBefore from 'dayjs/plugin/isSameOrBefore';
 import { GanttTask } from "@/types/gantt";
 import { buildDayRange } from "./ganttTimeline";
+
+dayjs.extend(isSameOrAfter);
+dayjs.extend(isSameOrBefore);
 
 export function exportGanttToExcel(
   tasks: GanttTask[],
