@@ -149,31 +149,57 @@ export default function ProjectPlanPage() {
         );
     }, []);
     
-    const handleUpdateTaskProgress = useCallback((taskId: string, progress: number) => {
+     const handleUpdateTaskProgress = useCallback((taskId: string, progress: number) => {
         const newProgress = Math.max(0, Math.min(100, progress));
-        setTasks(prevTasks => 
-            prevTasks.map(task => {
-                 if (task.subTasks) {
-                    const subTaskIndex = task.subTasks.findIndex(st => st.id === taskId);
-                    if (subTaskIndex !== -1) {
-                        const updatedSubTasks = [...task.subTasks];
-                        updatedSubTasks[subTaskIndex] = { ...updatedSubTasks[subTaskIndex], progress: newProgress };
-                        
-                        const avgProgress = updatedSubTasks.reduce((acc, st) => acc + (st.progress || 0), 0) / (updatedSubTasks.length || 1);
 
-                        return {
-                            ...task,
-                            progress: avgProgress,
-                            subTasks: updatedSubTasks
-                        };
+        const updateNestedTasks = (tasks: GanttTask[]): GanttTask[] => {
+            return tasks.map(task => {
+                // Direct match on main task
+                if (task.id === taskId && !task.hasSubTasks) {
+                    return { ...task, progress: newProgress };
+                }
+
+                // Check sub-tasks
+                if (task.subTasks) {
+                    let subTaskUpdated = false;
+                    const updatedSubTasks = task.subTasks.map(subTask => {
+                        // Check sub-of-sub-tasks
+                        if (subTask.subOfSubTasks) {
+                            let subOfSubTaskUpdated = false;
+                            const updatedSubOfSubTasks = subTask.subOfSubTasks.map(sst => {
+                                if (sst.id === taskId) {
+                                    subOfSubTaskUpdated = true;
+                                    return { ...sst, progress: newProgress };
+                                }
+                                return sst;
+                            });
+
+                            if (subOfSubTaskUpdated) {
+                                subTaskUpdated = true;
+                                const subTaskProgress = updatedSubOfSubTasks.reduce((acc, sst) => acc + (sst.progress || 0), 0) / (updatedSubOfSubTasks.length || 1);
+                                return { ...subTask, subOfSubTasks: updatedSubOfSubTasks, progress: subTaskProgress };
+                            }
+                        }
+
+                        // Direct match on sub-task
+                        if (subTask.id === taskId) {
+                            subTaskUpdated = true;
+                            return { ...subTask, progress: newProgress };
+                        }
+                        return subTask;
+                    });
+                    
+                    if (subTaskUpdated) {
+                        const taskProgress = updatedSubTasks.reduce((acc, st) => acc + (st.progress || 0), 0) / (updatedSubTasks.length || 1);
+                        return { ...task, subTasks: updatedSubTasks, progress: taskProgress };
                     }
                 }
-                if (task.id === taskId) {
-                   return { ...task, progress: newProgress };
-                }
+
                 return task;
-            })
-        );
+            });
+        };
+
+        setTasks(prevTasks => updateNestedTasks(prevTasks));
     }, []);
 
     const projectDateRange = useMemo(() => {
