@@ -5,6 +5,7 @@ import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import Link from 'next/link';
 import jsPDF from 'jspdf';
 import { toPng } from 'html-to-image';
+import { exportGanttToExcel } from "@/lib/exportGanttToExcel";
 
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -83,7 +84,7 @@ export default function ProjectPlanPage() {
         } catch (error: any) {
             console.error("Failed to fetch project plan", error);
             if (error.issues) {
-                 toast({ title: "Data Validation Error", description: `Could not load plan: ${error.issues.map((i:any) => i.message).join(', ')}`, variant: "destructive" });
+                 toast({ title: "Data Validation Error", description: `Could not load plan: ${''\'\'' + error.issues.map((i:any) => i.message).join(', ') + ''\'\''.`, variant: "destructive" });
             } else {
                 toast({ title: "Error", description: "Could not load project plan.", variant: "destructive" });
             }
@@ -331,7 +332,11 @@ export default function ProjectPlanPage() {
 
                              <Button variant="outline" className="bg-slate-800 border-slate-700 hover:bg-slate-700 text-white" onClick={handleExportToPDF} disabled={isExporting}>
                                 {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4"/>}
-                                <span>Export</span>
+                                <span>Export PDF</span>
+                            </Button>
+                             <Button variant="outline" className="bg-slate-800 border-slate-700 hover:bg-slate-700 text-white" onClick={() => exportGanttToExcel(tasks, projectDateRange.start, projectDateRange.end)} disabled={isExporting || tasks.length === 0}>
+                                <FileDown className="mr-2 h-4 w-4"/>
+                                <span>Export Excel</span>
                             </Button>
                         </div>
                         {/* Top Right Controls */}
