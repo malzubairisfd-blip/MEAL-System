@@ -71,3 +71,29 @@ export async function POST(req: Request) {
         return NextResponse.json({ ok: false, error: "Failed to save project.", details: String(err) }, { status: 500 });
     }
 }
+
+export async function DELETE(req: Request) {
+    const PROJECTS_FILE = getProjectsFile();
+    try {
+        const { projectIds } = await req.json();
+
+        if (!projectIds || !Array.isArray(projectIds)) {
+            return NextResponse.json({ ok: false, error: "projectIds array is required" }, { status: 400 });
+        }
+
+        const existingProjects = await getExistingProjects();
+        const idsToDelete = new Set(projectIds);
+        const updatedProjects = existingProjects.filter(p => !idsToDelete.has(p.projectId));
+
+        if (updatedProjects.length === existingProjects.length) {
+            return NextResponse.json({ ok: false, error: "No matching projects found to delete" }, { status: 404 });
+        }
+
+        await fs.writeFile(PROJECTS_FILE, JSON.stringify(updatedProjects, null, 2), "utf8");
+
+        return NextResponse.json({ ok: true, message: `Successfully deleted ${idsToDelete.size} project(s).` });
+    } catch (err: any) {
+        console.error("[PROJECTS_API_DELETE_ERROR]", err);
+        return NextResponse.json({ ok: false, error: "Failed to delete project(s).", details: String(err) }, { status: 500 });
+    }
+}

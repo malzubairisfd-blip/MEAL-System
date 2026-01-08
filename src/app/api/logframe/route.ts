@@ -75,25 +75,26 @@ export async function POST(req: Request) {
 export async function DELETE(req: Request) {
     const LOGFRAMES_FILE = getLogframesFile();
     try {
-        const { projectId } = await req.json();
+        const { projectIds } = await req.json();
 
-        if (!projectId) {
-            return NextResponse.json({ ok: false, error: "projectId is required" }, { status: 400 });
+        if (!projectIds || !Array.isArray(projectIds)) {
+            return NextResponse.json({ ok: false, error: "projectIds array is required" }, { status: 400 });
         }
         
         const existingLogframes = await getExistingLogframes();
-        const updatedLogframes = existingLogframes.filter(lf => lf.projectId !== projectId);
+        const idsToDelete = new Set(projectIds);
+        const updatedLogframes = existingLogframes.filter(lf => !idsToDelete.has(lf.projectId));
         
         if (updatedLogframes.length === existingLogframes.length) {
-             return NextResponse.json({ ok: false, error: "Logframe not found" }, { status: 404 });
+             return NextResponse.json({ ok: false, error: "No matching logframes found to delete" }, { status: 404 });
         }
 
         await fs.writeFile(LOGFRAMES_FILE, JSON.stringify(updatedLogframes, null, 2), "utf8");
         
-        return NextResponse.json({ ok: true, message: `Logframe for project ${projectId} deleted successfully.` });
+        return NextResponse.json({ ok: true, message: `Successfully deleted ${idsToDelete.size} logframe(s).` });
 
     } catch (err: any) {
         console.error("[LOGFRAME_API_ERROR]", err);
-        return NextResponse.json({ ok: false, error: "Failed to delete logframe.", details: String(err) }, { status: 500 });
+        return NextResponse.json({ ok: false, error: "Failed to delete logframe(s).", details: String(err) }, { status: 500 });
     }
 }

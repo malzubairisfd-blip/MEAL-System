@@ -37,13 +37,15 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const projectId = searchParams.get('projectId');
 
-    if (!projectId) {
-        return NextResponse.json({ error: "projectId is required" }, { status: 400 });
-    }
-
+    
     try {
         await ensureDataFile();
         const plans = await getExistingPlans();
+        
+        if (!projectId) {
+            return NextResponse.json(plans);
+        }
+
         const plan = plans.find(p => p.projectId === projectId);
 
         if (plan) {
@@ -83,5 +85,31 @@ export async function POST(req: Request) {
     } catch (err: any) {
         console.error("[PROJECT_PLAN_API_ERROR]", err);
         return NextResponse.json({ ok: false, error: "Failed to save project plan.", details: String(err) }, { status: 500 });
+    }
+}
+
+export async function DELETE(req: Request) {
+    const PLANS_FILE = getPlansFile();
+    try {
+        const { projectIds } = await req.json();
+
+        if (!projectIds || !Array.isArray(projectIds)) {
+            return NextResponse.json({ ok: false, error: "projectIds array is required" }, { status: 400 });
+        }
+
+        const existingPlans = await getExistingPlans();
+        const idsToDelete = new Set(projectIds);
+        const updatedPlans = existingPlans.filter(p => !idsToDelete.has(p.projectId));
+
+        if (updatedPlans.length === existingPlans.length) {
+            return NextResponse.json({ ok: false, error: "No matching project plans found to delete" }, { status: 404 });
+        }
+
+        await fs.writeFile(PLANS_FILE, JSON.stringify(updatedPlans, null, 2), "utf8");
+
+        return NextResponse.json({ ok: true, message: `Successfully deleted ${idsToDelete.size} project plan(s).` });
+    } catch (err: any) {
+        console.error("[PROJECT_PLAN_API_DELETE_ERROR]", err);
+        return NextResponse.json({ ok: false, error: "Failed to delete project plan(s).", details: String(err) }, { status: 500 });
     }
 }

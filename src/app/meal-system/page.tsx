@@ -16,6 +16,7 @@ import {
   ListChecks,
   Target,
   ArrowLeft,
+  Settings,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -31,6 +32,7 @@ export default function MealSystemPage() {
     { href: "#", icon: <MessageSquareWarning className="h-8 w-8 text-yellow-500" />, title: "Compliant Page" },
     { href: "/logframe", icon: <ListChecks className="h-8 w-8 text-cyan-500" />, title: "Logical Framework page" },
     { href: "#", icon: <Target className="h-8 w-8 text-orange-500" />, title: "Indicator Page" },
+    { href: "/meal-system/settings", icon: <Settings className="h-8 w-8 text-gray-500" />, title: "Settings" },
   ];
 
   return (
