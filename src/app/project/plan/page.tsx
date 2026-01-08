@@ -10,11 +10,12 @@ import minMax from "dayjs/plugin/minMax";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Loader2, Save, Calendar, Plus, ChevronDown, Filter, FileDown } from 'lucide-react';
+import { ArrowLeft, Loader2, Save, Calendar, Plus, ChevronDown, Filter, FileDown, Goal } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { GanttChart } from '@/components/gantt/GanttChart';
 import { exportGanttToExcel } from "@/lib/exportGanttToExcel";
 import { exportGanttToPDF } from '@/lib/exportGanttToPDF';
+import { Logframe } from '@/lib/logframe';
 
 
 dayjs.extend(minMax);
@@ -35,6 +36,7 @@ export default function ProjectPlanPage() {
     const { toast } = useToast();
     const [projects, setProjects] = useState<Project[]>([]);
     const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+    const [logframe, setLogframe] = useState<Logframe | null>(null);
     const [tasks, setTasks] = useState<GanttTask[]>([]);
     const [loading, setLoading] = useState({ projects: true, plan: false });
     const [isSaving, setIsSaving] = useState(false);
@@ -63,29 +65,43 @@ export default function ProjectPlanPage() {
         if (!project) return;
         
         setSelectedProject(project);
+        setTasks([]);
+        setLogframe(null);
         setLoading(prev => ({...prev, plan: true}));
         try {
-            const res = await fetch(`/api/project-plan?projectId=${projectId}`);
-            if (res.ok) {
-                const data = await res.json();
+            // Fetch both plan and logframe
+            const [planRes, logframeRes] = await Promise.all([
+                fetch(`/api/project-plan?projectId=${projectId}`),
+                fetch(`/api/logframe?projectId=${projectId}`)
+            ]);
+
+            // Handle Logframe
+            if (logframeRes.ok) {
+                const logframeData = await logframeRes.json();
+                setLogframe(logframeData);
+            } else {
+                toast({ title: "Logframe not found", description: "No logical framework found for this project.", variant: "default" });
+            }
+
+            // Handle Project Plan
+            if (planRes.ok) {
+                const data = await planRes.json();
                 if (data.tasks && data.tasks.length > 0) {
                      const parsedTasks = data.tasks.map((task: any) => GanttTaskSchema.parse(task));
                     setTasks(parsedTasks);
                 } else {
-                    setTasks([]);
+                    toast({ title: "New Plan", description: "No existing plan found. Add tasks to create one."});
                 }
             } else {
-                setTasks([]);
                 toast({ title: "New Plan", description: "No existing plan found. Add tasks to create one."});
             }
         } catch (error: any) {
-            console.error("Failed to fetch project plan", error);
+            console.error("Failed to fetch project plan or logframe", error);
             if (error.issues) {
                  toast({ title: "Data Validation Error", description: `Could not load plan: ${error.issues.map((i:any) => i.message).join(', ')}`, variant: "destructive" });
             } else {
-                toast({ title: "Error", description: "Could not load project plan.", variant: "destructive" });
+                toast({ title: "Error", description: "Could not load project plan or logframe.", variant: "destructive" });
             }
-            setTasks([]);
         } finally {
             setLoading(prev => ({...prev, plan: false}));
         }
@@ -236,6 +252,18 @@ export default function ProjectPlanPage() {
             </div>
 
             {selectedProject && (
+                <>
+                 {logframe && (
+                    <Card className="bg-blue-50 border-blue-200">
+                        <CardHeader className="flex-row items-start gap-4">
+                            <Goal className="h-8 w-8 text-blue-600 mt-1" />
+                            <div>
+                                <CardTitle className="text-blue-900">Project Goal</CardTitle>
+                                <CardDescription className="text-blue-700">{logframe.goal.description}</CardDescription>
+                            </div>
+                        </CardHeader>
+                    </Card>
+                 )}
                 <div className='bg-slate-900 rounded-lg p-2'>
                     <div className='flex justify-between items-center mb-2 px-3 py-2'>
                         <div className="flex items-center gap-2">
@@ -286,6 +314,7 @@ export default function ProjectPlanPage() {
                         />
                     )}
                 </div>
+                </>
             )}
         </div>
     );

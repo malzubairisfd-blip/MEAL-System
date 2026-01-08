@@ -7,7 +7,7 @@ import dayjs from "dayjs";
 import { GanttTask, TaskStatus } from "@/types/gantt";
 import { STATUS_COLORS } from "@/lib/statusStyles";
 import { calculateWorkingDays } from '@/lib/ganttUtils';
-import { ChevronDown, Trash2, Edit, ChevronRight, Goal, GitCommit, LocateFixed } from "lucide-react";
+import { ChevronDown, Trash2, Edit, ChevronRight, GitCommit, LocateFixed } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Input } from "../ui/input";
@@ -168,12 +168,8 @@ export const TaskListItem = ({ task, onDelete, onUpdateStatus, onUpdateProgress,
                       {task.title}
                     </span>
                 </div>
-                {level === 0 && task.goal && (
+                {level === 0 && task.outcome && (
                   <div className="flex items-center gap-2 pl-7 text-xs text-slate-400 mt-1">
-                    <Tooltip>
-                      <TooltipTrigger><Goal className="h-3 w-3"/></TooltipTrigger>
-                      <TooltipContent><p>{task.goal}</p></TooltipContent>
-                    </Tooltip>
                     <Tooltip>
                       <TooltipTrigger><GitCommit className="h-3 w-3"/></TooltipTrigger>
                       <TooltipContent><p>{task.outcome}</p></TooltipContent>

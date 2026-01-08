@@ -187,15 +187,13 @@ export default function EditTaskPage() {
 function RecursiveTaskItem({ control, index, remove, isEditMode, parentPath, logframe }: { control: any; index: number; remove: (index: number) => void; isEditMode?: boolean, parentPath: string, logframe: Logframe | null }) {
     const currentPath = index === -1 ? '' : (parentPath ? `${parentPath}.subTasks.${index}` : `tasks.${index}`);
 
-    const activityNumber = parentPath.split('.subTasks').filter(Boolean).map((_, i, arr) => {
-        const fullPath = arr.slice(0, i + 1).join('.subTasks');
-        const match = fullPath.match(/\.(\d+)$/);
-        return match ? parseInt(match[1]) + 1 : 1;
-    }).join('.') + (parentPath && index !== -1 ? `.${index + 1}` : (index !== -1 ? `${index + 1}`: ''));
+    const activityNumbering = parentPath 
+      ? `${parentPath.match(/\d+(\.\d+)*/)?.[0] || '1'}.${index + 1}`
+      : (index !== -1 ? `${index + 1}` : '');
 
     const hasSubTasks = useWatch({ control, name: currentPath ? `${currentPath}.hasSubTasks` : 'hasSubTasks' });
     
-    const isTopLevel = parentPath === '' && index === -1;
+    const isTopLevel = !parentPath && index !== -1 || (parentPath === '' && index === -1);
     const selectedOutcome = useWatch({ control, name: currentPath ? `${currentPath}.outcome` : 'outcome', disabled: !isTopLevel });
     const selectedOutput = useWatch({ control, name: currentPath ? `${currentPath}.output` : 'output', disabled: !isTopLevel });
     
@@ -209,7 +207,7 @@ function RecursiveTaskItem({ control, index, remove, isEditMode, parentPath, log
     return (
         <Card className="p-4 relative bg-slate-50 border-slate-200" style={{ marginLeft: `${(parentPath.split('.subTasks').length -1) * 20}px` }}>
             <div className="flex justify-between items-start mb-4">
-                <h3 className="text-lg font-semibold">Activity {activityNumber || 'Details'}</h3>
+                <h3 className="text-lg font-semibold">Activity {activityNumbering || 'Details'}</h3>
                 {!isEditMode && (
                     <Button type="button" variant="ghost" size="icon" onClick={() => remove(index)}>
                         <Trash2 className="h-4 w-4 text-destructive"/>
@@ -217,24 +215,9 @@ function RecursiveTaskItem({ control, index, remove, isEditMode, parentPath, log
                 )}
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {logframe && index === -1 && (
-                    <div className="col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
-                         <FormField control={control} name="goal" render={({ field }) => (
-                           <FormItem>
-                               <FormLabel>Project Goal</FormLabel>
-                               <Select onValueChange={field.onChange} value={field.value}>
-                                   <FormControl><SelectTrigger><SelectValue placeholder="Select Goal" /></SelectTrigger></FormControl>
-                                   <SelectContent>
-                                       <SelectItem value={logframe.goal.description}>{logframe.goal.description}</SelectItem>
-                                   </SelectContent>
-                               </Select>
-                           </FormItem>
-                       )} />
-                    </div>
-                )}
                  {isTopLevel && logframe && (
-                     <div className="col-span-2 grid grid-cols-1 md:grid-cols-3 gap-4">
-                       <FormField control={control} name={'outcome'} render={({ field }) => (
+                     <div className="col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+                       <FormField control={control} name={currentPath ? `${currentPath}.outcome` : 'outcome'} render={({ field }) => (
                            <FormItem>
                                <FormLabel>Outcome</FormLabel>
                                <Select onValueChange={field.onChange} value={field.value}>
@@ -245,7 +228,7 @@ function RecursiveTaskItem({ control, index, remove, isEditMode, parentPath, log
                                </Select>
                            </FormItem>
                        )} />
-                        <FormField control={control} name={'output'} render={({ field }) => (
+                        <FormField control={control} name={currentPath ? `${currentPath}.output` : 'output'} render={({ field }) => (
                            <FormItem>
                                <FormLabel>Output</FormLabel>
                                <Select onValueChange={field.onChange} value={field.value}>
@@ -256,29 +239,26 @@ function RecursiveTaskItem({ control, index, remove, isEditMode, parentPath, log
                                </Select>
                            </FormItem>
                        )} />
-                        <FormField control={control} name={'title'} render={({ field }) => (
-                           <FormItem>
-                               <FormLabel>Activity</FormLabel>
-                               <Select onValueChange={field.onChange} value={field.value} disabled={!selectedOutput}>
-                                   <FormControl><SelectTrigger><SelectValue placeholder="Select Activity" /></SelectTrigger></FormControl>
-                                   <SelectContent>
-                                       {filteredActivities.map((a, i) => <SelectItem key={i} value={a.description}>{a.description}</SelectItem>)}
-                                   </SelectContent>
-                               </Select>
-                               <FormMessage/>
-                           </FormItem>
-                       )} />
                     </div>
                  )}
-                 {!isTopLevel && (
-                     <FormField control={control} name={currentPath ? `${currentPath}.title` : 'title'} render={({ field }) => (
-                         <FormItem className="col-span-2">
-                            <FormLabel>Activity {activityNumber} Title</FormLabel>
-                            <FormControl><Input placeholder={`Enter title for activity ${activityNumber}...`} {...field} /></FormControl>
-                            <FormMessage/>
-                        </FormItem>
-                    )} />
-                 )}
+                 
+                <FormField control={control} name={currentPath ? `${currentPath}.title` : 'title'} render={({ field }) => (
+                    <FormItem className="col-span-2">
+                        <FormLabel>Activity {activityNumbering} Title</FormLabel>
+                        {isTopLevel && filteredActivities.length > 0 ? (
+                             <Select onValueChange={field.onChange} value={field.value} disabled={!selectedOutput}>
+                                <FormControl><SelectTrigger><SelectValue placeholder="Select Activity" /></SelectTrigger></FormControl>
+                                <SelectContent>
+                                    {filteredActivities.map((a, i) => <SelectItem key={i} value={a.description}>{a.description}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
+                        ) : (
+                            <FormControl><Input placeholder={`Enter title for activity ${activityNumbering}...`} {...field} /></FormControl>
+                        )}
+                        <FormMessage/>
+                    </FormItem>
+                )} />
+
                  {hasSubTasks === 'no' && (
                     <div className="col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
@@ -305,7 +285,7 @@ function RecursiveTaskItem({ control, index, remove, isEditMode, parentPath, log
                     name={currentPath ? `${currentPath}.hasSubTasks` : 'hasSubTasks'}
                     render={({ field }) => (
                         <FormItem className="col-span-2 space-y-3">
-                            <FormLabel>Include Activity {activityNumber}.1?</FormLabel>
+                            <FormLabel>Include Activity {activityNumbering || '1'}.1?</FormLabel>
                             <FormControl>
                                 <RadioGroup
                                     onValueChange={field.onChange}
@@ -342,11 +322,7 @@ function RecursiveTaskArray({ control, parentPath, logframe }: { control: any; p
         name
     });
 
-    const parentActivityNumber = parentPath.split('.subTasks').filter(Boolean).map((_, i, arr) => {
-        const fullPath = arr.slice(0, i + 1).join('.subTasks');
-        const match = fullPath.match(/\.(\d+)$/);
-        return match ? parseInt(match[1]) + 1 : 1;
-    }).join('.') + (parentPath.includes('.') ? `.${parseInt(parentPath.split('.').pop() || '0') + 1}` : (parentPath.match(/\d+$/) ? `.${parseInt(parentPath.split('.').pop() || '0') + 1}`: ''));
+    const parentActivityNumber = parentPath.match(/\d+(\.\d+)*/)?.[0] || '1';
 
     return (
         <div className="col-span-2 mt-4 space-y-4">
@@ -356,6 +332,7 @@ function RecursiveTaskArray({ control, parentPath, logframe }: { control: any; p
                     control={control} 
                     index={subIndex} 
                     remove={remove}
+                    isEditMode={false}
                     parentPath={name}
                     logframe={logframe}
                 />
