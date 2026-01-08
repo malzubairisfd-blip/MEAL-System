@@ -215,13 +215,13 @@ export default function AddTaskPage() {
     );
 }
 
-function RecursiveTaskItem({ control, index, remove, pathPrefix, logframe, isEditMode }: { control: any; index: number; remove: (index: number) => void; pathPrefix: string; logframe: Logframe | null; isEditMode?: boolean }) {
+function RecursiveTaskItem({ control, index, remove, pathPrefix, logframe }: { control: any; index: number; remove: (index: number) => void; pathPrefix: string; logframe: Logframe | null; }) {
     const currentPath = `${pathPrefix}.${index}`;
     const hasSubTasks = useWatch({ control, name: `${currentPath}.hasSubTasks` });
     const selectedOutcome = useWatch({ control, name: `${currentPath}.outcome` });
     const selectedOutput = useWatch({ control, name: `${currentPath}.output` });
 
-    const activityNumber = pathPrefix.split('.').filter(p => !isNaN(parseInt(p))).map(p => parseInt(p) + 1).join('.');
+    const activityNumber = pathPrefix.split('.').filter(p => !isNaN(parseInt(p))).map(p => parseInt(p) + 1).join('.') + `.${index + 1}`;
 
     const filteredActivities = React.useMemo(() => {
         if (!logframe || !selectedOutput) return [];
@@ -231,14 +231,12 @@ function RecursiveTaskItem({ control, index, remove, pathPrefix, logframe, isEdi
 
 
     return (
-        <Card className="p-4 relative bg-slate-50 border-slate-200" style={{ marginLeft: `${(pathPrefix.split('.').length - 1) * 20}px` }}>
+        <Card className="p-4 relative bg-slate-50 border-slate-200" style={{ marginLeft: `${(pathPrefix.split('.').filter(p => p === 'subTasks').length) * 20}px` }}>
             <div className="flex justify-between items-start mb-4">
                 <h3 className="text-lg font-semibold">Activity {activityNumber}</h3>
-                {!isEditMode && (
-                    <Button type="button" variant="ghost" size="icon" onClick={() => remove(index)}>
-                        <Trash2 className="h-4 w-4 text-destructive"/>
-                    </Button>
-                )}
+                <Button type="button" variant="ghost" size="icon" onClick={() => remove(index)}>
+                    <Trash2 className="h-4 w-4 text-destructive"/>
+                </Button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                  {logframe && (
@@ -341,7 +339,8 @@ function RecursiveTaskArray({ control, pathPrefix, logframe }: { control: any; p
         name: `${pathPrefix}.subTasks`
     });
 
-    const parentActivityNumber = pathPrefix.split('.').filter(p => !isNaN(parseInt(p))).map(p => parseInt(p) + 1).join('.') || '1';
+    const parentActivityNumber = (pathPrefix.split('.').filter(p => p !== 'tasks' && !isNaN(parseInt(p))).map(p => parseInt(p) + 1).join('.'));
+
 
     return (
         <div className="col-span-2 mt-4 space-y-4">

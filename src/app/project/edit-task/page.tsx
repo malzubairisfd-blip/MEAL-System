@@ -191,7 +191,7 @@ function RecursiveTaskItem({ control, index, remove, isEditMode, pathPrefix, log
     const selectedOutcome = useWatch({ control, name: currentPath ? `${currentPath}.outcome` : 'outcome' });
     const selectedOutput = useWatch({ control, name: currentPath ? `${currentPath}.output` : 'output' });
 
-    const activityNumber = (pathPrefix.split('.').filter(p => p !== 'tasks' && p !== 'subTasks').map(p => parseInt(p) + 1).join('.') + (index !== -1 ? `.${index + 1}` : '')).replace(/^\./, '');
+    const activityNumber = (pathPrefix.split('.').filter(p => !isNaN(parseInt(p))).map(p => parseInt(p) + 1).join('.') + (index !== -1 ? `.${index + 1}` : '')).replace(/^\./, '');
 
 
     const filteredActivities = React.useMemo(() => {
@@ -328,7 +328,7 @@ function RecursiveTaskArray({ control, pathPrefix, logframe }: { control: any; p
         name
     });
 
-    const parentActivityNumber = (pathPrefix.split('.').filter(p => p !== 'tasks' && p !== 'subTasks' && !isNaN(parseInt(p))).map(p => parseInt(p) + 1).join('.') + (pathPrefix.endsWith('subTasks') ? '' : `.${(parseInt(pathPrefix.split('.').pop() || '-1') + 1)}`)).replace(/^\./, '');
+    const parentActivityNumber = (pathPrefix.split('.').filter(p => !isNaN(parseInt(p))).map(p => parseInt(p) + 1).join('.') + (pathPrefix.match(/\d+$/) ? `.${parseInt(pathPrefix.split('.').pop() || '0') + 1}` : ''));
 
 
     return (
