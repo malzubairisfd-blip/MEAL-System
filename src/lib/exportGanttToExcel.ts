@@ -116,7 +116,7 @@ export function exportGanttToExcel(
 
   // PERCENT FORMAT
   for (let r = 1; r < rows.length; r++) {
-    const cell = ws[`C${''\'\'' + (r + 1)}`];
+    const cell = ws[`C${r + 1}`];
     if (cell) {
       cell.t = "n";
       cell.z = "0%";
