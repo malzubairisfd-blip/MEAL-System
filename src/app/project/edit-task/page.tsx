@@ -191,8 +191,7 @@ function RecursiveTaskItem({ control, index, remove, isEditMode, pathPrefix, log
     const selectedOutcome = useWatch({ control, name: currentPath ? `${currentPath}.outcome` : 'outcome' });
     const selectedOutput = useWatch({ control, name: currentPath ? `${currentPath}.output` : 'output' });
 
-    const activityNumber = (pathPrefix.split('.').filter(p => !isNaN(parseInt(p))).map(p => parseInt(p) + 1).join('.') + (index !== -1 ? `.${index + 1}` : '')).replace(/^\./, '');
-
+    const activityNumber = (pathPrefix.split('.').filter(p => !isNaN(parseInt(p))).map(p => parseInt(p) + 1).join('.') + (index !== -1 ? `.${index + 1}` : '')).replace(/^tasks\./, '').replace(/^\./, '');
 
     const filteredActivities = React.useMemo(() => {
         if (!logframe || !selectedOutput) return [];
@@ -227,7 +226,7 @@ function RecursiveTaskItem({ control, index, remove, isEditMode, pathPrefix, log
                        )} />
                     </div>
                 )}
-                 {logframe && (
+                 {logframe && pathPrefix === '' && (
                      <div className="col-span-2 grid grid-cols-1 md:grid-cols-3 gap-4">
                        <FormField control={control} name={currentPath ? `${currentPath}.outcome` : 'outcome'} render={({ field }) => (
                            <FormItem>
@@ -264,6 +263,15 @@ function RecursiveTaskItem({ control, index, remove, isEditMode, pathPrefix, log
                            </FormItem>
                        )} />
                     </div>
+                 )}
+                 {pathPrefix !== '' && (
+                     <FormField control={control} name={currentPath ? `${currentPath}.title` : 'title'} render={({ field }) => (
+                         <FormItem className="col-span-2">
+                            <FormLabel>Activity {activityNumber} Title</FormLabel>
+                            <FormControl><Input placeholder={`Enter title for activity ${activityNumber}...`} {...field} /></FormControl>
+                            <FormMessage/>
+                        </FormItem>
+                    )} />
                  )}
                  {hasSubTasks === 'no' && (
                     <div className="col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -328,7 +336,7 @@ function RecursiveTaskArray({ control, pathPrefix, logframe }: { control: any; p
         name
     });
 
-    const parentActivityNumber = (pathPrefix.split('.').filter(p => !isNaN(parseInt(p))).map(p => parseInt(p) + 1).join('.') + (pathPrefix.match(/\d+$/) ? `.${parseInt(pathPrefix.split('.').pop() || '0') + 1}` : ''));
+    const parentActivityNumber = (pathPrefix.split('.').filter(p => !isNaN(parseInt(p))).map(p => parseInt(p) + 1).join('.') + (pathPrefix.match(/\d+$/) ? `.${parseInt(pathPrefix.split('.').pop() || '0') + 1}` : '')).replace(/^tasks\./, '').replace(/^\./, '');
 
 
     return (

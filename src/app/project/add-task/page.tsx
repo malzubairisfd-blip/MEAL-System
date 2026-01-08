@@ -218,10 +218,12 @@ export default function AddTaskPage() {
 function RecursiveTaskItem({ control, index, remove, pathPrefix, logframe }: { control: any; index: number; remove: (index: number) => void; pathPrefix: string; logframe: Logframe | null; }) {
     const currentPath = `${pathPrefix}.${index}`;
     const hasSubTasks = useWatch({ control, name: `${currentPath}.hasSubTasks` });
-    const selectedOutcome = useWatch({ control, name: `${currentPath}.outcome` });
-    const selectedOutput = useWatch({ control, name: `${currentPath}.output` });
+    
+    // Only watch these for top-level activities (pathPrefix === 'tasks')
+    const selectedOutcome = useWatch({ control, name: `${currentPath}.outcome`, disabled: pathPrefix !== 'tasks' });
+    const selectedOutput = useWatch({ control, name: `${currentPath}.output`, disabled: pathPrefix !== 'tasks' });
 
-    const activityNumber = pathPrefix.split('.').filter(p => !isNaN(parseInt(p))).map(p => parseInt(p) + 1).join('.') + `.${index + 1}`;
+    const activityNumber = (pathPrefix.split('.').filter(p => !isNaN(parseInt(p))).map(p => parseInt(p) + 1).join('.') + `.${index + 1}`).replace(/^tasks\./, '');
 
     const filteredActivities = React.useMemo(() => {
         if (!logframe || !selectedOutput) return [];
@@ -239,7 +241,7 @@ function RecursiveTaskItem({ control, index, remove, pathPrefix, logframe }: { c
                 </Button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                 {logframe && (
+                 {logframe && pathPrefix === 'tasks' && (
                     <div className="col-span-2 grid grid-cols-1 md:grid-cols-3 gap-4">
                        <FormField control={control} name={`${currentPath}.outcome`} render={({ field }) => (
                            <FormItem>
@@ -277,6 +279,15 @@ function RecursiveTaskItem({ control, index, remove, pathPrefix, logframe }: { c
                        )} />
                     </div>
                 )}
+                 {pathPrefix !== 'tasks' && (
+                    <FormField control={control} name={`${currentPath}.title`} render={({ field }) => (
+                        <FormItem className="col-span-2">
+                           <FormLabel>Activity {activityNumber} Title</FormLabel>
+                           <FormControl><Input placeholder={`Enter title for activity ${activityNumber}...`} {...field} /></FormControl>
+                           <FormMessage/>
+                       </FormItem>
+                   )} />
+                 )}
                  {hasSubTasks === 'no' && (
                     <div className="col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
@@ -334,12 +345,13 @@ function RecursiveTaskItem({ control, index, remove, pathPrefix, logframe }: { c
 }
 
 function RecursiveTaskArray({ control, pathPrefix, logframe }: { control: any; pathPrefix: string; logframe: Logframe | null }) {
+    const name = pathPrefix ? `${pathPrefix}.subTasks` : 'tasks';
     const { fields, append, remove } = useFieldArray({
         control,
-        name: `${pathPrefix}.subTasks`
+        name
     });
 
-    const parentActivityNumber = (pathPrefix.split('.').filter(p => p !== 'tasks' && !isNaN(parseInt(p))).map(p => parseInt(p) + 1).join('.'));
+    const parentActivityNumber = (pathPrefix.split('.').filter(p => !isNaN(parseInt(p))).map(p => parseInt(p) + 1).join('.') + (pathPrefix.match(/\d+$/) ? `.${parseInt(pathPrefix.split('.').pop() || '0') + 1}` : '')).replace(/^tasks\./, '');
 
 
     return (
@@ -350,7 +362,7 @@ function RecursiveTaskArray({ control, pathPrefix, logframe }: { control: any; p
                     control={control} 
                     index={subIndex} 
                     remove={remove}
-                    pathPrefix={`${pathPrefix}.subTasks`}
+                    pathPrefix={name}
                     logframe={logframe}
                 />
             ))}
