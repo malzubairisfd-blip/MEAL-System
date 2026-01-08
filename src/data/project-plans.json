@@ -17,7 +17,13 @@
             "end": "2023-03-09",
             "progress": 100,
             "status": "DONE",
-            "hasSubOfSubTasks": "no"
+            "hasSubOfSubTasks": "no",
+            "startDay": "08",
+            "startMonth": "03",
+            "startYear": "2023",
+            "endDay": "09",
+            "endMonth": "03",
+            "endYear": "2023"
           },
           {
             "id": "sub-task-1-2",
@@ -26,7 +32,13 @@
             "end": "2023-03-17",
             "progress": 100,
             "status": "DONE",
-            "hasSubOfSubTasks": "no"
+            "hasSubOfSubTasks": "no",
+            "startDay": "13",
+            "startMonth": "03",
+            "startYear": "2023",
+            "endDay": "17",
+            "endMonth": "03",
+            "endYear": "2023"
           },
           {
             "id": "sub-task-1-3",
@@ -35,7 +47,13 @@
             "end": "2023-05-07",
             "progress": 100,
             "status": "DONE",
-            "hasSubOfSubTasks": "no"
+            "hasSubOfSubTasks": "no",
+            "startDay": "10",
+            "startMonth": "04",
+            "startYear": "2023",
+            "endDay": "07",
+            "endMonth": "05",
+            "endYear": "2023"
           },
           {
             "id": "sub-task-1-4",
@@ -44,7 +62,13 @@
             "end": "2023-04-13",
             "progress": 100,
             "status": "DONE",
-            "hasSubOfSubTasks": "no"
+            "hasSubOfSubTasks": "no",
+            "startDay": "12",
+            "startMonth": "04",
+            "startYear": "2023",
+            "endDay": "13",
+            "endMonth": "04",
+            "endYear": "2023"
           },
           {
             "id": "sub-task-1-5",
@@ -53,7 +77,13 @@
             "end": "2023-04-13",
             "progress": 100,
             "status": "DONE",
-            "hasSubOfSubTasks": "no"
+            "hasSubOfSubTasks": "no",
+            "startDay": "13",
+            "startMonth": "04",
+            "startYear": "2023",
+            "endDay": "13",
+            "endMonth": "04",
+            "endYear": "2023"
           }
         ]
       },
@@ -71,7 +101,13 @@
             "end": "2023-03-15",
             "progress": 100,
             "status": "DONE",
-            "hasSubOfSubTasks": "no"
+            "hasSubOfSubTasks": "no",
+            "startDay": "12",
+            "startMonth": "03",
+            "startYear": "2023",
+            "endDay": "15",
+            "endMonth": "03",
+            "endYear": "2023"
           },
           {
             "id": "sub-task-2-2",
@@ -80,7 +116,13 @@
             "end": "2023-03-16",
             "progress": 100,
             "status": "DONE",
-            "hasSubOfSubTasks": "no"
+            "hasSubOfSubTasks": "no",
+            "startDay": "16",
+            "startMonth": "03",
+            "startYear": "2023",
+            "endDay": "16",
+            "endMonth": "03",
+            "endYear": "2023"
           },
           {
             "id": "sub-task-2-3",
@@ -89,7 +131,13 @@
             "end": "2023-03-17",
             "progress": 100,
             "status": "DONE",
-            "hasSubOfSubTasks": "no"
+            "hasSubOfSubTasks": "no",
+            "startDay": "17",
+            "startMonth": "03",
+            "startYear": "2023",
+            "endDay": "17",
+            "endMonth": "03",
+            "endYear": "2023"
           },
           {
             "id": "sub-task-2-4",
@@ -98,7 +146,13 @@
             "end": "2023-03-20",
             "progress": 100,
             "status": "DONE",
-            "hasSubOfSubTasks": "no"
+            "hasSubOfSubTasks": "no",
+            "startDay": "18",
+            "startMonth": "03",
+            "startYear": "2023",
+            "endDay": "20",
+            "endMonth": "03",
+            "endYear": "2023"
           },
           {
             "id": "sub-task-2-5",
@@ -107,7 +161,13 @@
             "end": "2023-03-26",
             "progress": 100,
             "status": "DONE",
-            "hasSubOfSubTasks": "no"
+            "hasSubOfSubTasks": "no",
+            "startDay": "21",
+            "startMonth": "03",
+            "startYear": "2023",
+            "endDay": "26",
+            "endMonth": "03",
+            "endYear": "2023"
           },
           {
             "id": "sub-task-2-6",
@@ -116,7 +176,13 @@
             "end": "2023-03-27",
             "progress": 100,
             "status": "DONE",
-            "hasSubOfSubTasks": "no"
+            "hasSubOfSubTasks": "no",
+            "startDay": "27",
+            "startMonth": "03",
+            "startYear": "2023",
+            "endDay": "27",
+            "endMonth": "03",
+            "endYear": "2023"
           },
           {
             "id": "sub-task-2-7",
@@ -125,7 +191,13 @@
             "end": "2023-03-28",
             "progress": 100,
             "status": "DONE",
-            "hasSubOfSubTasks": "no"
+            "hasSubOfSubTasks": "no",
+            "startDay": "28",
+            "startMonth": "03",
+            "startYear": "2023",
+            "endDay": "28",
+            "endMonth": "03",
+            "endYear": "2023"
           }
         ]
       },
@@ -143,7 +215,13 @@
             "end": "2023-04-15",
             "progress": 100,
             "status": "DONE",
-            "hasSubOfSubTasks": "no"
+            "hasSubOfSubTasks": "no",
+            "startDay": "13",
+            "startMonth": "04",
+            "startYear": "2023",
+            "endDay": "15",
+            "endMonth": "04",
+            "endYear": "2023"
           },
           {
             "id": "sub-task-3-2",
@@ -152,7 +230,13 @@
             "end": "2023-04-16",
             "progress": 100,
             "status": "DONE",
-            "hasSubOfSubTasks": "no"
+            "hasSubOfSubTasks": "no",
+            "startDay": "16",
+            "startMonth": "04",
+            "startYear": "2023",
+            "endDay": "16",
+            "endMonth": "04",
+            "endYear": "2023"
           },
           {
             "id": "sub-task-3-3",
@@ -161,7 +245,13 @@
             "end": "2023-04-18",
             "progress": 100,
             "status": "DONE",
-            "hasSubOfSubTasks": "no"
+            "hasSubOfSubTasks": "no",
+            "startDay": "17",
+            "startMonth": "04",
+            "startYear": "2023",
+            "endDay": "18",
+            "endMonth": "04",
+            "endYear": "2023"
           },
           {
             "id": "sub-task-3-4",
@@ -170,7 +260,13 @@
             "end": "2023-04-19",
             "progress": 100,
             "status": "DONE",
-            "hasSubOfSubTasks": "no"
+            "hasSubOfSubTasks": "no",
+            "startDay": "19",
+            "startMonth": "04",
+            "startYear": "2023",
+            "endDay": "19",
+            "endMonth": "04",
+            "endYear": "2023"
           },
           {
             "id": "sub-task-3-5",
@@ -179,7 +275,13 @@
             "end": "2023-04-21",
             "progress": 100,
             "status": "DONE",
-            "hasSubOfSubTasks": "no"
+            "hasSubOfSubTasks": "no",
+            "startDay": "20",
+            "startMonth": "04",
+            "startYear": "2023",
+            "endDay": "21",
+            "endMonth": "04",
+            "endYear": "2023"
           },
           {
             "id": "sub-task-3-6",
@@ -188,7 +290,13 @@
             "end": "2023-05-05",
             "progress": 100,
             "status": "DONE",
-            "hasSubOfSubTasks": "no"
+            "hasSubOfSubTasks": "no",
+            "startDay": "22",
+            "startMonth": "04",
+            "startYear": "2023",
+            "endDay": "05",
+            "endMonth": "05",
+            "endYear": "2023"
           },
           {
             "id": "sub-task-3-7",
@@ -197,7 +305,13 @@
             "end": "2023-05-06",
             "progress": 100,
             "status": "DONE",
-            "hasSubOfSubTasks": "no"
+            "hasSubOfSubTasks": "no",
+            "startDay": "06",
+            "startMonth": "05",
+            "startYear": "2023",
+            "endDay": "06",
+            "endMonth": "05",
+            "endYear": "2023"
           },
           {
             "id": "sub-task-3-8",
@@ -206,7 +320,13 @@
             "end": "2023-05-29",
             "progress": 100,
             "status": "DONE",
-            "hasSubOfSubTasks": "no"
+            "hasSubOfSubTasks": "no",
+            "startDay": "07",
+            "startMonth": "05",
+            "startYear": "2023",
+            "endDay": "29",
+            "endMonth": "05",
+            "endYear": "2023"
           },
           {
             "id": "sub-task-3-9",
@@ -215,7 +335,13 @@
             "end": "2023-05-30",
             "progress": 50,
             "status": "IN_PROGRESS",
-            "hasSubOfSubTasks": "no"
+            "hasSubOfSubTasks": "no",
+            "startDay": "30",
+            "startMonth": "05",
+            "startYear": "2023",
+            "endDay": "30",
+            "endMonth": "05",
+            "endYear": "2023"
           }
         ]
       },
@@ -239,7 +365,13 @@
                 "start": "2023-05-14",
                 "end": "2023-05-16",
                 "progress": 100,
-                "status": "DONE"
+                "status": "DONE",
+                "startDay": "14",
+                "startMonth": "05",
+                "startYear": "2023",
+                "endDay": "16",
+                "endMonth": "05",
+                "endYear": "2023"
               },
               {
                 "id": "sss-4-1-2",
@@ -247,7 +379,13 @@
                 "start": "2023-05-17",
                 "end": "2023-05-19",
                 "progress": 100,
-                "status": "DONE"
+                "status": "DONE",
+                "startDay": "17",
+                "startMonth": "05",
+                "startYear": "2023",
+                "endDay": "19",
+                "endMonth": "05",
+                "endYear": "2023"
               },
               {
                 "id": "sss-4-1-3",
@@ -255,7 +393,13 @@
                 "start": "2023-05-20",
                 "end": "2023-05-24",
                 "progress": 100,
-                "status": "DONE"
+                "status": "DONE",
+                "startDay": "20",
+                "startMonth": "05",
+                "startYear": "2023",
+                "endDay": "24",
+                "endMonth": "05",
+                "endYear": "2023"
               },
               {
                 "id": "sss-4-1-4",
@@ -263,7 +407,13 @@
                 "start": "2023-05-25",
                 "end": "2023-05-30",
                 "progress": 50,
-                "status": "IN_PROGRESS"
+                "status": "IN_PROGRESS",
+                "startDay": "25",
+                "startMonth": "05",
+                "startYear": "2023",
+                "endDay": "30",
+                "endMonth": "05",
+                "endYear": "2023"
               },
               {
                 "id": "sss-4-1-5",
@@ -271,7 +421,13 @@
                 "start": "2023-05-31",
                 "end": "2023-05-31",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "31",
+                "startMonth": "05",
+                "startYear": "2023",
+                "endDay": "31",
+                "endMonth": "05",
+                "endYear": "2023"
               }
             ]
           },
@@ -288,7 +444,13 @@
                 "start": "2023-06-10",
                 "end": "2023-06-14",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "10",
+                "startMonth": "06",
+                "startYear": "2023",
+                "endDay": "14",
+                "endMonth": "06",
+                "endYear": "2023"
               },
               {
                 "id": "sss-4-2-2",
@@ -296,7 +458,13 @@
                 "start": "2023-06-15",
                 "end": "2023-06-18",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "15",
+                "startMonth": "06",
+                "startYear": "2023",
+                "endDay": "18",
+                "endMonth": "06",
+                "endYear": "2023"
               },
               {
                 "id": "sss-4-2-3",
@@ -304,7 +472,13 @@
                 "start": "2023-06-19",
                 "end": "2023-06-24",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "19",
+                "startMonth": "06",
+                "startYear": "2023",
+                "endDay": "24",
+                "endMonth": "06",
+                "endYear": "2023"
               },
               {
                 "id": "sss-4-2-4",
@@ -312,7 +486,13 @@
                 "start": "2023-06-25",
                 "end": "2023-06-28",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "25",
+                "startMonth": "06",
+                "startYear": "2023",
+                "endDay": "28",
+                "endMonth": "06",
+                "endYear": "2023"
               },
               {
                 "id": "sss-4-2-5",
@@ -320,7 +500,13 @@
                 "start": "2023-06-29",
                 "end": "2023-06-29",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "29",
+                "startMonth": "06",
+                "startYear": "2023",
+                "endDay": "29",
+                "endMonth": "06",
+                "endYear": "2023"
               }
             ]
           },
@@ -337,7 +523,13 @@
                 "start": "2023-07-08",
                 "end": "2023-07-12",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "08",
+                "startMonth": "07",
+                "startYear": "2023",
+                "endDay": "12",
+                "endMonth": "07",
+                "endYear": "2023"
               },
               {
                 "id": "sss-4-3-2",
@@ -345,7 +537,13 @@
                 "start": "2023-07-13",
                 "end": "2023-07-16",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "13",
+                "startMonth": "07",
+                "startYear": "2023",
+                "endDay": "16",
+                "endMonth": "07",
+                "endYear": "2023"
               },
               {
                 "id": "sss-4-3-3",
@@ -353,7 +551,13 @@
                 "start": "2023-07-17",
                 "end": "2023-07-22",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "17",
+                "startMonth": "07",
+                "startYear": "2023",
+                "endDay": "22",
+                "endMonth": "07",
+                "endYear": "2023"
               },
               {
                 "id": "sss-4-3-4",
@@ -361,7 +565,13 @@
                 "start": "2023-07-23",
                 "end": "2023-08-03",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "23",
+                "startMonth": "07",
+                "startYear": "2023",
+                "endDay": "03",
+                "endMonth": "08",
+                "endYear": "2023"
               },
               {
                 "id": "sss-4-3-5",
@@ -369,7 +579,13 @@
                 "start": "2023-08-04",
                 "end": "2023-08-04",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "04",
+                "startMonth": "08",
+                "startYear": "2023",
+                "endDay": "04",
+                "endMonth": "08",
+                "endYear": "2023"
               }
             ]
           },
@@ -386,7 +602,13 @@
                 "start": "2023-08-04",
                 "end": "2023-08-09",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "04",
+                "startMonth": "08",
+                "startYear": "2023",
+                "endDay": "09",
+                "endMonth": "08",
+                "endYear": "2023"
               },
               {
                 "id": "sss-4-4-2",
@@ -394,7 +616,13 @@
                 "start": "2023-08-10",
                 "end": "2023-08-13",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "10",
+                "startMonth": "08",
+                "startYear": "2023",
+                "endDay": "13",
+                "endMonth": "08",
+                "endYear": "2023"
               },
               {
                 "id": "sss-4-4-3",
@@ -402,7 +630,13 @@
                 "start": "2023-08-14",
                 "end": "2023-08-18",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "14",
+                "startMonth": "08",
+                "startYear": "2023",
+                "endDay": "18",
+                "endMonth": "08",
+                "endYear": "2023"
               },
               {
                 "id": "sss-4-4-4",
@@ -410,7 +644,13 @@
                 "start": "2023-08-19",
                 "end": "2023-08-28",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "19",
+                "startMonth": "08",
+                "startYear": "2023",
+                "endDay": "28",
+                "endMonth": "08",
+                "endYear": "2023"
               },
               {
                 "id": "sss-4-4-5",
@@ -418,7 +658,13 @@
                 "start": "2023-08-29",
                 "end": "2023-08-29",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "29",
+                "startMonth": "08",
+                "startYear": "2023",
+                "endDay": "29",
+                "endMonth": "08",
+                "endYear": "2023"
               }
             ]
           },
@@ -435,7 +681,13 @@
                 "start": "2023-09-09",
                 "end": "2023-09-13",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "09",
+                "startMonth": "09",
+                "startYear": "2023",
+                "endDay": "13",
+                "endMonth": "09",
+                "endYear": "2023"
               },
               {
                 "id": "sss-4-5-2",
@@ -443,7 +695,13 @@
                 "start": "2023-09-14",
                 "end": "2023-09-17",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "14",
+                "startMonth": "09",
+                "startYear": "2023",
+                "endDay": "17",
+                "endMonth": "09",
+                "endYear": "2023"
               },
               {
                 "id": "sss-4-5-3",
@@ -451,7 +709,13 @@
                 "start": "2023-09-18",
                 "end": "2023-09-23",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "18",
+                "startMonth": "09",
+                "startYear": "2023",
+                "endDay": "23",
+                "endMonth": "09",
+                "endYear": "2023"
               },
               {
                 "id": "sss-4-5-4",
@@ -459,7 +723,13 @@
                 "start": "2023-09-24",
                 "end": "2023-10-04",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "24",
+                "startMonth": "09",
+                "startYear": "2023",
+                "endDay": "04",
+                "endMonth": "10",
+                "endYear": "2023"
               },
               {
                 "id": "sss-4-5-5",
@@ -467,7 +737,13 @@
                 "start": "2023-10-05",
                 "end": "2023-10-05",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "05",
+                "startMonth": "10",
+                "startYear": "2023",
+                "endDay": "05",
+                "endMonth": "10",
+                "endYear": "2023"
               }
             ]
           }
@@ -493,7 +769,13 @@
                 "start": "2023-06-01",
                 "end": "2023-06-07",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "01",
+                "startMonth": "06",
+                "startYear": "2023",
+                "endDay": "07",
+                "endMonth": "06",
+                "endYear": "2023"
               },
               {
                 "id": "sss-5-1-2",
@@ -501,7 +783,13 @@
                 "start": "2023-06-08",
                 "end": "2023-06-17",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "08",
+                "startMonth": "06",
+                "startYear": "2023",
+                "endDay": "17",
+                "endMonth": "06",
+                "endYear": "2023"
               },
               {
                 "id": "sss-5-1-3",
@@ -509,7 +797,13 @@
                 "start": "2023-06-18",
                 "end": "2023-06-30",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "18",
+                "startMonth": "06",
+                "startYear": "2023",
+                "endDay": "30",
+                "endMonth": "06",
+                "endYear": "2023"
               },
               {
                 "id": "sss-5-1-4",
@@ -517,7 +811,13 @@
                 "start": "2023-07-01",
                 "end": "2023-07-15",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "01",
+                "startMonth": "07",
+                "startYear": "2023",
+                "endDay": "15",
+                "endMonth": "07",
+                "endYear": "2023"
               }
             ]
           },
@@ -534,7 +834,13 @@
                 "start": "2023-07-16",
                 "end": "2023-07-20",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "16",
+                "startMonth": "07",
+                "startYear": "2023",
+                "endDay": "20",
+                "endMonth": "07",
+                "endYear": "2023"
               },
               {
                 "id": "sss-5-2-2",
@@ -542,7 +848,13 @@
                 "start": "2023-07-21",
                 "end": "2023-07-31",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "21",
+                "startMonth": "07",
+                "startYear": "2023",
+                "endDay": "31",
+                "endMonth": "07",
+                "endYear": "2023"
               },
               {
                 "id": "sss-5-2-3",
@@ -550,15 +862,27 @@
                 "start": "2023-08-01",
                 "end": "2023-08-18",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "01",
+                "startMonth": "08",
+                "startYear": "2023",
+                "endDay": "18",
+                "endMonth": "08",
+                "endYear": "2023"
               },
               {
                 "id": "sss-5-2-4",
-                "title": "اصدار كشوف الاستحقاق المستفيدات بالإضافة الى بدل المواصلات ومراجعتها وتجهيز طلبات الصرف وترحيل كشوف الاستحقاق عبر النظام وتجهيز خطة الصرف بالتزامن مع كشف الجلسة",
+                "title": "اصدار كشوفات الاستحقاق المستفيدات بالإضافة الى بدل المواصلات ومراجعتها وتجهيز طلبات الصرف وترحيل كشوف الاستحقاق عبر النظام وتجهيز خطة الصرف بالتزامن مع كشف الجلسة",
                 "start": "2023-08-19",
                 "end": "2023-08-28",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "19",
+                "startMonth": "08",
+                "startYear": "2023",
+                "endDay": "28",
+                "endMonth": "08",
+                "endYear": "2023"
               },
               {
                 "id": "sss-5-2-5",
@@ -566,7 +890,13 @@
                 "start": "2023-08-29",
                 "end": "2023-08-29",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "29",
+                "startMonth": "08",
+                "startYear": "2023",
+                "endDay": "29",
+                "endMonth": "08",
+                "endYear": "2023"
               }
             ]
           },
@@ -583,7 +913,13 @@
                 "start": "2023-09-10",
                 "end": "2023-09-14",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "10",
+                "startMonth": "09",
+                "startYear": "2023",
+                "endDay": "14",
+                "endMonth": "09",
+                "endYear": "2023"
               },
               {
                 "id": "sss-5-3-2",
@@ -591,7 +927,13 @@
                 "start": "2023-09-15",
                 "end": "2023-09-19",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "15",
+                "startMonth": "09",
+                "startYear": "2023",
+                "endDay": "19",
+                "endMonth": "09",
+                "endYear": "2023"
               },
               {
                 "id": "sss-5-3-3",
@@ -599,7 +941,13 @@
                 "start": "2023-09-20",
                 "end": "2023-09-29",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "20",
+                "startMonth": "09",
+                "startYear": "2023",
+                "endDay": "29",
+                "endMonth": "09",
+                "endYear": "2023"
               },
               {
                 "id": "sss-5-3-4",
@@ -607,7 +955,13 @@
                 "start": "2023-09-30",
                 "end": "2023-10-04",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "30",
+                "startMonth": "09",
+                "startYear": "2023",
+                "endDay": "04",
+                "endMonth": "10",
+                "endYear": "2023"
               },
               {
                 "id": "sss-5-3-5",
@@ -615,7 +969,13 @@
                 "start": "2023-10-05",
                 "end": "2023-10-05",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "05",
+                "startMonth": "10",
+                "startYear": "2023",
+                "endDay": "05",
+                "endMonth": "10",
+                "endYear": "2023"
               }
             ]
           },
@@ -632,7 +992,13 @@
                 "start": "2023-08-10",
                 "end": "2023-08-14",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "10",
+                "startMonth": "08",
+                "startYear": "2023",
+                "endDay": "14",
+                "endMonth": "08",
+                "endYear": "2023"
               },
               {
                 "id": "sss-5-4-2",
@@ -640,7 +1006,13 @@
                 "start": "2023-08-15",
                 "end": "2023-08-18",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "15",
+                "startMonth": "08",
+                "startYear": "2023",
+                "endDay": "18",
+                "endMonth": "08",
+                "endYear": "2023"
               },
               {
                 "id": "sss-5-4-3",
@@ -648,7 +1020,13 @@
                 "start": "2023-08-19",
                 "end": "2023-08-23",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "19",
+                "startMonth": "08",
+                "startYear": "2023",
+                "endDay": "23",
+                "endMonth": "08",
+                "endYear": "2023"
               },
               {
                 "id": "sss-5-4-4",
@@ -656,7 +1034,13 @@
                 "start": "2023-08-24",
                 "end": "2023-08-30",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "24",
+                "startMonth": "08",
+                "startYear": "2023",
+                "endDay": "30",
+                "endMonth": "08",
+                "endYear": "2023"
               },
               {
                 "id": "sss-5-4-5",
@@ -664,7 +1048,13 @@
                 "start": "2023-08-31",
                 "end": "2023-08-31",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "31",
+                "startMonth": "08",
+                "startYear": "2023",
+                "endDay": "31",
+                "endMonth": "08",
+                "endYear": "2023"
               }
             ]
           },
@@ -681,7 +1071,13 @@
                 "start": "2023-11-10",
                 "end": "2023-11-14",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "10",
+                "startMonth": "11",
+                "startYear": "2023",
+                "endDay": "14",
+                "endMonth": "11",
+                "endYear": "2023"
               },
               {
                 "id": "sss-5-5-2",
@@ -689,7 +1085,13 @@
                 "start": "2023-11-15",
                 "end": "2023-11-18",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "15",
+                "startMonth": "11",
+                "startYear": "2023",
+                "endDay": "18",
+                "endMonth": "11",
+                "endYear": "2023"
               },
               {
                 "id": "sss-5-5-3",
@@ -697,7 +1099,13 @@
                 "start": "2023-11-19",
                 "end": "2023-11-24",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "19",
+                "startMonth": "11",
+                "startYear": "2023",
+                "endDay": "24",
+                "endMonth": "11",
+                "endYear": "2023"
               },
               {
                 "id": "sss-5-5-4",
@@ -705,7 +1113,13 @@
                 "start": "2023-11-25",
                 "end": "2023-12-02",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "25",
+                "startMonth": "11",
+                "startYear": "2023",
+                "endDay": "02",
+                "endMonth": "12",
+                "endYear": "2023"
               },
               {
                 "id": "sss-5-5-5",
@@ -713,7 +1127,13 @@
                 "start": "2023-12-03",
                 "end": "2023-12-03",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "03",
+                "startMonth": "12",
+                "startYear": "2023",
+                "endDay": "03",
+                "endMonth": "12",
+                "endYear": "2023"
               }
             ]
           }
@@ -739,7 +1159,13 @@
                 "start": "2023-10-08",
                 "end": "2023-10-12",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "08",
+                "startMonth": "10",
+                "startYear": "2023",
+                "endDay": "12",
+                "endMonth": "10",
+                "endYear": "2023"
               },
               {
                 "id": "sss-6-1-2",
@@ -747,7 +1173,13 @@
                 "start": "2023-10-13",
                 "end": "2023-10-16",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "13",
+                "startMonth": "10",
+                "startYear": "2023",
+                "endDay": "16",
+                "endMonth": "10",
+                "endYear": "2023"
               },
               {
                 "id": "sss-6-1-3",
@@ -755,7 +1187,13 @@
                 "start": "2023-10-17",
                 "end": "2023-10-22",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "17",
+                "startMonth": "10",
+                "startYear": "2023",
+                "endDay": "22",
+                "endMonth": "10",
+                "endYear": "2023"
               },
               {
                 "id": "sss-6-1-4",
@@ -763,7 +1201,13 @@
                 "start": "2023-10-23",
                 "end": "2023-10-30",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "23",
+                "startMonth": "10",
+                "startYear": "2023",
+                "endDay": "30",
+                "endMonth": "10",
+                "endYear": "2023"
               },
               {
                 "id": "sss-6-1-5",
@@ -771,7 +1215,13 @@
                 "start": "2023-10-31",
                 "end": "2023-10-31",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "31",
+                "startMonth": "10",
+                "startYear": "2023",
+                "endDay": "31",
+                "endMonth": "10",
+                "endYear": "2023"
               }
             ]
           },
@@ -788,7 +1238,13 @@
                 "start": "2023-11-10",
                 "end": "2023-11-14",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "10",
+                "startMonth": "11",
+                "startYear": "2023",
+                "endDay": "14",
+                "endMonth": "11",
+                "endYear": "2023"
               },
               {
                 "id": "sss-6-2-2",
@@ -796,7 +1252,13 @@
                 "start": "2023-11-15",
                 "end": "2023-11-18",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "15",
+                "startMonth": "11",
+                "startYear": "2023",
+                "endDay": "18",
+                "endMonth": "11",
+                "endYear": "2023"
               },
               {
                 "id": "sss-6-2-3",
@@ -804,7 +1266,13 @@
                 "start": "2023-11-19",
                 "end": "2023-11-24",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "19",
+                "startMonth": "11",
+                "startYear": "2023",
+                "endDay": "24",
+                "endMonth": "11",
+                "endYear": "2023"
               },
               {
                 "id": "sss-6-2-4",
@@ -812,7 +1280,13 @@
                 "start": "2023-11-25",
                 "end": "2023-12-02",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "25",
+                "startMonth": "11",
+                "startYear": "2023",
+                "endDay": "02",
+                "endMonth": "12",
+                "endYear": "2023"
               },
               {
                 "id": "sss-6-2-5",
@@ -820,7 +1294,13 @@
                 "start": "2023-12-03",
                 "end": "2023-12-03",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "03",
+                "startMonth": "12",
+                "startYear": "2023",
+                "endDay": "03",
+                "endMonth": "12",
+                "endYear": "2023"
               }
             ]
           },
@@ -837,7 +1317,13 @@
                 "start": "2023-12-09",
                 "end": "2023-12-13",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "09",
+                "startMonth": "12",
+                "startYear": "2023",
+                "endDay": "13",
+                "endMonth": "12",
+                "endYear": "2023"
               },
               {
                 "id": "sss-6-3-2",
@@ -845,7 +1331,13 @@
                 "start": "2023-12-14",
                 "end": "2023-12-17",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "14",
+                "startMonth": "12",
+                "startYear": "2023",
+                "endDay": "17",
+                "endMonth": "12",
+                "endYear": "2023"
               },
               {
                 "id": "sss-6-3-3",
@@ -853,7 +1345,13 @@
                 "start": "2023-12-18",
                 "end": "2023-12-23",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "18",
+                "startMonth": "12",
+                "startYear": "2023",
+                "endDay": "23",
+                "endMonth": "12",
+                "endYear": "2023"
               },
               {
                 "id": "sss-6-3-4",
@@ -861,7 +1359,13 @@
                 "start": "2023-12-24",
                 "end": "2023-12-31",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "24",
+                "startMonth": "12",
+                "startYear": "2023",
+                "endDay": "31",
+                "endMonth": "12",
+                "endYear": "2023"
               },
               {
                 "id": "sss-6-3-5",
@@ -869,7 +1373,13 @@
                 "start": "2024-01-01",
                 "end": "2024-01-01",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "01",
+                "startMonth": "01",
+                "startYear": "2024",
+                "endDay": "01",
+                "endMonth": "01",
+                "endYear": "2024"
               }
             ]
           },
@@ -886,7 +1396,13 @@
                 "start": "2024-01-10",
                 "end": "2024-01-16",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "10",
+                "startMonth": "01",
+                "startYear": "2024",
+                "endDay": "16",
+                "endMonth": "01",
+                "endYear": "2024"
               },
               {
                 "id": "sss-6-4-2",
@@ -894,7 +1410,13 @@
                 "start": "2024-01-17",
                 "end": "2024-01-20",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "17",
+                "startMonth": "01",
+                "startYear": "2024",
+                "endDay": "20",
+                "endMonth": "01",
+                "endYear": "2024"
               },
               {
                 "id": "sss-6-4-3",
@@ -902,7 +1424,13 @@
                 "start": "2024-01-21",
                 "end": "2024-01-26",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "21",
+                "startMonth": "01",
+                "startYear": "2024",
+                "endDay": "26",
+                "endMonth": "01",
+                "endYear": "2024"
               },
               {
                 "id": "sss-6-4-4",
@@ -910,7 +1438,13 @@
                 "start": "2024-01-27",
                 "end": "2024-01-30",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "27",
+                "startMonth": "01",
+                "startYear": "2024",
+                "endDay": "30",
+                "endMonth": "01",
+                "endYear": "2024"
               },
               {
                 "id": "sss-6-4-5",
@@ -918,7 +1452,13 @@
                 "start": "2024-01-31",
                 "end": "2024-01-31",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "31",
+                "startMonth": "01",
+                "startYear": "2024",
+                "endDay": "31",
+                "endMonth": "01",
+                "endYear": "2024"
               }
             ]
           },
@@ -935,7 +1475,13 @@
                 "start": "2024-02-11",
                 "end": "2024-02-17",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "11",
+                "startMonth": "02",
+                "startYear": "2024",
+                "endDay": "17",
+                "endMonth": "02",
+                "endYear": "2024"
               },
               {
                 "id": "sss-6-5-2",
@@ -943,7 +1489,13 @@
                 "start": "2024-02-18",
                 "end": "2024-02-21",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "18",
+                "startMonth": "02",
+                "startYear": "2024",
+                "endDay": "21",
+                "endMonth": "02",
+                "endYear": "2024"
               },
               {
                 "id": "sss-6-5-3",
@@ -951,7 +1503,13 @@
                 "start": "2024-02-22",
                 "end": "2024-02-27",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "22",
+                "startMonth": "02",
+                "startYear": "2024",
+                "endDay": "27",
+                "endMonth": "02",
+                "endYear": "2024"
               },
               {
                 "id": "sss-6-5-4",
@@ -959,7 +1517,13 @@
                 "start": "2024-02-28",
                 "end": "2024-03-06",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "28",
+                "startMonth": "02",
+                "startYear": "2024",
+                "endDay": "06",
+                "endMonth": "03",
+                "endYear": "2024"
               },
               {
                 "id": "sss-6-5-5",
@@ -967,7 +1531,13 @@
                 "start": "2024-03-07",
                 "end": "2024-03-07",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "07",
+                "startMonth": "03",
+                "startYear": "2024",
+                "endDay": "07",
+                "endMonth": "03",
+                "endYear": "2024"
               }
             ]
           },
@@ -984,7 +1554,13 @@
                 "start": "2024-03-12",
                 "end": "2024-03-17",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "12",
+                "startMonth": "03",
+                "startYear": "2024",
+                "endDay": "17",
+                "endMonth": "03",
+                "endYear": "2024"
               },
               {
                 "id": "sss-6-6-2",
@@ -992,7 +1568,13 @@
                 "start": "2024-03-18",
                 "end": "2024-03-22",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "18",
+                "startMonth": "03",
+                "startYear": "2024",
+                "endDay": "22",
+                "endMonth": "03",
+                "endYear": "2024"
               },
               {
                 "id": "sss-6-6-3",
@@ -1000,7 +1582,13 @@
                 "start": "2024-03-23",
                 "end": "2024-03-28",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "23",
+                "startMonth": "03",
+                "startYear": "2024",
+                "endDay": "28",
+                "endMonth": "03",
+                "endYear": "2024"
               },
               {
                 "id": "sss-6-6-4",
@@ -1008,7 +1596,13 @@
                 "start": "2024-03-29",
                 "end": "2024-04-03",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "29",
+                "startMonth": "03",
+                "startYear": "2024",
+                "endDay": "03",
+                "endMonth": "04",
+                "endYear": "2024"
               },
               {
                 "id": "sss-6-6-5",
@@ -1016,7 +1610,13 @@
                 "start": "2024-04-04",
                 "end": "2024-04-04",
                 "progress": 0,
-                "status": "PLANNED"
+                "status": "PLANNED",
+                "startDay": "04",
+                "startMonth": "04",
+                "startYear": "2024",
+                "endDay": "04",
+                "endMonth": "04",
+                "endYear": "2024"
               }
             ]
           }
