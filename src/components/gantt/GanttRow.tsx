@@ -2,7 +2,7 @@
 "use client";
 
 import dayjs from "dayjs";
-import { GanttTask, TaskStatus } from "@/types/gantt";
+import { GanttTask, TaskStatus, GanttSubTask } from "@/types/gantt";
 import { STATUS_COLORS } from "@/lib/statusStyles";
 import { calculateWorkingDays } from "@/lib/ganttUtils";
 import { ChevronDown, Trash2, Edit, ChevronRight } from "lucide-react";
@@ -13,13 +13,12 @@ import { Progress } from "../ui/progress";
 import { cn } from "@/lib/utils";
 
 interface RowProps {
-  task: GanttTask;
+  task: GanttTask | GanttSubTask;
   projectStart: string;
   dayWidth: number;
-  isSubTask?: boolean;
 }
 
-export function GanttRow({ task, projectStart, dayWidth, isSubTask = false }: RowProps) {
+export function GanttRow({ task, projectStart, dayWidth }: RowProps) {
   const offset = dayjs(task.start).diff(dayjs(projectStart), "day") * dayWidth;
   const duration = calculateWorkingDays(task.start, task.end);
   const width = duration * dayWidth;
@@ -32,7 +31,7 @@ export function GanttRow({ task, projectStart, dayWidth, isSubTask = false }: Ro
           left: offset,
           width,
           backgroundColor: STATUS_COLORS[task.status] || STATUS_COLORS["PLANNED"],
-          opacity: isSubTask ? 0.75 : 1,
+          minHeight: 24,
         }}
         title={`${task.title} (${task.start} → ${task.end})`}
       >
@@ -83,20 +82,21 @@ const TaskStatusBadge = ({ status, onUpdateStatus }: { status: TaskStatus, onUpd
 
 
 interface ListItemProps {
-    task: GanttTask;
+    task: GanttTask | GanttSubTask;
     onDelete: (taskId: string) => void;
     onUpdateStatus: (taskId: string, status: TaskStatus) => void;
     onUpdateProgress: (taskId: string, progress: number) => void;
-    isSubTask?: boolean;
     isCollapsed?: boolean;
     onToggleCollapse?: (taskId: string) => void;
+    level: number;
+    canCollapse: boolean;
 }
 
-export const TaskListItem = ({ task, onDelete, onUpdateStatus, onUpdateProgress, isSubTask = false, isCollapsed, onToggleCollapse }: ListItemProps) => {
+export const TaskListItem = ({ task, onDelete, onUpdateStatus, onUpdateProgress, isCollapsed, onToggleCollapse, level, canCollapse }: ListItemProps) => {
     const workingDays = calculateWorkingDays(task.start, task.end);
 
     let progressElement;
-    if (isSubTask) {
+    if (level > 0) { // Sub-tasks and sub-of-sub-tasks get an input
         progressElement = (
             <div className="flex items-center gap-2">
                 <Input
@@ -110,10 +110,8 @@ export const TaskListItem = ({ task, onDelete, onUpdateStatus, onUpdateProgress,
                 <span>%</span>
             </div>
         )
-    } else {
-         const avgProgress = task.hasSubTasks === 'yes' && task.subTasks && task.subTasks.length > 0 
-            ? task.subTasks.reduce((sum, st) => sum + (st.progress || 0), 0) / (task.subTasks.length || 1)
-            : task.progress;
+    } else { // Main tasks get a progress bar
+         const avgProgress = task.progress || 0;
         progressElement = (
             <div className="flex items-center gap-2 w-full">
                 <Progress value={avgProgress} className="h-2 w-full" />
@@ -123,14 +121,16 @@ export const TaskListItem = ({ task, onDelete, onUpdateStatus, onUpdateProgress,
     }
 
     return (
-        <div className={cn("h-full px-3 flex items-center justify-between text-sm group py-1", isSubTask ? 'pl-8 bg-slate-900/50' : '')}>
-            <div className="flex items-center gap-1 flex-1 py-1">
-                 {task.hasSubTasks === 'yes' && onToggleCollapse && (
+        <div className={cn("h-full px-3 flex items-center justify-between text-sm group py-1", level > 0 && 'bg-slate-900/50')} style={{ paddingLeft: `${0.75 + level * 1.5}rem`}}>
+            <div className="flex items-center gap-1 flex-1 py-1 min-w-0">
+                 {canCollapse && onToggleCollapse ? (
                     <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onToggleCollapse(task.id)}>
                         {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                     </Button>
+                ) : (
+                    <div className="w-6 h-6 flex-shrink-0" /> // Placeholder for alignment
                 )}
-                <span className={cn("whitespace-normal break-words", { 'ml-7': task.hasSubTasks !== 'yes' })}>{task.title}</span>
+                <span className="whitespace-normal break-words">{task.title}</span>
             </div>
             <div className="w-32 flex-shrink-0 flex justify-center">{progressElement}</div>
             <div className="w-24 flex-shrink-0 text-center">{workingDays}</div>
