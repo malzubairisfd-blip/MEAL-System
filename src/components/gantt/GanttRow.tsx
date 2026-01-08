@@ -119,24 +119,37 @@ export const TaskListItem = ({ task, onDelete, onUpdateStatus, onUpdateProgress,
     }
 
     return (
-        <div className={cn("h-full px-3 flex items-center justify-between text-sm group py-1", level > 0 && 'bg-slate-900/50')} style={{ paddingLeft: `${0.75 + level * 1.5}rem`}}>
-            <div className='w-12 flex-shrink-0 font-mono text-slate-400'>{taskNumber}</div>
-            <div className="flex items-center gap-1 flex-1 py-1 min-w-0">
-                 {canCollapse && onToggleCollapse ? (
-                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onToggleCollapse(task.id)}>
+        <div 
+          className={cn("h-full px-3 flex items-start text-sm group py-2 min-h-[4rem]", level > 0 && 'bg-slate-900/50')} 
+          style={{ paddingLeft: `${0.75 + level * 1.5}rem`}}
+        >
+            {/* Column 1: Task Number */}
+            <div className='w-12 flex-shrink-0 font-mono text-slate-400 pt-1'>{taskNumber}</div>
+
+            {/* Column 2: Title & Collapse Button */}
+            <div className="flex-1 flex items-start gap-1 min-w-0 pr-2">
+                {canCollapse && onToggleCollapse ? (
+                    <Button variant="ghost" size="icon" className="h-6 w-6 flex-shrink-0" onClick={() => onToggleCollapse(task.id)}>
                         {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                     </Button>
                 ) : (
                     <div className="w-6 h-6 flex-shrink-0" /> // Placeholder for alignment
                 )}
-                <span className="whitespace-normal break-words">{task.title}</span>
+                <span className="whitespace-normal break-words pt-1">{task.title}</span>
             </div>
-            <div className="w-32 flex-shrink-0 flex justify-center">{progressElement}</div>
-            <div className="w-24 flex-shrink-0 text-center">{workingDays}</div>
-            <div className="w-32 flex-shrink-0 flex justify-center">
+
+            {/* Column 3: Progress */}
+            <div className="w-32 flex-shrink-0 flex justify-center items-center pt-1">{progressElement}</div>
+
+            {/* Column 4: Working Days */}
+            <div className="w-24 flex-shrink-0 text-center pt-1">{workingDays}</div>
+            
+            {/* Column 5: Status */}
+            <div className="w-32 flex-shrink-0 flex justify-center items-start pt-1">
                  <TaskStatusBadge status={task.status} onUpdateStatus={(newStatus) => onUpdateStatus(task.id, newStatus)} />
             </div>
             
+            {/* Column 6: Actions */}
             <div className="w-8 flex-shrink-0">
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
