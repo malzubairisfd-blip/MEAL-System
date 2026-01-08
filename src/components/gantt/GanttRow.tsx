@@ -140,32 +140,31 @@ export const TaskListItem = ({ task, onDelete, onUpdateStatus, onUpdateProgress,
             {/* Column 1: Task Number */}
             <div className='w-12 flex-shrink-0 font-mono text-slate-400 pt-1'>{taskNumber}</div>
 
-            {/* Column 2: Title & Collapse Button */}
-             <div className="flex-1 flex items-start gap-1 min-w-0 pr-2">
-                {canCollapse && onToggleCollapse ? (
-                    <Button variant="ghost" size="icon" className="h-6 w-6 flex-shrink-0" onClick={() => onToggleCollapse(task.id)}>
-                        {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                    </Button>
-                ) : (
-                    <div className="w-6 h-6 flex-shrink-0" /> // Placeholder for alignment
-                )}
-                <div className="flex items-start gap-1 py-1 w-full min-w-[260px] max-w-[420px]">
+            {/* Container for Task & Progress */}
+            <div className="flex-1 flex flex-col min-w-0 pr-2">
+                <div className="flex items-start gap-1 py-1">
+                    {canCollapse && onToggleCollapse ? (
+                        <Button variant="ghost" size="icon" className="h-6 w-6 flex-shrink-0" onClick={() => onToggleCollapse(task.id)}>
+                            {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                        </Button>
+                    ) : (
+                        <div className="w-6 h-6 flex-shrink-0" /> // Placeholder for alignment
+                    )}
                     <span
                       title={task.title}
                       dir="rtl"
                       className={cn(
                         "text-right leading-relaxed whitespace-normal break-words overflow-hidden",
-                        "line-clamp-3",
-                        { 'ml-7': task.hasSubTasks !== 'yes' }
+                        "line-clamp-3"
                       )}
                     >
                       {task.title}
                     </span>
                 </div>
+                <div className="pl-7 w-full max-w-[200px]">
+                    {progressElement}
+                </div>
             </div>
-
-            {/* Column 3: Progress */}
-            <div className="w-32 flex-shrink-0 flex justify-center items-center pt-1">{progressElement}</div>
 
             {/* Column 4: Working Days */}
             <div className="w-24 flex-shrink-0 text-center pt-1">{workingDays}</div>

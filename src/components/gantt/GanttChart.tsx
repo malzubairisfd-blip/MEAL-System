@@ -145,10 +145,9 @@ export function GanttChart({
         <div className="flex sticky top-0 z-20 bg-slate-900">
             {/* LEFT HEADER */}
              <div className="w-[600px] border-r border-slate-700 flex-shrink-0">
-                <div className="h-20 border-b border-slate-700 font-semibold px-3 flex items-center justify-between">
+                <div className="h-20 border-b border-slate-700 font-semibold px-3 flex items-center">
                     <div className='w-12'>#</div>
-                    <div className='flex-1'>Task</div>
-                    <div className='w-32 text-center'>Progress</div>
+                    <div className='flex-1'>Task & Progress</div>
                     <div className='w-24 text-center'>Working Days</div>
                     <div className='w-32 text-center'>Status</div>
                     <div className='w-8'></div>
