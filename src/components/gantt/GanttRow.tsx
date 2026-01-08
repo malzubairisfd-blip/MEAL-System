@@ -1,10 +1,11 @@
 // components/gantt/GanttRow.tsx
 "use client";
 
+import React, { useMemo, useState, useCallback, useRef } from 'react';
 import dayjs from "dayjs";
 import { GanttTask, TaskStatus, GanttSubTask } from "@/types/gantt";
 import { STATUS_COLORS } from "@/lib/statusStyles";
-import { calculateWorkingDays } from "@/lib/ganttUtils";
+import { calculateWorkingDays } from '@/lib/ganttUtils';
 import { ChevronDown, Trash2, Edit, ChevronRight } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
@@ -140,7 +141,7 @@ export const TaskListItem = ({ task, onDelete, onUpdateStatus, onUpdateProgress,
             <div className='w-12 flex-shrink-0 font-mono text-slate-400 pt-1'>{taskNumber}</div>
 
             {/* Column 2: Title & Collapse Button */}
-            <div className="flex-1 flex items-start gap-1 min-w-0 pr-2">
+             <div className="flex-1 flex items-start gap-1 min-w-0 pr-2">
                 {canCollapse && onToggleCollapse ? (
                     <Button variant="ghost" size="icon" className="h-6 w-6 flex-shrink-0" onClick={() => onToggleCollapse(task.id)}>
                         {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
@@ -148,7 +149,19 @@ export const TaskListItem = ({ task, onDelete, onUpdateStatus, onUpdateProgress,
                 ) : (
                     <div className="w-6 h-6 flex-shrink-0" /> // Placeholder for alignment
                 )}
-                <span className="whitespace-normal break-words pt-1">{task.title}</span>
+                <div className="flex items-start gap-1 py-1 w-full min-w-[260px] max-w-[420px]">
+                    <span
+                      title={task.title}
+                      dir="rtl"
+                      className={cn(
+                        "text-right leading-relaxed whitespace-normal break-words overflow-hidden",
+                        "line-clamp-3",
+                        { 'ml-7': task.hasSubTasks !== 'yes' }
+                      )}
+                    >
+                      {task.title}
+                    </span>
+                </div>
             </div>
 
             {/* Column 3: Progress */}
