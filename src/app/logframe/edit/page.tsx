@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useForm, useFieldArray } from 'react-hook-form';
@@ -44,8 +44,7 @@ const RichTextEditor = ({ value, onChange, maxLength, placeholder }: { value: st
     );
 };
 
-
-export default function EditLogframePage() {
+function EditLogframeForm() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const { toast } = useToast();
@@ -237,6 +236,15 @@ export default function EditLogframePage() {
     );
 }
 
+
+export default function EditLogframePage() {
+    return (
+        <Suspense fallback={<div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin" /></div>}>
+            <EditLogframeForm />
+        </Suspense>
+    );
+}
+
 const ActivitiesArray = ({ control, outputIndex }: { control: any, outputIndex: number }) => {
     const { fields, append, remove } = useFieldArray({
         control,
@@ -348,3 +356,5 @@ const RisksAndAssumptionsArray = ({ control, outputIndex, activityIndex }: { con
          <Button type="button" variant="outline" size="sm" onClick={() => append({ risk: '', assumption: '' })}><Plus className="mr-2 h-4 w-4" /> Add Risk/Assumption</Button>
     </div>
 }
+
+    
