@@ -13,22 +13,22 @@ export const RiskAssumptionSchema = z.object({
 });
 
 export const ActivitySchema = z.object({
-  description: z.string().min(100).max(1000),
+  description: z.string().min(30).max(1000),
   indicators: z.array(IndicatorSchema).min(1),
   risksAndAssumptions: z.array(RiskAssumptionSchema).min(1),
 });
 
 export const OutputSchema = z.object({
-  description: z.string().min(100).max(1000),
+  description: z.string().min(30).max(1000),
   activities: z.array(ActivitySchema).min(1),
 });
 
 export const OutcomeSchema = z.object({
-  description: z.string().min(100).max(1000),
+  description: z.string().min(30).max(1000),
 });
 
 export const GoalSchema = z.object({
-  description: z.string().min(100).max(1000),
+  description: z.string().min(30).max(1000),
 });
 
 export const LogframeSchema = z.object({
