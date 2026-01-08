@@ -2,6 +2,7 @@
 "use client";
 
 import React, { useMemo, useState, useCallback, useRef } from 'react';
+import Link from 'next/link';
 import dayjs from "dayjs";
 import { GanttTask, TaskStatus, GanttSubTask } from "@/types/gantt";
 import { STATUS_COLORS } from "@/lib/statusStyles";
@@ -89,9 +90,10 @@ interface ListItemProps {
     level: number;
     canCollapse: boolean;
     taskNumber: string;
+    projectId: string;
 }
 
-export const TaskListItem = ({ task, onDelete, onUpdateStatus, onUpdateProgress, isCollapsed, onToggleCollapse, level, canCollapse, taskNumber }: ListItemProps) => {
+export const TaskListItem = ({ task, onDelete, onUpdateStatus, onUpdateProgress, isCollapsed, onToggleCollapse, level, canCollapse, taskNumber, projectId }: ListItemProps) => {
 
     const getTotalWorkingDays = (t: GanttTask | GanttSubTask): number => {
         if ('hasSubTasks' in t && t.hasSubTasks === 'yes' && t.subTasks) {
@@ -183,7 +185,12 @@ export const TaskListItem = ({ task, onDelete, onUpdateStatus, onUpdateProgress,
                         </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent>
-                        <DropdownMenuItem disabled>Edit Task</DropdownMenuItem>
+                        <DropdownMenuItem asChild>
+                           <Link href={`/project/edit-task?projectId=${projectId}&taskId=${task.id}`}>
+                                <Edit className="mr-2 h-4 w-4"/>
+                                Edit Task
+                           </Link>
+                        </DropdownMenuItem>
                         <DropdownMenuItem className="text-red-500" onClick={() => onDelete(task.id)}>
                             <Trash2 className="mr-2 h-4 w-4"/>
                             Delete Task

@@ -84,7 +84,7 @@ export default function ProjectPlanPage() {
         } catch (error: any) {
             console.error("Failed to fetch project plan", error);
             if (error.issues) {
-                 toast({ title: "Data Validation Error", description: `Could not load plan: '${error.issues.map((i:any) => i.message).join(', ')}'`, variant: "destructive" });
+                 toast({ title: "Data Validation Error", description: `Could not load plan: ${error.issues.map((i:any) => i.message).join(', ')}`, variant: "destructive" });
             } else {
                 toast({ title: "Error", description: "Could not load project plan.", variant: "destructive" });
             }
@@ -128,9 +128,21 @@ export default function ProjectPlanPage() {
         }
         return prevTasks.map(mainTask => {
           if (mainTask.subTasks) {
+            const newSubTasks = mainTask.subTasks.filter(st => st.id !== taskId);
+            if (newSubTasks.length < mainTask.subTasks.length) {
+              return { ...mainTask, subTasks: newSubTasks };
+            }
             return {
               ...mainTask,
-              subTasks: mainTask.subTasks.filter(st => st.id !== taskId),
+              subTasks: mainTask.subTasks.map(subTask => {
+                if (subTask.subOfSubTasks) {
+                  return {
+                    ...subTask,
+                    subOfSubTasks: subTask.subOfSubTasks.filter(sst => sst.id !== taskId)
+                  };
+                }
+                return subTask;
+              })
             };
           }
           return mainTask;
@@ -139,39 +151,39 @@ export default function ProjectPlanPage() {
     }, []);
     
     const handleUpdateTaskStatus = useCallback((taskId: string, status: TaskStatus) => {
-        setTasks(prevTasks => 
-            prevTasks.map(task => {
+        const updateStatusRecursively = (tasks: (GanttTask | any)[]): (GanttTask | any)[] => {
+            return tasks.map(task => {
                 if (task.id === taskId) {
                     return { ...task, status };
                 }
                 if (task.subTasks) {
-                    return {
-                        ...task,
-                        subTasks: task.subTasks.map(subTask => 
-                            subTask.id === taskId ? { ...subTask, status } : subTask
-                        )
-                    };
+                    return { ...task, subTasks: updateStatusRecursively(task.subTasks) };
+                }
+                if (task.subOfSubTasks) {
+                    return { ...task, subOfSubTasks: updateStatusRecursively(task.subOfSubTasks) };
                 }
                 return task;
-            })
-        );
+            });
+        };
+        setTasks(prevTasks => updateStatusRecursively(prevTasks));
     }, []);
     
      const handleUpdateTaskProgress = useCallback((taskId: string, progress: number) => {
         const newProgress = Math.max(0, Math.min(100, progress));
 
-        const updateNestedTasks = (tasks: GanttTask[]): GanttTask[] => {
-            return tasks.map(task => {
-                // Direct match on main task
+        const updateNestedTasks = (tasksToUpdate: GanttTask[]): GanttTask[] => {
+            return tasksToUpdate.map(task => {
                 if (task.id === taskId && task.hasSubTasks === 'no') {
                     return { ...task, progress: newProgress };
                 }
 
-                // Check sub-tasks
                 if (task.subTasks) {
                     let subTaskUpdated = false;
                     const updatedSubTasks = task.subTasks.map(subTask => {
-                        // Check sub-of-sub-tasks
+                        if (subTask.id === taskId && subTask.hasSubOfSubTasks === 'no') {
+                            subTaskUpdated = true;
+                            return { ...subTask, progress: newProgress };
+                        }
                         if (subTask.subOfSubTasks) {
                             let subOfSubTaskUpdated = false;
                             const updatedSubOfSubTasks = subTask.subOfSubTasks.map(sst => {
@@ -181,25 +193,18 @@ export default function ProjectPlanPage() {
                                 }
                                 return sst;
                             });
-
                             if (subOfSubTaskUpdated) {
                                 subTaskUpdated = true;
                                 const subTaskProgress = updatedSubOfSubTasks.reduce((acc, sst) => acc + (sst.progress || 0), 0) / (updatedSubOfSubTasks.length || 1);
-                                return { ...subTask, subOfSubTasks: updatedSubOfSubTasks, progress: subTaskProgress };
+                                return { ...subTask, subOfSubTasks: updatedSubOfSubTasks, progress: Math.round(subTaskProgress) };
                             }
-                        }
-
-                        // Direct match on sub-task without its own children
-                        if (subTask.id === taskId && subTask.hasSubOfSubTasks === 'no') {
-                            subTaskUpdated = true;
-                            return { ...subTask, progress: newProgress };
                         }
                         return subTask;
                     });
                     
                     if (subTaskUpdated) {
                         const taskProgress = updatedSubTasks.reduce((acc, st) => acc + (st.progress || 0), 0) / (updatedSubTasks.length || 1);
-                        return { ...task, subTasks: updatedSubTasks, progress: taskProgress };
+                        return { ...task, subTasks: updatedSubTasks, progress: Math.round(taskProgress) };
                     }
                 }
 
@@ -220,19 +225,25 @@ export default function ProjectPlanPage() {
             return { start, end };
         }
 
-        const allDates = tasks.flatMap(task => {
-            const dates = [dayjs(task.start), dayjs(task.end)];
-            if (task.subTasks) {
-                task.subTasks.forEach(st => {
-                    dates.push(dayjs(st.start));
-                    dates.push(dayjs(st.end));
-                });
-            }
-            return dates;
-        });
+        const allDates: dayjs.Dayjs[] = [];
+        const collectDates = (tasksToScan: GanttTask[]) => {
+            tasksToScan.forEach(task => {
+                if (task.start) allDates.push(dayjs(task.start));
+                if (task.end) allDates.push(dayjs(task.end));
+                if (task.subTasks) collectDates(task.subTasks);
+            });
+        };
+        collectDates(tasks);
+        
+        if (allDates.length === 0) {
+             const start = `${selectedProject.startDateYear}-${selectedProject.startDateMonth.padStart(2, '0')}-01`;
+             const endDay = new Date(Number(selectedProject.endDateYear), Number(selectedProject.endDateMonth), 0).getDate();
+             const end = `${selectedProject.endDateYear}-${selectedProject.endDateMonth.padStart(2, '0')}-${String(endDay).padStart(2, '0')}`;
+             return { start, end };
+        }
 
-        const minDate = dayjs.min(allDates) || dayjs(selectedProject.startDateYear);
-        const maxDate = dayjs.max(allDates) || dayjs(selectedProject.endDateYear);
+        const minDate = dayjs.min(allDates);
+        const maxDate = dayjs.max(allDates);
 
         return { start: minDate.startOf('month').format('YYYY-MM-DD'), end: maxDate.endOf('month').format('YYYY-MM-DD') };
         
@@ -252,7 +263,6 @@ export default function ProjectPlanPage() {
                 cacheBust: true,
                 pixelRatio: 2,
                 style: {
-                    // Temporarily set background to white for export
                     backgroundColor: 'white',
                 }
             });
@@ -313,7 +323,6 @@ export default function ProjectPlanPage() {
             {selectedProject && (
                 <div className='bg-slate-900 rounded-lg p-2'>
                     <div className='flex justify-between items-center mb-2 px-3 py-2'>
-                        {/* Top Left Controls */}
                         <div className="flex items-center gap-2">
                             <Button variant="outline" className="bg-slate-800 border-slate-700 hover:bg-slate-700 text-white">
                                 <Calendar className="mr-2 h-4 w-4"/>
@@ -339,7 +348,6 @@ export default function ProjectPlanPage() {
                                 <span>Export Excel</span>
                             </Button>
                         </div>
-                        {/* Top Right Controls */}
                          <div className="flex items-center gap-2">
                             <Button variant="ghost" size="icon"><Filter className="h-4 w-4"/></Button>
                             <Button variant="outline" className="bg-slate-800 border-slate-700 hover:bg-slate-700 text-white">3 months</Button>
@@ -355,6 +363,7 @@ export default function ProjectPlanPage() {
                        <div ref={ganttChartRef}>
                         <GanttChart 
                             tasks={tasks}
+                            projectId={selectedProject.projectId}
                             projectStart={projectDateRange.start}
                             projectEnd={projectDateRange.end}
                             onDeleteTask={handleDeleteTask}

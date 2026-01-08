@@ -19,6 +19,7 @@ const GanttTaskRow = ({
   task: GanttTask | GanttSubTask;
   level?: number;
   taskNumber: string;
+  projectId: string;
   projectStart: string;
   dayWidth: number;
   collapsedTasks: Set<string>;
@@ -47,6 +48,7 @@ const GanttTaskRow = ({
               level={level}
               canCollapse={canCollapse}
               taskNumber={taskNumber}
+              projectId={props.projectId}
             />
           </div>
           <div className="flex-1 relative">
@@ -75,6 +77,7 @@ const GanttTaskRow = ({
 
 export function GanttChart({
   tasks,
+  projectId,
   projectStart,
   projectEnd,
   onDeleteTask,
@@ -82,6 +85,7 @@ export function GanttChart({
   onUpdateTaskProgress
 }: {
   tasks: GanttTask[];
+  projectId: string;
   projectStart: string;
   projectEnd: string;
   onDeleteTask: (taskId: string) => void;
@@ -168,6 +172,7 @@ export function GanttChart({
                   task={task}
                   level={0}
                   taskNumber={`${index + 1}`}
+                  projectId={projectId}
                   projectStart={projectStart}
                   dayWidth={dayWidth}
                   collapsedTasks={collapsedTasks}
