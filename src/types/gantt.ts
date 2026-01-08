@@ -13,6 +13,9 @@ export type TaskStatus =
 // Base schema for a task, which will be used recursively
 const BaseGanttTaskSchema = z.object({
   id: z.string(),
+  goal: z.string().optional(),
+  outcome: z.string().optional(),
+  output: z.string().optional(),
   title: z.string().min(1, "Title is required.").max(1000),
   startDay: z.string().optional(),
   startMonth: z.string().optional(),

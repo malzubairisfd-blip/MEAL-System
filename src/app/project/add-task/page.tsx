@@ -18,7 +18,9 @@ import { Label } from '@/components/ui/label';
 
 import { ArrowLeft, Loader2, Save, Plus, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { GanttTaskSchema } from '@/types/gantt';
+import { GanttTask, GanttTaskSchema } from '@/types/gantt';
+import { Logframe } from '@/lib/logframe';
+
 
 interface Project {
   projectId: string;
@@ -40,6 +42,7 @@ export default function AddTaskPage() {
     
     const [projects, setProjects] = useState<Project[]>([]);
     const [selectedProjectId, setSelectedProjectId] = useState<string>('');
+    const [logframe, setLogframe] = useState<Logframe | null>(null);
     const [isSaving, setIsSaving] = useState(false);
     
     const form = useForm<z.infer<typeof AddTasksFormSchema>>({
@@ -69,6 +72,29 @@ export default function AddTaskPage() {
         fetchProjects();
     }, [searchParams, toast]);
 
+    useEffect(() => {
+        if (!selectedProjectId) {
+            setLogframe(null);
+            return;
+        }
+        const fetchLogframe = async () => {
+            try {
+                const res = await fetch(`/api/logframe?projectId=${selectedProjectId}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    setLogframe(data);
+                } else {
+                    setLogframe(null);
+                    toast({ title: "Logframe not found", description: "No logical framework found for this project.", variant: "default" });
+                }
+            } catch (error) {
+                setLogframe(null);
+                console.error("Failed to fetch logframe", error);
+            }
+        };
+        fetchLogframe();
+    }, [selectedProjectId, toast]);
+
     const onAddTaskSubmit = async (data: z.infer<typeof AddTasksFormSchema>) => {
         if (!selectedProjectId) {
             toast({ title: "Project Not Selected", description: "Please select a project first.", variant: "destructive" });
@@ -78,13 +104,14 @@ export default function AddTaskPage() {
         setIsSaving(true);
         try {
             const existingPlanRes = await fetch(`/api/project-plan?projectId=${selectedProjectId}`);
-            let existingTasks: any[] = [];
+            let existingTasks: GanttTask[] = [];
             if (existingPlanRes.ok) {
                 const existingPlan = await existingPlanRes.json();
                 existingTasks = existingPlan.tasks || [];
             }
             
-            const updatedTasks = [...existingTasks, ...data.tasks];
+            const validatedNewTasks = data.tasks.map(task => GanttTaskSchema.parse(task));
+            const updatedTasks = [...existingTasks, ...validatedNewTasks];
 
             const payload = { projectId: selectedProjectId, tasks: updatedTasks };
             const saveRes = await fetch('/api/project-plan', {
@@ -122,9 +149,9 @@ export default function AddTaskPage() {
                         <CardHeader>
                             <CardTitle>Select Project</CardTitle>
                         </CardHeader>
-                        <CardContent>
+                        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <Select onValueChange={setSelectedProjectId} value={selectedProjectId}>
-                                <SelectTrigger className="w-full md:w-1/2">
+                                <SelectTrigger>
                                     <SelectValue placeholder="Select a project..." />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -135,6 +162,28 @@ export default function AddTaskPage() {
                                     ))}
                                 </SelectContent>
                             </Select>
+                            {logframe && (
+                                <FormField
+                                    control={control}
+                                    name="tasks.0.goal"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Project Goal</FormLabel>
+                                            <Select onValueChange={field.onChange} value={field.value}>
+                                                <FormControl>
+                                                    <SelectTrigger>
+                                                        <SelectValue placeholder="Select the project goal..." />
+                                                    </SelectTrigger>
+                                                </FormControl>
+                                                <SelectContent>
+                                                    <SelectItem value={logframe.goal.description}>{logframe.goal.description}</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                            )}
                         </CardContent>
                     </Card>
 
@@ -146,6 +195,7 @@ export default function AddTaskPage() {
                                 index={index} 
                                 remove={remove}
                                 pathPrefix="tasks"
+                                logframe={logframe}
                             />
                         ))}
                     </div>
@@ -165,17 +215,25 @@ export default function AddTaskPage() {
     );
 }
 
-function RecursiveTaskItem({ control, index, remove, pathPrefix, isEditMode }: { control: any; index: number; remove: (index: number) => void; pathPrefix: string; isEditMode?: boolean }) {
+function RecursiveTaskItem({ control, index, remove, pathPrefix, logframe, isEditMode }: { control: any; index: number; remove: (index: number) => void; pathPrefix: string; logframe: Logframe | null; isEditMode?: boolean }) {
     const currentPath = `${pathPrefix}.${index}`;
     const hasSubTasks = useWatch({ control, name: `${currentPath}.hasSubTasks` });
-    const title = useWatch({ control, name: `${currentPath}.title` });
+    const selectedOutcome = useWatch({ control, name: `${currentPath}.outcome` });
+    const selectedOutput = useWatch({ control, name: `${currentPath}.output` });
 
     const activityNumber = pathPrefix.split('.').filter(p => !isNaN(parseInt(p))).map(p => parseInt(p) + 1).join('.');
+
+    const filteredActivities = React.useMemo(() => {
+        if (!logframe || !selectedOutput) return [];
+        const output = logframe.outputs.find(o => o.description === selectedOutput);
+        return output ? output.activities : [];
+    }, [logframe, selectedOutput]);
+
 
     return (
         <Card className="p-4 relative bg-slate-50 border-slate-200" style={{ marginLeft: `${(pathPrefix.split('.').length - 1) * 20}px` }}>
             <div className="flex justify-between items-start mb-4">
-                <h3 className="text-lg font-semibold">Activity {activityNumber}: <span className="font-normal text-muted-foreground">{title}</span></h3>
+                <h3 className="text-lg font-semibold">Activity {activityNumber}</h3>
                 {!isEditMode && (
                     <Button type="button" variant="ghost" size="icon" onClick={() => remove(index)}>
                         <Trash2 className="h-4 w-4 text-destructive"/>
@@ -183,18 +241,44 @@ function RecursiveTaskItem({ control, index, remove, pathPrefix, isEditMode }: {
                 )}
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField
-                    control={control}
-                    name={`${currentPath}.title`}
-                    render={({ field }) => (
-                        <FormItem className="col-span-2">
-                            <FormLabel>Activity {activityNumber} Title</FormLabel>
-                            <FormControl><Input {...field} maxLength={1000} /></FormControl>
-                            <FormMessage />
-                            <div className="text-xs text-right text-muted-foreground">{field.value?.length || 0}/1000</div>
-                        </FormItem>
-                    )}
-                />
+                 {logframe && (
+                    <div className="col-span-2 grid grid-cols-1 md:grid-cols-3 gap-4">
+                       <FormField control={control} name={`${currentPath}.outcome`} render={({ field }) => (
+                           <FormItem>
+                               <FormLabel>Outcome</FormLabel>
+                               <Select onValueChange={field.onChange} value={field.value}>
+                                   <FormControl><SelectTrigger><SelectValue placeholder="Select Outcome" /></SelectTrigger></FormControl>
+                                   <SelectContent>
+                                       <SelectItem value={logframe.outcome.description}>{logframe.outcome.description}</SelectItem>
+                                   </SelectContent>
+                               </Select>
+                           </FormItem>
+                       )} />
+                        <FormField control={control} name={`${currentPath}.output`} render={({ field }) => (
+                           <FormItem>
+                               <FormLabel>Output</FormLabel>
+                               <Select onValueChange={field.onChange} value={field.value}>
+                                   <FormControl><SelectTrigger><SelectValue placeholder="Select Output" /></SelectTrigger></FormControl>
+                                   <SelectContent>
+                                       {logframe.outputs.map((o, i) => <SelectItem key={i} value={o.description}>{o.description}</SelectItem>)}
+                                   </SelectContent>
+                               </Select>
+                           </FormItem>
+                       )} />
+                        <FormField control={control} name={`${currentPath}.title`} render={({ field }) => (
+                           <FormItem>
+                               <FormLabel>Activity</FormLabel>
+                               <Select onValueChange={field.onChange} value={field.value} disabled={!selectedOutput}>
+                                   <FormControl><SelectTrigger><SelectValue placeholder="Select Activity" /></SelectTrigger></FormControl>
+                                   <SelectContent>
+                                       {filteredActivities.map((a, i) => <SelectItem key={i} value={a.description}>{a.description}</SelectItem>)}
+                                   </SelectContent>
+                               </Select>
+                               <FormMessage/>
+                           </FormItem>
+                       )} />
+                    </div>
+                )}
                  {hasSubTasks === 'no' && (
                     <div className="col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
@@ -245,19 +329,19 @@ function RecursiveTaskItem({ control, index, remove, pathPrefix, isEditMode }: {
             </div>
             
             {hasSubTasks === 'yes' && (
-                <RecursiveTaskArray control={control} pathPrefix={currentPath} />
+                <RecursiveTaskArray control={control} pathPrefix={currentPath} logframe={logframe} />
             )}
         </Card>
     )
 }
 
-function RecursiveTaskArray({ control, pathPrefix }: { control: any; pathPrefix: string }) {
+function RecursiveTaskArray({ control, pathPrefix, logframe }: { control: any; pathPrefix: string; logframe: Logframe | null }) {
     const { fields, append, remove } = useFieldArray({
         control,
         name: `${pathPrefix}.subTasks`
     });
 
-    const parentActivityNumber = pathPrefix.split('.').filter(p => !isNaN(parseInt(p))).map(p => parseInt(p) + 1).join('.');
+    const parentActivityNumber = pathPrefix.split('.').filter(p => !isNaN(parseInt(p))).map(p => parseInt(p) + 1).join('.') || '1';
 
     return (
         <div className="col-span-2 mt-4 space-y-4">
@@ -268,6 +352,7 @@ function RecursiveTaskArray({ control, pathPrefix }: { control: any; pathPrefix:
                     index={subIndex} 
                     remove={remove}
                     pathPrefix={`${pathPrefix}.subTasks`}
+                    logframe={logframe}
                 />
             ))}
              <Button type="button" variant="secondary" size="sm" onClick={() => append({ id: `task-${Date.now()}`, title: '', hasSubTasks: 'no', status: 'PLANNED', progress: 0 })}>

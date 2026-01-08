@@ -19,6 +19,7 @@ import { Label } from '@/components/ui/label';
 import { ArrowLeft, Loader2, Save, Plus, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { GanttTask, GanttTaskSchema } from '@/types/gantt';
+import { Logframe } from '@/lib/logframe';
 
 interface Project {
   projectId: string;
@@ -39,6 +40,7 @@ export default function EditTaskPage() {
 
     const [project, setProject] = useState<Project | null>(null);
     const [allTasks, setAllTasks] = useState<GanttTask[]>([]);
+    const [logframe, setLogframe] = useState<Logframe | null>(null);
     const [isSaving, setIsSaving] = useState(false);
     const [loading, setLoading] = useState(true);
     
@@ -56,15 +58,21 @@ export default function EditTaskPage() {
         const fetchData = async () => {
             setLoading(true);
             try {
-                const [projRes, planRes] = await Promise.all([
+                const [projRes, planRes, logframeRes] = await Promise.all([
                     fetch('/api/projects'),
-                    fetch(`/api/project-plan?projectId=${projectId}`)
+                    fetch(`/api/project-plan?projectId=${projectId}`),
+                    fetch(`/api/logframe?projectId=${projectId}`)
                 ]);
 
                 if (projRes.ok) {
                     const projects = await projRes.json();
                     setProject(projects.find((p: Project) => p.projectId === projectId) || null);
                 }
+
+                if (logframeRes.ok) {
+                    setLogframe(await logframeRes.json());
+                }
+
 
                 if (planRes.ok) {
                     const plan = await planRes.json();
@@ -107,9 +115,12 @@ export default function EditTaskPage() {
 
         setIsSaving(true);
         try {
-             const updateTaskRecursively = (tasks: any[], id: string, updatedData: any): any[] => {
+             const updateTaskRecursively = (tasks: GanttTask[], id: string, updatedData: GanttTask): GanttTask[] => {
                 return tasks.map(task => {
-                    if (task.id === id) return updatedData;
+                    if (task.id === id) {
+                        // Use zod to parse and transform the data, ensuring start/end dates are calculated
+                        return GanttTaskSchema.parse(updatedData);
+                    }
                     if (task.subTasks) {
                         return { ...task, subTasks: updateTaskRecursively(task.subTasks, id, updatedData) };
                     }
@@ -132,6 +143,7 @@ export default function EditTaskPage() {
             router.push(`/project/plan`);
 
         } catch (error: any) {
+            console.error("Save error details:", error)
             toast({ title: "Save Failed", description: error.message, variant: "destructive" });
         } finally {
             setIsSaving(false);
@@ -158,7 +170,7 @@ export default function EditTaskPage() {
             
             <Form {...form}>
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-                     <RecursiveTaskItem control={control} index={-1} remove={() => {}} isEditMode={true} pathPrefix="" />
+                     <RecursiveTaskItem control={control} index={-1} remove={() => {}} isEditMode={true} pathPrefix="" logframe={logframe}/>
 
                     <div className="flex justify-end">
                         <Button type="submit" disabled={isSaving}>
@@ -172,17 +184,27 @@ export default function EditTaskPage() {
     );
 }
 
-function RecursiveTaskItem({ control, index, remove, isEditMode, pathPrefix }: { control: any; index: number; remove: (index: number) => void; isEditMode?: boolean, pathPrefix: string }) {
-    const currentPath = index === -1 ? '' : `${pathPrefix}.${index}`;
-    const hasSubTasks = useWatch({ control, name: currentPath ? `${currentPath}.hasSubTasks` : 'hasSubTasks' });
-    const title = useWatch({ control, name: currentPath ? `${currentPath}.title` : 'title' });
+function RecursiveTaskItem({ control, index, remove, isEditMode, pathPrefix, logframe }: { control: any; index: number; remove: (index: number) => void; isEditMode?: boolean, pathPrefix: string, logframe: Logframe | null }) {
+    const currentPath = index === -1 ? '' : (pathPrefix ? `${pathPrefix}.${index}` : `${index}`);
 
-    const activityNumber = pathPrefix.split('.').filter(p => p !== 'tasks' && p !== 'subTasks').map(p => parseInt(p) + 1).join('.');
+    const hasSubTasks = useWatch({ control, name: currentPath ? `${currentPath}.hasSubTasks` : 'hasSubTasks' });
+    const selectedOutcome = useWatch({ control, name: currentPath ? `${currentPath}.outcome` : 'outcome' });
+    const selectedOutput = useWatch({ control, name: currentPath ? `${currentPath}.output` : 'output' });
+
+    const activityNumber = (pathPrefix.split('.').filter(p => p !== 'tasks' && p !== 'subTasks').map(p => parseInt(p) + 1).join('.') + (index !== -1 ? `.${index + 1}` : '')).replace(/^\./, '');
+
+
+    const filteredActivities = React.useMemo(() => {
+        if (!logframe || !selectedOutput) return [];
+        const output = logframe.outputs.find(o => o.description === selectedOutput);
+        return output ? output.activities : [];
+    }, [logframe, selectedOutput]);
+
 
     return (
         <Card className="p-4 relative bg-slate-50 border-slate-200" style={{ marginLeft: `${(pathPrefix.split('.').filter(p => p === 'subTasks').length) * 20}px` }}>
             <div className="flex justify-between items-start mb-4">
-                <h3 className="text-lg font-semibold">Activity {activityNumber || 'Details'}: <span className="font-normal text-muted-foreground">{title}</span></h3>
+                <h3 className="text-lg font-semibold">Activity {activityNumber || 'Details'}</h3>
                 {!isEditMode && (
                     <Button type="button" variant="ghost" size="icon" onClick={() => remove(index)}>
                         <Trash2 className="h-4 w-4 text-destructive"/>
@@ -190,18 +212,59 @@ function RecursiveTaskItem({ control, index, remove, isEditMode, pathPrefix }: {
                 )}
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField
-                    control={control}
-                    name={currentPath ? `${currentPath}.title` : 'title'}
-                    render={({ field }) => (
-                        <FormItem className="col-span-2">
-                            <FormLabel>Activity {activityNumber || ''} Title</FormLabel>
-                            <FormControl><Input {...field} maxLength={1000} /></FormControl>
-                            <FormMessage />
-                            <div className="text-xs text-right text-muted-foreground">{field.value?.length || 0}/1000</div>
-                        </FormItem>
-                    )}
-                />
+                {logframe && index === -1 && (
+                    <div className="col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+                         <FormField control={control} name="goal" render={({ field }) => (
+                           <FormItem>
+                               <FormLabel>Project Goal</FormLabel>
+                               <Select onValueChange={field.onChange} value={field.value}>
+                                   <FormControl><SelectTrigger><SelectValue placeholder="Select Goal" /></SelectTrigger></FormControl>
+                                   <SelectContent>
+                                       <SelectItem value={logframe.goal.description}>{logframe.goal.description}</SelectItem>
+                                   </SelectContent>
+                               </Select>
+                           </FormItem>
+                       )} />
+                    </div>
+                )}
+                 {logframe && (
+                     <div className="col-span-2 grid grid-cols-1 md:grid-cols-3 gap-4">
+                       <FormField control={control} name={currentPath ? `${currentPath}.outcome` : 'outcome'} render={({ field }) => (
+                           <FormItem>
+                               <FormLabel>Outcome</FormLabel>
+                               <Select onValueChange={field.onChange} value={field.value}>
+                                   <FormControl><SelectTrigger><SelectValue placeholder="Select Outcome" /></SelectTrigger></FormControl>
+                                   <SelectContent>
+                                       <SelectItem value={logframe.outcome.description}>{logframe.outcome.description}</SelectItem>
+                                   </SelectContent>
+                               </Select>
+                           </FormItem>
+                       )} />
+                        <FormField control={control} name={currentPath ? `${currentPath}.output` : 'output'} render={({ field }) => (
+                           <FormItem>
+                               <FormLabel>Output</FormLabel>
+                               <Select onValueChange={field.onChange} value={field.value}>
+                                   <FormControl><SelectTrigger><SelectValue placeholder="Select Output" /></SelectTrigger></FormControl>
+                                   <SelectContent>
+                                       {logframe.outputs.map((o, i) => <SelectItem key={i} value={o.description}>{o.description}</SelectItem>)}
+                                   </SelectContent>
+                               </Select>
+                           </FormItem>
+                       )} />
+                        <FormField control={control} name={currentPath ? `${currentPath}.title` : 'title'} render={({ field }) => (
+                           <FormItem>
+                               <FormLabel>Activity</FormLabel>
+                               <Select onValueChange={field.onChange} value={field.value} disabled={!selectedOutput}>
+                                   <FormControl><SelectTrigger><SelectValue placeholder="Select Activity" /></SelectTrigger></FormControl>
+                                   <SelectContent>
+                                       {filteredActivities.map((a, i) => <SelectItem key={i} value={a.description}>{a.description}</SelectItem>)}
+                                   </SelectContent>
+                               </Select>
+                               <FormMessage/>
+                           </FormItem>
+                       )} />
+                    </div>
+                 )}
                  {hasSubTasks === 'no' && (
                     <div className="col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
@@ -232,7 +295,7 @@ function RecursiveTaskItem({ control, index, remove, isEditMode, pathPrefix }: {
                             <FormControl>
                                 <RadioGroup
                                     onValueChange={field.onChange}
-                                    defaultValue={field.value}
+                                    value={field.value}
                                     className="flex space-x-4"
                                 >
                                     <FormItem className="flex items-center space-x-2 space-y-0">
@@ -252,20 +315,21 @@ function RecursiveTaskItem({ control, index, remove, isEditMode, pathPrefix }: {
             </div>
             
             {hasSubTasks === 'yes' && (
-                <RecursiveTaskArray control={control} pathPrefix={currentPath} />
+                <RecursiveTaskArray control={control} pathPrefix={currentPath} logframe={logframe} />
             )}
         </Card>
     )
 }
 
-function RecursiveTaskArray({ control, pathPrefix }: { control: any; pathPrefix: string }) {
+function RecursiveTaskArray({ control, pathPrefix, logframe }: { control: any; pathPrefix: string, logframe: Logframe | null }) {
     const name = pathPrefix ? `${pathPrefix}.subTasks` : 'subTasks';
     const { fields, append, remove } = useFieldArray({
         control,
         name
     });
 
-    const parentActivityNumber = pathPrefix.split('.').filter(p => p !== 'tasks' && p !== 'subTasks' && p !== '').map(p => parseInt(p) + 1).join('.') || '1';
+    const parentActivityNumber = (pathPrefix.split('.').filter(p => p !== 'tasks' && p !== 'subTasks' && !isNaN(parseInt(p))).map(p => parseInt(p) + 1).join('.') + (pathPrefix.endsWith('subTasks') ? '' : `.${(parseInt(pathPrefix.split('.').pop() || '-1') + 1)}`)).replace(/^\./, '');
+
 
     return (
         <div className="col-span-2 mt-4 space-y-4">
@@ -276,6 +340,7 @@ function RecursiveTaskArray({ control, pathPrefix }: { control: any; pathPrefix:
                     index={subIndex} 
                     remove={remove}
                     pathPrefix={name}
+                    logframe={logframe}
                 />
             ))}
              <Button type="button" variant="secondary" size="sm" onClick={() => append({ id: `task-${Date.now()}`, title: '', hasSubTasks: 'no', status: 'PLANNED', progress: 0 })}>
