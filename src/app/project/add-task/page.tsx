@@ -194,7 +194,7 @@ export default function AddTaskPage() {
                                 control={control} 
                                 index={index} 
                                 remove={remove}
-                                pathPrefix="tasks"
+                                parentPath=""
                                 logframe={logframe}
                             />
                         ))}
@@ -215,15 +215,19 @@ export default function AddTaskPage() {
     );
 }
 
-function RecursiveTaskItem({ control, index, remove, pathPrefix, logframe }: { control: any; index: number; remove: (index: number) => void; pathPrefix: string; logframe: Logframe | null; }) {
-    const currentPath = `${pathPrefix}.${index}`;
+function RecursiveTaskItem({ control, index, remove, parentPath, logframe }: { control: any; index: number; remove: (index: number) => void; parentPath: string; logframe: Logframe | null; }) {
+    const currentPath = parentPath ? `${parentPath}.subTasks.${index}` : `tasks.${index}`;
+    const activityNumber = parentPath.split('.subTasks').filter(Boolean).map((_, i, arr) => {
+        const fullPath = arr.slice(0, i + 1).join('.subTasks');
+        const match = fullPath.match(/\.(\d+)$/);
+        return match ? parseInt(match[1]) + 1 : 1;
+    }).join('.') + (parentPath ? `.${index + 1}` : `${index + 1}`);
+
     const hasSubTasks = useWatch({ control, name: `${currentPath}.hasSubTasks` });
     
-    // Only watch these for top-level activities (pathPrefix === 'tasks')
-    const selectedOutcome = useWatch({ control, name: `${currentPath}.outcome`, disabled: pathPrefix !== 'tasks' });
-    const selectedOutput = useWatch({ control, name: `${currentPath}.output`, disabled: pathPrefix !== 'tasks' });
-
-    const activityNumber = (pathPrefix.split('.').filter(p => !isNaN(parseInt(p))).map(p => parseInt(p) + 1).join('.') + `.${index + 1}`).replace(/^tasks\./, '');
+    const isTopLevel = !parentPath;
+    const selectedOutcome = useWatch({ control, name: `${currentPath}.outcome`, disabled: !isTopLevel });
+    const selectedOutput = useWatch({ control, name: `${currentPath}.output`, disabled: !isTopLevel });
 
     const filteredActivities = React.useMemo(() => {
         if (!logframe || !selectedOutput) return [];
@@ -233,7 +237,7 @@ function RecursiveTaskItem({ control, index, remove, pathPrefix, logframe }: { c
 
 
     return (
-        <Card className="p-4 relative bg-slate-50 border-slate-200" style={{ marginLeft: `${(pathPrefix.split('.').filter(p => p === 'subTasks').length) * 20}px` }}>
+        <Card className="p-4 relative bg-slate-50 border-slate-200" style={{ marginLeft: `${(parentPath.split('.subTasks').length -1) * 20}px` }}>
             <div className="flex justify-between items-start mb-4">
                 <h3 className="text-lg font-semibold">Activity {activityNumber}</h3>
                 <Button type="button" variant="ghost" size="icon" onClick={() => remove(index)}>
@@ -241,7 +245,7 @@ function RecursiveTaskItem({ control, index, remove, pathPrefix, logframe }: { c
                 </Button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                 {logframe && pathPrefix === 'tasks' && (
+                 {isTopLevel && logframe && (
                     <div className="col-span-2 grid grid-cols-1 md:grid-cols-3 gap-4">
                        <FormField control={control} name={`${currentPath}.outcome`} render={({ field }) => (
                            <FormItem>
@@ -279,7 +283,7 @@ function RecursiveTaskItem({ control, index, remove, pathPrefix, logframe }: { c
                        )} />
                     </div>
                 )}
-                 {pathPrefix !== 'tasks' && (
+                 {!isTopLevel && (
                     <FormField control={control} name={`${currentPath}.title`} render={({ field }) => (
                         <FormItem className="col-span-2">
                            <FormLabel>Activity {activityNumber} Title</FormLabel>
@@ -338,21 +342,24 @@ function RecursiveTaskItem({ control, index, remove, pathPrefix, logframe }: { c
             </div>
             
             {hasSubTasks === 'yes' && (
-                <RecursiveTaskArray control={control} pathPrefix={currentPath} logframe={logframe} />
+                <RecursiveTaskArray control={control} parentPath={currentPath} logframe={logframe} />
             )}
         </Card>
     )
 }
 
-function RecursiveTaskArray({ control, pathPrefix, logframe }: { control: any; pathPrefix: string; logframe: Logframe | null }) {
-    const name = pathPrefix ? `${pathPrefix}.subTasks` : 'tasks';
+function RecursiveTaskArray({ control, parentPath, logframe }: { control: any; parentPath: string; logframe: Logframe | null }) {
+    const name = `${parentPath}.subTasks`;
     const { fields, append, remove } = useFieldArray({
         control,
         name
     });
 
-    const parentActivityNumber = (pathPrefix.split('.').filter(p => !isNaN(parseInt(p))).map(p => parseInt(p) + 1).join('.') + (pathPrefix.match(/\d+$/) ? `.${parseInt(pathPrefix.split('.').pop() || '0') + 1}` : '')).replace(/^tasks\./, '');
-
+    const parentActivityNumber = parentPath.split('.subTasks').filter(Boolean).map((_, i, arr) => {
+        const fullPath = arr.slice(0, i + 1).join('.subTasks');
+        const match = fullPath.match(/\.(\d+)$/);
+        return match ? parseInt(match[1]) + 1 : 1;
+    }).join('.') + (parentPath.includes('.') ? `.${parseInt(parentPath.split('.').pop() || '0') + 1}` : `${parseInt(parentPath.split('.').pop() || '0') + 1}`);
 
     return (
         <div className="col-span-2 mt-4 space-y-4">
@@ -362,7 +369,7 @@ function RecursiveTaskArray({ control, pathPrefix, logframe }: { control: any; p
                     control={control} 
                     index={subIndex} 
                     remove={remove}
-                    pathPrefix={name}
+                    parentPath={parentPath}
                     logframe={logframe}
                 />
             ))}
