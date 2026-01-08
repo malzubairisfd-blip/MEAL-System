@@ -104,25 +104,22 @@ export function GanttChart({
   }, []);
 
     const { overallProgress, totalWorkingDays } = useMemo(() => {
-        const mainTasksWithSubtasks = tasks.filter(t => t.hasSubTasks === 'yes' && t.subTasks && t.subTasks.length > 0);
+        let totalProgressSum = 0;
+        let totalProgressWeight = 0;
+        let totalDays = 0;
         
-        let overallProgress = 0;
-        if (mainTasksWithSubtasks.length > 0) {
-            const totalProgress = mainTasksWithSubtasks.reduce((sum, task) => {
-                const subTaskProgressAvg = task.subTasks!.reduce((acc, st) => acc + (st.progress || 0), 0) / (task.subTasks!.length || 1);
-                return sum + subTaskProgressAvg;
-            }, 0);
-            overallProgress = totalProgress / (mainTasksWithSubtasks.length || 1);
-        }
+        tasks.forEach(task => {
+            const taskWorkingDays = calculateWorkingDays(task.start, task.end);
+            totalDays += taskWorkingDays;
 
-        const totalWorkingDays = tasks.reduce((sum, task) => {
-            if (task.hasSubTasks === 'yes' && task.subTasks) {
-                return sum + task.subTasks.reduce((subSum, st) => subSum + calculateWorkingDays(st.start, st.end), 0);
-            }
-            return sum + calculateWorkingDays(task.start, task.end);
-        }, 0);
+            // Use parent task progress directly as it should be rolled up
+            totalProgressSum += (task.progress || 0) * taskWorkingDays;
+            totalProgressWeight += taskWorkingDays;
+        });
 
-        return { overallProgress, totalWorkingDays };
+        const overallProgress = totalProgressWeight > 0 ? totalProgressSum / totalProgressWeight : 0;
+        
+        return { overallProgress, totalWorkingDays: totalDays };
     }, [tasks]);
 
   return (

@@ -159,7 +159,7 @@ export default function ProjectPlanPage() {
                         const updatedSubTasks = [...task.subTasks];
                         updatedSubTasks[subTaskIndex] = { ...updatedSubTasks[subTaskIndex], progress: newProgress };
                         
-                        const avgProgress = updatedSubTasks.reduce((acc, st) => acc + st.progress, 0) / (updatedSubTasks.length || 1);
+                        const avgProgress = updatedSubTasks.reduce((acc, st) => acc + (st.progress || 0), 0) / (updatedSubTasks.length || 1);
 
                         return {
                             ...task,
