@@ -22,7 +22,7 @@ const BaseGanttTaskSchema = z.object({
   endYear: z.string().optional(),
   progress: z.coerce.number().min(0).max(100).optional(),
   status: z.enum(["DONE", "IN_PROGRESS", "PLANNED", "BLOCKED", "EXPECTS_PLANNING"]).default("PLANNED"),
-  hasSubTasks: z.enum(['yes', 'no']),
+  hasSubTasks: z.enum(['yes', 'no']).default('no'),
 });
 
 // Recursive schema definition
