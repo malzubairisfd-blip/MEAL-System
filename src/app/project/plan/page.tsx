@@ -4,7 +4,8 @@
 import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
+import { toPng } from 'html-to-image';
+
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -240,22 +241,27 @@ export default function ProjectPlanPage() {
         toast({ title: "Exporting...", description: "Please wait while the PDF is being generated." });
 
         try {
-            const canvas = await html2canvas(ganttChartRef.current, {
-                allowTaint: true,
-                useCORS: true,
-                scale: 2, // Increase scale for better resolution
+            const imgData = await toPng(ganttChartRef.current, {
+                cacheBust: true,
+                pixelRatio: 2,
+                style: {
+                    // Temporarily set background to white for export
+                    backgroundColor: 'white',
+                }
             });
 
-            const imgData = canvas.toDataURL('image/png');
+            // Get the dimensions from the generated image
+            const img = new Image();
+            img.src = imgData;
+            await new Promise(resolve => { img.onload = resolve; });
+            
             const pdf = new jsPDF({
                 orientation: 'landscape',
                 unit: 'px',
-                format: [canvas.width, canvas.height],
+                format: [img.width, img.height],
             });
 
-            const pdfWidth = pdf.internal.pageSize.getWidth();
-            const pdfHeight = pdf.internal.pageSize.getHeight();
-            pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+            pdf.addImage(imgData, 'PNG', 0, 0, img.width, img.height);
             
             const fileName = selectedProject ? `${selectedProject.projectName}-plan.pdf` : 'project-plan.pdf';
             pdf.save(fileName);
