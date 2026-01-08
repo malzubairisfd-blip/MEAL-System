@@ -1,7 +1,7 @@
 // src/app/project/edit-task/page.tsx
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useForm, useFieldArray, useWatch } from "react-hook-form";
@@ -30,7 +30,8 @@ const months = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0
 const years = Array.from({ length: 21 }, (_, i) => String(new Date().getFullYear() - 10 + i));
 const days = Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, '0'));
 
-export default function EditTaskPage() {
+
+function EditTaskPageContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const { toast } = useToast();
@@ -93,7 +94,8 @@ export default function EditTaskPage() {
                     const taskToEdit = taskId ? findTaskRecursively(tasks, taskId) : null;
 
                     if (taskToEdit) {
-                        form.reset(GanttTaskSchema.parse(taskToEdit));
+                        const parsedTask = GanttTaskSchema.parse(taskToEdit);
+                        form.reset(parsedTask);
                     } else if (taskId) {
                         toast({ title: "Error", description: `Task with ID "${taskId}" not found in this project.`, variant: "destructive"});
                     }
@@ -154,7 +156,6 @@ export default function EditTaskPage() {
         return <div className="flex items-center justify-center h-96"><Loader2 className="h-8 w-8 animate-spin" /></div>
     }
 
-    // Don't render the form until the data is loaded to prevent flicker and errors
     if (!form.formState.isDirty && form.getValues().id !== taskId) {
        return <div className="flex items-center justify-center h-96"><Loader2 className="h-8 w-8 animate-spin" /></div>
     }
@@ -189,17 +190,39 @@ export default function EditTaskPage() {
     );
 }
 
+export default function EditTaskPage() {
+    return (
+        <Suspense fallback={<div className="flex justify-center items-center h-96"><Loader2 className="h-8 w-8 animate-spin" /></div>}>
+            <EditTaskPageContent />
+        </Suspense>
+    )
+}
+
 function RecursiveTaskItem({ control, index, remove, isEditMode, parentPath, logframe }: { control: any; index: number; remove: (index: number) => void; isEditMode?: boolean, parentPath: string, logframe: Logframe | null }) {
     const currentPath = index === -1 ? '' : (parentPath ? `${parentPath}.subTasks.${index}` : `tasks.${index}`);
 
-    const parentActivityNumber = parentPath.split('.subTasks').filter(Boolean).map((_, i) => i + 1).join('.');
-    const activityNumbering = parentPath ? `${parentActivityNumber}.${index + 1}` : (index >= 0 ? `${index + 1}` : '');
+    const getDynamicActivityNumbering = () => {
+      if (parentPath) {
+        const parentParts = parentPath.match(/subTasks\.(\d+)/g) || [];
+        const parentIndices = parentParts.map(p => parseInt(p.split('.')[1]) + 1);
+        const topLevelIndex = parentPath.match(/^tasks\.(\d+)/);
+        if (topLevelIndex) {
+            parentIndices.unshift(parseInt(topLevelIndex[1]) + 1);
+        }
+        return [...parentIndices, index + 1].join('.');
+      }
+      return index >= 0 ? `${index + 1}` : '';
+    };
+
+    const activityNumbering = getDynamicActivityNumbering();
 
     const hasSubTasks = useWatch({ control, name: currentPath ? `${currentPath}.hasSubTasks` : 'hasSubTasks' });
     
-    const isTopLevel = !parentPath;
-    const selectedOutcome = useWatch({ control, name: currentPath ? `${currentPath}.outcome` : 'outcome', disabled: !isTopLevel });
-    const selectedOutput = useWatch({ control, name: currentPath ? `${currentPath}.output` : 'output', disabled: !isTopLevel });
+    const isTopLevel = !parentPath && index >= 0;
+    const isEditTopLevel = isEditMode && !parentPath;
+    
+    const selectedOutcome = useWatch({ control, name: currentPath ? `${currentPath}.outcome` : 'outcome' });
+    const selectedOutput = useWatch({ control, name: currentPath ? `${currentPath}.output` : 'output' });
     
     const filteredActivities = React.useMemo(() => {
         if (!logframe || !selectedOutput) return [];
@@ -211,7 +234,7 @@ function RecursiveTaskItem({ control, index, remove, isEditMode, parentPath, log
     return (
         <Card className="p-4 relative bg-slate-50 border-slate-200" style={{ marginLeft: `${(parentPath.split('.subTasks').length -1) * 20}px` }}>
             <div className="flex justify-between items-start mb-4">
-                <h3 className="text-lg font-semibold">{isTopLevel ? `Activity ${activityNumbering}` : `Activity ${activityNumbering}`}</h3>
+                <h3 className="text-lg font-semibold">{`Activity ${activityNumbering}`}</h3>
                 {!isEditMode && (
                     <Button type="button" variant="ghost" size="icon" onClick={() => remove(index)}>
                         <Trash2 className="h-4 w-4 text-destructive"/>
@@ -219,7 +242,7 @@ function RecursiveTaskItem({ control, index, remove, isEditMode, parentPath, log
                 )}
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                 {isTopLevel && logframe && (
+                 {(isTopLevel || isEditTopLevel) && logframe && (
                      <div className="col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
                        <FormField control={control} name={currentPath ? `${currentPath}.outcome` : 'outcome'} render={({ field }) => (
                            <FormItem>
@@ -248,8 +271,8 @@ function RecursiveTaskItem({ control, index, remove, isEditMode, parentPath, log
                  
                 <FormField control={control} name={currentPath ? `${currentPath}.title` : 'title'} render={({ field }) => (
                     <FormItem className="col-span-2">
-                        <FormLabel>{`Activity ${activityNumbering || '1'} Title`}</FormLabel>
-                        {isTopLevel && filteredActivities.length > 0 ? (
+                        <FormLabel>{`Activity ${activityNumbering || ''} Title`}</FormLabel>
+                        {(isTopLevel || isEditTopLevel) && filteredActivities.length > 0 ? (
                              <Select onValueChange={field.onChange} value={field.value} disabled={!selectedOutput}>
                                 <FormControl><SelectTrigger><SelectValue placeholder="Select Activity" /></SelectTrigger></FormControl>
                                 <SelectContent>
@@ -313,18 +336,29 @@ function RecursiveTaskItem({ control, index, remove, isEditMode, parentPath, log
             </div>
             
             {hasSubTasks === 'yes' && (
-                <RecursiveTaskArray control={control} parentPath={currentPath} logframe={logframe} parentActivityNumber={activityNumbering} />
+                <RecursiveTaskArray control={control} parentPath={currentPath} logframe={logframe} />
             )}
         </Card>
     )
 }
 
-function RecursiveTaskArray({ control, parentPath, logframe, parentActivityNumber }: { control: any; parentPath: string; logframe: Logframe | null; parentActivityNumber: string; }) {
+function RecursiveTaskArray({ control, parentPath, logframe }: { control: any; parentPath: string; logframe: Logframe | null; }) {
     const name = parentPath ? `${parentPath}.subTasks` : 'tasks';
     const { fields, append, remove } = useFieldArray({
         control,
         name
     });
+
+    const getParentActivityNumbering = () => {
+      if (!parentPath) return `Activity ${fields.length + 1}`;
+      const parentParts = parentPath.match(/subTasks\.(\d+)/g) || [];
+      const parentIndices = parentParts.map(p => parseInt(p.split('.')[1]) + 1);
+      const topLevelIndex = parentPath.match(/^tasks\.(\d+)/);
+      if (topLevelIndex) {
+          parentIndices.unshift(parseInt(topLevelIndex[1]) + 1);
+      }
+      return `Activity ${[...parentIndices, fields.length + 1].join('.')}`;
+    };
 
     return (
         <div className="col-span-2 mt-4 space-y-4">
@@ -340,7 +374,7 @@ function RecursiveTaskArray({ control, parentPath, logframe, parentActivityNumbe
                 />
             ))}
              <Button type="button" variant="secondary" size="sm" onClick={() => append({ id: `task-${Date.now()}`, title: '', hasSubTasks: 'no', status: 'PLANNED', progress: 0 })}>
-                <Plus className="mr-2 h-4 w-4" /> {`Add Activity ${parentActivityNumber || '1'}.${fields.length + 1}`}
+                <Plus className="mr-2 h-4 w-4" /> Add {getParentActivityNumbering()}
             </Button>
         </div>
     );
