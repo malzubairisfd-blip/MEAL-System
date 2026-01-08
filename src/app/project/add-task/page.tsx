@@ -180,7 +180,7 @@ export default function AddTaskPage() {
 
                     <div className="flex justify-between">
                         <Button type="button" variant="outline" onClick={() => append({ id: `task-${Date.now()}`, title: "", hasSubTasks: 'no', status: 'PLANNED', progress: 0 })}>
-                            <Plus className="mr-2 h-4 w-4"/> Add Another Activity
+                            <Plus className="mr-2 h-4 w-4"/> {`Add Activity ${fields.length + 1}`}
                         </Button>
                         <Button type="submit" disabled={isSaving}>
                             {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Save className="mr-2 h-4 w-4" />}
@@ -196,9 +196,8 @@ export default function AddTaskPage() {
 function RecursiveTaskItem({ control, index, remove, parentPath, logframe }: { control: any; index: number; remove: (index: number) => void; parentPath: string; logframe: Logframe | null; }) {
     const currentPath = parentPath ? `${parentPath}.subTasks.${index}` : `tasks.${index}`;
     
-    const activityNumbering = parentPath 
-      ? `${parentPath.match(/\d+(\.\d+)*/)?.[0] || '1'}.${index + 1}`
-      : `${index + 1}`;
+    const parentActivityNumber = parentPath.split('.subTasks').filter(Boolean).map((_, i) => i + 1).join('.');
+    const activityNumbering = parentPath ? `${parentActivityNumber}.${index + 1}` : `${index + 1}`;
 
     const hasSubTasks = useWatch({ control, name: `${currentPath}.hasSubTasks` });
     
@@ -216,7 +215,7 @@ function RecursiveTaskItem({ control, index, remove, parentPath, logframe }: { c
     return (
         <Card className="p-4 relative bg-slate-50 border-slate-200" style={{ marginLeft: `${(parentPath.split('.subTasks').length -1) * 20}px` }}>
             <div className="flex justify-between items-start mb-4">
-                <h3 className="text-lg font-semibold">Activity {activityNumbering}</h3>
+                <h3 className="text-lg font-semibold">{isTopLevel ? `Activity ${activityNumbering}` : `Activity ${activityNumbering}`}</h3>
                 <Button type="button" variant="ghost" size="icon" onClick={() => remove(index)}>
                     <Trash2 className="h-4 w-4 text-destructive"/>
                 </Button>
@@ -250,7 +249,7 @@ function RecursiveTaskItem({ control, index, remove, parentPath, logframe }: { c
                 )}
                 <FormField control={control} name={`${currentPath}.title`} render={({ field }) => (
                    <FormItem className="col-span-2">
-                       <FormLabel>Activity {activityNumbering} Title</FormLabel>
+                       <FormLabel>{`Activity ${activityNumbering} Title`}</FormLabel>
                        {isTopLevel && filteredActivities.length > 0 ? (
                             <Select onValueChange={field.onChange} value={field.value} disabled={!selectedOutput}>
                                <FormControl><SelectTrigger><SelectValue placeholder="Select Activity" /></SelectTrigger></FormControl>
@@ -290,7 +289,7 @@ function RecursiveTaskItem({ control, index, remove, parentPath, logframe }: { c
                     name={`${currentPath}.hasSubTasks`}
                     render={({ field }) => (
                         <FormItem className="col-span-2 space-y-3">
-                            <FormLabel>Include Activity {activityNumbering}.1?</FormLabel>
+                            <FormLabel>{`Include Activity ${activityNumbering}.1?`}</FormLabel>
                             <FormControl>
                                 <RadioGroup
                                     onValueChange={field.onChange}
@@ -314,20 +313,18 @@ function RecursiveTaskItem({ control, index, remove, parentPath, logframe }: { c
             </div>
             
             {hasSubTasks === 'yes' && (
-                <RecursiveTaskArray control={control} parentPath={currentPath} logframe={logframe} />
+                <RecursiveTaskArray control={control} parentPath={currentPath} logframe={logframe} parentActivityNumber={activityNumbering} />
             )}
         </Card>
     )
 }
 
-function RecursiveTaskArray({ control, parentPath, logframe }: { control: any; parentPath: string; logframe: Logframe | null }) {
-    const name = `${parentPath}.subTasks`;
+function RecursiveTaskArray({ control, parentPath, logframe, parentActivityNumber }: { control: any; parentPath: string; logframe: Logframe | null; parentActivityNumber: string; }) {
+    const name = parentPath ? `${parentPath}.subTasks` : 'tasks';
     const { fields, append, remove } = useFieldArray({
         control,
         name
     });
-
-    const parentActivityNumber = parentPath.match(/\d+(\.\d+)*/)?.[0] || '1';
 
     return (
         <div className="col-span-2 mt-4 space-y-4">
@@ -342,7 +339,7 @@ function RecursiveTaskArray({ control, parentPath, logframe }: { control: any; p
                 />
             ))}
              <Button type="button" variant="secondary" size="sm" onClick={() => append({ id: `task-${Date.now()}`, title: '', hasSubTasks: 'no', status: 'PLANNED', progress: 0 })}>
-                <Plus className="mr-2 h-4 w-4" /> Add Activity {parentActivityNumber}.{fields.length + 1}
+                <Plus className="mr-2 h-4 w-4" /> {`Add Activity ${parentActivityNumber || '1'}.${fields.length + 1}`}
             </Button>
         </div>
     );
