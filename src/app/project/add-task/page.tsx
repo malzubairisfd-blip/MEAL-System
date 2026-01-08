@@ -52,10 +52,8 @@ export default function AddTaskPage() {
     });
     
     useEffect(() => {
-        if(form.getValues('tasks').length === 0 && existingTasksCount > 0) {
-            form.reset({ tasks: [{ id: `task-${Date.now()}`, title: "", hasSubTasks: 'no', status: 'PLANNED', progress: 0 }] });
-        } else if (form.getValues('tasks').length === 0 && existingTasksCount === 0) {
-            form.reset({ tasks: [{ id: `task-${Date.now()}`, title: "", hasSubTasks: 'no', status: 'PLANNED', progress: 0 }] });
+        if(form.getValues('tasks').length === 0 && existingTasksCount >= 0) {
+             form.reset({ tasks: [{ id: `task-${Date.now()}`, title: "", hasSubTasks: 'no', status: 'PLANNED', progress: 0 }] });
         }
     }, [existingTasksCount, form]);
 
@@ -144,7 +142,7 @@ export default function AddTaskPage() {
             if (!saveRes.ok) throw new Error("Failed to save the new activities.");
 
             toast({ title: "Activities Added!", description: "The new activities have been added to the project plan." });
-            router.push(`/project/plan`);
+            router.push(`/project/plan?projectId=${selectedProjectId}`);
 
         } catch (error: any) {
             toast({ title: "Save Failed", description: error.message, variant: "destructive" });
@@ -158,7 +156,7 @@ export default function AddTaskPage() {
              <div className="flex justify-between items-center">
                 <h1 className="text-3xl font-bold">Add New Activities</h1>
                 <Button variant="outline" asChild>
-                    <Link href="/project/plan">
+                    <Link href={`/project/plan?projectId=${selectedProjectId}`}>
                         <ArrowLeft className="mr-2 h-4 w-4" /> Back to Project Plan
                     </Link>
                 </Button>
@@ -201,7 +199,7 @@ export default function AddTaskPage() {
                     </div>
 
                     <div className="flex justify-between">
-                        <Button type="button" variant="outline" onClick={() => append({ id: `task-${Date.now()}`, title: "", hasSubTasks: 'no', status: 'PLANNED', progress: 0 })}>
+                         <Button type="button" variant="outline" onClick={() => append({ id: `task-${Date.now()}`, title: "", hasSubTasks: 'no', status: 'PLANNED', progress: 0 })}>
                             <Plus className="mr-2 h-4 w-4"/> {`Add Activity ${existingTasksCount + fields.length + 1}`}
                         </Button>
                         <Button type="submit" disabled={isSaving}>
@@ -221,8 +219,14 @@ function RecursiveTaskItem({ control, index, remove, parentPath, logframe, baseA
     const activityNumbering = useMemo(() => {
         if(parentPath){
             const parentParts = parentPath.split('.').filter(p => p !== 'tasks' && p !== 'subTasks');
-            const parentNumbering = parentParts.map(p => parseInt(p, 10) + 1).join('.');
-            return `${parentNumbering}.${index + 1}`;
+            // This logic is getting complex, needs to be robust
+            const parentIndex = parentParts[0];
+            const parentNumber = baseActivityNumber ? `${baseActivityNumber-1}.${parseInt(parentIndex, 10)+1}` : `${parseInt(parentIndex, 10)+1}`;
+            let currentNumbering = parentNumber;
+            for(let i=1; i<parentParts.length; i++) {
+                currentNumbering += `.${parseInt(parentParts[i], 10)+1}`;
+            }
+            return `${currentNumbering}.${index + 1}`;
         }
         return `${baseActivityNumber || index + 1}`;
     }, [parentPath, index, baseActivityNumber]);
@@ -243,7 +247,7 @@ function RecursiveTaskItem({ control, index, remove, parentPath, logframe, baseA
     return (
         <Card className="p-4 relative bg-slate-50 border-slate-200" style={{ marginLeft: `${(parentPath.split('subTasks').length -1) * 20}px` }}>
             <div className="flex justify-between items-start mb-4">
-                <h3 className="text-lg font-semibold">{isTopLevel ? `Activity ${activityNumbering}` : `Activity ${activityNumbering}`}</h3>
+                <h3 className="text-lg font-semibold">{`Activity ${activityNumbering}`}</h3>
                 <Button type="button" variant="ghost" size="icon" onClick={() => remove(index)}>
                     <Trash2 className="h-4 w-4 text-destructive"/>
                 </Button>
@@ -364,11 +368,10 @@ function RecursiveTaskArray({ control, parentPath, logframe, parentActivityNumbe
                     remove={remove}
                     parentPath={name}
                     logframe={logframe}
-                    baseActivityNumber={subIndex+1} // this is now relative
                 />
             ))}
              <Button type="button" variant="secondary" size="sm" onClick={() => append({ id: `task-${Date.now()}`, title: '', hasSubTasks: 'no', status: 'PLANNED', progress: 0 })}>
-                <Plus className="mr-2 h-4 w-4" /> {`Add Activity ${parentActivityNumber}.${fields.length + 1}`}
+                <Plus className="mr-2 h-4 w-4" /> Add Activity {`${parentActivityNumber}.${fields.length + 1}`}
             </Button>
         </div>
     );

@@ -16,6 +16,7 @@ import { GanttChart } from '@/components/gantt/GanttChart';
 import { exportGanttToExcel } from "@/lib/exportGanttToExcel";
 import { exportGanttToPDF } from '@/lib/exportGanttToPDF';
 import { Logframe } from '@/lib/logframe';
+import { useSearchParams } from 'next/navigation';
 
 
 dayjs.extend(minMax);
@@ -34,6 +35,7 @@ const days = Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, '0')
 
 export default function ProjectPlanPage() {
     const { toast } = useToast();
+    const searchParams = useSearchParams();
     const [projects, setProjects] = useState<Project[]>([]);
     const [selectedProject, setSelectedProject] = useState<Project | null>(null);
     const [logframe, setLogframe] = useState<Logframe | null>(null);
@@ -50,6 +52,12 @@ export default function ProjectPlanPage() {
                 if (!res.ok) throw new Error("Failed to fetch projects");
                 const data = await res.json();
                 setProjects(data);
+
+                const projectIdFromUrl = searchParams.get('projectId');
+                if (projectIdFromUrl) {
+                    handleProjectSelect(projectIdFromUrl);
+                }
+
             } catch (error) {
                 console.error(error);
                 toast({ title: "Error", description: "Could not load projects.", variant: "destructive" });
@@ -58,11 +66,16 @@ export default function ProjectPlanPage() {
             }
         };
         fetchProjects();
-    }, [toast]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [searchParams]);
     
-    const handleProjectSelect = async (projectId: string) => {
+    const handleProjectSelect = useCallback(async (projectId: string) => {
         const project = projects.find(p => p.projectId === projectId);
-        if (!project) return;
+        if (!project) {
+          // If project not found in the list, it might not be loaded yet.
+          // We'll rely on the useEffect with searchParams to call this again.
+          return;
+        }
         
         setSelectedProject(project);
         setTasks([]);
@@ -90,9 +103,11 @@ export default function ProjectPlanPage() {
                      const parsedTasks = data.tasks.map((task: any) => GanttTaskSchema.parse(task));
                     setTasks(parsedTasks);
                 } else {
+                    setTasks([]);
                     toast({ title: "New Plan", description: "No existing plan found. Add tasks to create one."});
                 }
             } else {
+                 setTasks([]);
                 toast({ title: "New Plan", description: "No existing plan found. Add tasks to create one."});
             }
         } catch (error: any) {
@@ -105,7 +120,7 @@ export default function ProjectPlanPage() {
         } finally {
             setLoading(prev => ({...prev, plan: false}));
         }
-    };
+    }, [projects, toast]);
 
     const handleSavePlan = async () => {
         if (!selectedProject) {
@@ -180,8 +195,8 @@ export default function ProjectPlanPage() {
                     
                     // If any subtask was updated, recalculate parent progress.
                     if (updatedSubTasks !== task.subTasks) {
-                        const totalWeight = updatedSubTasks.reduce((acc, st) => acc + calculateWorkingDays(st.start, st.end), 0);
-                        const weightedProgress = updatedSubTasks.reduce((acc, st) => acc + (st.progress || 0) * calculateWorkingDays(st.start, st.end), 0);
+                        const totalWeight = updatedSubTasks.reduce((acc, st) => acc + (st.end ? dayjs(st.end).diff(dayjs(st.start), 'day') + 1 : 0), 0);
+                        const weightedProgress = updatedSubTasks.reduce((acc, st) => acc + (st.progress || 0) * (st.end ? dayjs(st.end).diff(dayjs(st.start), 'day') + 1 : 0), 0);
                         const newParentProgress = totalWeight > 0 ? weightedProgress / totalWeight : 0;
                         
                         return { ...task, subTasks: updatedSubTasks, progress: Math.round(newParentProgress) };

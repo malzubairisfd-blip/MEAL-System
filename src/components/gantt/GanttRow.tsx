@@ -7,18 +7,12 @@ import dayjs from "dayjs";
 import { GanttTask, TaskStatus } from "@/types/gantt";
 import { STATUS_COLORS } from "@/lib/statusStyles";
 import { calculateWorkingDays } from '@/lib/ganttUtils';
-import { ChevronDown, Trash2, Edit, ChevronRight, GitCommit, LocateFixed } from "lucide-react";
+import { ChevronDown, Trash2, Edit, ChevronRight } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Input } from "../ui/input";
 import { Progress } from "../ui/progress";
 import { cn } from "@/lib/utils";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip"
 
 interface RowProps {
   task: GanttTask;
@@ -139,7 +133,6 @@ export const TaskListItem = ({ task, onDelete, onUpdateStatus, onUpdateProgress,
     }
 
     return (
-      <TooltipProvider>
         <div 
           className={cn("h-full px-3 flex items-start text-sm group py-2 min-h-[4rem]", level > 0 && 'bg-slate-900/50')} 
           style={{ paddingLeft: `${0.75 + level * 1.5}rem`}}
@@ -168,18 +161,6 @@ export const TaskListItem = ({ task, onDelete, onUpdateStatus, onUpdateProgress,
                       {task.title}
                     </span>
                 </div>
-                {level === 0 && task.outcome && (
-                  <div className="flex items-center gap-2 pl-7 text-xs text-slate-400 mt-1">
-                    <Tooltip>
-                      <TooltipTrigger><GitCommit className="h-3 w-3"/></TooltipTrigger>
-                      <TooltipContent><p>{task.outcome}</p></TooltipContent>
-                    </Tooltip>
-                     <Tooltip>
-                      <TooltipTrigger><LocateFixed className="h-3 w-3"/></TooltipTrigger>
-                      <TooltipContent><p>{task.output}</p></TooltipContent>
-                    </Tooltip>
-                  </div>
-                )}
                 <div className="pl-7 w-full max-w-[200px] mt-2">
                     {progressElement}
                 </div>
@@ -218,6 +199,5 @@ export const TaskListItem = ({ task, onDelete, onUpdateStatus, onUpdateProgress,
                 )}
             </div>
         </div>
-      </TooltipProvider>
     );
 };

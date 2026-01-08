@@ -6,7 +6,7 @@ import { GanttTask, TaskStatus } from "@/types/gantt";
 import { GanttHeader } from "./GanttHeader";
 import { GanttRow, TaskListItem } from "./GanttRow";
 import { calculateWorkingDays } from '@/lib/ganttUtils';
-import { Activity, Sigma } from 'lucide-react';
+import { Activity, Sigma, Layers, LocateFixed } from 'lucide-react';
 
 const GanttTaskRow = ({
   task,
@@ -112,6 +112,25 @@ export function GanttChart({
         return { overallProgress, totalWorkingDays: totalDuration };
     }, [tasks]);
 
+    const groupedTasks = useMemo(() => {
+        const groups = new Map<string, { outcome: string, outputs: Map<string, GanttTask[]> }>();
+        tasks.forEach(task => {
+            const outcomeKey = task.outcome || 'Uncategorized';
+            const outputKey = task.output || 'Uncategorized';
+
+            if (!groups.has(outcomeKey)) {
+                groups.set(outcomeKey, { outcome: outcomeKey, outputs: new Map() });
+            }
+            const outcomeGroup = groups.get(outcomeKey)!;
+
+            if (!outcomeGroup.outputs.has(outputKey)) {
+                outcomeGroup.outputs.set(outputKey, []);
+            }
+            outcomeGroup.outputs.get(outputKey)!.push(task);
+        });
+        return Array.from(groups.values());
+    }, [tasks]);
+
   return (
     <>
     <div className="flex items-center gap-6 mb-4 bg-slate-800 border border-slate-700 rounded-lg p-4 text-white">
@@ -154,22 +173,36 @@ export function GanttChart({
         </div>
         
         <div className='relative'>
-             {tasks.map((task, index) => (
-                <GanttTaskRow
-                  key={task.id}
-                  task={task}
-                  level={0}
-                  taskNumber={`${index + 1}`}
-                  projectId={projectId}
-                  projectStart={projectStart}
-                  dayWidth={dayWidth}
-                  collapsedTasks={collapsedTasks}
-                  onToggleCollapse={toggleCollapse}
-                  onDeleteTask={onDeleteTask}
-                  onUpdateTaskStatus={onUpdateTaskStatus}
-                  onUpdateTaskProgress={onUpdateTaskProgress}
-                />
-            ))}
+             {groupedTasks.map((outcomeGroup, outcomeIndex) => (
+                 <React.Fragment key={outcomeIndex}>
+                    <div className="bg-blue-900/30 text-blue-200 font-bold p-2 px-4 flex items-center gap-2 border-b border-t border-blue-700">
+                       <Layers className="h-4 w-4" /> {outcomeGroup.outcome}
+                    </div>
+                     {Array.from(outcomeGroup.outputs.entries()).map(([outputKey, outputTasks], outputIndex) => (
+                        <React.Fragment key={outputIndex}>
+                            <div className="bg-slate-800/50 text-slate-300 font-semibold p-2 px-8 flex items-center gap-2 border-b border-slate-700">
+                                <LocateFixed className="h-4 w-4" /> {outputKey}
+                            </div>
+                            {outputTasks.map((task, index) => (
+                                <GanttTaskRow
+                                    key={task.id}
+                                    task={task}
+                                    level={0}
+                                    taskNumber={`${index + 1}`}
+                                    projectId={projectId}
+                                    projectStart={projectStart}
+                                    dayWidth={dayWidth}
+                                    collapsedTasks={collapsedTasks}
+                                    onToggleCollapse={toggleCollapse}
+                                    onDeleteTask={onDeleteTask}
+                                    onUpdateTaskStatus={onUpdateTaskStatus}
+                                    onUpdateTaskProgress={onUpdateTaskProgress}
+                                />
+                            ))}
+                        </React.Fragment>
+                     ))}
+                 </React.Fragment>
+             ))}
         </div>
 
     </div>
