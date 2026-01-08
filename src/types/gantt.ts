@@ -168,9 +168,9 @@ export const GanttTaskSchema = z.object({
     };
 
     if (data.hasSubTasks === 'yes' && data.subTasks && data.subTasks.length > 0) {
-        const { weightedProgress, totalWeight } = calculateWeightedProgress(data.subTasks, 1);
-        totalWeightedProgress = weightedProgress;
-        totalWeight = totalWeight;
+        const result = calculateWeightedProgress(data.subTasks, 1);
+        totalWeightedProgress = result.weightedProgress;
+        totalWeight = result.totalWeight;
 
         if (totalWeight > 0) {
             finalProgress = totalWeightedProgress / totalWeight;
@@ -208,4 +208,3 @@ export interface GanttSubOfSubTask extends Omit<GanttTask, 'subTasks' | 'hasSubT
 export type GanttTaskFormValues = z.infer<typeof GanttTaskSchema>;
 export type SubTaskFormValues = z.infer<typeof SubTaskSchema>;
 export type SubOfSubTaskFormValues = z.infer<typeof SubOfSubTaskSchema>;
-
