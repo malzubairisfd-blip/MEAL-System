@@ -4,14 +4,16 @@
     "tasks": [
       {
         "id": "task-1",
-        "title": "اختيار وتدريب المثقفات المجتمعيات المنسقون الميدانيون",
+        "outcome": "توفير تدريب متعدد المستويات وزيادة فرص عمل للفتيات في الفئة العمرية (18-35 سنة).",
+        "output": "توفير التدريب وفرص العمل للنساء من سن 18 إلى 35 سنة للعمل كمثقفات مجتمعيات.",
+        "title": "اختيار وتدريب المثقفات المجتمعيات والمنسقين الميدانيين.",
+        "progress": 100,
         "status": "PLANNED",
         "hasSubTasks": "yes",
         "subTasks": [
           {
             "id": "sub-task-1-1",
             "title": "توزيع وتعليق الإعلان في جميع قرى ومناطق المديريات المستهدفة",
-            "hasSubTasks": "no",
             "startDay": "08",
             "startMonth": "03",
             "startYear": "2023",
@@ -20,13 +22,13 @@
             "endYear": "2023",
             "progress": 100,
             "status": "DONE",
+            "hasSubTasks": "no",
             "start": "2023-03-08",
             "end": "2023-03-09"
           },
           {
             "id": "sub-task-1-2",
             "title": "استلام وفرز ملفات المتقدمات",
-            "hasSubTasks": "no",
             "startDay": "13",
             "startMonth": "03",
             "startYear": "2023",
@@ -35,13 +37,13 @@
             "endYear": "2023",
             "progress": 100,
             "status": "DONE",
+            "hasSubTasks": "no",
             "start": "2023-03-13",
             "end": "2023-03-17"
           },
           {
             "id": "sub-task-1-3",
             "title": "اجراء المقابلة الشخصية للمتقدمات والمؤهلات",
-            "hasSubTasks": "no",
             "startDay": "10",
             "startMonth": "04",
             "startYear": "2023",
@@ -50,13 +52,13 @@
             "endYear": "2023",
             "progress": 100,
             "status": "DONE",
+            "hasSubTasks": "no",
             "start": "2023-04-10",
             "end": "2023-05-07"
           },
           {
             "id": "sub-task-1-4",
             "title": "تدريب للمثقفات المجتمعيات",
-            "hasSubTasks": "no",
             "startDay": "12",
             "startMonth": "04",
             "startYear": "2023",
@@ -65,13 +67,13 @@
             "endYear": "2023",
             "progress": 100,
             "status": "DONE",
+            "hasSubTasks": "no",
             "start": "2023-04-12",
             "end": "2023-04-13"
           },
           {
             "id": "sub-task-1-5",
             "title": "توقيع العقود مع المثقفات المحتمعيات",
-            "hasSubTasks": "no",
             "startDay": "13",
             "startMonth": "04",
             "startYear": "2023",
@@ -80,13 +82,13 @@
             "endYear": "2023",
             "progress": 100,
             "status": "DONE",
+            "hasSubTasks": "no",
             "start": "2023-04-13",
             "end": "2023-04-13"
           }
         ],
         "start": "2023-03-08",
-        "end": "2023-05-07",
-        "progress": 100
+        "end": "2023-05-07"
       },
       {
         "id": "task-2",
@@ -1705,4 +1707,3 @@
     ]
   }
 ]
-    

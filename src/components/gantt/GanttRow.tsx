@@ -195,25 +195,27 @@ export const TaskListItem = ({ task, onDelete, onUpdateStatus, onUpdateProgress,
             
             {/* Column 6: Actions */}
             <div className="w-8 flex-shrink-0">
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100">
-                            <Edit className="h-4 w-4"/>
-                        </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent>
-                        <DropdownMenuItem asChild>
-                           <Link href={`/project/edit-task?projectId=${projectId}&taskId=${task.id}`}>
-                                <Edit className="mr-2 h-4 w-4"/>
-                                Edit Activity
-                           </Link>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem className="text-red-500" onClick={() => onDelete(task.id)}>
-                            <Trash2 className="mr-2 h-4 w-4"/>
-                            Delete Activity
-                        </DropdownMenuItem>
-                    </DropdownMenuContent>
-                </DropdownMenu>
+                {level === 0 && (
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100">
+                                <Edit className="h-4 w-4"/>
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent>
+                            <DropdownMenuItem asChild>
+                            <Link href={`/project/edit-task?projectId=${projectId}&taskId=${task.id}`}>
+                                    <Edit className="mr-2 h-4 w-4"/>
+                                    Edit Activity
+                            </Link>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem className="text-red-500" onClick={() => onDelete(task.id)}>
+                                <Trash2 className="mr-2 h-4 w-4"/>
+                                Delete Activity
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                )}
             </div>
         </div>
       </TooltipProvider>

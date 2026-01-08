@@ -1,7 +1,7 @@
 // src/app/project/add-task/page.tsx
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useForm, useFieldArray, useWatch } from "react-hook-form";
@@ -43,12 +43,21 @@ export default function AddTaskPage() {
     const [projects, setProjects] = useState<Project[]>([]);
     const [selectedProjectId, setSelectedProjectId] = useState<string>('');
     const [logframe, setLogframe] = useState<Logframe | null>(null);
+    const [existingTasksCount, setExistingTasksCount] = useState(0);
     const [isSaving, setIsSaving] = useState(false);
     
     const form = useForm<z.infer<typeof AddTasksFormSchema>>({
         resolver: zodResolver(AddTasksFormSchema),
-        defaultValues: { tasks: [{ id: `task-${Date.now()}`, title: "", hasSubTasks: 'no', status: 'PLANNED', progress: 0 }] },
+        defaultValues: { tasks: [] },
     });
+    
+    useEffect(() => {
+        if(form.getValues('tasks').length === 0 && existingTasksCount > 0) {
+            form.reset({ tasks: [{ id: `task-${Date.now()}`, title: "", hasSubTasks: 'no', status: 'PLANNED', progress: 0 }] });
+        } else if (form.getValues('tasks').length === 0 && existingTasksCount === 0) {
+            form.reset({ tasks: [{ id: `task-${Date.now()}`, title: "", hasSubTasks: 'no', status: 'PLANNED', progress: 0 }] });
+        }
+    }, [existingTasksCount, form]);
 
     const { fields, append, remove, control } = useFieldArray({
       control: form.control,
@@ -75,24 +84,36 @@ export default function AddTaskPage() {
     useEffect(() => {
         if (!selectedProjectId) {
             setLogframe(null);
+            setExistingTasksCount(0);
             return;
         }
-        const fetchLogframe = async () => {
+        const fetchProjectData = async () => {
             try {
-                const res = await fetch(`/api/logframe?projectId=${selectedProjectId}`);
-                if (res.ok) {
-                    const data = await res.json();
-                    setLogframe(data);
+                const [logframeRes, planRes] = await Promise.all([
+                    fetch(`/api/logframe?projectId=${selectedProjectId}`),
+                    fetch(`/api/project-plan?projectId=${selectedProjectId}`)
+                ]);
+
+                if (logframeRes.ok) {
+                    setLogframe(await logframeRes.json());
                 } else {
                     setLogframe(null);
                     toast({ title: "Logframe not found", description: "No logical framework found for this project.", variant: "default" });
                 }
+                
+                if (planRes.ok) {
+                    const plan = await planRes.json();
+                    setExistingTasksCount(plan.tasks?.length || 0);
+                } else {
+                    setExistingTasksCount(0);
+                }
             } catch (error) {
                 setLogframe(null);
-                console.error("Failed to fetch logframe", error);
+                setExistingTasksCount(0);
+                console.error("Failed to fetch project data", error);
             }
         };
-        fetchLogframe();
+        fetchProjectData();
     }, [selectedProjectId, toast]);
 
     const onAddTaskSubmit = async (data: z.infer<typeof AddTasksFormSchema>) => {
@@ -174,13 +195,14 @@ export default function AddTaskPage() {
                                 remove={remove}
                                 parentPath=""
                                 logframe={logframe}
+                                baseActivityNumber={existingTasksCount + index + 1}
                             />
                         ))}
                     </div>
 
                     <div className="flex justify-between">
                         <Button type="button" variant="outline" onClick={() => append({ id: `task-${Date.now()}`, title: "", hasSubTasks: 'no', status: 'PLANNED', progress: 0 })}>
-                            <Plus className="mr-2 h-4 w-4"/> {`Add Activity ${fields.length + 1}`}
+                            <Plus className="mr-2 h-4 w-4"/> {`Add Activity ${existingTasksCount + fields.length + 1}`}
                         </Button>
                         <Button type="submit" disabled={isSaving}>
                             {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Save className="mr-2 h-4 w-4" />}
@@ -193,19 +215,25 @@ export default function AddTaskPage() {
     );
 }
 
-function RecursiveTaskItem({ control, index, remove, parentPath, logframe }: { control: any; index: number; remove: (index: number) => void; parentPath: string; logframe: Logframe | null; }) {
+function RecursiveTaskItem({ control, index, remove, parentPath, logframe, baseActivityNumber }: { control: any; index: number; remove: (index: number) => void; parentPath: string; logframe: Logframe | null; baseActivityNumber?: number; }) {
     const currentPath = parentPath ? `${parentPath}.subTasks.${index}` : `tasks.${index}`;
     
-    const parentActivityNumber = parentPath.split('.subTasks').filter(Boolean).map((_, i) => i + 1).join('.');
-    const activityNumbering = parentPath ? `${parentActivityNumber}.${index + 1}` : `${index + 1}`;
-
+    const activityNumbering = useMemo(() => {
+        if(parentPath){
+            const parentParts = parentPath.split('.').filter(p => p !== 'tasks' && p !== 'subTasks');
+            const parentNumbering = parentParts.map(p => parseInt(p, 10) + 1).join('.');
+            return `${parentNumbering}.${index + 1}`;
+        }
+        return `${baseActivityNumber || index + 1}`;
+    }, [parentPath, index, baseActivityNumber]);
+    
     const hasSubTasks = useWatch({ control, name: `${currentPath}.hasSubTasks` });
     
     const isTopLevel = !parentPath;
     const selectedOutcome = useWatch({ control, name: `${currentPath}.outcome`, disabled: !isTopLevel });
     const selectedOutput = useWatch({ control, name: `${currentPath}.output`, disabled: !isTopLevel });
 
-    const filteredActivities = React.useMemo(() => {
+    const filteredActivities = useMemo(() => {
         if (!logframe || !selectedOutput) return [];
         const output = logframe.outputs.find(o => o.description === selectedOutput);
         return output ? output.activities : [];
@@ -213,7 +241,7 @@ function RecursiveTaskItem({ control, index, remove, parentPath, logframe }: { c
 
 
     return (
-        <Card className="p-4 relative bg-slate-50 border-slate-200" style={{ marginLeft: `${(parentPath.split('.subTasks').length -1) * 20}px` }}>
+        <Card className="p-4 relative bg-slate-50 border-slate-200" style={{ marginLeft: `${(parentPath.split('subTasks').length -1) * 20}px` }}>
             <div className="flex justify-between items-start mb-4">
                 <h3 className="text-lg font-semibold">{isTopLevel ? `Activity ${activityNumbering}` : `Activity ${activityNumbering}`}</h3>
                 <Button type="button" variant="ghost" size="icon" onClick={() => remove(index)}>
@@ -336,10 +364,11 @@ function RecursiveTaskArray({ control, parentPath, logframe, parentActivityNumbe
                     remove={remove}
                     parentPath={name}
                     logframe={logframe}
+                    baseActivityNumber={subIndex+1} // this is now relative
                 />
             ))}
              <Button type="button" variant="secondary" size="sm" onClick={() => append({ id: `task-${Date.now()}`, title: '', hasSubTasks: 'no', status: 'PLANNED', progress: 0 })}>
-                <Plus className="mr-2 h-4 w-4" /> {`Add Activity ${parentActivityNumber || '1'}.${fields.length + 1}`}
+                <Plus className="mr-2 h-4 w-4" /> {`Add Activity ${parentActivityNumber}.${fields.length + 1}`}
             </Button>
         </div>
     );

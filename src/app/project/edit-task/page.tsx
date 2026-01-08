@@ -44,9 +44,13 @@ function EditTaskPageContent() {
     const [logframe, setLogframe] = useState<Logframe | null>(null);
     const [isSaving, setIsSaving] = useState(false);
     const [loading, setLoading] = useState(true);
+    const [activityNumber, setActivityNumber] = useState('');
     
     const form = useForm<GanttTask>({
         resolver: zodResolver(GanttTaskSchema),
+        defaultValues: {
+          hasSubTasks: 'no'
+        }
     });
 
     useEffect(() => {
@@ -80,24 +84,18 @@ function EditTaskPageContent() {
                     const tasks = plan.tasks || [];
                     setAllTasks(tasks);
 
-                    const findTaskRecursively = (tasksToSearch: any[], id: string): any | null => {
-                        for (const task of tasksToSearch) {
-                            if (task.id === id) return task;
-                            if (task.subTasks) {
-                                const found = findTaskRecursively(task.subTasks, id);
-                                if (found) return found;
-                            }
+                    const taskIndex = tasks.findIndex((t: GanttTask) => t.id === taskId);
+
+                    if (taskIndex !== -1) {
+                        const taskToEdit = tasks[taskIndex];
+                         // Ensure subTasks is an array for the form
+                        if (taskToEdit.hasSubTasks === 'yes' && !taskToEdit.subTasks) {
+                            taskToEdit.subTasks = [];
                         }
-                        return null;
-                    };
-
-                    const taskToEdit = taskId ? findTaskRecursively(tasks, taskId) : null;
-
-                    if (taskToEdit) {
-                        const parsedTask = GanttTaskSchema.parse(taskToEdit);
-                        form.reset(parsedTask);
-                    } else if (taskId) {
-                        toast({ title: "Error", description: `Task with ID "${taskId}" not found in this project.`, variant: "destructive"});
+                        form.reset(GanttTaskSchema.parse(taskToEdit));
+                        setActivityNumber(String(taskIndex + 1));
+                    } else if(taskId) {
+                         toast({ title: "Error", description: `Task with ID "${taskId}" not found in this project.`, variant: "destructive"});
                     }
                 }
             } catch (error: any) {
@@ -117,11 +115,12 @@ function EditTaskPageContent() {
 
         setIsSaving(true);
         try {
+            const updatedTaskData = GanttTaskSchema.parse(data);
+
              const updateTaskRecursively = (tasks: GanttTask[], id: string, updatedData: GanttTask): GanttTask[] => {
                 return tasks.map(task => {
                     if (task.id === id) {
-                        // Use zod to parse and transform the data, ensuring start/end dates are calculated
-                        return GanttTaskSchema.parse(updatedData);
+                        return updatedData;
                     }
                     if (task.subTasks) {
                         return { ...task, subTasks: updateTaskRecursively(task.subTasks, id, updatedData) };
@@ -130,7 +129,7 @@ function EditTaskPageContent() {
                 });
             };
 
-            const updatedTasks = updateTaskRecursively(allTasks, taskId, data);
+            const updatedTasks = updateTaskRecursively(allTasks, taskId, updatedTaskData);
 
             const payload = { projectId, tasks: updatedTasks };
             const saveRes = await fetch('/api/project-plan', {
@@ -176,7 +175,7 @@ function EditTaskPageContent() {
             
             <Form {...form}>
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-                     <RecursiveTaskItem control={control} index={-1} remove={() => {}} isEditMode={true} parentPath="" logframe={logframe}/>
+                     <RecursiveTaskItem control={control} index={-1} remove={() => {}} isEditMode={true} parentPath="" logframe={logframe} activityNumbering={activityNumber}/>
 
                     <div className="flex justify-end">
                         <Button type="submit" disabled={isSaving}>
@@ -198,28 +197,12 @@ export default function EditTaskPage() {
     )
 }
 
-function RecursiveTaskItem({ control, index, remove, isEditMode, parentPath, logframe }: { control: any; index: number; remove: (index: number) => void; isEditMode?: boolean, parentPath: string, logframe: Logframe | null }) {
+function RecursiveTaskItem({ control, index, remove, isEditMode, parentPath, logframe, activityNumbering }: { control: any; index: number; remove: (index: number) => void; isEditMode?: boolean, parentPath: string, logframe: Logframe | null; activityNumbering: string; }) {
     const currentPath = index === -1 ? '' : (parentPath ? `${parentPath}.subTasks.${index}` : `tasks.${index}`);
-
-    const getDynamicActivityNumbering = () => {
-      if (parentPath) {
-        const parentParts = parentPath.match(/subTasks\.(\d+)/g) || [];
-        const parentIndices = parentParts.map(p => parseInt(p.split('.')[1]) + 1);
-        const topLevelIndex = parentPath.match(/^tasks\.(\d+)/);
-        if (topLevelIndex) {
-            parentIndices.unshift(parseInt(topLevelIndex[1]) + 1);
-        }
-        return [...parentIndices, index + 1].join('.');
-      }
-      return index >= 0 ? `${index + 1}` : '';
-    };
-
-    const activityNumbering = getDynamicActivityNumbering();
 
     const hasSubTasks = useWatch({ control, name: currentPath ? `${currentPath}.hasSubTasks` : 'hasSubTasks' });
     
-    const isTopLevel = !parentPath && index >= 0;
-    const isEditTopLevel = isEditMode && !parentPath;
+    const isTopLevel = !parentPath;
     
     const selectedOutcome = useWatch({ control, name: currentPath ? `${currentPath}.outcome` : 'outcome' });
     const selectedOutput = useWatch({ control, name: currentPath ? `${currentPath}.output` : 'output' });
@@ -242,7 +225,7 @@ function RecursiveTaskItem({ control, index, remove, isEditMode, parentPath, log
                 )}
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                 {(isTopLevel || isEditTopLevel) && logframe && (
+                 {isTopLevel && logframe && (
                      <div className="col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
                        <FormField control={control} name={currentPath ? `${currentPath}.outcome` : 'outcome'} render={({ field }) => (
                            <FormItem>
@@ -272,7 +255,7 @@ function RecursiveTaskItem({ control, index, remove, isEditMode, parentPath, log
                 <FormField control={control} name={currentPath ? `${currentPath}.title` : 'title'} render={({ field }) => (
                     <FormItem className="col-span-2">
                         <FormLabel>{`Activity ${activityNumbering || ''} Title`}</FormLabel>
-                        {(isTopLevel || isEditTopLevel) && filteredActivities.length > 0 ? (
+                        {isTopLevel && filteredActivities.length > 0 ? (
                              <Select onValueChange={field.onChange} value={field.value} disabled={!selectedOutput}>
                                 <FormControl><SelectTrigger><SelectValue placeholder="Select Activity" /></SelectTrigger></FormControl>
                                 <SelectContent>
@@ -312,7 +295,7 @@ function RecursiveTaskItem({ control, index, remove, isEditMode, parentPath, log
                     name={currentPath ? `${currentPath}.hasSubTasks` : 'hasSubTasks'}
                     render={({ field }) => (
                         <FormItem className="col-span-2 space-y-3">
-                            <FormLabel>{`Include Activity ${activityNumbering || '1'}.1?`}</FormLabel>
+                            <FormLabel>{`Include Activity ${activityNumbering}.1?`}</FormLabel>
                             <FormControl>
                                 <RadioGroup
                                     onValueChange={field.onChange}
@@ -336,29 +319,18 @@ function RecursiveTaskItem({ control, index, remove, isEditMode, parentPath, log
             </div>
             
             {hasSubTasks === 'yes' && (
-                <RecursiveTaskArray control={control} parentPath={currentPath} logframe={logframe} />
+                <RecursiveTaskArray control={control} parentPath={currentPath} logframe={logframe} parentActivityNumber={activityNumbering} />
             )}
         </Card>
     )
 }
 
-function RecursiveTaskArray({ control, parentPath, logframe }: { control: any; parentPath: string; logframe: Logframe | null; }) {
+function RecursiveTaskArray({ control, parentPath, logframe, parentActivityNumber }: { control: any; parentPath: string; logframe: Logframe | null; parentActivityNumber: string; }) {
     const name = parentPath ? `${parentPath}.subTasks` : 'tasks';
     const { fields, append, remove } = useFieldArray({
         control,
         name
     });
-
-    const getParentActivityNumbering = () => {
-      if (!parentPath) return `Activity ${fields.length + 1}`;
-      const parentParts = parentPath.match(/subTasks\.(\d+)/g) || [];
-      const parentIndices = parentParts.map(p => parseInt(p.split('.')[1]) + 1);
-      const topLevelIndex = parentPath.match(/^tasks\.(\d+)/);
-      if (topLevelIndex) {
-          parentIndices.unshift(parseInt(topLevelIndex[1]) + 1);
-      }
-      return `Activity ${[...parentIndices, fields.length + 1].join('.')}`;
-    };
 
     return (
         <div className="col-span-2 mt-4 space-y-4">
@@ -371,10 +343,11 @@ function RecursiveTaskArray({ control, parentPath, logframe }: { control: any; p
                     isEditMode={false}
                     parentPath={name}
                     logframe={logframe}
+                    activityNumbering={`${parentActivityNumber}.${subIndex + 1}`}
                 />
             ))}
              <Button type="button" variant="secondary" size="sm" onClick={() => append({ id: `task-${Date.now()}`, title: '', hasSubTasks: 'no', status: 'PLANNED', progress: 0 })}>
-                <Plus className="mr-2 h-4 w-4" /> Add {getParentActivityNumbering()}
+                <Plus className="mr-2 h-4 w-4" /> Add Activity {`${parentActivityNumber}.${fields.length + 1}`}
             </Button>
         </div>
     );
