@@ -175,24 +175,23 @@ export const GanttTaskSchema = z.object({
 });
 
 
-export interface GanttTask {
-  id: string;
-  title: string;
-  start: string;
-  end: string;
-  status: TaskStatus;
-  progress: number;
-  parentId?: string;
-  hasSubTasks: 'yes' | 'no';
-  subTasks?: GanttSubTask[];
-}
+export type GanttTask = z.infer<typeof GanttTaskSchema> & {
+    start: string;
+    end: string;
+    subTasks?: GanttSubTask[];
+};
 
-export interface GanttSubTask extends Omit<GanttTask, 'subTasks' | 'hasSubTasks'> {
-  hasSubOfSubTasks: 'yes' | 'no';
-  subOfSubTasks?: GanttSubOfSubTask[];
-}
+export type GanttSubTask = Omit<GanttTask, 'subTasks' | 'hasSubTasks'> & {
+    start: string;
+    end: string;
+    hasSubOfSubTasks: 'yes' | 'no';
+    subOfSubTasks?: GanttSubOfSubTask[];
+};
 
-export interface GanttSubOfSubTask extends Omit<GanttTask, 'subTasks' | 'hasSubTasks' | 'parentId'> {}
+export type GanttSubOfSubTask = Omit<GanttTask, 'subTasks' | 'hasSubTasks' | 'parentId'> & {
+    start: string;
+    end: string;
+};
 
 export type GanttTaskFormValues = z.infer<typeof GanttTaskSchema>;
 export type SubTaskFormValues = z.infer<typeof SubTaskSchema>;
