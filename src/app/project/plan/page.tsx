@@ -84,7 +84,7 @@ export default function ProjectPlanPage() {
         } catch (error: any) {
             console.error("Failed to fetch project plan", error);
             if (error.issues) {
-                 toast({ title: "Data Validation Error", description: `Could not load plan: ${''\'\'' + error.issues.map((i:any) => i.message).join(', ') + ''\'\''}`, variant: "destructive" });
+                 toast({ title: "Data Validation Error", description: `Could not load plan: ${error.issues.map((i:any) => i.message).join(', ')}`, variant: "destructive" });
             } else {
                 toast({ title: "Error", description: "Could not load project plan.", variant: "destructive" });
             }
