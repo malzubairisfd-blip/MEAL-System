@@ -2,24 +2,49 @@
 // src/app/monitoring/purpose-and-scope/page.tsx
 "use client";
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Loader2, Plus, Edit } from 'lucide-react';
+import { ArrowLeft, Loader2, Plus, Edit, FileDown, Layers, Users, SlidersHorizontal, CheckSquare, Sigma } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { generateWordDocument } from '@/lib/exportToWord';
+
 
 interface Project {
   projectId: string;
   projectName: string;
 }
 
+interface MonitoringActivity {
+  mainActivityId: string;
+  mainActivityTitle: string;
+  monitoredSubActivities: string[];
+  personResponsible: string;
+  monitoringTools: string;
+  monitoringFrequency: string;
+  purposeAndScope: string;
+  estimatedBudget: number;
+}
+
 interface MonitoringPlan {
     projectId: string;
-    monitoringActivities: any[];
+    monitoringActivities: MonitoringActivity[];
 }
+
+const KPICard = ({ title, value, icon }: { title: string, value: string | number, icon: React.ReactNode }) => (
+    <Card className="transition-all hover:shadow-md hover:-translate-y-1">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">{title}</CardTitle>
+            {icon}
+        </CardHeader>
+        <CardContent>
+            <div className="text-2xl font-bold">{value}</div>
+        </CardContent>
+    </Card>
+);
+
 
 export default function PurposeAndScopePage() {
     const { toast } = useToast();
@@ -27,6 +52,7 @@ export default function PurposeAndScopePage() {
     const [selectedProject, setSelectedProject] = useState<string>('');
     const [plan, setPlan] = useState<MonitoringPlan | null>(null);
     const [loading, setLoading] = useState({ projects: true, plan: false });
+    const [isExporting, setIsExporting] = useState(false);
 
     useEffect(() => {
         const fetchProjects = async () => {
@@ -66,26 +92,42 @@ export default function PurposeAndScopePage() {
         }
     };
     
-    const renderList = (text: string | undefined) => {
-        if (!text) return null;
-        return (
-            <ul className="list-disc list-inside space-y-1">
-                {text.split('\n').map((item, index) => item.trim() && <li key={index}>{item.replace(/^- /, '')}</li>)}
-            </ul>
-        )
+    const handleExport = async () => {
+        if (!plan) return;
+        setIsExporting(true);
+        try {
+            await generateWordDocument(plan);
+            toast({ title: "Export Successful", description: "The Word document has been generated and downloaded." });
+        } catch (error: any) {
+            toast({ title: "Export Failed", description: error.message, variant: "destructive" });
+        } finally {
+            setIsExporting(false);
+        }
     };
+
+    const renderListFromString = (text: string | undefined) => {
+      if (!text) return null;
+      return (
+        <ul className="list-disc list-inside space-y-1 pl-4">
+          {text.split('\n').map((item, index) => item.trim() && <li key={index}>{item.replace(/^- /, '')}</li>)}
+        </ul>
+      );
+    };
+
+    const totalMonitoredSubActivities = plan?.monitoringActivities.reduce((acc, act) => acc + (act.monitoredSubActivities?.length || 0), 0) || 0;
+    const totalBudget = plan?.monitoringActivities.reduce((acc, act) => acc + (Number(act.estimatedBudget) || 0), 0) || 0;
 
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center">
                 <div>
-                    <h1 className="text-3xl font-bold">Purpose and Scope of M&amp;E System</h1>
+                    <h1 className="text-3xl font-bold">Purpose and Scope of M&E System</h1>
                     <p className="text-muted-foreground">View and manage the monitoring plans for your projects.</p>
                 </div>
                 <div className="flex gap-2">
                     <Button variant="outline" asChild>
                         <Link href="/monitoring">
-                            <ArrowLeft className="mr-2 h-4 w-4" /> Back to M&amp;E Planning
+                            <ArrowLeft className="mr-2 h-4 w-4" /> Back to M&E Planning
                         </Link>
                     </Button>
                     <Button asChild>
@@ -99,9 +141,9 @@ export default function PurposeAndScopePage() {
             <Card>
                 <CardHeader>
                     <CardTitle>Select a Project</CardTitle>
-                    <CardDescription>Choose a project to view its M&amp;E purpose and scope plan.</CardDescription>
+                    <CardDescription>Choose a project to view its M&E purpose and scope plan.</CardDescription>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="flex items-center gap-4">
                      <Select onValueChange={handleProjectSelect} value={selectedProject} disabled={loading.projects}>
                         <SelectTrigger className="w-full md:w-1/2">
                             <SelectValue placeholder={loading.projects ? "Loading projects..." : "Select a project..."} />
@@ -114,6 +156,12 @@ export default function PurposeAndScopePage() {
                             ))}
                         </SelectContent>
                     </Select>
+                     {plan && (
+                         <Button onClick={handleExport} disabled={isExporting}>
+                            {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <FileDown className="mr-2 h-4 w-4" />}
+                            Export to Word
+                        </Button>
+                     )}
                 </CardContent>
             </Card>
 
@@ -124,56 +172,65 @@ export default function PurposeAndScopePage() {
             )}
             
             {plan && plan.monitoringActivities && (
-                 <Card>
-                    <CardHeader>
-                        <CardTitle>Monitoring Plan Details</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="border rounded-lg overflow-hidden">
-                            <Table>
-                                <TableHeader>
-                                    <TableRow className="bg-muted hover:bg-muted">
-                                        <TableHead className="w-1/6 text-primary font-bold">Main Activity</TableHead>
-                                        <TableHead className="w-1/6 text-primary font-bold">Monitored Sub-Activities</TableHead>
-                                        <TableHead className="text-primary font-bold">Responsible Person</TableHead>
-                                        <TableHead className="text-primary font-bold">Monitoring Tools &amp; Frequency</TableHead>
-                                        <TableHead className="w-1/6 text-primary font-bold">Purpose and Scope</TableHead>
-                                        <TableHead className="text-primary font-bold">Estimated Budget</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {plan.monitoringActivities.map(activity => (
-                                        <TableRow key={activity.mainActivityId} className="border-b-2 border-primary/20">
-                                            <TableCell className="font-semibold align-top bg-primary/5">{activity.mainActivityTitle}</TableCell>
-                                            <TableCell className="align-top">
-                                                <ul className="list-disc list-inside">
-                                                    {activity.monitoredSubActivities?.map((sub: string) => <li key={sub}>{sub}</li>)}
-                                                </ul>
-                                            </TableCell>
-                                            <TableCell className="align-top text-sm">{renderList(activity.personResponsible)}</TableCell>
-                                            <TableCell className="align-top text-sm">
-                                                <div className="space-y-2">
-                                                    <div>
-                                                        <p className="font-semibold">Tools:</p>
-                                                        <p>{activity.monitoringTools}</p>
-                                                    </div>
-                                                    <div>
-                                                        <p className="font-semibold">Frequency:</p>
-                                                        <p>{activity.monitoringFrequency}</p>
-                                                    </div>
-                                                </div>
-                                            </TableCell>
-                                            <TableCell className="align-top text-sm">{renderList(activity.purposeAndScope)}</TableCell>
-                                            <TableCell className="align-top text-sm font-semibold">
-                                                {activity.estimatedBudget ? `$${Number(activity.estimatedBudget).toLocaleString()}` : 'N/A'}
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
+                 <div className="document-view bg-white p-8 rounded-lg shadow-lg border">
+                    <h2 className="text-2xl font-bold text-center mb-6">Monitoring & Evaluation Plan</h2>
+                    
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                       <KPICard title="Main Activities" value={plan.monitoringActivities.length} icon={<Layers className="text-blue-500" />}/>
+                       <KPICard title="Monitored Sub-Activities" value={totalMonitoredSubActivities} icon={<CheckSquare className="text-green-500" />}/>
+                       <KPICard title="Total M&E Budget" value={`$${totalBudget.toLocaleString()}`} icon={<Sigma className="text-purple-500" />}/>
+                    </div>
+
+                    {plan.monitoringActivities.map((activity, index) => (
+                        <div key={activity.mainActivityId} className="activity-section mb-8">
+                            <h3 className="text-xl font-bold border-b-2 border-primary pb-2 mb-4">
+                                Main Activity {index + 1}: {activity.mainActivityTitle}
+                            </h3>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+                                <Card>
+                                    <CardHeader>
+                                        <CardTitle className="text-base flex items-center gap-2"><CheckSquare className="text-green-600"/> Activities to be Monitored ({activity.monitoredSubActivities?.length || 0})</CardTitle>
+                                    </CardHeader>
+                                    <CardContent>
+                                        {activity.monitoredSubActivities && activity.monitoredSubActivities.length > 0 ? (
+                                            <ul className="list-decimal list-inside space-y-1">
+                                                {activity.monitoredSubActivities.map(sub => <li key={sub}>{sub}</li>)}
+                                            </ul>
+                                        ) : <p className="text-muted-foreground">No sub-activities selected.</p>}
+                                    </CardContent>
+                                </Card>
+                                 <Card>
+                                    <CardHeader>
+                                        <CardTitle className="text-base flex items-center gap-2"><Users className="text-blue-600"/> Person Responsible for Monitoring</CardTitle>
+                                    </CardHeader>
+                                    <CardContent>
+                                       {renderListFromString(activity.personResponsible)}
+                                    </CardContent>
+                                </Card>
+                                 <Card>
+                                    <CardHeader>
+                                        <CardTitle className="text-base flex items-center gap-2"><SlidersHorizontal className="text-orange-600"/> Monitoring Tools & Frequency</CardTitle>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <h4 className="font-semibold">Tools Used:</h4>
+                                        <p className="mb-2 text-muted-foreground">{activity.monitoringTools}</p>
+                                        <h4 className="font-semibold">Frequency:</h4>
+                                        <p className="text-muted-foreground">{activity.monitoringFrequency}</p>
+                                    </CardContent>
+                                </Card>
+                                 <Card>
+                                    <CardHeader>
+                                        <CardTitle className="text-base flex items-center gap-2"><Layers className="text-purple-600"/> Purpose and Scope</CardTitle>
+                                    </CardHeader>
+                                    <CardContent>
+                                        {renderListFromString(activity.purposeAndScope)}
+                                    </CardContent>
+                                </Card>
+                            </div>
                         </div>
-                    </CardContent>
-                </Card>
+                    ))}
+                 </div>
             )}
         </div>
     );

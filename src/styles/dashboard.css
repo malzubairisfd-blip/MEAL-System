@@ -1,4 +1,5 @@
 
+
 .dashboard {
   display: grid;
   grid-template-columns: repeat(12, 1fr);
@@ -40,3 +41,27 @@
     color: #000000;
     text-shadow: 1px 1px 2px white, -1px -1px 2px white, 1px -1px 2px white, -1px 1px 2px white;
 }
+
+/* Document View Styles */
+.document-view {
+    font-family: 'Times New Roman', serif;
+    line-height: 1.6;
+}
+
+.document-view .activity-section {
+    page-break-inside: avoid;
+}
+
+.document-view h2, .document-view h3, .document-view h4 {
+    font-family: 'Arial', sans-serif;
+    font-weight: bold;
+}
+
+.document-view ul {
+    list-style-position: inside;
+}
+
+.document-view .card-title {
+    font-family: 'Arial', sans-serif;
+}
+
