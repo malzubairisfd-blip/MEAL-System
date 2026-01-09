@@ -1,7 +1,8 @@
+
 // src/app/project/edit-task/page.tsx
 "use client";
 
-import React, { useEffect, useState, Suspense } from 'react';
+import React, { useEffect, useState, Suspense, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useForm, useFieldArray, useWatch } from "react-hook-form";
@@ -49,7 +50,8 @@ function EditTaskPageContent() {
     const form = useForm<GanttTask>({
         resolver: zodResolver(GanttTaskSchema),
         defaultValues: {
-          hasSubTasks: 'no'
+          hasSubTasks: 'no',
+          subTasks: []
         }
     });
 
@@ -78,22 +80,36 @@ function EditTaskPageContent() {
                     setLogframe(await logframeRes.json());
                 }
 
-
                 if (planRes.ok) {
                     const plan = await planRes.json();
                     const tasks = plan.tasks || [];
                     setAllTasks(tasks);
 
-                    const taskIndex = tasks.findIndex((t: GanttTask) => t.id === taskId);
+                    const findTaskAndPath = (searchTasks: GanttTask[], id: string, parentPath = ''): { task: GanttTask, number: string } | null => {
+                        for (let i = 0; i < searchTasks.length; i++) {
+                            const task = searchTasks[i];
+                            const currentNumber = parentPath ? `${parentPath}.${i + 1}` : `${i + 1}`;
+                            if (task.id === id) {
+                                return { task, number: currentNumber };
+                            }
+                            if (task.hasSubTasks === 'yes' && task.subTasks) {
+                                const found = findTaskAndPath(task.subTasks, id, currentNumber);
+                                if (found) return found;
+                            }
+                        }
+                        return null;
+                    };
 
-                    if (taskIndex !== -1) {
-                        const taskToEdit = tasks[taskIndex];
-                         // Ensure subTasks is an array for the form
+                    const found = findTaskAndPath(tasks, taskId || '');
+                    
+                    if (found) {
+                        const taskToEdit = found.task;
+                        // Ensure subTasks is an array for the form
                         if (taskToEdit.hasSubTasks === 'yes' && !taskToEdit.subTasks) {
                             taskToEdit.subTasks = [];
                         }
                         form.reset(GanttTaskSchema.parse(taskToEdit));
-                        setActivityNumber(String(taskIndex + 1));
+                        setActivityNumber(found.number);
                     } else if(taskId) {
                          toast({ title: "Error", description: `Task with ID "${taskId}" not found in this project.`, variant: "destructive"});
                     }
@@ -122,7 +138,7 @@ function EditTaskPageContent() {
                     if (task.id === id) {
                         return updatedData;
                     }
-                    if (task.subTasks) {
+                    if (task.subTasks && task.hasSubTasks === 'yes') {
                         return { ...task, subTasks: updateTaskRecursively(task.subTasks, id, updatedData) };
                     }
                     return task;
@@ -155,7 +171,7 @@ function EditTaskPageContent() {
         return <div className="flex items-center justify-center h-96"><Loader2 className="h-8 w-8 animate-spin" /></div>
     }
 
-    if (!form.formState.isDirty && form.getValues().id !== taskId) {
+    if (!form.getValues().id) {
        return <div className="flex items-center justify-center h-96"><Loader2 className="h-8 w-8 animate-spin" /></div>
     }
 
@@ -202,9 +218,8 @@ function RecursiveTaskItem({ control, index, remove, isEditMode, parentPath, log
 
     const hasSubTasks = useWatch({ control, name: currentPath ? `${currentPath}.hasSubTasks` : 'hasSubTasks' });
     
-    const isTopLevel = !parentPath;
+    const isTopLevel = !parentPath && index === -1;
     
-    const selectedOutcome = useWatch({ control, name: currentPath ? `${currentPath}.outcome` : 'outcome' });
     const selectedOutput = useWatch({ control, name: currentPath ? `${currentPath}.output` : 'output' });
     
     const filteredActivities = React.useMemo(() => {
@@ -326,7 +341,7 @@ function RecursiveTaskItem({ control, index, remove, isEditMode, parentPath, log
 }
 
 function RecursiveTaskArray({ control, parentPath, logframe, parentActivityNumber }: { control: any; parentPath: string; logframe: Logframe | null; parentActivityNumber: string; }) {
-    const name = parentPath ? `${parentPath}.subTasks` : 'tasks';
+    const name = parentPath ? `${parentPath}.subTasks` : 'subTasks';
     const { fields, append, remove } = useFieldArray({
         control,
         name

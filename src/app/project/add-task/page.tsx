@@ -1,3 +1,4 @@
+
 // src/app/project/add-task/page.tsx
 "use client";
 
@@ -218,15 +219,20 @@ function RecursiveTaskItem({ control, index, remove, parentPath, logframe, baseA
     
     const activityNumbering = useMemo(() => {
         if(parentPath){
-            const parentParts = parentPath.split('.').filter(p => p !== 'tasks' && p !== 'subTasks');
-            // This logic is getting complex, needs to be robust
-            const parentIndex = parentParts[0];
-            const parentNumber = baseActivityNumber ? `${baseActivityNumber-1}.${parseInt(parentIndex, 10)+1}` : `${parseInt(parentIndex, 10)+1}`;
-            let currentNumbering = parentNumber;
-            for(let i=1; i<parentParts.length; i++) {
-                currentNumbering += `.${parseInt(parentParts[i], 10)+1}`;
+            // parentPath could be "tasks.0.subTasks.1.subTasks"
+            const pathParts = parentPath.split('.');
+            let finalNumbering = '';
+            
+            // Find the base number
+            const topLevelIndex = parseInt(pathParts[1], 10);
+            finalNumbering += (baseActivityNumber !== undefined ? baseActivityNumber + topLevelIndex -1 : topLevelIndex + 1);
+
+            // Add sub-indices
+            for(let i=3; i < pathParts.length; i+=2) {
+                finalNumbering += `.${parseInt(pathParts[i], 10) + 1}`;
             }
-            return `${currentNumbering}.${index + 1}`;
+
+            return `${finalNumbering}.${index + 1}`;
         }
         return `${baseActivityNumber || index + 1}`;
     }, [parentPath, index, baseActivityNumber]);
@@ -234,7 +240,6 @@ function RecursiveTaskItem({ control, index, remove, parentPath, logframe, baseA
     const hasSubTasks = useWatch({ control, name: `${currentPath}.hasSubTasks` });
     
     const isTopLevel = !parentPath;
-    const selectedOutcome = useWatch({ control, name: `${currentPath}.outcome`, disabled: !isTopLevel });
     const selectedOutput = useWatch({ control, name: `${currentPath}.output`, disabled: !isTopLevel });
 
     const filteredActivities = useMemo(() => {
@@ -368,6 +373,7 @@ function RecursiveTaskArray({ control, parentPath, logframe, parentActivityNumbe
                     remove={remove}
                     parentPath={name}
                     logframe={logframe}
+                    baseActivityNumber={parseInt(parentActivityNumber)} // Pass base number for correct sub-numbering
                 />
             ))}
              <Button type="button" variant="secondary" size="sm" onClick={() => append({ id: `task-${Date.now()}`, title: '', hasSubTasks: 'no', status: 'PLANNED', progress: 0 })}>

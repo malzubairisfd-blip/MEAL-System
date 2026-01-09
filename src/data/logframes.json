@@ -120,6 +120,41 @@
                 "assumption": "توحيد الوقت لتنفيذ الجلسة."
               }
             ]
+          },
+          {
+            "description": " تنفيذ جلسات التثقيف والصرف المستحقات الشهرية للمستفيدات من حالات سوء التغذية",
+            "indicators": [
+              {
+                "description": "عدد جلسات التثقيف المنفذة",
+                "type": "#",
+                "target": 500,
+                "meansOfVerification": [
+                  "كشوفات الجلسات"
+                ]
+              },
+              {
+                "description": "عدد الزيارات المنزلية",
+                "type": "#",
+                "target": 1000,
+                "meansOfVerification": [
+                  "تقارير المثقفات"
+                ]
+              },
+              {
+                "description": "عدد الاسر المستفيدة من التحويلات النقدية )منح نقدية مباشرة(\t\t\t\t \t\t\t\t \t\t\t\t \t\t\t\t",
+                "type": "#",
+                "target": 400,
+                "meansOfVerification": [
+                  "\"النظام الفرعي للمشروع   Sub-MIS\""
+                ]
+              }
+            ],
+            "risksAndAssumptions": [
+              {
+                "risk": "التأخير في تنفيذ الجلسه",
+                "assumption": "توحيد الوقت لتنفيذ الجلسه"
+              }
+            ]
           }
         ]
       },
