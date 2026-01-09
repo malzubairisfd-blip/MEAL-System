@@ -2,7 +2,7 @@
 // src/app/project/add-task/page.tsx
 "use client";
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useForm, useFieldArray, useWatch } from "react-hook-form";
@@ -36,7 +36,8 @@ const months = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0
 const years = Array.from({ length: 21 }, (_, i) => String(new Date().getFullYear() - 10 + i));
 const days = Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, '0'));
 
-export default function AddTaskPage() {
+
+function AddTaskFormContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const { toast } = useToast();
@@ -214,20 +215,25 @@ export default function AddTaskPage() {
     );
 }
 
+export default function AddTaskPage() {
+    return (
+        <Suspense fallback={<div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin" /></div>}>
+            <AddTaskFormContent />
+        </Suspense>
+    )
+}
+
 function RecursiveTaskItem({ control, index, remove, parentPath, logframe, baseActivityNumber }: { control: any; index: number; remove: (index: number) => void; parentPath: string; logframe: Logframe | null; baseActivityNumber?: number; }) {
     const currentPath = parentPath ? `${parentPath}.subTasks.${index}` : `tasks.${index}`;
     
     const activityNumbering = useMemo(() => {
         if(parentPath){
-            // parentPath could be "tasks.0.subTasks.1.subTasks"
             const pathParts = parentPath.split('.');
             let finalNumbering = '';
             
-            // Find the base number
             const topLevelIndex = parseInt(pathParts[1], 10);
             finalNumbering += (baseActivityNumber !== undefined ? baseActivityNumber + topLevelIndex -1 : topLevelIndex + 1);
 
-            // Add sub-indices
             for(let i=3; i < pathParts.length; i+=2) {
                 finalNumbering += `.${parseInt(pathParts[i], 10) + 1}`;
             }
@@ -373,7 +379,7 @@ function RecursiveTaskArray({ control, parentPath, logframe, parentActivityNumbe
                     remove={remove}
                     parentPath={name}
                     logframe={logframe}
-                    baseActivityNumber={parseInt(parentActivityNumber)} // Pass base number for correct sub-numbering
+                    baseActivityNumber={parseInt(parentActivityNumber)}
                 />
             ))}
              <Button type="button" variant="secondary" size="sm" onClick={() => append({ id: `task-${Date.now()}`, title: '', hasSubTasks: 'no', status: 'PLANNED', progress: 0 })}>
