@@ -103,8 +103,8 @@ function EditTaskPageContent() {
                     const found = findTaskAndPath(tasks, taskId || '');
                     
                     if (found) {
-                        const taskToEdit = found.task;
-                        form.reset(GanttTaskSchema.parse(taskToEdit));
+                        const taskToEdit = GanttTaskSchema.parse(found.task);
+                        form.reset(taskToEdit); // This now resets with the full, parsed object.
                         setActivityNumber(found.number);
                     } else if(taskId) {
                          toast({ title: "Error", description: `Task with ID "${taskId}" not found in this project.`, variant: "destructive"});
@@ -167,6 +167,7 @@ function EditTaskPageContent() {
         return <div className="flex items-center justify-center h-96"><Loader2 className="h-8 w-8 animate-spin" /></div>
     }
 
+    // Render form only if the data has been loaded into the form state.
     if (!form.getValues().id) {
        return <div className="flex items-center justify-center h-96"><Loader2 className="h-8 w-8 animate-spin" /></div>
     }
@@ -211,6 +212,8 @@ export default function EditTaskPage() {
 
 function RecursiveTaskItem({ control, index, remove, isEditMode, parentPath, logframe, activityNumbering }: { control: any; index: number; remove: (index: number) => void; isEditMode?: boolean, parentPath: string, logframe: Logframe | null; activityNumbering: string; }) {
     const currentPath = index === -1 ? '' : (parentPath ? `${parentPath}.subTasks.${index}` : `subTasks.${index}`);
+    const { fields: subTaskFields, append: appendSubTask, remove: removeSubTask } = useFieldArray({ control, name: currentPath ? `${currentPath}.subTasks` : 'subTasks' });
+
 
     const hasSubTasks = useWatch({ control, name: currentPath ? `${currentPath}.hasSubTasks` : 'hasSubTasks' });
     
@@ -330,36 +333,24 @@ function RecursiveTaskItem({ control, index, remove, isEditMode, parentPath, log
             </div>
             
             {hasSubTasks === 'yes' && (
-                <RecursiveTaskArray control={control} parentPath={currentPath} logframe={logframe} parentActivityNumber={activityNumbering} />
+                <div className="col-span-2 mt-4 space-y-4">
+                  {subTaskFields.map((subField, subIndex) => (
+                      <RecursiveTaskItem 
+                          key={subField.id} 
+                          control={control} 
+                          index={subIndex} 
+                          remove={removeSubTask}
+                          isEditMode={false}
+                          parentPath={currentPath ? `${currentPath}.subTasks` : 'subTasks'}
+                          logframe={logframe}
+                          activityNumbering={`${activityNumbering}.${subIndex + 1}`}
+                      />
+                  ))}
+                   <Button type="button" variant="secondary" size="sm" onClick={() => appendSubTask({ id: `task-${Date.now()}`, title: '', hasSubTasks: 'no', status: 'PLANNED', progress: 0 })}>
+                      <Plus className="mr-2 h-4 w-4" /> Add Activity {`${activityNumbering}.${subTaskFields.length + 1}`}
+                  </Button>
+              </div>
             )}
         </Card>
     )
-}
-
-function RecursiveTaskArray({ control, parentPath, logframe, parentActivityNumber }: { control: any; parentPath: string; logframe: Logframe | null; parentActivityNumber: string; }) {
-    const name = parentPath ? `${parentPath}.subTasks` : 'subTasks';
-    const { fields, append, remove } = useFieldArray({
-        control,
-        name
-    });
-
-    return (
-        <div className="col-span-2 mt-4 space-y-4">
-            {fields.map((subField, subIndex) => (
-                <RecursiveTaskItem 
-                    key={subField.id} 
-                    control={control} 
-                    index={subIndex} 
-                    remove={remove}
-                    isEditMode={false}
-                    parentPath={name}
-                    logframe={logframe}
-                    activityNumbering={`${parentActivityNumber}.${subIndex + 1}`}
-                />
-            ))}
-             <Button type="button" variant="secondary" size="sm" onClick={() => append({ id: `task-${Date.now()}`, title: '', hasSubTasks: 'no', status: 'PLANNED', progress: 0 })}>
-                <Plus className="mr-2 h-4 w-4" /> Add Activity {`${parentActivityNumber}.${fields.length + 1}`}
-            </Button>
-        </div>
-    );
 }
