@@ -1,7 +1,7 @@
 // src/app/project/plan/page.tsx
 "use client";
 
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useMemo, useCallback, Suspense } from 'react';
 import Link from 'next/link';
 import { GanttTask, TaskStatus, GanttTaskSchema } from '@/types/gantt';
 import dayjs from "dayjs";
@@ -33,7 +33,7 @@ interface Project {
 
 const days = Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, '0'));
 
-export default function ProjectPlanPage() {
+function ProjectPlanPageContent() {
     const { toast } = useToast();
     const searchParams = useSearchParams();
     const [projects, setProjects] = useState<Project[]>([]);
@@ -54,8 +54,8 @@ export default function ProjectPlanPage() {
                 setProjects(data);
 
                 const projectIdFromUrl = searchParams.get('projectId');
-                if (projectIdFromUrl) {
-                    handleProjectSelect(projectIdFromUrl);
+                if (projectIdFromUrl && data.find((p: Project) => p.projectId === projectIdFromUrl)) {
+                    handleProjectSelect(projectIdFromUrl, data);
                 }
 
             } catch (error) {
@@ -67,13 +67,12 @@ export default function ProjectPlanPage() {
         };
         fetchProjects();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [searchParams]);
+    }, []);
     
-    const handleProjectSelect = useCallback(async (projectId: string) => {
-        const project = projects.find(p => p.projectId === projectId);
+    const handleProjectSelect = useCallback(async (projectId: string, projectList?: Project[]) => {
+        const currentProjects = projectList || projects;
+        const project = currentProjects.find(p => p.projectId === projectId);
         if (!project) {
-          // If project not found in the list, it might not be loaded yet.
-          // We'll rely on the useEffect with searchParams to call this again.
           return;
         }
         
@@ -242,7 +241,7 @@ export default function ProjectPlanPage() {
             <div className="flex justify-between items-center">
                 <h1 className="text-3xl font-bold">Project Plan</h1>
                 <div className="flex gap-2">
-                    <Select onValueChange={handleProjectSelect} value={selectedProject?.projectId || ''} disabled={loading.projects}>
+                    <Select onValueChange={(value) => handleProjectSelect(value)} value={selectedProject?.projectId || ''} disabled={loading.projects}>
                         <SelectTrigger className="w-full md:w-72">
                             <SelectValue placeholder={loading.projects ? "Loading..." : "Select a project..."} />
                         </SelectTrigger>
@@ -332,5 +331,13 @@ export default function ProjectPlanPage() {
                 </>
             )}
         </div>
+    );
+}
+
+export default function ProjectPlanPage() {
+    return (
+        <Suspense fallback={<div className="flex justify-center py-8"><Loader2 className="h-8 w-8 animate-spin" /></div>}>
+            <ProjectPlanPageContent />
+        </Suspense>
     );
 }
