@@ -104,10 +104,6 @@ function EditTaskPageContent() {
                     
                     if (found) {
                         const taskToEdit = found.task;
-                        // Ensure subTasks is an array for the form
-                        if (taskToEdit.hasSubTasks === 'yes' && !taskToEdit.subTasks) {
-                            taskToEdit.subTasks = [];
-                        }
                         form.reset(GanttTaskSchema.parse(taskToEdit));
                         setActivityNumber(found.number);
                     } else if(taskId) {
@@ -214,7 +210,7 @@ export default function EditTaskPage() {
 }
 
 function RecursiveTaskItem({ control, index, remove, isEditMode, parentPath, logframe, activityNumbering }: { control: any; index: number; remove: (index: number) => void; isEditMode?: boolean, parentPath: string, logframe: Logframe | null; activityNumbering: string; }) {
-    const currentPath = index === -1 ? '' : (parentPath ? `${parentPath}.subTasks.${index}` : `tasks.${index}`);
+    const currentPath = index === -1 ? '' : (parentPath ? `${parentPath}.subTasks.${index}` : `subTasks.${index}`);
 
     const hasSubTasks = useWatch({ control, name: currentPath ? `${currentPath}.hasSubTasks` : 'hasSubTasks' });
     
