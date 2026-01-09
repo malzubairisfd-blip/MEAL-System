@@ -1,4 +1,4 @@
-
+// src/app/monitoring/page.tsx
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,7 +17,7 @@ import Link from "next/link";
 
 export default function MonitoringPage() {
   const monitoringSteps = [
-    { href: "#", icon: <Target className="h-8 w-8 text-indigo-500" />, title: "Identify the purpose and scope of the M&E system" },
+    { href: "/monitoring/purpose-and-scope", icon: <Target className="h-8 w-8 text-indigo-500" />, title: "Identify the purpose and scope of the M&E system" },
     { href: "#", icon: <Database className="h-8 w-8 text-blue-500" />, title: "Plan for data collection and management" },
     { href: "#", icon: <BarChart3 className="h-8 w-8 text-green-500" />, title: "Plan for data analysis" },
     { href: "#", icon: <FileText className="h-8 w-8 text-sky-500" />, title: "Plan for information reporting and utilization" },
