@@ -94,7 +94,7 @@ export default function AddMonitoringPlanPage() {
                 const plan = await planRes.json();
                 setProjectPlan(plan);
                 
-                const existingMonitoringRes = await fetch(`/api/monitoring-plan?projectId=${projectId}`);
+                const existingMonitoringRes = await fetch(`/api/purpose-and-scope?projectId=${projectId}`);
                 if (existingMonitoringRes.ok) {
                     const existingPlan = await existingMonitoringRes.json();
                     replace(existingPlan.monitoringActivities);
@@ -125,7 +125,7 @@ export default function AddMonitoringPlanPage() {
     const onSubmit = async (data: FormValues) => {
         setIsSaving(true);
         try {
-            const response = await fetch('/api/monitoring-plan', {
+            const response = await fetch('/api/purpose-and-scope', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data),

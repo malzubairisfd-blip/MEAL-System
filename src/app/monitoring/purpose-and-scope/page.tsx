@@ -77,7 +77,7 @@ export default function PurposeAndScopePage() {
 
         setLoading(prev => ({ ...prev, plan: true }));
         try {
-            const res = await fetch(`/api/monitoring-plan?projectId=${projectId}`);
+            const res = await fetch(`/api/purpose-and-scope?projectId=${projectId}`);
             if (res.ok) {
                 setPlan(await res.json());
             } else if (res.status === 404) {
