@@ -1,3 +1,4 @@
+
 // src/app/monitoring/purpose-and-scope/add/page.tsx
 "use client";
 
@@ -18,6 +19,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft, Save, Loader2, Plus, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Input } from '@/components/ui/input';
 
 interface Project {
   projectId: string;
@@ -32,6 +34,7 @@ const monitoringActivitySchema = z.object({
   monitoringTools: z.string().min(1, "Monitoring tools are required."),
   monitoringFrequency: z.string().min(1, "Monitoring frequency is required."),
   purposeAndScope: z.string().min(1, "Purpose and scope is required."),
+  estimatedBudget: z.coerce.number().min(0, "Budget must be a positive number.").optional(),
 });
 
 const formSchema = z.object({
@@ -105,6 +108,7 @@ export default function AddMonitoringPlanPage() {
                         monitoringTools: '',
                         monitoringFrequency: '',
                         purposeAndScope: '',
+                        estimatedBudget: 0,
                     }));
                     replace(monitoringActivities);
                 }
@@ -241,7 +245,7 @@ export default function AddMonitoringPlanPage() {
                                     <FormField control={form.control} name={`monitoringActivities.${index}.personResponsible`} render={({ field }) => (
                                         <FormItem>
                                             <FormLabel>Person Responsible for Monitoring</FormLabel>
-                                            <FormControl><Textarea placeholder="e.g.,&#10;- John Doe, M&E Officer&#10;- Jane Smith, Field Coordinator" {...field} /></FormControl>
+                                            <FormControl><Textarea placeholder="e.g.,&#10;- John Doe, M&amp;E Officer&#10;- Jane Smith, Field Coordinator" {...field} /></FormControl>
                                             <FormMessage />
                                         </FormItem>
                                     )} />
@@ -271,6 +275,13 @@ export default function AddMonitoringPlanPage() {
                                             <FormMessage />
                                         </FormItem>
                                     )} />
+                                    <FormField control={form.control} name={`monitoringActivities.${index}.estimatedBudget`} render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Estimated Budget</FormLabel>
+                                            <FormControl><Input type="number" placeholder="0.00" {...field} /></FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )} />
                                 </CardContent>
                             </Card>
                         )
@@ -280,7 +291,7 @@ export default function AddMonitoringPlanPage() {
                         <div className="flex justify-end">
                             <Button type="submit" size="lg" disabled={isSaving}>
                                 {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                                Save & Submit Plan
+                                Save &amp; Submit Plan
                             </Button>
                         </div>
                     )}

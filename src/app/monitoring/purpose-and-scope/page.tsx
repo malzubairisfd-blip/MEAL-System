@@ -1,3 +1,4 @@
+
 // src/app/monitoring/purpose-and-scope/page.tsx
 "use client";
 
@@ -78,13 +79,13 @@ export default function PurposeAndScopePage() {
         <div className="space-y-6">
             <div className="flex justify-between items-center">
                 <div>
-                    <h1 className="text-3xl font-bold">Purpose and Scope of M&E System</h1>
+                    <h1 className="text-3xl font-bold">Purpose and Scope of M&amp;E System</h1>
                     <p className="text-muted-foreground">View and manage the monitoring plans for your projects.</p>
                 </div>
                 <div className="flex gap-2">
                     <Button variant="outline" asChild>
                         <Link href="/monitoring">
-                            <ArrowLeft className="mr-2 h-4 w-4" /> Back to M&E Planning
+                            <ArrowLeft className="mr-2 h-4 w-4" /> Back to M&amp;E Planning
                         </Link>
                     </Button>
                     <Button asChild>
@@ -98,7 +99,7 @@ export default function PurposeAndScopePage() {
             <Card>
                 <CardHeader>
                     <CardTitle>Select a Project</CardTitle>
-                    <CardDescription>Choose a project to view its M&E purpose and scope plan.</CardDescription>
+                    <CardDescription>Choose a project to view its M&amp;E purpose and scope plan.</CardDescription>
                 </CardHeader>
                 <CardContent>
                      <Select onValueChange={handleProjectSelect} value={selectedProject} disabled={loading.projects}>
@@ -132,11 +133,12 @@ export default function PurposeAndScopePage() {
                             <Table>
                                 <TableHeader>
                                     <TableRow className="bg-muted hover:bg-muted">
-                                        <TableHead className="w-1/4 text-primary font-bold">Main Activity</TableHead>
-                                        <TableHead className="w-1/4 text-primary font-bold">Monitored Sub-Activities</TableHead>
+                                        <TableHead className="w-1/6 text-primary font-bold">Main Activity</TableHead>
+                                        <TableHead className="w-1/6 text-primary font-bold">Monitored Sub-Activities</TableHead>
                                         <TableHead className="text-primary font-bold">Responsible Person</TableHead>
-                                        <TableHead className="text-primary font-bold">Monitoring Tools & Frequency</TableHead>
-                                        <TableHead className="text-primary font-bold">Purpose and Scope</TableHead>
+                                        <TableHead className="text-primary font-bold">Monitoring Tools &amp; Frequency</TableHead>
+                                        <TableHead className="w-1/6 text-primary font-bold">Purpose and Scope</TableHead>
+                                        <TableHead className="text-primary font-bold">Estimated Budget</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -162,6 +164,9 @@ export default function PurposeAndScopePage() {
                                                 </div>
                                             </TableCell>
                                             <TableCell className="align-top text-sm">{renderList(activity.purposeAndScope)}</TableCell>
+                                            <TableCell className="align-top text-sm font-semibold">
+                                                {activity.estimatedBudget ? `$${Number(activity.estimatedBudget).toLocaleString()}` : 'N/A'}
+                                            </TableCell>
                                         </TableRow>
                                     ))}
                                 </TableBody>
