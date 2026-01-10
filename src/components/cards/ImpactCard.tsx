@@ -28,7 +28,7 @@ export function ImpactCard({ title, value, impact }: ImpactCardProps) {
       `}
       style={{ borderLeftColor: borderColor }}
     >
-      <p className="text-xs uppercase tracking-widest text-muted mb-2">{title}</p>
+      <p className="text-xs uppercase tracking-widest text-white mb-2">{title}</p>
       <p className="font-mono text-2xl font-medium">{value}</p>
     </motion.div>
   );
