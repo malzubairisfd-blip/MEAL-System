@@ -31,6 +31,8 @@ export const DecisionPieChart: React.FC<DecisionPieChartProps> = ({ data }) => {
                     fill="#8884d8"
                     dataKey="value"
                     nameKey="name"
+                    startAngle={180}
+                    endAngle={0}
                     label={({
                         cx,
                         cy,
