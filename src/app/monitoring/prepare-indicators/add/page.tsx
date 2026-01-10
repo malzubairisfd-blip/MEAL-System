@@ -1,3 +1,4 @@
+
 // src/app/monitoring/prepare-indicators/add/page.tsx
 "use client";
 
@@ -227,7 +228,7 @@ function AddIndicatorPlanForm() {
                                     <CardContent className="space-y-6 pl-10">
                                         {indicators.map((indicator) => (
                                              <IndicatorCard
-                                                key={indicator.id || indicator.originalIndex}
+                                                key={indicator.originalIndex}
                                                 control={control}
                                                 indicatorIndex={indicator.originalIndex}
                                                 removeIndicator={removeIndicator}
@@ -347,3 +348,4 @@ export default function AddIndicatorTrackingPage() {
         </Suspense>
     );
 }
+
