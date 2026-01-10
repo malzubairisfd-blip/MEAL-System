@@ -101,7 +101,7 @@ export default function ProjectDetailsPage() {
                     <CardContent className="space-y-6">
                         <div>
                             <h3 className="font-semibold mb-2">Project Summary</h3>
-                            <p className="text-muted-foreground bg-slate-50 p-4 rounded-md border">{selectedProject.summary}</p>
+                            <p className="text-black bg-slate-50 p-4 rounded-md border">{selectedProject.summary}</p>
                         </div>
 
                         <Separator />
