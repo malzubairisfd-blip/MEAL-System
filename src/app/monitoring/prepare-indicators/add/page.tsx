@@ -83,7 +83,7 @@ function AddIndicatorPlanForm() {
             try {
                  const [logframeRes, planRes] = await Promise.all([
                     fetch(`/api/logframe?projectId=${selectedProjectId}`),
-                    fetch(`/api/indicator-tracking?projectId=${selectedProjectId}`)
+                    fetch(`/api/monitoring-indicators?projectId=${selectedProjectId}`)
                 ]);
 
                 let logframeData: Logframe | null = null;
@@ -136,7 +136,7 @@ function AddIndicatorPlanForm() {
     const onSubmit = async (data: IndicatorTrackingPlan) => {
         setIsSaving(true);
         try {
-            const response = await fetch('/api/indicator-tracking', {
+            const response = await fetch('/api/monitoring-indicators', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data),
@@ -348,3 +348,4 @@ export default function AddIndicatorTrackingPage() {
         </Suspense>
     );
 }
+

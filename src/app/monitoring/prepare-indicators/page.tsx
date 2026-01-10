@@ -87,7 +87,7 @@ export default function PrepareIndicatorsPage() {
             try {
                 const [logframeRes, indicatorPlanRes] = await Promise.all([
                     fetch(`/api/logframe?projectId=${selectedProjectId}`),
-                    fetch(`/api/indicator-tracking?projectId=${selectedProjectId}`)
+                    fetch(`/api/monitoring-indicators?projectId=${selectedProjectId}`)
                 ]);
 
                 if (logframeRes.ok) setLogframe(await logframeRes.json());
@@ -237,3 +237,4 @@ export default function PrepareIndicatorsPage() {
         </div>
     );
 }
+
