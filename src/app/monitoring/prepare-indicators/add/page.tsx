@@ -45,7 +45,7 @@ function AddIndicatorPlanForm() {
 
     const { control, setValue, watch } = form;
     
-    const { fields: indicatorFields, replace: replaceIndicators, append: appendIndicator } = useFieldArray({
+    const { fields: indicatorFields, replace: replaceIndicators, append: appendIndicator, remove: removeIndicator } = useFieldArray({
       control,
       name: 'indicators'
     });
@@ -230,7 +230,7 @@ function AddIndicatorPlanForm() {
                                                 key={indicator.id}
                                                 control={control}
                                                 indicatorIndex={indicator.originalIndex}
-                                                removeIndicator={remove}
+                                                removeIndicator={removeIndicator}
                                             />
                                         ))}
                                          <Button
