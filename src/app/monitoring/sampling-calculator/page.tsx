@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { ArrowLeft, Loader2, Calculator } from 'lucide-react';
+import { ArrowLeft, Loader2, Calculator, Save } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Logframe } from '@/lib/logframe';
 
@@ -25,7 +25,7 @@ export default function SamplingCalculatorPage() {
     const [projects, setProjects] = useState<Project[]>([]);
     const [selectedProjectId, setSelectedProjectId] = useState('');
     const [logframe, setLogframe] = useState<Logframe | null>(null);
-    const [loading, setLoading] = useState({ projects: true, data: false });
+    const [loading, setLoading] = useState({ projects: true, data: false, saving: false });
     
     // Calculator State
     const [marginOfError, setMarginOfError] = useState(5);
@@ -78,9 +78,23 @@ export default function SamplingCalculatorPage() {
         const fetchData = async () => {
             setLoading(prev => ({...prev, data: true}));
             try {
-                const logframeRes = await fetch(`/api/logframe?projectId=${selectedProjectId}`);
+                const [logframeRes, samplingPlanRes] = await Promise.all([
+                    fetch(`/api/logframe?projectId=${selectedProjectId}`),
+                    fetch(`/api/sampling-plan?projectId=${selectedProjectId}`)
+                ]);
+
                 if (logframeRes.ok) setLogframe(await logframeRes.json());
                 else { setLogframe(null); toast({ title: "Logframe Not Found", description: "This project doesn't have a logical framework yet." }); }
+                
+                if (samplingPlanRes.ok) {
+                    const plan = await samplingPlanRes.json();
+                    setMarginOfError(plan.marginOfError);
+                    setConfidenceLevel(plan.confidenceLevel);
+                    setPopulationSize(plan.populationSize);
+                    setResponseDistribution(plan.responseDistribution);
+                    toast({ title: "Loaded Saved Plan", description: "Loaded the previously saved sampling plan for this project."});
+                }
+
             } catch (error: any) {
                  toast({ title: "Error", description: "Failed to load project data.", variant: 'destructive' });
             } finally {
@@ -89,6 +103,43 @@ export default function SamplingCalculatorPage() {
         }
         fetchData();
     }, [selectedProjectId, toast]);
+
+    const handleSavePlan = async () => {
+        if (!selectedProjectId) {
+            toast({ title: "Validation Error", description: "Please select a project before saving the plan.", variant: "destructive" });
+            return;
+        }
+
+        setLoading(prev => ({ ...prev, saving: true }));
+        try {
+            const payload = {
+                projectId: selectedProjectId,
+                marginOfError,
+                confidenceLevel,
+                populationSize,
+                responseDistribution,
+                recommendedSampleSize,
+            };
+
+            const response = await fetch('/api/sampling-plan', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to save the sampling plan.');
+            }
+            
+            toast({ title: "Plan Saved!", description: "Your sampling plan has been saved successfully." });
+
+        } catch (error: any) {
+            toast({ title: "Save Failed", description: error.message, variant: 'destructive' });
+        } finally {
+            setLoading(prev => ({ ...prev, saving: false }));
+        }
+    };
     
     const renderLogframe = () => {
         if (loading.data) return <div className="text-center p-8"><Loader2 className="h-8 w-8 animate-spin" /></div>;
@@ -208,6 +259,13 @@ export default function SamplingCalculatorPage() {
                         <div className="p-4 bg-primary/10 rounded-lg text-center">
                             <p className="text-sm font-medium text-primary">Your recommended sample size is</p>
                             <p className="text-4xl font-bold text-primary">{recommendedSampleSize}</p>
+                        </div>
+                        
+                         <div className="flex justify-end">
+                            <Button onClick={handleSavePlan} disabled={loading.saving || !selectedProjectId}>
+                                {loading.saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                                Save Plan
+                            </Button>
                         </div>
                         
                         <Accordion type="single" collapsible>
