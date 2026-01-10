@@ -18,13 +18,37 @@ interface Project {
   projectName: string;
 }
 
-const renderTextWithBreaks = (text: string) => {
+const renderTextWithBreaks = (text: string | undefined) => {
+    if (!text) return null;
     return text.split('\n').map((line, index) => (
         <React.Fragment key={index}>
             {line}
             {index < text.split('\n').length - 1 && <br />}
         </React.Fragment>
     ));
+}
+
+interface GroupedData {
+    goal: { description: string };
+    outcome: { description: string; outputs: OutputGroup[] };
+}
+
+interface OutputGroup {
+    description: string;
+    activities: ActivityGroup[];
+}
+
+interface ActivityGroup {
+    description: string;
+    indicators: IndicatorWithPlan[];
+}
+
+interface IndicatorWithPlan {
+    description: string;
+    type: '#' | '%';
+    target: number;
+    meansOfVerification: string[];
+    plan?: Partial<IndicatorPlan>;
 }
 
 export default function MEPlanTablePage() {
@@ -83,20 +107,27 @@ export default function MEPlanTablePage() {
         fetchData();
     }, [selectedProjectId, toast]);
 
-    const indicatorsWithPlan = useMemo(() => {
-        if (!logframe) return [];
-        const planMap = new Map(mePlan?.indicators.map(p => [p.indicatorId, p]));
+    const groupedData = useMemo((): GroupedData | null => {
+        if (!logframe) return null;
         
-        return logframe.outputs.flatMap(output => 
-            output.activities.flatMap(activity => 
-                activity.indicators.map(indicator => ({
-                    ...indicator,
-                    activityDescription: activity.description,
-                    outputDescription: output.description,
-                    plan: planMap.get(indicator.description) || {}
+        const planMap = new Map(mePlan?.indicators.map(p => [p.indicatorId, p]));
+
+        return {
+            goal: logframe.goal,
+            outcome: {
+                ...logframe.outcome,
+                outputs: logframe.outputs.map(output => ({
+                    ...output,
+                    activities: output.activities.map(activity => ({
+                        ...activity,
+                        indicators: activity.indicators.map(indicator => ({
+                            ...indicator,
+                            plan: planMap.get(indicator.description)
+                        }))
+                    }))
                 }))
-            )
-        );
+            }
+        };
     }, [logframe, mePlan]);
 
 
@@ -141,19 +172,19 @@ export default function MEPlanTablePage() {
 
             {loading.data && <div className="text-center p-8"><Loader2 className="h-8 w-8 animate-spin" /></div>}
             
-            {logframe && !loading.data && (
+            {groupedData && !loading.data && (
                 <Card>
                     <CardHeader>
-                        <CardTitle>{logframe.goal.description}</CardTitle>
-                        <CardDescription>{logframe.outcome.description}</CardDescription>
+                        <CardTitle>{groupedData.goal.description}</CardTitle>
+                        <CardDescription>{groupedData.outcome.description}</CardDescription>
                     </CardHeader>
                     <CardContent>
                         <div className="border rounded-lg overflow-x-auto">
                             <Table>
                                 <TableHeader>
                                     <TableRow className="bg-muted">
-                                        <TableHead className="w-[15%]">Output/Activity</TableHead>
-                                        <TableHead className="w-[15%]">Indicator</TableHead>
+                                        <TableHead className="w-[15%]">Output/Activity/Indicator</TableHead>
+                                        <TableHead className="w-[15%]">Indicator Details</TableHead>
                                         <TableHead>Indicator Definition</TableHead>
                                         <TableHead>Data Collection</TableHead>
                                         <TableHead>Frequency</TableHead>
@@ -162,23 +193,32 @@ export default function MEPlanTablePage() {
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {indicatorsWithPlan.map((item, index) => (
-                                        <React.Fragment key={index}>
+                                    {groupedData.outcome.outputs.map((output, oIdx) => (
+                                        <React.Fragment key={oIdx}>
                                             <TableRow className="bg-blue-50 hover:bg-blue-100">
-                                                <TableCell colSpan={7} className="font-bold p-3">Output: {item.outputDescription}</TableCell>
+                                                <TableCell colSpan={7} className="font-bold p-3">Output {oIdx + 1}: {output.description}</TableCell>
                                             </TableRow>
-                                            <TableRow className="bg-slate-50 hover:bg-slate-100">
-                                                <TableCell colSpan={7} className="font-semibold p-3 pl-8">Activity: {item.activityDescription}</TableCell>
-                                            </TableRow>
-                                            <TableRow>
-                                                <TableCell className="pl-12">{item.description}</TableCell>
-                                                <TableCell><b>Target:</b> {item.target} ({item.type})<br/><b>MoV:</b> {item.meansOfVerification.join(', ')}</TableCell>
-                                                <TableCell>{renderTextWithBreaks(item.plan.definition || '')}</TableCell>
-                                                <TableCell>{renderTextWithBreaks(item.plan.collectionMethods || '')}</TableCell>
-                                                <TableCell>{renderTextWithBreaks(item.plan.frequency || '')}</TableCell>
-                                                <TableCell>{renderTextWithBreaks(item.plan.responsibilities || '')}</TableCell>
-                                                <TableCell>{renderTextWithBreaks(item.plan.informationUse || '')}</TableCell>
-                                            </TableRow>
+                                            {output.activities.map((activity, aIdx) => (
+                                                <React.Fragment key={aIdx}>
+                                                    <TableRow className="bg-slate-50 hover:bg-slate-100">
+                                                        <TableCell colSpan={7} className="font-semibold p-3 pl-8">Activity {oIdx + 1}.{aIdx+1}: {activity.description}</TableCell>
+                                                    </TableRow>
+                                                    {activity.indicators.map((indicator, iIdx) => (
+                                                        <TableRow key={iIdx}>
+                                                            <TableCell className="pl-12 font-medium">{indicator.description}</TableCell>
+                                                            <TableCell>
+                                                                <b>Target:</b> {indicator.target} ({indicator.type})<br/>
+                                                                <b>MoV:</b> {indicator.meansOfVerification.join(', ')}
+                                                            </TableCell>
+                                                            <TableCell>{renderTextWithBreaks(indicator.plan?.definition)}</TableCell>
+                                                            <TableCell>{renderTextWithBreaks(indicator.plan?.collectionMethods)}</TableCell>
+                                                            <TableCell>{renderTextWithBreaks(indicator.plan?.frequency)}</TableCell>
+                                                            <TableCell>{renderTextWithBreaks(indicator.plan?.responsibilities)}</TableCell>
+                                                            <TableCell>{renderTextWithBreaks(indicator.plan?.informationUse)}</TableCell>
+                                                        </TableRow>
+                                                    ))}
+                                                </React.Fragment>
+                                            ))}
                                         </React.Fragment>
                                     ))}
                                 </TableBody>

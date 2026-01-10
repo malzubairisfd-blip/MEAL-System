@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { MEPlanSchema, type MEPlan } from '@/types/me-plan';
+import { MEPlanSchema, type MEPlan, type IndicatorPlan } from '@/types/me-plan';
 import { Logframe } from '@/lib/logframe';
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -16,7 +16,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft, Save, Loader2, Plus, Trash2 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { Input } from '@/components/ui/input';
 
 interface Project {
   projectId: string;
@@ -27,7 +27,7 @@ function AddMEPlanForm() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const { toast } = useToast();
-    const projectId = searchParams.get('projectId');
+    const projectIdFromUrl = searchParams.get('projectId');
     
     const [projects, setProjects] = useState<Project[]>([]);
     const [logframe, setLogframe] = useState<Logframe | null>(null);
@@ -37,17 +37,19 @@ function AddMEPlanForm() {
     const form = useForm<MEPlan>({
         resolver: zodResolver(MEPlanSchema),
         defaultValues: {
-            projectId: projectId || '',
+            projectId: projectIdFromUrl || '',
             indicators: []
         },
     });
 
-    const { control, setValue } = form;
-    const { fields, replace } = useFieldArray({
-        control,
-        name: "indicators"
+    const { control, setValue, getValues, watch } = form;
+    
+    // We will now manage outputs as a field array to group activities and indicators
+    const { fields: outputFields, replace: replaceOutputs } = useFieldArray({
+      control,
+      name: 'outputs'
     });
-
+    
     useEffect(() => {
         const fetchProjects = async () => {
             setLoading(prev => ({ ...prev, projects: true }));
@@ -64,11 +66,12 @@ function AddMEPlanForm() {
         fetchProjects();
     }, [toast]);
     
+    const selectedProjectId = watch('projectId');
+
     useEffect(() => {
-        const selectedProjectId = form.watch('projectId');
         if (!selectedProjectId) {
             setLogframe(null);
-            replace([]);
+            replaceOutputs([]);
             return;
         };
 
@@ -80,42 +83,43 @@ function AddMEPlanForm() {
                     fetch(`/api/me-plan?projectId=${selectedProjectId}`)
                 ]);
 
-                let indicatorPlans: any[] = [];
-
+                let logframeData: Logframe | null = null;
                 if (logframeRes.ok) {
-                    const logframeData = await logframeRes.json();
+                    logframeData = await logframeRes.json();
                     setLogframe(logframeData);
-
-                    // Pre-populate form fields from logframe
-                    indicatorPlans = logframeData.outputs.flatMap((o: any) =>
-                        o.activities.flatMap((a: any) =>
-                            a.indicators.map((i: any) => ({
-                                indicatorId: i.description,
-                                indicatorDescription: i.description,
-                                definition: '',
-                                collectionMethods: '',
-                                frequency: '',
-                                responsibilities: '',
-                                informationUse: ''
-                            }))
-                        )
-                    );
                 } else {
                      toast({title: "Logframe not found", description: "Please create a logframe for this project first.", variant: 'destructive'});
                 }
                 
+                let planMap = new Map<string, any>();
                 if (mePlanRes.ok) {
                     const mePlanData = await mePlanRes.json();
-                    const planMap = new Map(mePlanData.indicators.map((p: any) => [p.indicatorId, p]));
-                    indicatorPlans.forEach(plan => {
-                        const existingPlan = planMap.get(plan.indicatorId);
-                        if (existingPlan) {
-                            Object.assign(plan, existingPlan);
-                        }
-                    });
+                    if(mePlanData.indicators) {
+                       planMap = new Map(mePlanData.indicators.map((p: any) => [p.indicatorId, p]));
+                    }
                 }
-                
-                replace(indicatorPlans);
+
+                if (logframeData) {
+                    const groupedOutputs = logframeData.outputs.map(output => ({
+                        ...output,
+                        activities: output.activities.map(activity => ({
+                            ...activity,
+                            indicators: activity.indicators.map(indicator => {
+                                const existingPlan = planMap.get(indicator.description);
+                                return {
+                                    ...indicator,
+                                    isNew: false,
+                                    definition: existingPlan?.definition || '',
+                                    collectionMethods: existingPlan?.collectionMethods || '',
+                                    frequency: existingPlan?.frequency || '',
+                                    responsibilities: existingPlan?.responsibilities || '',
+                                    informationUse: existingPlan?.informationUse || '',
+                                }
+                            })
+                        }))
+                    }));
+                    replaceOutputs(groupedOutputs);
+                }
 
             } catch(e: any) {
                 toast({ title: "Error loading data", description: e.message, variant: 'destructive' });
@@ -125,16 +129,35 @@ function AddMEPlanForm() {
         };
         fetchData();
 
-    }, [form.watch('projectId'), replace, toast]);
-
+    }, [selectedProjectId, replaceOutputs, toast]);
 
     const onSubmit = async (data: MEPlan) => {
         setIsSaving(true);
+        // Flatten the data from the new structure
+        const flattenedIndicators = data.outputs?.flatMap(o => 
+            o.activities.flatMap(a => 
+                a.indicators.map(i => ({
+                    indicatorId: i.description,
+                    indicatorDescription: i.description,
+                    definition: i.definition || '',
+                    collectionMethods: i.collectionMethods || '',
+                    frequency: i.frequency || '',
+                    responsibilities: i.responsibilities || '',
+                    informationUse: i.informationUse || '',
+                }))
+            )
+        ) || [];
+
+        const payload = {
+            projectId: data.projectId,
+            indicators: flattenedIndicators,
+        };
+
         try {
             const response = await fetch('/api/me-plan', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data),
+                body: JSON.stringify(payload),
             });
             const result = await response.json();
             if (!response.ok) throw new Error(result.error || "Failed to save M&E Plan");
@@ -169,7 +192,7 @@ function AddMEPlanForm() {
                         </CardHeader>
                         <CardContent>
                              <FormField
-                                control={form.control}
+                                control={control}
                                 name="projectId"
                                 render={({ field }) => (
                                     <FormItem>
@@ -196,57 +219,22 @@ function AddMEPlanForm() {
 
                     {loading.data ? (
                         <div className="text-center p-8"><Loader2 className="h-8 w-8 animate-spin"/></div>
-                    ) : fields.length === 0 && logframe ? (
-                         <Card><CardContent className="p-6 text-center text-muted-foreground">No indicators found in the logical framework for this project.</CardContent></Card>
+                    ) : outputFields.length === 0 && logframe ? (
+                         <Card><CardContent className="p-6 text-center text-muted-foreground">No outputs found in the logical framework for this project.</CardContent></Card>
                     ) : (
-                        fields.map((field, index) => (
-                             <Card key={field.id} className="border-l-4 border-primary">
-                                <CardHeader>
-                                    <CardTitle>Indicator {index + 1}</CardTitle>
-                                    <CardDescription>{field.indicatorDescription}</CardDescription>
-                                </CardHeader>
-                                <CardContent className="space-y-4">
-                                     <FormField control={control} name={`indicators.${index}.definition`} render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Indicator Definition</FormLabel>
-                                            <FormControl><Textarea maxLength={1000} {...field} /></FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )} />
-                                     <FormField control={control} name={`indicators.${index}.collectionMethods`} render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Data Collection Methods</FormLabel>
-                                            <FormControl><Textarea {...field} /></FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )} />
-                                     <FormField control={control} name={`indicators.${index}.frequency`} render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Frequency and Schedule</FormLabel>
-                                            <FormControl><Textarea {...field} /></FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )} />
-                                     <FormField control={control} name={`indicators.${index}.responsibilities`} render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Responsibilities</FormLabel>
-                                            <FormControl><Textarea {...field} /></FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )} />
-                                     <FormField control={control} name={`indicators.${index}.informationUse`} render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Information Use</FormLabel>
-                                            <FormControl><Textarea {...field} /></FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )} />
-                                </CardContent>
-                            </Card>
+                        outputFields.map((outputField, outputIndex) => (
+                          <Card key={outputField.id} className="border-blue-200 border-2">
+                            <CardHeader>
+                              <CardTitle>Output {outputIndex + 1}: {outputField.description}</CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-6 pl-10">
+                              <ActivitiesArray control={control} outputIndex={outputIndex} />
+                            </CardContent>
+                          </Card>
                         ))
                     )}
 
-                    {fields.length > 0 && (
+                    {outputFields.length > 0 && (
                          <div className="flex justify-end">
                             <Button type="submit" size="lg" disabled={isSaving}>
                                 {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
@@ -258,6 +246,111 @@ function AddMEPlanForm() {
             </Form>
         </div>
     );
+}
+
+const ActivitiesArray = ({ control, outputIndex }: { control: any, outputIndex: number }) => {
+  const { fields: activityFields } = useFieldArray({
+    control,
+    name: `outputs.${outputIndex}.activities`,
+  });
+
+  return activityFields.map((activityField, activityIndex) => (
+    <Card key={activityField.id} className="bg-slate-50">
+      <CardHeader>
+        <CardTitle className="text-lg">Activity {outputIndex + 1}.{activityIndex + 1}: {activityField.description}</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <IndicatorsArray control={control} outputIndex={outputIndex} activityIndex={activityIndex} />
+      </CardContent>
+    </Card>
+  ));
+}
+
+const IndicatorsArray = ({ control, outputIndex, activityIndex }: { control: any, outputIndex: number, activityIndex: number }) => {
+  const { fields, append, remove } = useFieldArray({
+    control,
+    name: `outputs.${outputIndex}.activities.${activityIndex}.indicators`
+  });
+
+  return (
+    <div className="space-y-4">
+      {fields.map((indicatorField, indicatorIndex) => (
+        <Card key={indicatorField.id} className="border-l-4 border-primary bg-white p-6 relative">
+          {fields.length > 1 && (
+            <Button type="button" variant="ghost" size="icon" className="absolute top-2 right-2 h-6 w-6" onClick={() => remove(indicatorIndex)}>
+              <Trash2 className="h-4 w-4 text-destructive" />
+            </Button>
+          )}
+          <CardHeader className='p-0 pb-4'>
+            <FormField control={control} name={`outputs.${outputIndex}.activities.${activityIndex}.indicators.${indicatorIndex}.description`} render={({ field }) => (
+              <FormItem>
+                <FormLabel>Indicator {outputIndex + 1}.{activityIndex+1}.{indicatorIndex+1} Title</FormLabel>
+                <FormControl>
+                  <Input {...field} readOnly={!(indicatorField as any).isNew} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+          </CardHeader>
+          <CardContent className="p-0 space-y-4">
+            <FormField control={control} name={`outputs.${outputIndex}.activities.${activityIndex}.indicators.${indicatorIndex}.definition`} render={({ field }) => (
+                <FormItem>
+                    <FormLabel>Indicator Definition</FormLabel>
+                    <FormControl><Textarea maxLength={1000} {...field} /></FormControl>
+                    <FormMessage />
+                </FormItem>
+            )} />
+            <FormField control={control} name={`outputs.${outputIndex}.activities.${activityIndex}.indicators.${indicatorIndex}.collectionMethods`} render={({ field }) => (
+              <FormItem>
+                  <FormLabel>Data Collection Methods</FormLabel>
+                  <FormControl><Textarea {...field} /></FormControl>
+                  <FormMessage />
+              </FormItem>
+            )} />
+            <FormField control={control} name={`outputs.${outputIndex}.activities.${activityIndex}.indicators.${indicatorIndex}.frequency`} render={({ field }) => (
+                <FormItem>
+                    <FormLabel>Frequency and Schedule</FormLabel>
+                    <FormControl><Textarea {...field} /></FormControl>
+                    <FormMessage />
+                </FormItem>
+            )} />
+            <FormField control={control} name={`outputs.${outputIndex}.activities.${activityIndex}.indicators.${indicatorIndex}.responsibilities`} render={({ field }) => (
+                <FormItem>
+                    <FormLabel>Responsibilities</FormLabel>
+                    <FormControl><Textarea {...field} /></FormControl>
+                    <FormMessage />
+                </FormItem>
+            )} />
+            <FormField control={control} name={`outputs.${outputIndex}.activities.${activityIndex}.indicators.${indicatorIndex}.informationUse`} render={({ field }) => (
+                <FormItem>
+                    <FormLabel>Information Use</FormLabel>
+                    <FormControl><Textarea {...field} /></FormControl>
+                    <FormMessage />
+                </FormItem>
+            )} />
+          </CardContent>
+        </Card>
+      ))}
+      <Button
+        type="button"
+        variant="secondary"
+        onClick={() => append({ 
+          description: '', 
+          isNew: true, 
+          type: '#', 
+          target: 0, 
+          meansOfVerification: [],
+          definition: '', 
+          collectionMethods: '',
+          frequency: '',
+          responsibilities: '',
+          informationUse: ''
+        })}
+      >
+        <Plus className="mr-2 h-4 w-4" /> Add Indicator
+      </Button>
+    </div>
+  )
 }
 
 export default function AddMEPlanTablePage() {

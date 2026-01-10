@@ -56,19 +56,23 @@ export async function POST(req: Request) {
         await ensureDataFile();
         const newPlan = await req.json();
 
+        // The payload now contains projectId and a list of indicators
         if (!newPlan || !newPlan.projectId || !Array.isArray(newPlan.indicators)) {
-            return NextResponse.json({ ok: false, error: "Invalid M&E plan payload" }, { status: 400 });
+            return NextResponse.json({ ok: false, error: "Invalid M&E plan payload. Expected projectId and indicators array." }, { status: 400 });
         }
 
         const existingPlans = await getExistingPlans();
         const index = existingPlans.findIndex((p: any) => p.projectId === newPlan.projectId);
 
         if (index !== -1) {
-            // Update existing plan
-            existingPlans[index] = newPlan;
+            // Update existing plan's indicators
+            existingPlans[index].indicators = newPlan.indicators;
         } else {
             // Add new plan
-            existingPlans.push(newPlan);
+            existingPlans.push({
+                projectId: newPlan.projectId,
+                indicators: newPlan.indicators
+            });
         }
         
         await fs.writeFile(getPlansFile(), JSON.stringify(existingPlans, null, 2), "utf8");
