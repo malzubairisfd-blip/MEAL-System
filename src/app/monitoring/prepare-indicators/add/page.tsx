@@ -1,8 +1,7 @@
-
 // src/app/monitoring/prepare-indicators/add/page.tsx
 "use client";
 
-import React, { useEffect, useState, Suspense } from 'react';
+import React, { useEffect, useState, useMemo, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useForm, useFieldArray, useWatch } from 'react-hook-form';
@@ -46,10 +45,12 @@ function AddIndicatorPlanForm() {
 
     const { control, setValue, watch } = form;
     
-    const { fields: indicatorFields, replace: replaceIndicators } = useFieldArray({
+    const { fields: indicatorFields, replace: replaceIndicators, append: appendIndicator } = useFieldArray({
       control,
       name: 'indicators'
     });
+
+    const currentIndicators = watch("indicators");
     
     useEffect(() => {
         const fetchProjects = async () => {
@@ -107,6 +108,7 @@ function AddIndicatorPlanForm() {
                                 const existingPlan = planMap.get(indicator.description);
                                 return {
                                     indicatorId: indicator.description,
+                                    isNew: false, // Flag for pre-existing indicators
                                     outcome: logframeData.outcome.description,
                                     output: output.description,
                                     activity: activity.description,
@@ -148,6 +150,19 @@ function AddIndicatorPlanForm() {
             setIsSaving(false);
         }
     }
+
+    const activityGroups = useMemo(() => {
+        if (!currentIndicators) return [];
+        const groups = new Map<string, any[]>();
+        currentIndicators.forEach((indicator, index) => {
+            const key = `${indicator.output} > ${indicator.activity}`;
+            if (!groups.has(key)) {
+                groups.set(key, []);
+            }
+            groups.get(key)!.push({ ...indicator, originalIndex: index });
+        });
+        return Array.from(groups.entries());
+    }, [currentIndicators]);
 
     return (
         <div className="space-y-6">
@@ -198,19 +213,50 @@ function AddIndicatorPlanForm() {
 
                     {loading.data ? (
                         <div className="text-center p-8"><Loader2 className="h-8 w-8 animate-spin"/></div>
-                    ) : indicatorFields.length === 0 && logframe ? (
+                    ) : activityGroups.length === 0 && logframe ? (
                          <Card><CardContent className="p-6 text-center text-muted-foreground">No indicators found in the logical framework for this project.</CardContent></Card>
                     ) : (
-                        indicatorFields.map((indicatorField, indicatorIndex) => (
-                          <IndicatorCard
-                              key={indicatorField.id}
-                              control={control}
-                              indicatorIndex={indicatorIndex}
-                          />
-                        ))
+                         activityGroups.map(([groupKey, indicators], groupIndex) => {
+                            const [output, activity] = groupKey.split(' > ');
+                            return (
+                                <Card key={groupKey} className="border-blue-200 border-2">
+                                    <CardHeader>
+                                        <CardTitle>{output}</CardTitle>
+                                        <p className="text-md text-muted-foreground">{activity}</p>
+                                    </CardHeader>
+                                    <CardContent className="space-y-6 pl-10">
+                                        {indicators.map((indicator, indicatorIndex) => (
+                                             <IndicatorCard
+                                                key={indicator.id}
+                                                control={control}
+                                                indicatorIndex={indicator.originalIndex}
+                                                removeIndicator={remove}
+                                            />
+                                        ))}
+                                         <Button
+                                            type="button"
+                                            variant="outline"
+                                            onClick={() => {
+                                                const lastIndicatorInGroup = indicators[indicators.length - 1];
+                                                appendIndicator({
+                                                    indicatorId: '', // User will fill this
+                                                    isNew: true,
+                                                    outcome: lastIndicatorInGroup.outcome,
+                                                    output: lastIndicatorInGroup.output,
+                                                    activity: lastIndicatorInGroup.activity,
+                                                    units: [],
+                                                });
+                                            }}
+                                        >
+                                            <Plus className="mr-2 h-4 w-4" /> Add New Indicator to this Activity
+                                        </Button>
+                                    </CardContent>
+                                </Card>
+                            )
+                        })
                     )}
 
-                    {indicatorFields.length > 0 && (
+                    {activityGroups.length > 0 && (
                          <div className="flex justify-end">
                             <Button type="submit" size="lg" disabled={isSaving}>
                                 {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
@@ -224,7 +270,7 @@ function AddIndicatorPlanForm() {
     );
 }
 
-const IndicatorCard = ({ control, indicatorIndex }: { control: any, indicatorIndex: number }) => {
+const IndicatorCard = ({ control, indicatorIndex, removeIndicator }: { control: any; indicatorIndex: number; removeIndicator: (index: number) => void; }) => {
     const indicator = useWatch({ control, name: `indicators.${indicatorIndex}` });
     const { fields: unitFields, append, remove } = useFieldArray({
         control,
@@ -232,20 +278,34 @@ const IndicatorCard = ({ control, indicatorIndex }: { control: any, indicatorInd
     });
 
     if (!indicator) {
-        return null; // Don't render if the indicator data is not yet available
+        return null;
     }
     
     return (
-        <Card className="border-blue-200 border-2">
-            <CardHeader>
-                <CardTitle>Indicator: {indicator.indicatorId}</CardTitle>
-                <p className="text-sm text-muted-foreground">
-                    {indicator.outcome} &rarr; {indicator.output} &rarr; {indicator.activity}
-                </p>
+        <Card className="bg-slate-50 relative p-6">
+             {indicator.isNew && (
+                <Button type="button" variant="ghost" size="icon" className="absolute top-2 right-2" onClick={() => removeIndicator(indicatorIndex)}>
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                </Button>
+            )}
+             <CardHeader className="p-0 mb-4">
+                 <FormField
+                    control={control}
+                    name={`indicators.${indicatorIndex}.indicatorId`}
+                    render={({ field }) => (
+                        <FormItem>
+                            <FormLabel className='font-semibold'>Indicator Title</FormLabel>
+                            <FormControl>
+                                <Input {...field} readOnly={!indicator.isNew} placeholder={indicator.isNew ? "Enter new indicator title..." : ""}/>
+                            </FormControl>
+                            <FormMessage />
+                        </FormItem>
+                    )}
+                />
             </CardHeader>
-            <CardContent className="space-y-6 pl-10">
+            <CardContent className="space-y-6 p-0">
                 {unitFields.map((unitField, unitIndex) => (
-                    <Card key={unitField.id} className="bg-slate-50 relative p-6">
+                    <Card key={unitField.id} className="bg-white relative p-6">
                         <Button type="button" variant="ghost" size="icon" className="absolute top-2 right-2" onClick={() => remove(unitIndex)}>
                             <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>

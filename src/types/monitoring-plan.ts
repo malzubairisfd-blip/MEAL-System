@@ -21,7 +21,7 @@ const IndicatorFormSchema = z.object({
   informationUse: z.string().min(1, "Information use is required."),
    // These are from original logframe and not directly edited here but needed for structure
   type: z.enum(['#', '%']).optional(),
-  target: z.number().optional(),
+  target: z.coerce.number().optional(),
   meansOfVerification: z.array(z.string()).optional(),
 });
 

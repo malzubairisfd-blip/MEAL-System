@@ -10,7 +10,8 @@ export const IndicatorUnitSchema = z.object({
 });
 
 export const IndicatorSchema = z.object({
-  indicatorId: z.string(),
+  indicatorId: z.string().min(1, "New indicator title is required."),
+  isNew: z.boolean().optional(),
   outcome: z.string().optional(),
   output: z.string().optional(),
   activity: z.string().optional(),

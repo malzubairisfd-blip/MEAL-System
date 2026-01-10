@@ -38,13 +38,12 @@ function AddMEPlanForm() {
         resolver: zodResolver(MEPlanSchema),
         defaultValues: {
             projectId: projectIdFromUrl || '',
-            indicators: []
+            outputs: []
         },
     });
 
     const { control, setValue, getValues, watch } = form;
     
-    // We will now manage outputs as a field array to group activities and indicators
     const { fields: outputFields, replace: replaceOutputs } = useFieldArray({
       control,
       name: 'outputs'
@@ -133,7 +132,6 @@ function AddMEPlanForm() {
 
     const onSubmit = async (data: MEPlan) => {
         setIsSaving(true);
-        // Flatten the data from the new structure
         const flattenedIndicators = data.outputs?.flatMap(o => 
             o.activities.flatMap(a => 
                 a.indicators.map(i => ({
@@ -276,7 +274,7 @@ const IndicatorsArray = ({ control, outputIndex, activityIndex }: { control: any
     <div className="space-y-4">
       {fields.map((indicatorField, indicatorIndex) => (
         <Card key={indicatorField.id} className="border-l-4 border-primary bg-white p-6 relative">
-          {fields.length > 1 && (
+          {(indicatorField as any).isNew && (
             <Button type="button" variant="ghost" size="icon" className="absolute top-2 right-2 h-6 w-6" onClick={() => remove(indicatorIndex)}>
               <Trash2 className="h-4 w-4 text-destructive" />
             </Button>
@@ -286,7 +284,7 @@ const IndicatorsArray = ({ control, outputIndex, activityIndex }: { control: any
               <FormItem>
                 <FormLabel>Indicator {outputIndex + 1}.{activityIndex+1}.{indicatorIndex+1} Title</FormLabel>
                 <FormControl>
-                  <Input {...field} readOnly={!(indicatorField as any).isNew} />
+                  <Input {...field} readOnly={!(indicatorField as any).isNew} placeholder={(indicatorField as any).isNew ? "Enter new indicator title..." : ""} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
