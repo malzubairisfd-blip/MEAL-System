@@ -216,7 +216,7 @@ function AddIndicatorPlanForm() {
                     ) : activityGroups.length === 0 && logframe ? (
                          <Card><CardContent className="p-6 text-center text-muted-foreground">No indicators found in the logical framework for this project.</CardContent></Card>
                     ) : (
-                         activityGroups.map(([groupKey, indicators], groupIndex) => {
+                         activityGroups.map(([groupKey, indicators]) => {
                             const [output, activity] = groupKey.split(' > ');
                             return (
                                 <Card key={groupKey} className="border-blue-200 border-2">
@@ -225,9 +225,9 @@ function AddIndicatorPlanForm() {
                                         <p className="text-md text-muted-foreground">{activity}</p>
                                     </CardHeader>
                                     <CardContent className="space-y-6 pl-10">
-                                        {indicators.map((indicator, indicatorIndex) => (
+                                        {indicators.map((indicator) => (
                                              <IndicatorCard
-                                                key={indicator.id}
+                                                key={indicator.id || indicator.originalIndex}
                                                 control={control}
                                                 indicatorIndex={indicator.originalIndex}
                                                 removeIndicator={removeIndicator}
