@@ -4,16 +4,16 @@
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ArrowRight, Table, DatabaseZap, Binary, Percent, FileQuestion, Users, UserCheck, Sheet } from "lucide-react";
+import { ArrowLeft, ArrowRight, Table, DatabaseZap, Binary, Percent, FileQuestion, Users, UserCheck, Sheet, Target } from "lucide-react";
 
 export default function DataCollectionPlanPage() {
   const dataCollectionSteps = [
     { title: "Develop an M&E plan table", icon: <Table className="h-8 w-8 text-blue-500" />, href: "/monitoring/me-plan-table" },
+    { title: "Prepare Monitoring indicators", icon: <Target className="h-8 w-8 text-orange-500" />, href: "/monitoring/prepare-indicators" },
     { title: "Availability of secondary data", icon: <DatabaseZap className="h-8 w-8 text-indigo-500" />, href: "#" },
     { title: "Determine the quantitative and qualitative data", icon: <Binary className="h-8 w-8 text-purple-500" />, href: "#" },
     { title: "Determine sampling requirements", icon: <Percent className="h-8 w-8 text-sky-500" />, href: "#" },
     { title: "Prepare for any surveys", icon: <FileQuestion className="h-8 w-8 text-green-500" />, href: "#" },
-    { title: "Prepare Monitoring indicators", icon: <Users className="h-8 w-8 text-orange-500" />, href: "#" },
     { title: "Establish Monitoring staff selection Crietria", icon: <UserCheck className="h-8 w-8 text-red-500" />, href: "#" },
     { title: "indicator tracking table (ITT)", icon: <Sheet className="h-8 w-8 text-yellow-500" />, href: "#" },
   ];
