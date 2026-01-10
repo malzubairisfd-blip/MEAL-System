@@ -1,3 +1,4 @@
+
 // src/app/monitoring/prepare-indicators/add/page.tsx
 "use client";
 
@@ -99,14 +100,14 @@ function AddIndicatorPlanForm() {
                     }
                 }
 
-                if (logframeData) {
+                if (logframeData && logframeData.outcome) {
                     const flattenedIndicators = logframeData.outputs.flatMap(output => 
                         output.activities.flatMap(activity => 
                             activity.indicators.map(indicator => {
                                 const existingPlan = planMap.get(indicator.description);
                                 return {
                                     indicatorId: indicator.description,
-                                    outcome: logframe.outcome.description,
+                                    outcome: logframeData.outcome.description,
                                     output: output.description,
                                     activity: activity.description,
                                     units: existingPlan?.units || []
@@ -115,6 +116,8 @@ function AddIndicatorPlanForm() {
                         )
                     );
                     replaceIndicators(flattenedIndicators);
+                } else {
+                    replaceIndicators([]);
                 }
 
             } catch(e: any) {
