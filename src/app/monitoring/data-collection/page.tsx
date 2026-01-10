@@ -8,7 +8,7 @@ import { ArrowLeft, ArrowRight, Table, DatabaseZap, Binary, Percent, FileQuestio
 
 export default function DataCollectionPlanPage() {
   const dataCollectionSteps = [
-    { title: "Develop an M&E plan table", icon: <Table className="h-8 w-8 text-blue-500" />, href: "#" },
+    { title: "Develop an M&E plan table", icon: <Table className="h-8 w-8 text-blue-500" />, href: "/monitoring/me-plan-table" },
     { title: "Availability of secondary data", icon: <DatabaseZap className="h-8 w-8 text-indigo-500" />, href: "#" },
     { title: "Determine the quantitative and qualitative data", icon: <Binary className="h-8 w-8 text-purple-500" />, href: "#" },
     { title: "Determine sampling requirements", icon: <Percent className="h-8 w-8 text-sky-500" />, href: "#" },
