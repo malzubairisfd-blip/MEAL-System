@@ -43,10 +43,10 @@ const TableWithBarChart = ({ title, data, dataKeyLabel }: { title: string; data:
         {/* The ScrollArea height is removed to allow full content rendering for image capture */}
         <ScrollArea>
           <Table>
-            <TableHeader>
+            <TableHeader className="bg-primary text-primary-foreground">
               <TableRow>
-                <TableHead>{dataKeyLabel}</TableHead>
-                <TableHead className="text-right">{t('report.charts.beneficiaries')}</TableHead>
+                <TableHead className="font-bold text-black">{dataKeyLabel}</TableHead>
+                <TableHead className="text-right font-bold text-black">{t('report.charts.beneficiaries')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -106,5 +106,3 @@ export const WomenAndChildrenDonut = ({ data }: ChartProps) => {
         </Card>
     );
 };
-
-    

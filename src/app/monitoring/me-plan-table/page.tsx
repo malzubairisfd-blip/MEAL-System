@@ -182,14 +182,14 @@ export default function MEPlanTablePage() {
                         <div className="border rounded-lg overflow-x-auto">
                             <Table>
                                 <TableHeader>
-                                    <TableRow className="bg-muted">
-                                        <TableHead className="w-[15%]">Output/Activity/Indicator</TableHead>
-                                        <TableHead className="w-[15%]">Indicator Details</TableHead>
-                                        <TableHead>Indicator Definition</TableHead>
-                                        <TableHead>Data Collection</TableHead>
-                                        <TableHead>Frequency</TableHead>
-                                        <TableHead>Responsibilities</TableHead>
-                                        <TableHead>Information Use</TableHead>
+                                    <TableRow className="bg-primary text-primary-foreground">
+                                        <TableHead className="w-[15%] font-bold text-black">Output/Activity/Indicator</TableHead>
+                                        <TableHead className="w-[15%] font-bold text-black">Indicator Details</TableHead>
+                                        <TableHead className="font-bold text-black">Indicator Definition</TableHead>
+                                        <TableHead className="font-bold text-black">Data Collection</TableHead>
+                                        <TableHead className="font-bold text-black">Frequency</TableHead>
+                                        <TableHead className="font-bold text-black">Responsibilities</TableHead>
+                                        <TableHead className="font-bold text-black">Information Use</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>

@@ -118,10 +118,10 @@ export function PairwiseModal({ cluster, isOpen, onClose }: PairwiseModalProps) 
                           </div>
                         <h4 className="font-semibold mt-4 mb-2">{t('review.pairwiseModal.scoreBreakdown')}</h4>
                         <Table>
-                          <TableHeader>
+                          <TableHeader className="bg-primary text-primary-foreground">
                             <TableRow>
-                              <TableHead>{t('review.pairwiseModal.component')}</TableHead>
-                              <TableHead className="text-right">{t('review.pairwiseModal.score')}</TableHead>
+                              <TableHead className="font-bold text-black">{t('review.pairwiseModal.component')}</TableHead>
+                              <TableHead className="text-right font-bold text-black">{t('review.pairwiseModal.score')}</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>

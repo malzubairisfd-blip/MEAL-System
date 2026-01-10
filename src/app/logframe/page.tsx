@@ -199,10 +199,10 @@ export default function LogicalFrameworkDashboardPage() {
                         ) : selectedLogframe ? (
                              <div className="border rounded-lg">
                                 <table className="w-full text-sm">
-                                    <thead className="bg-muted">
+                                    <thead className="bg-primary text-primary-foreground">
                                         <tr>
-                                            <th className="p-3 text-left w-1/4 font-semibold">Title</th>
-                                            <th className="p-3 text-left font-semibold">Description</th>
+                                            <th className="p-3 text-left w-1/4 font-bold text-black">Title</th>
+                                            <th className="p-3 text-left font-bold text-black">Description</th>
                                         </tr>
                                     </thead>
                                     <tbody>

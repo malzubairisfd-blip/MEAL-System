@@ -273,12 +273,12 @@ export default function CorrectionPage() {
                         <div className="flex-1 overflow-hidden border rounded-md">
                             <ScrollArea className="h-96">
                                 <Table>
-                                    <TableHeader>
+                                    <TableHeader className="bg-primary text-primary-foreground">
                                     <TableRow>
-                                        <TableHead className="w-[50px]">Select</TableHead>
-                                        <TableHead>Woman Name</TableHead>
-                                        <TableHead>Husband Name</TableHead>
-                                        <TableHead>National ID</TableHead>
+                                        <TableHead className="w-[50px] font-bold text-black">Select</TableHead>
+                                        <TableHead className="font-bold text-black">Woman Name</TableHead>
+                                        <TableHead className="font-bold text-black">Husband Name</TableHead>
+                                        <TableHead className="font-bold text-black">National ID</TableHead>
                                     </TableRow>
                                     </TableHeader>
                                     <TableBody>

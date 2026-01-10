@@ -12,12 +12,12 @@ export function EvidenceTable({ rows }: { rows: EvidenceRow[] }) {
   return (
     <div className="bg-surface border border-border rounded-lg overflow-hidden">
       <table className="w-full text-sm">
-        <thead className="bg-black/30">
+        <thead className="bg-primary text-primary-foreground">
           <tr>
-            <th className="px-4 py-3 text-left">Indicator</th>
-            <th className="px-4 py-3">Target</th>
-            <th className="px-4 py-3">Actual</th>
-            <th className="px-4 py-3">Status</th>
+            <th className="px-4 py-3 text-left font-bold text-black">Indicator</th>
+            <th className="px-4 py-3 font-bold text-black">Target</th>
+            <th className="px-4 py-3 font-bold text-black">Actual</th>
+            <th className="px-4 py-3 font-bold text-black">Status</th>
           </tr>
         </thead>
         <tbody>

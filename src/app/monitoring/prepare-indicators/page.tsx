@@ -182,14 +182,14 @@ export default function PrepareIndicatorsPage() {
                         <div className="border rounded-lg overflow-x-auto">
                             <Table>
                                 <TableHeader>
-                                    <TableRow className="bg-muted">
-                                        <TableHead className="w-[15%]">Indicator</TableHead>
-                                        <TableHead className="w-[10%]">Unit</TableHead>
-                                        <TableHead>Targeted</TableHead>
-                                        <TableHead>Actual</TableHead>
-                                        <TableHead>Percentage</TableHead>
-                                        <TableHead>Data Sources</TableHead>
-                                        <TableHead>Responsibilities</TableHead>
+                                    <TableRow className="bg-primary text-primary-foreground">
+                                        <TableHead className="w-[15%] font-bold text-black">Indicator</TableHead>
+                                        <TableHead className="w-[10%] font-bold text-black">Unit</TableHead>
+                                        <TableHead className="font-bold text-black">Targeted</TableHead>
+                                        <TableHead className="font-bold text-black">Actual</TableHead>
+                                        <TableHead className="font-bold text-black">Percentage</TableHead>
+                                        <TableHead className="font-bold text-black">Data Sources</TableHead>
+                                        <TableHead className="font-bold text-black">Responsibilities</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -237,5 +237,3 @@ export default function PrepareIndicatorsPage() {
         </div>
     );
 }
-
-    
