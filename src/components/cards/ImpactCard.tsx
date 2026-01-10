@@ -1,4 +1,7 @@
+"use client";
+
 // components/cards/ImpactCard.tsx
+import { motion } from 'framer-motion';
 import { colors } from '@/theme/colors';
 
 type ImpactLevel = 'high' | 'medium' | 'low';
@@ -17,7 +20,7 @@ export function ImpactCard({ title, value, impact }: ImpactCardProps) {
   }[impact];
   
   return (
-    <div
+    <motion.div
       whileHover={{ scale: 1.01 }}
       className={`
         bg-surface border border-border border-l-4
@@ -27,6 +30,6 @@ export function ImpactCard({ title, value, impact }: ImpactCardProps) {
     >
       <p className="text-xs uppercase tracking-widest text-muted mb-2">{title}</p>
       <p className="font-mono text-2xl font-medium">{value}</p>
-    </div>
+    </motion.div>
   );
 }
