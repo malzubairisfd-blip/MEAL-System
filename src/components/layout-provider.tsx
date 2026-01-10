@@ -15,7 +15,7 @@ import {
   SidebarTrigger,
   SidebarInset,
 } from "@/components/ui/sidebar";
-import { FileBarChart2, Upload, Microscope, ClipboardList, Home, Settings, FileDown, Globe, BarChartHorizontal, Wrench, Briefcase, ListChecks, Monitor, Target } from "lucide-react";
+import { FileBarChart2, Upload, Microscope, ClipboardList, Home, Settings, FileDown, Globe, BarChartHorizontal, Wrench, Briefcase, ListChecks, Monitor, Target, Palette } from "lucide-react";
 import { useTranslation } from "@/hooks/use-translation";
 import { useLanguage } from "@/context/language-context";
 import {
@@ -88,6 +88,7 @@ export function LayoutProvider({ children, year }: { children: React.ReactNode, 
     { href: "/report", icon: <BarChartHorizontal />, label: t("sidebar.report") },
     { href: "/export", icon: <FileDown />, label: t("sidebar.export") },
     { href: "/settings", icon: <Settings />, label: t("sidebar.settings") },
+    { href: "/style-guide", icon: <Palette />, label: "Style Guide" },
   ];
 
   let pageTitle = "Dashboard";

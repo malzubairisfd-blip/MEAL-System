@@ -1,1 +1,55 @@
-[]
+[
+  {
+    "projectId": "200-23596",
+    "calculations": [
+      {
+        "activityId": "اختيار وتدريب المثقفات المجتمعيات والمنسقين الميدانيين.",
+        "populationSize": 200,
+        "confidenceLevel": 95,
+        "marginOfError": 5,
+        "responseDistribution": 50,
+        "recommendedSampleSize": 132
+      },
+      {
+        "activityId": "المسح الميداني للأسر المستهدفة في المديرية وتسجيل الحوامل والأمهات.",
+        "populationSize": 2634,
+        "confidenceLevel": 95,
+        "marginOfError": 5,
+        "responseDistribution": 50,
+        "recommendedSampleSize": 336
+      },
+      {
+        "activityId": "تنفيذ فعاليات الالتحاق وعقد الجلسة التعريفية والتوقيع على استمارة الالتحاق بالمشروع.",
+        "populationSize": 2500,
+        "confidenceLevel": 95,
+        "marginOfError": 5,
+        "responseDistribution": 50,
+        "recommendedSampleSize": 334
+      },
+      {
+        "activityId": "تنفيذ جلسات التثقيف والصرف المستحقات الشهرية للمستفيدات خلال دورة الاستحقاق العامة",
+        "populationSize": 2634,
+        "confidenceLevel": 99,
+        "marginOfError": 2,
+        "responseDistribution": 50,
+        "recommendedSampleSize": 1612
+      },
+      {
+        "activityId": " تنفيذ جلسات التثقيف والصرف المستحقات الشهرية للمستفيدات من حالات سوء التغذية",
+        "populationSize": 200,
+        "confidenceLevel": 99,
+        "marginOfError": 5,
+        "responseDistribution": 50,
+        "recommendedSampleSize": 154
+      },
+      {
+        "activityId": "فرز واحالة حالات سوء التغذية (الأطفالوالامهات) للمرافق الصحية لتلقي العلاج",
+        "populationSize": 200,
+        "confidenceLevel": 95,
+        "marginOfError": 5,
+        "responseDistribution": 50,
+        "recommendedSampleSize": 132
+      }
+    ]
+  }
+]
