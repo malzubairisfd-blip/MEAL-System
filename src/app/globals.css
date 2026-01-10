@@ -43,38 +43,38 @@ body {
     --sidebar-ring: 272 100% 25%;
   }
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 272 90% 70%;
-    --primary-foreground: 272 100% 25%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 60 90% 65%;
-    --accent-foreground: 60 100% 15%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 272 90% 70%;
+    --background: 210 29% 12%; /* #17202A */
+    --foreground: 210 20% 90%; /* Light Gray */
+    --card: 210 29% 16%; /* Slightly lighter than background */
+    --card-foreground: 210 20% 90%;
+    --popover: 210 29% 12%;
+    --popover-foreground: 210 20% 90%;
+    --primary: 204 69% 63%; /* #5DADE2 */
+    --primary-foreground: 210 29% 12%; /* Dark background color for text on primary */
+    --secondary: 207 44% 49%; /* #4A90E2 - A slightly darker blue for secondary elements */
+    --secondary-foreground: 210 20% 95%;
+    --muted: 210 29% 22%;
+    --muted-foreground: 210 20% 65%;
+    --accent: 207 44% 49%;
+    --accent-foreground: 210 20% 95%;
+    --destructive: 0 63% 31%;
+    --destructive-foreground: 210 20% 95%;
+    --border: 210 29% 22%;
+    --input: 210 29% 22%;
+    --ring: 204 69% 63%;
     --chart-1: 220 70% 50%;
     --chart-2: 160 60% 45%;
     --chart-3: 30 80% 55%;
     --chart-4: 280 65% 60%;
     --chart-5: 340 75% 55%;
-    --sidebar-background: 222.2 84% 4.9%;
-    --sidebar-foreground: 210 40% 98%;
-    --sidebar-primary: 272 90% 70%;
-    --sidebar-primary-foreground: 272 100% 25%;
-    --sidebar-accent: 60 90% 65%;
-    --sidebar-accent-foreground: 60 100% 15%;
-    --sidebar-border: 217.2 32.6% 17.5%;
-    --sidebar-ring: 272 90% 70%;
+    --sidebar-background: 210 29% 10%; /* Even darker sidebar */
+    --sidebar-foreground: 210 20% 90%;
+    --sidebar-primary: 204 69% 63%;
+    --sidebar-primary-foreground: 210 29% 12%;
+    --sidebar-accent: 207 44% 49%;
+    --sidebar-accent-foreground: 210 20% 95%;
+    --sidebar-border: 210 29% 22%;
+    --sidebar-ring: 204 69% 63%;
   }
 }
 
