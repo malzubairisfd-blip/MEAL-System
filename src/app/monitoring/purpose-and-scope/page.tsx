@@ -172,7 +172,7 @@ export default function PurposeAndScopePage() {
             )}
             
             {plan && plan.monitoringActivities && (
-                 <div className="document-view bg-white p-8 rounded-lg shadow-lg border">
+                 <div className="document-view bg-white text-black p-8 rounded-lg shadow-lg border">
                     <h2 className="text-2xl font-bold text-center mb-6">Monitoring & Evaluation Plan</h2>
                     
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
