@@ -207,22 +207,22 @@ export default function LogicalFrameworkDashboardPage() {
                                     </thead>
                                     <tbody>
                                         <tr className="border-b">
-                                            <td className="p-3 font-semibold bg-green-100 align-top">PROJECT GOAL</td>
+                                            <td className="p-3 font-semibold bg-primary/10 align-top">PROJECT GOAL</td>
                                             <td className="p-3">{renderTextWithLineBreaks(selectedLogframe.goal.description)}</td>
                                         </tr>
                                         <tr className="border-b">
-                                            <td className="p-3 font-semibold bg-green-100 align-top">OUTCOME</td>
+                                            <td className="p-3 font-semibold bg-primary/10 align-top">OUTCOME</td>
                                             <td className="p-3">{renderTextWithLineBreaks(selectedLogframe.outcome.description)}</td>
                                         </tr>
                                         {selectedLogframe.outputs.map((output, oIdx) => (
                                             <React.Fragment key={oIdx}>
                                                 <tr className="border-b">
-                                                    <td className="p-3 font-semibold bg-green-100 align-top">OUTPUT {oIdx + 1}</td>
+                                                    <td className="p-3 font-semibold bg-primary/10 align-top">OUTPUT {oIdx + 1}</td>
                                                     <td className="p-3">{renderTextWithLineBreaks(output.description)}</td>
                                                 </tr>
                                                 {output.activities.map((activity, aIdx) => (
                                                      <React.Fragment key={aIdx}>
-                                                        <tr className="border-b bg-gray-50">
+                                                        <tr className="border-b bg-muted/50">
                                                             <td className="p-3 pl-8 font-semibold align-top">ACTIVITY {oIdx + 1}.{aIdx + 1}</td>
                                                             <td className="p-3">{renderTextWithLineBreaks(activity.description)}</td>
                                                         </tr>
