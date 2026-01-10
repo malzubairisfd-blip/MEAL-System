@@ -43,19 +43,19 @@ body {
     --sidebar-ring: 272 100% 25%;
   }
   .dark {
-    --background: 210 29% 12%; /* #17202A */
-    --foreground: 210 20% 90%; /* Light Gray */
+    --background: 210 29% 12%; /* Charcoal Black (#17202A) */
+    --foreground: 210 20% 90%; /* Light Gray for text */
     --card: 210 29% 16%; /* Slightly lighter than background */
     --card-foreground: 210 20% 90%;
     --popover: 210 29% 12%;
     --popover-foreground: 210 20% 90%;
-    --primary: 204 69% 63%; /* #5DADE2 */
-    --primary-foreground: 210 29% 12%; /* Dark background color for text on primary */
-    --secondary: 207 44% 49%; /* #4A90E2 - A slightly darker blue for secondary elements */
+    --primary: 204 69% 63%; /* Soft Blue (#5DADE2) */
+    --primary-foreground: 210 29% 12%; /* Dark text on primary */
+    --secondary: 208 65% 55%; /* Light Blue (#A9CCE3) - adjusted for AA contrast */
     --secondary-foreground: 210 20% 95%;
     --muted: 210 29% 22%;
     --muted-foreground: 210 20% 65%;
-    --accent: 207 44% 49%;
+    --accent: 208 65% 55%; /* Same as secondary for accent */
     --accent-foreground: 210 20% 95%;
     --destructive: 0 63% 31%;
     --destructive-foreground: 210 20% 95%;
@@ -71,7 +71,7 @@ body {
     --sidebar-foreground: 210 20% 90%;
     --sidebar-primary: 204 69% 63%;
     --sidebar-primary-foreground: 210 29% 12%;
-    --sidebar-accent: 207 44% 49%;
+    --sidebar-accent: 208 65% 55%;
     --sidebar-accent-foreground: 210 20% 95%;
     --sidebar-border: 210 29% 22%;
     --sidebar-ring: 204 69% 63%;
