@@ -5,10 +5,10 @@
 import React, { useEffect, useState, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useForm, useFieldArray, Controller } from 'react-hook-form';
+import { useForm, useFieldArray, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { IndicatorTrackingPlanSchema, type IndicatorTrackingPlan, type IndicatorUnit } from '@/types/indicator-tracking';
+import { IndicatorTrackingPlanSchema, type IndicatorTrackingPlan } from '@/types/indicator-tracking';
 import { Logframe } from '@/lib/logframe';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -225,12 +225,16 @@ function AddIndicatorPlanForm() {
 }
 
 const IndicatorCard = ({ control, indicatorIndex }: { control: any, indicatorIndex: number }) => {
-    const indicator = useForm().watch(`indicators.${indicatorIndex}`);
+    const indicator = useWatch({ control, name: `indicators.${indicatorIndex}` });
     const { fields: unitFields, append, remove } = useFieldArray({
         control,
         name: `indicators.${indicatorIndex}.units`
     });
 
+    if (!indicator) {
+        return null; // Don't render if the indicator data is not yet available
+    }
+    
     return (
         <Card className="border-blue-200 border-2">
             <CardHeader>
