@@ -5,7 +5,7 @@ import fs from "fs/promises";
 import path from "path";
 
 const getDataPath = () => path.join(process.cwd(), 'src/data');
-const getPlansFile = () => path.join(getDataPath(), 'monitoring-plans.json');
+const getPlansFile = () => path.join(getDataPath(), 'scope-and-purpose.json');
 
 async function getExistingPlans() {
     const PLANS_FILE = getPlansFile();
