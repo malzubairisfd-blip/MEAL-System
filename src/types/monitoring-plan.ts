@@ -1,4 +1,4 @@
-// src/types/me-plan.ts
+// src/types/monitoring-plan.ts
 import { z } from 'zod';
 
 export const IndicatorPlanSchema = z.object({

@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ArrowLeft, Edit, Plus, Loader2 } from 'lucide-react';
 import { Logframe } from '@/lib/logframe';
-import { MEPlan, IndicatorPlan } from '@/types/me-plan';
+import { MEPlan, IndicatorPlan } from '@/types/monitoring-plan';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 
@@ -82,7 +82,7 @@ export default function MEPlanTablePage() {
             try {
                 const [logframeRes, mePlanRes] = await Promise.all([
                     fetch(`/api/logframe?projectId=${selectedProjectId}`),
-                    fetch(`/api/me-plan?projectId=${selectedProjectId}`)
+                    fetch(`/api/monitoring-plan?projectId=${selectedProjectId}`)
                 ]);
 
                 if (logframeRes.ok) {

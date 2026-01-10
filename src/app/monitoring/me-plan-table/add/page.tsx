@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { MEPlanSchema, type MEPlan, type IndicatorPlan } from '@/types/me-plan';
+import { MEPlanSchema, type MEPlan, type IndicatorPlan } from '@/types/monitoring-plan';
 import { Logframe } from '@/lib/logframe';
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -80,7 +80,7 @@ function AddMEPlanForm() {
             try {
                  const [logframeRes, mePlanRes] = await Promise.all([
                     fetch(`/api/logframe?projectId=${selectedProjectId}`),
-                    fetch(`/api/me-plan?projectId=${selectedProjectId}`)
+                    fetch(`/api/monitoring-plan?projectId=${selectedProjectId}`)
                 ]);
 
                 let logframeData: Logframe | null = null;
@@ -154,7 +154,7 @@ function AddMEPlanForm() {
         };
 
         try {
-            const response = await fetch('/api/me-plan', {
+            const response = await fetch('/api/monitoring-plan', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload),
