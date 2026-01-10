@@ -1,3 +1,4 @@
+
 // src/app/monitoring/prepare-indicators/page.tsx
 "use client";
 
@@ -11,7 +12,7 @@ import { ArrowLeft, Edit, Plus, Loader2 } from 'lucide-react';
 import { Logframe } from '@/lib/logframe';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import { IndicatorTrackingPlan } from '@/types/indicator-tracking';
+import { IndicatorTrackingPlan } from '@/types/monitoring-indicators';
 
 interface Project {
   projectId: string;

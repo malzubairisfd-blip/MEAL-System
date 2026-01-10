@@ -1,10 +1,11 @@
+
 // src/app/api/indicator-tracking/route.ts
 import { NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
 
 const getDataPath = () => path.join(process.cwd(), 'src/data');
-const getPlansFile = () => path.join(getDataPath(), 'indicator-tracking.json');
+const getPlansFile = () => path.join(getDataPath(), 'monitoring-indicators.json');
 
 async function getExistingPlans() {
     const PLANS_FILE = getPlansFile();

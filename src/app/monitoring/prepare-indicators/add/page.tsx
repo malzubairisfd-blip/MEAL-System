@@ -8,7 +8,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useForm, useFieldArray, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { IndicatorTrackingPlanSchema, type IndicatorTrackingPlan } from '@/types/indicator-tracking';
+import { IndicatorTrackingPlanSchema, type IndicatorTrackingPlan } from '@/types/monitoring-indicators';
 import { Logframe } from '@/lib/logframe';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -217,7 +217,7 @@ function AddIndicatorPlanForm() {
                     ) : activityGroups.length === 0 && logframe ? (
                          <Card><CardContent className="p-6 text-center text-muted-foreground">No indicators found in the logical framework for this project.</CardContent></Card>
                     ) : (
-                         activityGroups.map(([groupKey, indicators]) => {
+                         activityGroups.map(([groupKey, indicators], groupIndex) => {
                             const [output, activity] = groupKey.split(' > ');
                             return (
                                 <Card key={groupKey} className="border-blue-200 border-2">
@@ -348,4 +348,3 @@ export default function AddIndicatorTrackingPage() {
         </Suspense>
     );
 }
-
