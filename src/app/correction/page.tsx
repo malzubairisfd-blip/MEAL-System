@@ -284,7 +284,7 @@ export default function CorrectionPage() {
                                     <TableBody>
                                         {filteredRecords.map(record => (
                                             <TableRow key={record._internalId}
-                                                className={`cursor-pointer ${selectedRecordIds.has(record._internalId!) ? 'bg-blue-100 hover:bg-blue-200' : 'hover:bg-muted'}`}
+                                                className={`cursor-pointer ${selectedRecordIds.has(record._internalId!) ? 'bg-blue-100 hover:bg-blue-200 text-black' : 'hover:bg-muted'}`}
                                                 onClick={() => handleSelect(record._internalId!)}
                                             >
                                                 <TableCell>
@@ -395,3 +395,5 @@ function ComparisonRow({ label, score }: { label: string, score: number }) {
         </div>
     );
 }
+
+    
