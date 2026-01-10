@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
-import { MealLayout } from "@/components/layout/MealLayout";
+import { LayoutProvider } from "@/components/layout-provider";
+import { Toaster } from "@/components/ui/toaster";
 import { LanguageProvider } from "@/context/language-context";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "MEAL Dashboard",
-  description: "Monitoring, Evaluation, Accountability, and Learning Dashboard",
+  title: "Beneficiary Insights",
+  description: "AI-powered data analysis for beneficiary information.",
 };
 
 export default function RootLayout({
@@ -14,11 +15,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body>
         <LanguageProvider>
-          <MealLayout>{children}</MealLayout>
+          <LayoutProvider year={new Date().getFullYear()}>{children}</LayoutProvider>
         </LanguageProvider>
+        <Toaster />
       </body>
     </html>
   );

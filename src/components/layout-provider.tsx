@@ -4,18 +4,23 @@
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import {
-  SidebarProvider,
-  Sidebar,
-  SidebarHeader,
-  SidebarContent,
-  SidebarMenu,
-  SidebarMenuItem,
-  SidebarMenuButton,
-  SidebarFooter,
-  SidebarTrigger,
-  SidebarInset,
-} from "@/components/ui/sidebar";
-import { FileBarChart2, Upload, Microscope, ClipboardList, Home, Settings, FileDown, Globe, BarChartHorizontal, Wrench, Briefcase, ListChecks, Monitor, Target, Palette } from "lucide-react";
+  FileBarChart2,
+  Upload,
+  Microscope,
+  ClipboardList,
+  Home,
+  Settings,
+  FileDown,
+  Globe,
+  BarChartHorizontal,
+  Wrench,
+  Briefcase,
+  ListChecks,
+  Monitor,
+  Target,
+  Palette,
+  ChevronLeft
+} from "lucide-react";
 import { useTranslation } from "@/hooks/use-translation";
 import { useLanguage } from "@/context/language-context";
 import {
@@ -27,8 +32,8 @@ import {
 import { Button } from "./ui/button";
 import { useState, useEffect } from "react";
 import { Skeleton } from "./ui/skeleton";
+import { cn } from "@/lib/utils";
 
-// This wrapper component ensures the DropdownMenu only renders on the client, fixing hydration errors.
 function ClientOnlyLanguageSwitcher() {
   const { language, setLanguage } = useLanguage();
   const [isClient, setIsClient] = useState(false);
@@ -38,7 +43,7 @@ function ClientOnlyLanguageSwitcher() {
   }, []);
 
   if (!isClient) {
-    return null; // Don't render on the server
+    return null;
   }
 
   return (
@@ -61,19 +66,17 @@ function ClientOnlyLanguageSwitcher() {
   );
 }
 
-
 export function LayoutProvider({ children, year }: { children: React.ReactNode, year: number }) {
   const currentPathname = usePathname();
   const [pathname, setPathname] = useState(currentPathname);
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const { t, isLoading: isTranslationLoading } = useTranslation();
 
-  // Defer reading the pathname until after hydration on the client
   useEffect(() => {
     setPathname(currentPathname);
   }, [currentPathname]);
   
   const isActive = (path: string) => pathname === path || (path !== "/" && pathname.startsWith(path));
-
 
   const sidebarLinks = [
     { href: "/", icon: <Home />, label: t("sidebar.dashboard") },
@@ -98,61 +101,66 @@ export function LayoutProvider({ children, year }: { children: React.ReactNode, 
   } else if (pathname === "/") {
     pageTitle = t("sidebar.dashboard");
   } else {
-    // Fallback for nested pages not in the main sidebar
     const pathSegments = pathname.split('/').filter(Boolean);
     pageTitle = pathSegments.length > 0 ? pathSegments.join(' ') : 'Dashboard';
   }
 
-
   return (
-    <SidebarProvider>
-      <Sidebar>
-        <SidebarHeader>
-          <div className="flex items-center gap-2 p-2">
-            <FileBarChart2 className="size-6 text-primary" />
-            <span className="text-lg font-semibold text-foreground">Beneficiary Insights</span>
-          </div>
-        </SidebarHeader>
-        <SidebarContent>
-          <SidebarMenu>
-            {isTranslationLoading ? (
-              <>
-                <Skeleton className="h-8 w-full" />
-                <Skeleton className="h-8 w-full" />
-                <Skeleton className="h-8 w-full" />
-              </>
-            ) : (
-               sidebarLinks.map(link => (
-                <SidebarMenuItem key={link.href}>
-                  <SidebarMenuButton asChild isActive={isActive(link.href)}>
-                    <Link href={link.href}>
-                      {link.icon}
-                      <span>{link.label}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))
-            )}
-          </SidebarMenu>
-        </SidebarContent>
-        <SidebarFooter>
-          <div className="text-xs text-muted-foreground p-4">
-             © {year}
-          </div>
-        </SidebarFooter>
-      </Sidebar>
-      <SidebarInset>
+    <div className="flex min-h-screen">
+      <aside
+        className={cn(
+          "bg-card text-card-foreground border-r transition-all duration-300 ease-in-out flex flex-col",
+          isCollapsed ? "w-20" : "w-64"
+        )}
+      >
+        <div className="flex items-center justify-between p-4 border-b">
+           <div className={cn("flex items-center gap-2", isCollapsed && "hidden")}>
+             <FileBarChart2 className="size-6 text-primary" />
+             <span className="text-lg font-semibold">Beneficiary Insights</span>
+           </div>
+           <Button variant="ghost" size="icon" onClick={() => setIsCollapsed(!isCollapsed)} className="ml-auto">
+             <ChevronLeft className={cn("transition-transform", isCollapsed && "rotate-180")} />
+           </Button>
+        </div>
+        <nav className="flex-1 px-4 py-4 space-y-2">
+          {isTranslationLoading ? (
+            Array.from({length: 5}).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)
+          ) : (
+            sidebarLinks.map(link => (
+              <Link
+                key={link.href}
+                href={link.href}
+                className={cn(
+                  "flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary hover:bg-muted",
+                  isActive(link.href) && "bg-primary/10 text-primary font-semibold",
+                  isCollapsed && "justify-center"
+                )}
+                title={isCollapsed ? link.label : undefined}
+              >
+                {link.icon}
+                <span className={cn(isCollapsed && "hidden")}>{link.label}</span>
+              </Link>
+            ))
+          )}
+        </nav>
+        <div className="mt-auto p-4 border-t">
+            <div className={cn("text-xs text-muted-foreground", isCollapsed && "text-center")}>
+                 © {year}
+              </div>
+        </div>
+      </aside>
+
+      <div className="flex flex-col flex-1">
         <header className="flex h-14 items-center gap-4 border-b bg-card px-6">
-            <SidebarTrigger />
             <div className="flex-1">
                 {isTranslationLoading ? <Skeleton className="h-6 w-32" /> : <h1 className="text-lg font-semibold capitalize">{pageTitle}</h1>}
             </div>
              <ClientOnlyLanguageSwitcher />
         </header>
-        <main className="flex-1 overflow-auto p-4 md:p-6">
+        <main className="flex-1 overflow-auto p-4 md:p-6 bg-background">
             {children}
         </main>
-      </SidebarInset>
-    </SidebarProvider>
+      </div>
+    </div>
   );
 }
