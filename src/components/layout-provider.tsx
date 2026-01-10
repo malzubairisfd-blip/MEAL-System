@@ -14,7 +14,7 @@ import {
   SidebarTrigger,
   SidebarInset,
 } from "@/components/ui/sidebar";
-import { FileBarChart2, Upload, Microscope, ClipboardList, Home, Settings, FileDown, Globe, BarChartHorizontal, Wrench, Briefcase, ListChecks } from "lucide-react";
+import { FileBarChart2, Upload, Microscope, ClipboardList, Home, Settings, FileDown, Globe, BarChartHorizontal, Wrench, Briefcase, ListChecks, Monitor } from "lucide-react";
 import { useTranslation } from "@/hooks/use-translation";
 import { useLanguage } from "@/context/language-context";
 import {
@@ -71,12 +71,14 @@ export function LayoutProvider({ children, year }: { children: React.ReactNode, 
     setPathname(currentPathname);
   }, [currentPathname]);
   
-  const isActive = (path: string) => pathname === path;
+  const isActive = (path: string) => pathname === path || (path !== "/" && pathname.startsWith(path));
+
 
   const sidebarLinks = [
     { href: "/", icon: <Home />, label: t("sidebar.dashboard") },
     { href: "/meal-system", icon: <Briefcase />, label: "MEAL System" },
     { href: "/logframe", icon: <ListChecks />, label: "Logical Framework" },
+    { href: "/monitoring", icon: <Monitor />, label: "M&E Lifecycle" },
     { href: "/upload", icon: <Upload />, label: t("sidebar.upload") },
     { href: "/correction", icon: <Wrench />, label: 'Correction' },
     { href: "/review", icon: <Microscope />, label: t("sidebar.review") },
@@ -86,7 +88,18 @@ export function LayoutProvider({ children, year }: { children: React.ReactNode, 
     { href: "/settings", icon: <Settings />, label: t("sidebar.settings") },
   ];
 
-  const pageTitle = sidebarLinks.find(l => l.href === pathname)?.label || t(`header.${pathname.split('/').pop() || 'dashboard'}`);
+  let pageTitle = "Dashboard";
+  const activeLink = sidebarLinks.find(l => isActive(l.href) && l.href !== "/");
+  if (activeLink) {
+    pageTitle = activeLink.label;
+  } else if (pathname === "/") {
+    pageTitle = t("sidebar.dashboard");
+  } else {
+    // Fallback for nested pages not in the main sidebar
+    const pathSegments = pathname.split('/').filter(Boolean);
+    pageTitle = pathSegments.length > 0 ? pathSegments.join(' ') : 'Dashboard';
+  }
+
 
   return (
     <SidebarProvider>
