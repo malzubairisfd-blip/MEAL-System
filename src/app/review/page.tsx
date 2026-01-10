@@ -281,7 +281,7 @@ function ClusterCard({ cluster, clusterNumber, onInspect }: { cluster: Cluster, 
             </p>
           ))}
         </div>
-         <Card className="bg-slate-50 border">
+         <Card className="bg-card border">
           <CardHeader className="p-4">
             <CardTitle className="text-right text-base flex justify-between items-center">
              <span>{t('review.clusterCard.aiSummary')}</span>
@@ -304,3 +304,5 @@ function ClusterCard({ cluster, clusterNumber, onInspect }: { cluster: Cluster, 
     </Card>
   );
 }
+
+    

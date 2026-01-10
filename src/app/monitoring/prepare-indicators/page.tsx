@@ -195,12 +195,12 @@ export default function PrepareIndicatorsPage() {
                                 <TableBody>
                                     {groupedData.outcome.outputs.map((output, oIdx) => (
                                         <React.Fragment key={oIdx}>
-                                            <TableRow className="bg-blue-50 hover:bg-blue-100">
+                                            <TableRow className="bg-primary/10 hover:bg-primary/20">
                                                 <TableCell colSpan={7} className="font-bold p-3">Output {oIdx + 1}: {output.description}</TableCell>
                                             </TableRow>
                                             {output.activities.map((activity, aIdx) => (
                                                 <React.Fragment key={aIdx}>
-                                                    <TableRow className="bg-slate-50 hover:bg-slate-100">
+                                                    <TableRow className="bg-muted/50 hover:bg-muted">
                                                         <TableCell colSpan={7} className="font-semibold p-3 pl-8">Activity {oIdx + 1}.{aIdx+1}: {activity.description}</TableCell>
                                                     </TableRow>
                                                     {activity.indicators.map((indicator, iIdx) => (
@@ -238,3 +238,4 @@ export default function PrepareIndicatorsPage() {
     );
 }
 
+    

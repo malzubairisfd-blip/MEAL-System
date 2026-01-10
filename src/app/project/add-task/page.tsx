@@ -256,7 +256,7 @@ function RecursiveTaskItem({ control, index, remove, parentPath, logframe, baseA
 
 
     return (
-        <Card className="p-4 relative bg-slate-50 border-slate-200" style={{ marginLeft: `${(parentPath.split('subTasks').length -1) * 20}px` }}>
+        <Card className="p-4 relative bg-card border-border" style={{ marginLeft: `${(parentPath.split('subTasks').length -1) * 20}px` }}>
             <div className="flex justify-between items-start mb-4">
                 <h3 className="text-lg font-semibold">{`Activity ${activityNumbering}`}</h3>
                 <Button type="button" variant="ghost" size="icon" onClick={() => remove(index)}>
@@ -388,3 +388,5 @@ function RecursiveTaskArray({ control, parentPath, logframe, parentActivityNumbe
         </div>
     );
 }
+
+    

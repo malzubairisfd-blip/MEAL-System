@@ -283,7 +283,7 @@ const IndicatorCard = ({ control, indicatorIndex, removeIndicator }: { control: 
     }
     
     return (
-        <Card className="bg-slate-50 relative p-6">
+        <Card className="bg-card relative p-6">
              {indicator.isNew && (
                 <Button type="button" variant="ghost" size="icon" className="absolute top-2 right-2" onClick={() => removeIndicator(indicatorIndex)}>
                     <Trash2 className="h-4 w-4 text-destructive" />
@@ -306,7 +306,7 @@ const IndicatorCard = ({ control, indicatorIndex, removeIndicator }: { control: 
             </CardHeader>
             <CardContent className="space-y-6 p-0">
                 {unitFields.map((unitField, unitIndex) => (
-                    <Card key={unitField.id} className="bg-white relative p-6">
+                    <Card key={unitField.id} className="bg-background relative p-6">
                         <Button type="button" variant="ghost" size="icon" className="absolute top-2 right-2" onClick={() => remove(unitIndex)}>
                             <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
@@ -349,3 +349,5 @@ export default function AddIndicatorTrackingPage() {
     );
 }
 
+
+    

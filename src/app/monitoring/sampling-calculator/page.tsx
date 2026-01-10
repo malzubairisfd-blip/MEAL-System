@@ -242,7 +242,7 @@ export default function SamplingCalculatorPage() {
                                                 const calcData = samplingPlan?.calculations.find(c => c.activityId === activity.description);
                                                 if (!calcData) return null;
                                                 return (
-                                                    <Card key={aIdx} className="bg-slate-50">
+                                                    <Card key={aIdx} className="bg-card">
                                                         <CardHeader>
                                                             <CardTitle className="text-base">Activity {oIdx+1}.{aIdx+1}: {activity.description}</CardTitle>
                                                         </CardHeader>
@@ -292,3 +292,5 @@ export default function SamplingCalculatorPage() {
         </div>
     );
 }
+
+    
