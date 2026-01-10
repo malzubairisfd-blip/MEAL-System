@@ -646,11 +646,11 @@ export default function UploadPage() {
               </div>
 
               {isProcessing && (
-                  <div className="space-y-2 mt-4">
+                  <div className="space-y-2 mt-4 bg-card p-4 rounded-lg">
                     <div className="flex justify-between items-center text-sm font-medium text-muted-foreground">
                       <span>{formattedStatus()}</span>
                     </div>
-                    <div className="relative h-4 w-full overflow-hidden rounded-full bg-secondary">
+                    <div className="relative h-4 w-full overflow-hidden rounded-full bg-muted">
                       <Progress value={progressInfo.progress} className="absolute h-full w-full" />
                       <div className="absolute inset-0 flex items-center justify-center">
                         <span className="text-xs font-medium text-primary-foreground mix-blend-difference">
