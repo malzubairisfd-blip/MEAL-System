@@ -12,7 +12,7 @@ export default function DataCollectionPlanPage() {
     { title: "Prepare Monitoring indicators", icon: <Target className="h-8 w-8 text-orange-500" />, href: "/monitoring/prepare-indicators" },
     { title: "Availability of secondary data", icon: <DatabaseZap className="h-8 w-8 text-indigo-500" />, href: "#" },
     { title: "Determine the quantitative and qualitative data", icon: <Binary className="h-8 w-8 text-purple-500" />, href: "#" },
-    { title: "Determine sampling requirements", icon: <Percent className="h-8 w-8 text-sky-500" />, href: "#" },
+    { title: "Determine sampling requirements", icon: <Percent className="h-8 w-8 text-sky-500" />, href: "/monitoring/sampling-calculator" },
     { title: "Prepare for any surveys", icon: <FileQuestion className="h-8 w-8 text-green-500" />, href: "#" },
     { title: "Establish Monitoring staff selection Crietria", icon: <UserCheck className="h-8 w-8 text-red-500" />, href: "#" },
     { title: "indicator tracking table (ITT)", icon: <Sheet className="h-8 w-8 text-yellow-500" />, href: "#" },
