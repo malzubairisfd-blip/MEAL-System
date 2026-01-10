@@ -69,7 +69,7 @@ function ClientOnlyLanguageSwitcher() {
 export function LayoutProvider({ children, year }: { children: React.ReactNode, year: number }) {
   const currentPathname = usePathname();
   const [pathname, setPathname] = useState(currentPathname);
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(true);
   const { t, isLoading: isTranslationLoading } = useTranslation();
 
   useEffect(() => {
@@ -109,20 +109,19 @@ export function LayoutProvider({ children, year }: { children: React.ReactNode, 
     <div className="flex min-h-screen">
       <aside
         className={cn(
-          "bg-card text-card-foreground border-r transition-all duration-300 ease-in-out flex flex-col",
+          "bg-card text-card-foreground border-r transition-all duration-300 ease-in-out flex flex-col fixed h-full z-50",
           isCollapsed ? "w-20" : "w-64"
         )}
+        onMouseEnter={() => setIsCollapsed(false)}
+        onMouseLeave={() => setIsCollapsed(true)}
       >
-        <div className="flex items-center justify-between p-4 border-b">
+        <div className="flex items-center justify-between p-4 border-b h-14">
            <div className={cn("flex items-center gap-2", isCollapsed && "hidden")}>
              <FileBarChart2 className="size-6 text-primary" />
              <span className="text-lg font-semibold">Beneficiary Insights</span>
            </div>
-           <Button variant="ghost" size="icon" onClick={() => setIsCollapsed(!isCollapsed)} className="ml-auto">
-             <ChevronLeft className={cn("transition-transform", isCollapsed && "rotate-180")} />
-           </Button>
         </div>
-        <nav className="flex-1 px-4 py-4 space-y-2">
+        <nav className="flex-1 px-4 py-4 space-y-2 overflow-y-auto">
           {isTranslationLoading ? (
             Array.from({length: 5}).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)
           ) : (
@@ -138,7 +137,7 @@ export function LayoutProvider({ children, year }: { children: React.ReactNode, 
                 title={isCollapsed ? link.label : undefined}
               >
                 {link.icon}
-                <span className={cn(isCollapsed && "hidden")}>{link.label}</span>
+                <span className={cn("whitespace-nowrap", isCollapsed && "hidden")}>{link.label}</span>
               </Link>
             ))
           )}
@@ -150,8 +149,8 @@ export function LayoutProvider({ children, year }: { children: React.ReactNode, 
         </div>
       </aside>
 
-      <div className="flex flex-col flex-1">
-        <header className="flex h-14 items-center gap-4 border-b bg-card px-6">
+      <div className={cn("flex flex-col flex-1 transition-all duration-300 ease-in-out", isCollapsed ? "pl-20" : "pl-64")}>
+        <header className="flex h-14 items-center gap-4 border-b bg-card px-6 sticky top-0 z-40">
             <div className="flex-1">
                 {isTranslationLoading ? <Skeleton className="h-6 w-32" /> : <h1 className="text-lg font-semibold capitalize">{pageTitle}</h1>}
             </div>
