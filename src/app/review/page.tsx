@@ -141,59 +141,6 @@ export default function ReviewPage() {
     }
     setIsSaving(false);
   };
-  
-    useEffect(() => {
-    if (!selectedCluster || selectedClusterIndex === null) return;
-
-    handleUpdateClusterDecision(selectedClusterIndex, (c) => {
-      const cluster = { ...c };
-      const recordDecisions = cluster.recordDecisions || {};
-      const newReasons: { [key: string]: string } = {};
-
-      const keptRecord = cluster.records.find(
-        (r) => recordDecisions[r._internalId!] === "تبقى"
-      );
-      const verifyRecord = cluster.records.find(
-        (r) => recordDecisions[r._internalId!] === "تحقق"
-      );
-
-      cluster.records.forEach((record) => {
-        const decision = recordDecisions[record._internalId!];
-        if (decision === "مكررة") {
-          const targetRecord = keptRecord || verifyRecord;
-          if (targetRecord) {
-            newReasons[record._internalId!] = `مستفيدة مكررة مع ${
-              targetRecord.beneficiaryId
-            } - ${targetRecord.womanName || ""}`;
-          }
-        } else if (decision === "تحقق") {
-          const otherVerify = cluster.records.find(
-            (r) =>
-              r._internalId !== record._internalId &&
-              recordDecisions[r._internalId!] === "تحقق"
-          );
-          const target =
-            otherVerify ||
-            keptRecord ||
-            cluster.records.find(
-              (r) => recordDecisions[r._internalId!] === "ليست تكرار"
-            ) ||
-            cluster.records.find(
-              (r) => recordDecisions[r._internalId!] === "مكررة"
-            );
-
-          if (target) {
-            newReasons[record._internalId!] = `اشتباه تكرار مع ${
-              target.beneficiaryId
-            } - ${target.womanName || ""}`;
-          }
-        }
-      });
-      cluster.decisionReasons = { ...cluster.decisionReasons, ...newReasons };
-      return cluster;
-    });
-  }, [allClusters, selectedCluster, selectedClusterIndex]);
-
 
   if (loading) {
     return (
@@ -344,13 +291,59 @@ const SmartphoneScreen = ({
   };
 
   const handleRecordDecisionChange = (recordId: string, decision: string) => {
-    onUpdateDecision(clusterIndex, (c) => {
-        const newDecisions = { ...(c.recordDecisions || {}), [recordId]: decision };
-        // Auto-select "تبقى" for the first record if group is "تكرار"
-        if (decision === "تكرار" && Object.keys(newDecisions).length === 1) {
-            newDecisions[c.records[0]._internalId!] = 'تبقى';
+    onUpdateDecision(clusterIndex, (currentCluster) => {
+        let newDecisions = { ...(currentCluster.recordDecisions || {}), [recordId]: decision };
+        
+        // Auto-select "تبقى" for the first record if group is "تكرار" and it's the first decision
+        if (cluster.groupDecision === 'تكرار' && Object.keys(newDecisions).length === 1) {
+            newDecisions[cluster.records[0]._internalId!] = 'تبقى';
         }
-        return { ...c, recordDecisions: newDecisions };
+
+        // --- Start of logic moved from useEffect ---
+        const newReasons: { [key: string]: string } = {};
+
+        const keptRecord = cluster.records.find(
+          (r) => newDecisions[r._internalId!] === "تبقى"
+        );
+        const verifyRecord = cluster.records.find(
+          (r) => newDecisions[r._internalId!] === "تحقق"
+        );
+
+        cluster.records.forEach((record) => {
+          const currentDecision = newDecisions[record._internalId!];
+          if (currentDecision === "مكررة") {
+            const targetRecord = keptRecord || verifyRecord;
+            if (targetRecord) {
+              newReasons[record._internalId!] = `مستفيدة مكررة مع ${
+                targetRecord.beneficiaryId
+              } - ${targetRecord.womanName || ""}`;
+            }
+          } else if (currentDecision === "تحقق") {
+            const otherVerify = cluster.records.find(
+              (r) =>
+                r._internalId !== record._internalId &&
+                newDecisions[r._internalId!] === "تحقق"
+            );
+            const target =
+              otherVerify ||
+              keptRecord ||
+              cluster.records.find(
+                (r) => newDecisions[r._internalId!] === "ليست تكرار"
+              ) ||
+              cluster.records.find(
+                (r) => newDecisions[r._internalId!] === "مكررة"
+              );
+
+            if (target) {
+              newReasons[record._internalId!] = `اشتباه تكرار مع ${
+                target.beneficiaryId
+              } - ${target.womanName || ""}`;
+            }
+          }
+        });
+        // --- End of logic moved from useEffect ---
+
+        return { ...currentCluster, recordDecisions: newDecisions, decisionReasons: { ...(currentCluster.decisionReasons || {}), ...newReasons } };
     });
     // Move to next record automatically
     if (activeRecordIndex !== null && activeRecordIndex < cluster.records.length - 1) {
