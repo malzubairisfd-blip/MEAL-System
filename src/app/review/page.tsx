@@ -88,7 +88,8 @@ export default function ReviewPage() {
       );
       setAllClusters(sortedClusters);
       if (sortedClusters.length > 0) {
-        setSelectedClusterIndex(0);
+        const firstUnreviewedIndex = sortedClusters.findIndex(c => !c.groupDecision);
+        setSelectedClusterIndex(firstUnreviewedIndex !== -1 ? firstUnreviewedIndex : 0);
       }
     } else {
       toast({
