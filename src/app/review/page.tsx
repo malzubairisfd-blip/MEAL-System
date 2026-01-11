@@ -152,7 +152,7 @@ export default function ReviewPage() {
 
 
   const handleRecordDecisionChange = useCallback((recordId: string, decision: string) => {
-    if (selectedClusterIndex === null) return;
+    if (selectedClusterIndex === null || !selectedCluster) return;
   
     handleUpdateClusterDecision(selectedClusterIndex, (currentCluster) => {
       let newDecisions = { ...(currentCluster.recordDecisions || {}), [recordId]: decision };
@@ -180,14 +180,14 @@ export default function ReviewPage() {
       return { ...currentCluster, recordDecisions: newDecisions, decisionReasons: { ...(currentCluster.decisionReasons || {}), ...newReasons } };
     });
   
-    const currentIndex = cluster.records.findIndex(r => r._internalId === recordId);
-    if (currentIndex < cluster.records.length - 1) {
+    const currentIndex = selectedCluster.records.findIndex(r => r._internalId === recordId);
+    if (currentIndex < selectedCluster.records.length - 1) {
       setActiveRecordIndex(currentIndex + 1);
     } else {
       setActiveRecordIndex(null); // Mark as done
       handleSaveAndNext(); // Auto-save and move to next cluster
     }
-  }, [selectedClusterIndex, handleUpdateClusterDecision, cluster, handleSaveAndNext]);
+  }, [selectedClusterIndex, handleUpdateClusterDecision, selectedCluster, handleSaveAndNext]);
 
   const handleGroupDecisionChange = useCallback((value: "تكرار" | "ليست تكرار") => {
     if (selectedClusterIndex === null) return;
@@ -366,7 +366,7 @@ const SmartphoneScreen = ({
       <div className="p-3 border-b flex justify-between items-center">
         <h2 className="font-bold text-center text-sm">المجموعة ({cluster.records.length} سجلات)</h2>
          <div className="w-48">
-            <Label className="text-xs">قرار المجموعة</Label>
+            <Label>قرار المجموعة</Label>
             <Select onValueChange={onGroupDecisionChange} value={cluster.groupDecision}>
               <SelectTrigger className="h-8">
                 <SelectValue placeholder="اختر قرارًا..." />
@@ -431,4 +431,3 @@ const SmartphoneScreen = ({
     </div>
   );
 };
-
