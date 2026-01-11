@@ -1,306 +1,493 @@
 
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import type { RecordRow } from "@/lib/types";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { Loader2, Search, ChevronLeft, AlertTriangle, ChevronRight, PieChart, Microscope } from "lucide-react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Loader2,
+  ChevronLeft,
+  Smartphone,
+  ChevronDown,
+  ChevronUp,
+  Save,
+  Users,
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
-import { PairwiseModal } from "@/components/PairwiseModal";
-import { generateArabicClusterSummary, getDecisionAndNote } from "@/lib/arabicClusterSummary";
 import { useTranslation } from "@/hooks/use-translation";
-import { DecisionPieChart } from "@/components/DecisionPieChart";
-import { loadCachedResult } from "@/lib/cache";
-
+import { loadCachedResult, cacheFinalResult } from "@/lib/cache";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
+import { cn } from "@/lib/utils";
 
 type Cluster = {
   records: RecordRow[];
   reasons: string[];
-  avgWomanNameScore?: number;
-  avgHusbandNameScore?: number;
-  avgFinalScore?: number;
-  confidenceScore?: number;
-  pairScores?: any[];
+  pairScores: any[];
+  confidenceScore: number;
+  Max_PairScore: number;
+  // Fields for review decisions
+  groupDecision?: "تكرار" | "ليست تكرار";
+  recordDecisions?: { [recordId: string]: string };
+  decisionReasons?: { [recordId: string]: string };
 };
 
 export default function ReviewPage() {
   const { t } = useTranslation();
   const [allClusters, setAllClusters] = useState<Cluster[]>([]);
-  const [filteredClusters, setFilteredClusters] = useState<Cluster[]>([]);
-  const [selectedCluster, setSelectedCluster] = useState<Cluster | null>(null);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+  const [selectedClusterIndex, setSelectedClusterIndex] = useState<number | null>(
+    null
+  );
+  const [activeRecordIndex, setActiveRecordIndex] = useState<number | null>(null);
   const { toast } = useToast();
 
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(9);
+  const loadClusters = useCallback(async () => {
+    setLoading(true);
+    const result = await loadCachedResult();
 
-  useEffect(() => {
-    async function getData() {
-      setLoading(true);
-      const result = await loadCachedResult();
-
-      if (result) {
-        const clusters = result.clusters || [];
-        setAllClusters(clusters);
-
-        if (clusters.length === 0) {
-          toast({ title: t('review.toasts.noClustersFound.title'), description: t('review.toasts.noClustersFound.description'), variant: "default" });
-        }
-
-      } else {
-        toast({ title: t('review.toasts.noData.title'), description: t('review.toasts.noData.description'), variant: "destructive" });
-      }
-      setLoading(false);
-    }
-    getData();
-  }, [toast, t]);
-
-
-  useEffect(() => {
-    const applyFilter = () => {
-      if (!search.trim()) {
-        setFilteredClusters(allClusters);
-        return;
-      }
-      const s = search.toLowerCase();
-      const filtered = allClusters.filter((cluster) =>
-        cluster.records.some(
-          (r) =>
-            String(r.womanName ?? '').toLowerCase().includes(s) ||
-            String(r.husbandName ?? '').toLowerCase().includes(s) ||
-            String(r.phone ?? '').toLowerCase().includes(s)
-        )
+    if (result && result.clusters) {
+      const sortedClusters = [...result.clusters].sort(
+        (a, b) => (b.Max_PairScore || 0) - (a.Max_PairScore || 0)
       );
-      setFilteredClusters(filtered);
-      setCurrentPage(1); // Reset to first page on new search
-    };
-    applyFilter();
-  }, [search, allClusters]);
-  
-  const decisionChartData = useMemo(() => {
-    if (loading || allClusters.length === 0) {
-      return [];
+      setAllClusters(sortedClusters);
+      if (sortedClusters.length > 0) {
+        setSelectedClusterIndex(0);
+        setActiveRecordIndex(0);
+      }
+    } else {
+      toast({
+        title: t("review.toasts.noData.title"),
+        description: t("review.toasts.noData.description"),
+        variant: "destructive",
+      });
     }
+    setLoading(false);
+  }, [t, toast]);
 
-    const decisionCounts: Record<string, number> = {
-        'تكرار مؤكد': 0,
-        'اشتباه تكرار مؤكد': 0,
-        'اشتباه تكرار': 0,
-        'إحتمالية تكرار': 0
-    };
+  useEffect(() => {
+    loadClusters();
+  }, [loadClusters]);
 
-    allClusters.forEach(cluster => {
-        const { decision } = getDecisionAndNote(cluster.confidenceScore || 0);
-        if (decision in decisionCounts) {
-            decisionCounts[decision as keyof typeof decisionCounts]++;
-        }
-    });
-
-    return Object.entries(decisionCounts).map(([decision, count]) => ({
-      name: decision,
-      value: count,
-    }));
-  }, [allClusters, loading]);
-
-
-  const handleInspect = (cluster: Cluster) => {
-    setSelectedCluster(cluster);
-  }
-
-  const indexOfLastItem = currentPage * itemsPerPage;
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentClusters = filteredClusters.slice(indexOfFirstItem, indexOfLastItem);
-  const totalPages = Math.ceil(filteredClusters.length / itemsPerPage);
-
-  const paginate = (pageNumber: number) => {
-    if (pageNumber > 0 && pageNumber <= totalPages) {
-      setCurrentPage(pageNumber);
+  const selectedCluster = useMemo(() => {
+    if (selectedClusterIndex === null || !allClusters[selectedClusterIndex]) {
+      return null;
     }
+    return allClusters[selectedClusterIndex];
+  }, [selectedClusterIndex, allClusters]);
+
+  const handleUpdateClusterDecision = (
+    clusterIndex: number,
+    updateFn: (cluster: Cluster) => Cluster
+  ) => {
+    setAllClusters((prev) =>
+      prev.map((c, i) => (i === clusterIndex ? updateFn(c) : c))
+    );
   };
 
+  const handleSaveAndNext = async () => {
+    if (selectedClusterIndex === null || !selectedCluster) return;
+
+    // Validation
+    if (
+      selectedCluster.groupDecision === "تكرار" &&
+      !Object.values(selectedCluster.recordDecisions || {}).some(
+        (d) => d === "تبقى"
+      )
+    ) {
+      toast({
+        title: "خطأ في التحقق",
+        description: "عندما تكون المجموعة مكررة، يجب أن يبقى سجل واحد على الأقل.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsSaving(true);
+    const currentData = await loadCachedResult();
+    const newClusters = [...allClusters];
+    await cacheFinalResult({ ...currentData, clusters: newClusters });
+
+    toast({
+      title: "تم الحفظ",
+      description: `تم حفظ القرارات للمجموعة ${selectedClusterIndex + 1}.`,
+    });
+
+    if (selectedClusterIndex < allClusters.length - 1) {
+      setSelectedClusterIndex(selectedClusterIndex + 1);
+      setActiveRecordIndex(0);
+    } else {
+      toast({
+        title: "اكتملت المراجعة",
+        description: "لقد قمت بمراجعة جميع المجموعات.",
+      });
+    }
+    setIsSaving(false);
+  };
+  
+    useEffect(() => {
+    if (!selectedCluster || selectedClusterIndex === null) return;
+
+    handleUpdateClusterDecision(selectedClusterIndex, (c) => {
+      const cluster = { ...c };
+      const recordDecisions = cluster.recordDecisions || {};
+      const newReasons: { [key: string]: string } = {};
+
+      const keptRecord = cluster.records.find(
+        (r) => recordDecisions[r._internalId!] === "تبقى"
+      );
+      const verifyRecord = cluster.records.find(
+        (r) => recordDecisions[r._internalId!] === "تحقق"
+      );
+
+      cluster.records.forEach((record) => {
+        const decision = recordDecisions[record._internalId!];
+        if (decision === "مكررة") {
+          const targetRecord = keptRecord || verifyRecord;
+          if (targetRecord) {
+            newReasons[record._internalId!] = `مستفيدة مكررة مع ${
+              targetRecord.beneficiaryId
+            } - ${targetRecord.womanName || ""}`;
+          }
+        } else if (decision === "تحقق") {
+          const otherVerify = cluster.records.find(
+            (r) =>
+              r._internalId !== record._internalId &&
+              recordDecisions[r._internalId!] === "تحقق"
+          );
+          const target =
+            otherVerify ||
+            keptRecord ||
+            cluster.records.find(
+              (r) => recordDecisions[r._internalId!] === "ليست تكرار"
+            ) ||
+            cluster.records.find(
+              (r) => recordDecisions[r._internalId!] === "مكررة"
+            );
+
+          if (target) {
+            newReasons[record._internalId!] = `اشتباه تكرار مع ${
+              target.beneficiaryId
+            } - ${target.womanName || ""}`;
+          }
+        }
+      });
+      cluster.decisionReasons = { ...cluster.decisionReasons, ...newReasons };
+      return cluster;
+    });
+  }, [allClusters, selectedCluster, selectedClusterIndex]);
+
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <p className="ml-4">جاري تحميل المجموعات...</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-6">
-      <Card>
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full max-h-[calc(100vh-10rem)]">
+      {/* Cluster List */}
+      <Card className="lg:col-span-1 flex flex-col">
         <CardHeader>
-          <div className="flex justify-between items-start">
-            <div>
-              <CardTitle>{t('review.title')}</CardTitle>
-              <CardDescription>
-                {t('review.description', {filteredClusters: filteredClusters.length, allClusters: allClusters.length})}
-              </CardDescription>
-            </div>
-             <div className="flex flex-col sm:flex-row gap-2">
-                <Button variant="outline" asChild>
-                    <Link href="/upload">
-                        <ChevronLeft className="mr-2 h-4 w-4" />
-                        {t('review.buttons.backToUpload')}
-                    </Link>
-                </Button>
-                <Button asChild>
-                    <Link href="/audit">
-                        {t('review.buttons.goToAudit')}
-                        <AlertTriangle className="ml-2 h-4 w-4" />
-                    </Link>
-                </Button>
-            </div>
-          </div>
+          <CardTitle>قائمة المجموعات</CardTitle>
+          <CardDescription>
+            تم العثور على {allClusters.length} مجموعات، مرتبة حسب الثقة.
+          </CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="mb-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
-             <div className="lg:col-span-2">
-                  <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      type="text"
-                      placeholder={t('review.searchPlaceholder')}
-                      className="pl-10"
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                    />
-                  </div>
-              </div>
-              <Card className="lg:col-span-1">
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <CardTitle className="text-sm font-medium">Final Decision Distribution</CardTitle>
-                      <PieChart className="h-4 w-4 text-muted-foreground" />
-                  </CardHeader>
-                  <CardContent className="p-0 h-48">
-                      {loading ? (
-                           <div className="flex items-center justify-center h-full text-muted-foreground">
-                                <Loader2 className="h-6 w-6 animate-spin" />
-                           </div>
-                      ) : (
-                          <DecisionPieChart data={decisionChartData} />
-                      )}
-                  </CardContent>
-              </Card>
-          </div>
-                    
-          {loading ? (
-            <div className="text-center text-muted-foreground py-10">
-                <Loader2 className="mx-auto h-8 w-8 animate-spin" />
-                <p className="mt-2">{t('review.loading')}</p>
-            </div>
-          ) : currentClusters.length > 0 ? (
-            <>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {currentClusters.map((c, idx) => {
-                  const clusterId = c.records.map(r => r._internalId).sort().join('-');
-                  return (
-                    <ClusterCard 
-                      key={clusterId}
-                      cluster={c} 
-                      clusterNumber={(currentPage - 1) * itemsPerPage + idx + 1}
-                      onInspect={() => handleInspect(c)}
-                    />
-                  )
-                })}
-              </div>
-              {totalPages > 1 && (
-                <div className="flex justify-center items-center gap-4 mt-6">
-                  <Button variant="outline" onClick={() => paginate(currentPage - 1)} disabled={currentPage === 1}>
-                    <ChevronLeft className="mr-2 h-4 w-4" />
-                    {t('review.previous')}
-                  </Button>
-                  <span className="text-sm text-muted-foreground">
-                    {t('review.pagination', {currentPage: currentPage, totalPages: totalPages})}
+        <CardContent className="flex-1 overflow-y-auto">
+          <div className="space-y-2">
+            {allClusters.map((cluster, index) => (
+              <button
+                key={index}
+                onClick={() => {
+                  setSelectedClusterIndex(index);
+                  setActiveRecordIndex(0);
+                }}
+                className={cn(
+                  "w-full text-left p-3 rounded-lg border transition-colors",
+                  selectedClusterIndex === index
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "hover:bg-muted"
+                )}
+              >
+                <div className="flex justify-between items-center">
+                  <span className="font-semibold">
+                    المجموعة {index + 1} ({cluster.records.length} سجلات)
                   </span>
-                  <Button variant="outline" onClick={() => paginate(currentPage + 1)} disabled={currentPage === totalPages}>
-                    {t('review.next')}
-                    <ChevronRight className="h-4 w-4 ml-2" />
-                  </Button>
+                  <span
+                    className={cn(
+                      "font-bold text-lg",
+                      (cluster.Max_PairScore || 0) >= 0.8
+                        ? "text-red-500"
+                        : (cluster.Max_PairScore || 0) >= 0.7
+                        ? "text-orange-500"
+                        : "text-green-500"
+                    )}
+                  >
+                    {Math.round((cluster.Max_PairScore || 0) * 100)}%
+                  </span>
                 </div>
-              )}
-            </>
-          ) : (
-             <div className="text-center text-muted-foreground py-10">
-                <p>{t('review.noClusters')}{search ? t('review.noClustersForQuery') : ''}.</p>
-            </div>
-          )}
+                <p className="text-xs truncate">
+                  {cluster.records.map((r) => r.womanName).join(" | ")}
+                </p>
+              </button>
+            ))}
+          </div>
         </CardContent>
       </Card>
 
-      {selectedCluster && (
-        <PairwiseModal
-          cluster={selectedCluster}
-          isOpen={!!selectedCluster}
-          onClose={() => setSelectedCluster(null)}
-        />
-      )}
+      {/* Smartphone Panel */}
+      <div className="lg:col-span-2 flex items-center justify-center">
+        {selectedCluster ? (
+          <SmartphoneShell>
+            <SmartphoneScreen
+              cluster={selectedCluster}
+              clusterIndex={selectedClusterIndex!}
+              activeRecordIndex={activeRecordIndex}
+              setActiveRecordIndex={setActiveRecordIndex}
+              onUpdateDecision={handleUpdateClusterDecision}
+            />
+          </SmartphoneShell>
+        ) : (
+          <div className="text-center text-muted-foreground">
+            <Users className="mx-auto h-12 w-12" />
+            <p className="mt-2">حدد مجموعة من القائمة لبدء المراجعة.</p>
+          </div>
+        )}
+      </div>
+      
+       {/* Decision Panel */}
+       <Card className="lg:col-span-3">
+          <CardHeader>
+            <CardTitle>لوحة القرار</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+               {selectedCluster && selectedClusterIndex !== null && (
+                <div>
+                  <h3 className="font-semibold mb-2">ملخص القرار للمجموعة {selectedClusterIndex + 1}</h3>
+                   <div className="p-4 bg-muted rounded-lg space-y-2 text-sm">
+                      <p><strong>قرار المجموعة:</strong> {selectedCluster.groupDecision || 'لم يحدد'}</p>
+                       <div><strong>قرارات السجلات:</strong>
+                         <ul className="list-disc pl-5">
+                          {selectedCluster.records.map(r => (
+                              <li key={r._internalId}>
+                                  <span className="font-semibold">{r.womanName}:</span> 
+                                  <span className="ml-2">{selectedCluster.recordDecisions?.[r._internalId!] || 'لم يحدد'}</span>
+                                  {selectedCluster.decisionReasons?.[r._internalId!] && <span className="text-xs text-muted-foreground ml-2">({selectedCluster.decisionReasons[r._internalId!]})</span>}
+                              </li>
+                          ))}
+                         </ul>
+                      </div>
+                   </div>
+                </div>
+               )}
+               <div className="flex justify-end">
+                <Button onClick={handleSaveAndNext} disabled={isSaving}>
+                    {isSaving ? <Loader2 className="animate-spin mr-2" /> : <Save className="mr-2" />}
+                    حفظ وتحميل المجموعة التالية
+                </Button>
+               </div>
+          </CardContent>
+       </Card>
     </div>
   );
 }
 
+const SmartphoneShell = ({ children }: { children: React.ReactNode }) => (
+  <div className="relative mx-auto border-gray-800 dark:border-gray-800 bg-gray-800 border-[14px] rounded-[2.5rem] h-[700px] w-[350px] shadow-xl">
+    <div className="w-[148px] h-[18px] bg-gray-800 top-0 rounded-b-[1rem] left-1/2 -translate-x-1/2 absolute"></div>
+    <div className="h-[46px] w-[3px] bg-gray-800 absolute -left-[17px] top-[124px] rounded-l-lg"></div>
+    <div className="h-[46px] w-[3px] bg-gray-800 absolute -left-[17px] top-[178px] rounded-l-lg"></div>
+    <div className="h-[64px] w-[3px] bg-gray-800 absolute -right-[17px] top-[142px] rounded-r-lg"></div>
+    <div className="rounded-[2rem] overflow-hidden w-full h-full bg-background">
+      {children}
+    </div>
+  </div>
+);
 
-function ClusterCard({ cluster, clusterNumber, onInspect }: { cluster: Cluster, clusterNumber: number, onInspect: () => void }) {
-  const { t } = useTranslation();
-  const summaryHtml = generateArabicClusterSummary({
-      reasons: cluster.reasons,
-      avgWomanNameScore: cluster.avgWomanNameScore,
-      avgHusbandNameScore: cluster.avgHusbandNameScore,
-      avgFinalScore: cluster.avgFinalScore,
-      confidenceScore: cluster.confidenceScore
-  }, cluster.records);
-  const confidenceScore = cluster.confidenceScore;
+const SmartphoneScreen = ({
+  cluster,
+  clusterIndex,
+  activeRecordIndex,
+  setActiveRecordIndex,
+  onUpdateDecision,
+}: {
+  cluster: Cluster;
+  clusterIndex: number;
+  activeRecordIndex: number | null;
+  setActiveRecordIndex: (index: number | null) => void;
+  onUpdateDecision: (index: number, fn: (c: Cluster) => Cluster) => void;
+}) => {
 
-  const getScoreColor = (score?: number | null) => {
-    if (score == null) return "text-gray-500";
-    if (score >= 90) return "text-red-600 font-bold";
-    if (score >= 75) return "text-orange-500 font-semibold";
-    if (score >= 60) return "text-blue-600";
-    return "text-gray-600";
+  const handleGroupDecisionChange = (value: "تكرار" | "ليست تكرار") => {
+    onUpdateDecision(clusterIndex, (c) => ({ ...c, groupDecision: value }));
+  };
+
+  const handleRecordDecisionChange = (recordId: string, decision: string) => {
+    onUpdateDecision(clusterIndex, (c) => {
+        const newDecisions = { ...(c.recordDecisions || {}), [recordId]: decision };
+        // Auto-select "تبقى" for the first record if group is "تكرار"
+        if (decision === "تكرار" && Object.keys(newDecisions).length === 1) {
+            newDecisions[c.records[0]._internalId!] = 'تبقى';
+        }
+        return { ...c, recordDecisions: newDecisions };
+    });
+    // Move to next record automatically
+    if (activeRecordIndex !== null && activeRecordIndex < cluster.records.length - 1) {
+        setActiveRecordIndex(activeRecordIndex + 1);
+    } else {
+        setActiveRecordIndex(null); // All done
+    }
   };
   
-  const displayConfidence = confidenceScore !== undefined ? Math.round(confidenceScore) : null;
-  
+  const handleExclusionReasonChange = (recordId: string, reason: string) => {
+     onUpdateDecision(clusterIndex, c => ({ ...c, decisionReasons: { ...(c.decisionReasons || {}), [recordId]: reason }}));
+  };
+
   return (
-    <Card className="flex flex-col hover:shadow-md transition-shadow">
-      <CardHeader>
-        <div className="flex justify-between items-start">
+    <div className="h-full flex flex-col">
+      <div className="p-4 border-b">
+        <h2 className="font-bold text-center">المجموعة {clusterIndex + 1}</h2>
+        <p className="text-xs text-muted-foreground text-center">
+          {cluster.records.length} سجلات
+        </p>
+      </div>
+      <ScrollArea className="flex-1">
+        <div className="p-4 space-y-4">
           <div>
-            <CardTitle>Cluster {clusterNumber}</CardTitle>
-            <CardDescription>{cluster.records.length} {t('review.clusterCard.records')}</CardDescription>
+            <Label>قرار المجموعة</Label>
+            <Select
+              onValueChange={handleGroupDecisionChange}
+              value={cluster.groupDecision}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="اختر قرارًا للمجموعة..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="تكرار">تكرار</SelectItem>
+                <SelectItem value="ليست تكرار">ليست تكرار</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
-           <div className="text-right">
-              <p className="text-xs text-muted-foreground">{t('review.clusterCard.confidence')}</p>
-              <strong className={`text-lg ${getScoreColor(displayConfidence)}`}>
-                {displayConfidence === null ? <Loader2 className="h-4 w-4 animate-spin" /> : `${displayConfidence}%`}
-              </strong>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="flex-1 space-y-4">
-        <div className="space-y-2 text-sm">
-          {cluster.records.slice(0, 3).map((r, i) => (
-            <p key={i} className="truncate" title={r.womanName}>
-              {r.womanName}
-            </p>
+          <Separator />
+          {cluster.records.map((record, index) => (
+            <RecordCard
+              key={record._internalId}
+              record={record}
+              isActive={index === activeRecordIndex}
+              onSelect={() => setActiveRecordIndex(index)}
+              decision={cluster.recordDecisions?.[record._internalId!]}
+              onDecisionChange={(decision) => handleRecordDecisionChange(record._internalId!, decision)}
+              exclusionReason={cluster.decisionReasons?.[record._internalId!]}
+              onExclusionReasonChange={(reason) => handleExclusionReasonChange(record._internalId!, reason)}
+            />
           ))}
         </div>
-         <Card className="bg-card border">
-          <CardHeader className="p-4">
-            <CardTitle className="text-right text-base flex justify-between items-center">
-             <span>{t('review.clusterCard.aiSummary')}</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="text-right p-4 pt-0 bg-gray-200">
-             <div
-              className="text-sm text-black leading-relaxed"
-              dangerouslySetInnerHTML={{ __html: summaryHtml }}
-            />
-          </CardContent>
-        </Card>
-      </CardContent>
-      <CardFooter className="flex flex-col sm:flex-row gap-2">
-        <Button variant="outline" className="w-full" onClick={onInspect}>
-          <Microscope className="mr-2 h-4 w-4" />
-          {t('review.clusterCard.inspect')}
-        </Button>
-      </CardFooter>
+      </ScrollArea>
+    </div>
+  );
+};
+
+const RecordCard = ({
+  record,
+  isActive,
+  onSelect,
+  decision,
+  onDecisionChange,
+  exclusionReason,
+  onExclusionReasonChange
+}: {
+  record: RecordRow;
+  isActive: boolean;
+  onSelect: () => void;
+  decision?: string;
+  onDecisionChange: (decision: string) => void;
+  exclusionReason?: string;
+  onExclusionReasonChange: (reason: string) => void;
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <Card
+      className={cn(
+        "transition-all",
+        isActive ? "border-primary shadow-lg" : "border-border"
+      )}
+    >
+      <CardHeader className="p-3 cursor-pointer" onClick={() => { onSelect(); setIsOpen(!isOpen); }}>
+        <div className="flex justify-between items-center">
+          <p className="font-semibold text-sm truncate">{record.womanName}</p>
+          {isOpen ? <ChevronUp className="h-4 w-4"/> : <ChevronDown className="h-4 w-4"/>}
+        </div>
+      </CardHeader>
+      {isOpen && (
+        <CardContent className="p-3 pt-0 text-xs space-y-2">
+          <p>
+            <strong>المستفيد:</strong> {record.beneficiaryId}
+          </p>
+          <p>
+            <strong>الزوج:</strong> {record.husbandName}
+          </p>
+          <p>
+            <strong>الرقم القومي:</strong> {record.nationalId}
+          </p>
+          <p>
+            <strong>الهاتف:</strong> {record.phone}
+          </p>
+           <p>
+            <strong>الموقع:</strong> {record.village}
+          </p>
+          <div className="pt-2">
+            <Label>قرار السجل</Label>
+            <Select onValueChange={onDecisionChange} value={decision}>
+              <SelectTrigger>
+                <SelectValue placeholder="اختر قرارًا..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="مكررة">مكررة</SelectItem>
+                <SelectItem value="ليست تكرار">ليست تكرار</SelectItem>
+                <SelectItem value="تبقى">تبقى</SelectItem>
+                <SelectItem value="تحقق">تحقق</SelectItem>
+                <SelectItem value="مستبعدة">مستبعدة</SelectItem>
+              </SelectContent>
+            </Select>
+             {decision === 'مستبعدة' && (
+                <div className="mt-2">
+                    <Label>سبب الاستبعاد</Label>
+                    <Select onValueChange={onExclusionReasonChange} value={exclusionReason}>
+                        <SelectTrigger>
+                            <SelectValue placeholder="اختر سببًا..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="عدم انطباق المعايير على المستفيدة">عدم انطباق المعايير على المستفيدة</SelectItem>
+                            <SelectItem value="تكرار في الاستفادة مثقفة/مستفيدة">تكرار في الاستفادة مثقفة/مستفيدة</SelectItem>
+                            <SelectItem value="انتقال سكن وإقامة المستفيدة خارج منطقة المشروع">انتقال سكن وإقامة المستفيدة خارج منطقة المشروع</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+            )}
+          </div>
+        </CardContent>
+      )}
     </Card>
   );
-}
+};
