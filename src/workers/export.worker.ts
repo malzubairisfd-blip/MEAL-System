@@ -73,7 +73,7 @@ self.onmessage = async (event) => {
           [arrayBuffer]
         );
         
-    } catch (error: any) {
+    } catch (error: any) => {
         safePostMessage({ type: 'error', data: error instanceof Error ? error.message : String(error) });
     }
 };
@@ -129,7 +129,8 @@ function enrichData(cachedData: any): { enrichedRecords: EnrichedRecord[], enric
         
         clusterMaxScores.set(clusterId, maxPairScoreInCluster);
 
-        const { decision, expertNote } = getDecisionAndNote(cluster.confidenceScore || 0);
+        const { decision } = getDecisionAndNote(cluster.confidenceScore || 0);
+        const expertNote = generateArabicClusterSummary(cluster, cluster.records).replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]*>?/gm, '').trim();
         
         return {
             ...cluster,
