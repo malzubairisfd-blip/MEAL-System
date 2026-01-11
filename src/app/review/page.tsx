@@ -43,7 +43,6 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Separator } from "@/components/ui/separator";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import {
@@ -197,7 +196,7 @@ export default function ReviewPage() {
       setActiveRecordIndex(null); // Mark as done
       handleSaveAndNext(); // Auto-save and move to next cluster
     }
-  }, [selectedClusterIndex, handleUpdateClusterDecision, selectedCluster, handleSaveAndNext]);
+  }, [selectedClusterIndex, selectedCluster, handleUpdateClusterDecision, handleSaveAndNext]);
 
   const handleGroupDecisionChange = useCallback((value: "تكرار" | "ليست تكرار") => {
     if (selectedClusterIndex === null) return;
@@ -250,7 +249,7 @@ export default function ReviewPage() {
                   selectedClusterIndex === index
                     ? "bg-primary text-primary-foreground border-primary"
                     : "hover:bg-muted",
-                  cluster.groupDecision && selectedClusterIndex !== index && "bg-green-100 dark:bg-green-900/30 border-green-500"
+                  cluster.groupDecision && "bg-green-100 dark:bg-green-900/30 border-green-500"
                 )}
               >
                 <div className="flex justify-between items-center">
@@ -352,7 +351,7 @@ const SmartphoneShellLandscape = ({ children }: { children: React.ReactNode }) =
   </div>
 );
 
-const IconButton = ({
+const DecisionButton = ({
   icon: Icon,
   label,
   onClick,
@@ -363,21 +362,15 @@ const IconButton = ({
   onClick: () => void;
   isActive: boolean;
 }) => (
-  <Tooltip>
-    <TooltipTrigger asChild>
-      <Button
-        variant="ghost"
-        size="icon"
+    <Button
+        variant={isActive ? "default" : "outline"}
+        size="sm"
         onClick={onClick}
-        className={cn("h-8 w-8", isActive && "bg-primary/20 text-primary")}
-      >
-        <Icon className="h-5 w-5" />
-      </Button>
-    </TooltipTrigger>
-    <TooltipContent>
-      <p>{label}</p>
-    </TooltipContent>
-  </Tooltip>
+        className={cn("flex-1", isActive && "bg-primary text-primary-foreground")}
+    >
+        <Icon className="h-4 w-4 mr-2" />
+        {label}
+    </Button>
 );
 
 const SmartphoneScreen = ({
@@ -406,24 +399,12 @@ const SmartphoneScreen = ({
     { label: "مستبعدة", value: "مستبعدة", icon: Ban },
   ] as const;
 
+  const activeRecord = activeRecordIndex !== null ? cluster.records[activeRecordIndex] : null;
+
   return (
     <div className="h-full flex flex-col">
       <div className="p-3 border-b flex justify-between items-center">
         <h2 className="font-bold text-center text-sm">المجموعة ({cluster.records.length} سجلات)</h2>
-         <div className="flex items-center gap-2">
-            <Label className="text-sm">قرار المجموعة:</Label>
-            <div className="flex items-center gap-1 rounded-md bg-muted p-1">
-                {groupDecisionOptions.map(opt => (
-                    <IconButton 
-                        key={opt.value}
-                        icon={opt.icon}
-                        label={opt.label}
-                        onClick={() => onGroupDecisionChange(opt.value)}
-                        isActive={cluster.groupDecision === opt.value}
-                    />
-                ))}
-            </div>
-          </div>
       </div>
       <ScrollArea className="flex-1">
         <Table className="text-xs">
@@ -432,7 +413,7 @@ const SmartphoneScreen = ({
               <TableHead className="w-1/4">اسم السيدة</TableHead>
               <TableHead>اسم الزوج</TableHead>
               <TableHead>الرقم القومي</TableHead>
-              <TableHead className="w-1/3 text-center">القرار</TableHead>
+              <TableHead>القرار</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -444,41 +425,64 @@ const SmartphoneScreen = ({
                   <TableCell>{record.womanName}</TableCell>
                   <TableCell>{record.husbandName}</TableCell>
                   <TableCell>{record.nationalId}</TableCell>
-                  <TableCell>
-                    <div className="flex flex-col items-center gap-1">
-                        <div className="flex items-center gap-1 rounded-md bg-muted p-1">
-                            {recordDecisionOptions.map(opt => (
-                                <IconButton
-                                    key={opt.value}
-                                    icon={opt.icon}
-                                    label={opt.label}
-                                    onClick={() => onRecordDecisionChange(record._internalId!, opt.value)}
-                                    isActive={decision === opt.value}
-                                />
-                            ))}
-                        </div>
-                         {decision === 'مستبعدة' && (
-                            <div className="mt-1 w-full">
-                                <Select onValueChange={(val) => onExclusionReasonChange(record._internalId!, val)} value={cluster.decisionReasons?.[record._internalId!]}>
-                                    <SelectTrigger className="h-7 text-xs">
-                                        <SelectValue placeholder="اختر سببًا..." />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="عدم انطباق المعايير على المستفيدة">عدم انطباق المعايير</SelectItem>
-                                        <SelectItem value="تكرار في الاستفادة مثقفة/مستفيدة">تكرار في الاستفادة</SelectItem>
-                                        <SelectItem value="انتقال سكن وإقامة المستفيدة خارج منطقة المشروع">انتقال السكن</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                        )}
-                    </div>
-                  </TableCell>
+                  <TableCell>{decision || 'لم يحدد'}</TableCell>
                 </TableRow>
               );
             })}
           </TableBody>
         </Table>
       </ScrollArea>
+
+      {/* Decision Panel */}
+      <div className="p-4 border-t bg-muted/50 space-y-4">
+        {/* Group Decision */}
+        <div>
+            <Label className="text-sm font-semibold mb-2 block">قرار المجموعة</Label>
+             <div className="flex items-center gap-2">
+                 {groupDecisionOptions.map(opt => (
+                    <DecisionButton 
+                        key={opt.value}
+                        icon={opt.icon}
+                        label={opt.label}
+                        onClick={() => onGroupDecisionChange(opt.value)}
+                        isActive={cluster.groupDecision === opt.value}
+                    />
+                ))}
+            </div>
+        </div>
+        
+        {/* Per-Record Decision */}
+        {activeRecord && (
+            <div>
+                <Label className="text-sm font-semibold mb-2 block">قرار السجل لـ: <span className="text-primary">{activeRecord.womanName}</span></Label>
+                <div className="grid grid-cols-3 gap-2">
+                    {recordDecisionOptions.map(opt => (
+                        <DecisionButton
+                            key={opt.value}
+                            icon={opt.icon}
+                            label={opt.label}
+                            onClick={() => onRecordDecisionChange(activeRecord._internalId!, opt.value)}
+                            isActive={cluster.recordDecisions?.[activeRecord._internalId!] === opt.value}
+                        />
+                    ))}
+                </div>
+                {cluster.recordDecisions?.[activeRecord._internalId!] === 'مستبعدة' && (
+                    <div className="mt-2">
+                        <Select onValueChange={(val) => onExclusionReasonChange(activeRecord._internalId!, val)} value={cluster.decisionReasons?.[activeRecord._internalId!]}>
+                            <SelectTrigger className="h-8 text-xs">
+                                <SelectValue placeholder="اختر سببًا..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="عدم انطباق المعايير على المستفيدة">عدم انطباق المعايير</SelectItem>
+                                <SelectItem value="تكرار في الاستفادة مثقفة/مستفيدة">تكرار في الاستفادة</SelectItem>
+                                <SelectItem value="انتقال سكن وإقامة المستفيدة خارج منطقة المشروع">انتقال السكن</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                )}
+            </div>
+        )}
+      </div>
     </div>
   );
 };
