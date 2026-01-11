@@ -6,38 +6,38 @@
 
 @layer base {
   :root {
-    --background: 210 29% 12%; /* Charcoal Black (#17202A) */
+    --background: 220 13% 18%; /* Dark Slate Blue */
     --foreground: 210 20% 90%; /* Light Gray for text */
-    --card: 210 29% 16%; /* Slightly lighter than background */
-    --card-foreground: 210 20% 90%;
-    --popover: 210 29% 12%;
-    --popover-foreground: 210 20% 90%;
+    --card: 220 13% 22%; /* Slightly lighter than background */
+    --card-foreground: 210 20% 95%;
+    --popover: 220 13% 18%;
+    --popover-foreground: 210 20% 95%;
     --primary: 210 80% 60%; /* A distinct blue */
-    --primary-foreground: 210 29% 12%; /* Dark text on primary */
-    --secondary: 208 65% 55%; /* Light Blue (#A9CCE3) - adjusted for AA contrast */
+    --primary-foreground: 210 20% 95%; 
+    --secondary: 208 65% 55%; /* Light Blue - adjusted for AA contrast */
     --secondary-foreground: 210 20% 95%;
-    --muted: 210 29% 22%;
-    --muted-foreground: 210 20% 65%;
+    --muted: 220 13% 28%;
+    --muted-foreground: 210 20% 75%;
     --accent: 208 65% 55%; /* Same as secondary for accent */
     --accent-foreground: 210 20% 95%;
-    --destructive: 0 63% 31%;
+    --destructive: 0 63% 40%;
     --destructive-foreground: 210 20% 95%;
-    --border: 0 0% 100%;
-    --input: 210 29% 22%;
-    --ring: 204 69% 63%;
+    --border: 220 13% 35%;
+    --input: 220 13% 28%;
+    --ring: 210 80% 60%;
     --chart-1: 220 70% 50%;
     --chart-2: 160 60% 45%;
     --chart-3: 30 80% 55%;
     --chart-4: 280 65% 60%;
     --chart-5: 340 75% 55%;
-    --sidebar-background: 210 29% 10%; /* Even darker sidebar */
+    --sidebar-background: 220 13% 14%; /* Even darker sidebar */
     --sidebar-foreground: 210 20% 90%;
-    --sidebar-primary: 204 69% 63%;
-    --sidebar-primary-foreground: 210 29% 12%;
+    --sidebar-primary: 210 80% 60%;
+    --sidebar-primary-foreground: 210 20% 95%;
     --sidebar-accent: 208 65% 55%;
     --sidebar-accent-foreground: 210 20% 95%;
-    --sidebar-border: 210 29% 22%;
-    --sidebar-ring: 204 69% 63%;
+    --sidebar-border: 220 13% 28%;
+    --sidebar-ring: 210 80% 60%;
     --radius: 0.5rem;
   }
 }
