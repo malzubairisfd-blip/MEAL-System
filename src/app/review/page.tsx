@@ -138,9 +138,9 @@ export default function ReviewPage() {
         toast({ title: "خطأ في التحقق", description: "يجب تحديد قرار لكل سجل في المجموعة.", variant: "destructive" });
         return false;
       }
-      if (keptRecords !== 1) {
-        setValidationError("عندما تكون المجموعة مكررة، يجب تحديد سجل واحد فقط لـ 'تبقى'.");
-        toast({ title: "خطأ في التحقق", description: "عندما تكون المجموعة مكررة، يجب تحديد سجل واحد فقط لـ 'تبقى'.", variant: "destructive" });
+      if (keptRecords < 1) {
+        setValidationError("عندما تكون المجموعة مكررة، يجب تحديد سجل واحد على الأقل لـ 'تبقى'.");
+        toast({ title: "خطأ في التحقق", description: "عندما تكون المجموعة مكررة، يجب تحديد سجل واحد على الأقل لـ 'تبقى'.", variant: "destructive" });
         return false;
       }
     }
