@@ -19,6 +19,7 @@ import {
   ChevronUp,
   Save,
   Users,
+  Check,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
@@ -35,6 +36,14 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 type Cluster = {
   records: RecordRow[];
@@ -70,7 +79,6 @@ export default function ReviewPage() {
       setAllClusters(sortedClusters);
       if (sortedClusters.length > 0) {
         setSelectedClusterIndex(0);
-        setActiveRecordIndex(0);
       }
     } else {
       toast({
@@ -93,16 +101,16 @@ export default function ReviewPage() {
     return allClusters[selectedClusterIndex];
   }, [selectedClusterIndex, allClusters]);
 
-  const handleUpdateClusterDecision = (
-    clusterIndex: number,
-    updateFn: (cluster: Cluster) => Cluster
-  ) => {
-    setAllClusters((prev) =>
-      prev.map((c, i) => (i === clusterIndex ? updateFn(c) : c))
-    );
-  };
+  const handleUpdateClusterDecision = useCallback(
+    (clusterIndex: number, updateFn: (cluster: Cluster) => Cluster) => {
+      setAllClusters((prev) =>
+        prev.map((c, i) => (i === clusterIndex ? updateFn(c) : c))
+      );
+    },
+    []
+  );
 
-  const handleSaveAndNext = async () => {
+  const handleSaveAndNext = useCallback(async () => {
     if (selectedClusterIndex === null || !selectedCluster) return;
 
     // Validation
@@ -132,7 +140,7 @@ export default function ReviewPage() {
 
     if (selectedClusterIndex < allClusters.length - 1) {
       setSelectedClusterIndex(selectedClusterIndex + 1);
-      setActiveRecordIndex(0);
+      setActiveRecordIndex(null); // Reset active record for new cluster
     } else {
       toast({
         title: "اكتملت المراجعة",
@@ -140,7 +148,64 @@ export default function ReviewPage() {
       });
     }
     setIsSaving(false);
-  };
+  }, [selectedClusterIndex, selectedCluster, allClusters, toast]);
+
+
+  const handleRecordDecisionChange = useCallback((recordId: string, decision: string) => {
+    if (selectedClusterIndex === null) return;
+  
+    handleUpdateClusterDecision(selectedClusterIndex, (currentCluster) => {
+      let newDecisions = { ...(currentCluster.recordDecisions || {}), [recordId]: decision };
+      const newReasons: { [key: string]: string } = {};
+  
+      const keptRecord = currentCluster.records.find(r => newDecisions[r._internalId!] === "تبقى");
+      const verifyRecord = currentCluster.records.find(r => newDecisions[r._internalId!] === "تحقق");
+  
+      currentCluster.records.forEach(record => {
+        const currentDecision = newDecisions[record._internalId!];
+        if (currentDecision === "مكررة") {
+          const targetRecord = keptRecord || verifyRecord;
+          if (targetRecord) {
+            newReasons[record._internalId!] = `مستفيدة مكررة مع ${targetRecord.beneficiaryId} - ${targetRecord.womanName || ""}`;
+          }
+        } else if (currentDecision === "تحقق") {
+          const otherVerify = currentCluster.records.find(r => r._internalId !== record._internalId && newDecisions[r._internalId!] === "تحقق");
+          const target = otherVerify || keptRecord || currentCluster.records.find(r => newDecisions[r._internalId!] === "ليست تكرار") || currentCluster.records.find(r => newDecisions[r._internalId!] === "مكررة");
+          if (target) {
+            newReasons[record._internalId!] = `اشتباه تكرار مع ${target.beneficiaryId} - ${target.womanName || ""}`;
+          }
+        }
+      });
+  
+      return { ...currentCluster, recordDecisions: newDecisions, decisionReasons: { ...(currentCluster.decisionReasons || {}), ...newReasons } };
+    });
+  
+    const currentIndex = cluster.records.findIndex(r => r._internalId === recordId);
+    if (currentIndex < cluster.records.length - 1) {
+      setActiveRecordIndex(currentIndex + 1);
+    } else {
+      setActiveRecordIndex(null); // Mark as done
+      handleSaveAndNext(); // Auto-save and move to next cluster
+    }
+  }, [selectedClusterIndex, handleUpdateClusterDecision, cluster, handleSaveAndNext]);
+
+  const handleGroupDecisionChange = useCallback((value: "تكرار" | "ليست تكرار") => {
+    if (selectedClusterIndex === null) return;
+    
+    handleUpdateClusterDecision(selectedClusterIndex, (c) => {
+        const newDecisions = { ...(c.recordDecisions || {}) };
+        if (value === "تكرار" && c.records.length > 0) {
+            // Automatically set first record to "تبقى" if it's a new decision
+             if(!Object.values(newDecisions).some(d => d === 'تبقى')) {
+               newDecisions[c.records[0]._internalId!] = 'تبقى';
+             }
+        }
+        return { ...c, groupDecision: value, recordDecisions: newDecisions };
+    });
+    // Start the workflow
+    setActiveRecordIndex(0);
+  }, [selectedClusterIndex, handleUpdateClusterDecision]);
+
 
   if (loading) {
     return (
@@ -168,12 +233,14 @@ export default function ReviewPage() {
                 key={index}
                 onClick={() => {
                   setSelectedClusterIndex(index);
-                  setActiveRecordIndex(0);
+                  setActiveRecordIndex(null); // Reset active record on cluster change
                 }}
                 className={cn(
                   "w-full text-left p-3 rounded-lg border transition-colors",
                   selectedClusterIndex === index
                     ? "bg-primary text-primary-foreground border-primary"
+                    : cluster.groupDecision // Mark completed clusters
+                    ? "bg-green-100 dark:bg-green-900/30 border-green-500"
                     : "hover:bg-muted"
                 )}
               >
@@ -197,184 +264,112 @@ export default function ReviewPage() {
                 <p className="text-xs truncate">
                   {cluster.records.map((r) => r.womanName).join(" | ")}
                 </p>
+                 {cluster.groupDecision && (
+                    <div className="flex items-center gap-1 text-xs mt-1 text-green-700 dark:text-green-300">
+                        <Check className="h-3 w-3" />
+                        <span>مكتمل</span>
+                    </div>
+                 )}
               </button>
             ))}
           </div>
         </CardContent>
       </Card>
 
-      {/* Smartphone Panel */}
-      <div className="lg:col-span-2 flex items-center justify-center">
+      {/* Main Content Area */}
+      <div className="lg:col-span-2 flex flex-col gap-6">
         {selectedCluster ? (
-          <SmartphoneShell>
+           <SmartphoneShellLandscape>
             <SmartphoneScreen
               cluster={selectedCluster}
-              clusterIndex={selectedClusterIndex!}
               activeRecordIndex={activeRecordIndex}
-              setActiveRecordIndex={setActiveRecordIndex}
-              onUpdateDecision={handleUpdateClusterDecision}
+              onGroupDecisionChange={handleGroupDecisionChange}
+              onRecordDecisionChange={handleRecordDecisionChange}
+              onExclusionReasonChange={(recordId, reason) => {
+                  if (selectedClusterIndex === null) return;
+                  handleUpdateClusterDecision(selectedClusterIndex, c => ({...c, decisionReasons: {...(c.decisionReasons || {}), [recordId]: reason}}))
+              }}
             />
-          </SmartphoneShell>
+          </SmartphoneShellLandscape>
         ) : (
-          <div className="text-center text-muted-foreground">
-            <Users className="mx-auto h-12 w-12" />
-            <p className="mt-2">حدد مجموعة من القائمة لبدء المراجعة.</p>
+          <div className="text-center text-muted-foreground flex-1 flex items-center justify-center">
+            <div>
+              <Users className="mx-auto h-12 w-12" />
+              <p className="mt-2">حدد مجموعة من القائمة لبدء المراجعة.</p>
+            </div>
           </div>
         )}
-      </div>
-      
-       {/* Decision Panel */}
-       <Card className="lg:col-span-3">
-          <CardHeader>
-            <CardTitle>لوحة القرار</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-               {selectedCluster && selectedClusterIndex !== null && (
-                <div>
-                  <h3 className="font-semibold mb-2">ملخص القرار للمجموعة {selectedClusterIndex + 1}</h3>
-                   <div className="p-4 bg-muted rounded-lg space-y-2 text-sm">
-                      <p><strong>قرار المجموعة:</strong> {selectedCluster.groupDecision || 'لم يحدد'}</p>
-                       <div><strong>قرارات السجلات:</strong>
-                         <ul className="list-disc pl-5">
-                          {selectedCluster.records.map(r => (
-                              <li key={r._internalId}>
-                                  <span className="font-semibold">{r.womanName}:</span> 
-                                  <span className="ml-2">{selectedCluster.recordDecisions?.[r._internalId!] || 'لم يحدد'}</span>
-                                  {selectedCluster.decisionReasons?.[r._internalId!] && <span className="text-xs text-muted-foreground ml-2">({selectedCluster.decisionReasons[r._internalId!]})</span>}
-                              </li>
-                          ))}
-                         </ul>
-                      </div>
+        
+        {/* Decision Summary Panel */}
+        {selectedCluster && (
+            <Card>
+              <CardHeader>
+                <CardTitle>ملخص القرار</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm">
+                  <p><strong>قرار المجموعة:</strong> {selectedCluster.groupDecision || 'لم يحدد'}</p>
+                   <div><strong>قرارات السجلات:</strong>
+                     <ul className="list-disc pl-5">
+                      {selectedCluster.records.map(r => (
+                          <li key={r._internalId}>
+                              <span className="font-semibold">{r.womanName}:</span> 
+                              <span className="ml-2">{selectedCluster.recordDecisions?.[r._internalId!] || 'لم يحدد'}</span>
+                              {selectedCluster.decisionReasons?.[r._internalId!] && <span className="text-xs text-muted-foreground ml-2">({selectedCluster.decisionReasons[r._internalId!]})</span>}
+                          </li>
+                      ))}
+                     </ul>
+                  </div>
+                   <div className="flex justify-end pt-4">
+                    <Button onClick={handleSaveAndNext} disabled={isSaving}>
+                        {isSaving ? <Loader2 className="animate-spin mr-2" /> : <Save className="mr-2" />}
+                        حفظ وتحميل المجموعة التالية
+                    </Button>
                    </div>
-                </div>
-               )}
-               <div className="flex justify-end">
-                <Button onClick={handleSaveAndNext} disabled={isSaving}>
-                    {isSaving ? <Loader2 className="animate-spin mr-2" /> : <Save className="mr-2" />}
-                    حفظ وتحميل المجموعة التالية
-                </Button>
-               </div>
-          </CardContent>
-       </Card>
+              </CardContent>
+           </Card>
+        )}
+      </div>
     </div>
   );
 }
 
-const SmartphoneShell = ({ children }: { children: React.ReactNode }) => (
-  <div className="relative mx-auto border-gray-800 dark:border-gray-800 bg-gray-800 border-[14px] rounded-[2.5rem] h-[700px] w-[350px] shadow-xl">
-    <div className="w-[148px] h-[18px] bg-gray-800 top-0 rounded-b-[1rem] left-1/2 -translate-x-1/2 absolute"></div>
-    <div className="h-[46px] w-[3px] bg-gray-800 absolute -left-[17px] top-[124px] rounded-l-lg"></div>
-    <div className="h-[46px] w-[3px] bg-gray-800 absolute -left-[17px] top-[178px] rounded-l-lg"></div>
-    <div className="h-[64px] w-[3px] bg-gray-800 absolute -right-[17px] top-[142px] rounded-r-lg"></div>
+const SmartphoneShellLandscape = ({ children }: { children: React.ReactNode }) => (
+  <div className="relative mx-auto border-gray-800 bg-gray-800 border-[14px] rounded-[2.5rem] h-[350px] w-[700px] shadow-xl">
+    <div className="h-[46px] w-[3px] bg-gray-800 absolute -top-[17px] left-[124px] rounded-t-lg"></div>
+    <div className="h-[46px] w-[3px] bg-gray-800 absolute -top-[17px] left-[178px] rounded-t-lg"></div>
+    <div className="h-[64px] w-[3px] bg-gray-800 absolute -right-[17px] top-[142px] rounded-r-lg transform -rotate-90 origin-top-right"></div>
     <div className="rounded-[2rem] overflow-hidden w-full h-full bg-background">
       {children}
     </div>
   </div>
 );
 
+
 const SmartphoneScreen = ({
   cluster,
-  clusterIndex,
   activeRecordIndex,
-  setActiveRecordIndex,
-  onUpdateDecision,
+  onGroupDecisionChange,
+  onRecordDecisionChange,
+  onExclusionReasonChange
 }: {
   cluster: Cluster;
-  clusterIndex: number;
   activeRecordIndex: number | null;
-  setActiveRecordIndex: (index: number | null) => void;
-  onUpdateDecision: (index: number, fn: (c: Cluster) => Cluster) => void;
+  onGroupDecisionChange: (value: "تكرار" | "ليست تكرار") => void;
+  onRecordDecisionChange: (recordId: string, decision: string) => void;
+  onExclusionReasonChange: (recordId: string, reason: string) => void;
 }) => {
 
-  const handleGroupDecisionChange = (value: "تكرار" | "ليست تكرار") => {
-    onUpdateDecision(clusterIndex, (c) => ({ ...c, groupDecision: value }));
-  };
-
-  const handleRecordDecisionChange = (recordId: string, decision: string) => {
-    onUpdateDecision(clusterIndex, (currentCluster) => {
-        let newDecisions = { ...(currentCluster.recordDecisions || {}), [recordId]: decision };
-        
-        // Auto-select "تبقى" for the first record if group is "تكرار" and it's the first decision
-        if (cluster.groupDecision === 'تكرار' && Object.keys(newDecisions).length === 1) {
-            newDecisions[cluster.records[0]._internalId!] = 'تبقى';
-        }
-
-        // --- Start of logic moved from useEffect ---
-        const newReasons: { [key: string]: string } = {};
-
-        const keptRecord = cluster.records.find(
-          (r) => newDecisions[r._internalId!] === "تبقى"
-        );
-        const verifyRecord = cluster.records.find(
-          (r) => newDecisions[r._internalId!] === "تحقق"
-        );
-
-        cluster.records.forEach((record) => {
-          const currentDecision = newDecisions[record._internalId!];
-          if (currentDecision === "مكررة") {
-            const targetRecord = keptRecord || verifyRecord;
-            if (targetRecord) {
-              newReasons[record._internalId!] = `مستفيدة مكررة مع ${
-                targetRecord.beneficiaryId
-              } - ${targetRecord.womanName || ""}`;
-            }
-          } else if (currentDecision === "تحقق") {
-            const otherVerify = cluster.records.find(
-              (r) =>
-                r._internalId !== record._internalId &&
-                newDecisions[r._internalId!] === "تحقق"
-            );
-            const target =
-              otherVerify ||
-              keptRecord ||
-              cluster.records.find(
-                (r) => newDecisions[r._internalId!] === "ليست تكرار"
-              ) ||
-              cluster.records.find(
-                (r) => newDecisions[r._internalId!] === "مكررة"
-              );
-
-            if (target) {
-              newReasons[record._internalId!] = `اشتباه تكرار مع ${
-                target.beneficiaryId
-              } - ${target.womanName || ""}`;
-            }
-          }
-        });
-        // --- End of logic moved from useEffect ---
-
-        return { ...currentCluster, recordDecisions: newDecisions, decisionReasons: { ...(currentCluster.decisionReasons || {}), ...newReasons } };
-    });
-    // Move to next record automatically
-    if (activeRecordIndex !== null && activeRecordIndex < cluster.records.length - 1) {
-        setActiveRecordIndex(activeRecordIndex + 1);
-    } else {
-        setActiveRecordIndex(null); // All done
-    }
-  };
-  
-  const handleExclusionReasonChange = (recordId: string, reason: string) => {
-     onUpdateDecision(clusterIndex, c => ({ ...c, decisionReasons: { ...(c.decisionReasons || {}), [recordId]: reason }}));
-  };
+  const decisionOptions = ["مكررة", "ليست تكرار", "تبقى", "تحقق", "مستبعدة"];
 
   return (
     <div className="h-full flex flex-col">
-      <div className="p-4 border-b">
-        <h2 className="font-bold text-center">المجموعة {clusterIndex + 1}</h2>
-        <p className="text-xs text-muted-foreground text-center">
-          {cluster.records.length} سجلات
-        </p>
-      </div>
-      <ScrollArea className="flex-1">
-        <div className="p-4 space-y-4">
-          <div>
-            <Label>قرار المجموعة</Label>
-            <Select
-              onValueChange={handleGroupDecisionChange}
-              value={cluster.groupDecision}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="اختر قرارًا للمجموعة..." />
+      <div className="p-3 border-b flex justify-between items-center">
+        <h2 className="font-bold text-center text-sm">المجموعة ({cluster.records.length} سجلات)</h2>
+         <div className="w-48">
+            <Label className="text-xs">قرار المجموعة</Label>
+            <Select onValueChange={onGroupDecisionChange} value={cluster.groupDecision}>
+              <SelectTrigger className="h-8">
+                <SelectValue placeholder="اختر قرارًا..." />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="تكرار">تكرار</SelectItem>
@@ -382,106 +377,58 @@ const SmartphoneScreen = ({
               </SelectContent>
             </Select>
           </div>
-          <Separator />
-          {cluster.records.map((record, index) => (
-            <RecordCard
-              key={record._internalId}
-              record={record}
-              isActive={index === activeRecordIndex}
-              onSelect={() => setActiveRecordIndex(index)}
-              decision={cluster.recordDecisions?.[record._internalId!]}
-              onDecisionChange={(decision) => handleRecordDecisionChange(record._internalId!, decision)}
-              exclusionReason={cluster.decisionReasons?.[record._internalId!]}
-              onExclusionReasonChange={(reason) => handleExclusionReasonChange(record._internalId!, reason)}
-            />
-          ))}
-        </div>
+      </div>
+      <ScrollArea className="flex-1">
+        <Table className="text-xs">
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-1/4">اسم السيدة</TableHead>
+              <TableHead>اسم الزوج</TableHead>
+              <TableHead>الرقم القومي</TableHead>
+              <TableHead className="w-1/3">القرار</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {cluster.records.map((record, index) => {
+              const isActive = index === activeRecordIndex;
+              const decision = cluster.recordDecisions?.[record._internalId!];
+              const isDecided = !!decision;
+              return (
+                <TableRow key={record._internalId} className={cn(isActive && "bg-blue-100 dark:bg-blue-900/30")}>
+                  <TableCell>{record.womanName}</TableCell>
+                  <TableCell>{record.husbandName}</TableCell>
+                  <TableCell>{record.nationalId}</TableCell>
+                  <TableCell>
+                    <Select onValueChange={(val) => onRecordDecisionChange(record._internalId!, val)} value={decision} disabled={cluster.groupDecision === undefined}>
+                      <SelectTrigger className="h-8">
+                        <SelectValue placeholder="اختر قرارًا..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                         {decisionOptions.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                     {decision === 'مستبعدة' && (
+                        <div className="mt-1">
+                            <Select onValueChange={(val) => onExclusionReasonChange(record._internalId!, val)} value={cluster.decisionReasons?.[record._internalId!]}>
+                                <SelectTrigger className="h-7 text-xs">
+                                    <SelectValue placeholder="اختر سببًا..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="عدم انطباق المعايير على المستفيدة">عدم انطباق المعايير على المستفيدة</SelectItem>
+                                    <SelectItem value="تكرار في الاستفادة مثقفة/مستفيدة">تكرار في الاستفادة مثقفة/مستفيدة</SelectItem>
+                                    <SelectItem value="انتقال سكن وإقامة المستفيدة خارج منطقة المشروع">انتقال سكن وإقامة المستفيدة خارج منطقة المشروع</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    )}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
       </ScrollArea>
     </div>
   );
 };
 
-const RecordCard = ({
-  record,
-  isActive,
-  onSelect,
-  decision,
-  onDecisionChange,
-  exclusionReason,
-  onExclusionReasonChange
-}: {
-  record: RecordRow;
-  isActive: boolean;
-  onSelect: () => void;
-  decision?: string;
-  onDecisionChange: (decision: string) => void;
-  exclusionReason?: string;
-  onExclusionReasonChange: (reason: string) => void;
-}) => {
-  const [isOpen, setIsOpen] = useState(false);
-
-  return (
-    <Card
-      className={cn(
-        "transition-all",
-        isActive ? "border-primary shadow-lg" : "border-border"
-      )}
-    >
-      <CardHeader className="p-3 cursor-pointer" onClick={() => { onSelect(); setIsOpen(!isOpen); }}>
-        <div className="flex justify-between items-center">
-          <p className="font-semibold text-sm truncate">{record.womanName}</p>
-          {isOpen ? <ChevronUp className="h-4 w-4"/> : <ChevronDown className="h-4 w-4"/>}
-        </div>
-      </CardHeader>
-      {isOpen && (
-        <CardContent className="p-3 pt-0 text-xs space-y-2">
-          <p>
-            <strong>المستفيد:</strong> {record.beneficiaryId}
-          </p>
-          <p>
-            <strong>الزوج:</strong> {record.husbandName}
-          </p>
-          <p>
-            <strong>الرقم القومي:</strong> {record.nationalId}
-          </p>
-          <p>
-            <strong>الهاتف:</strong> {record.phone}
-          </p>
-           <p>
-            <strong>الموقع:</strong> {record.village}
-          </p>
-          <div className="pt-2">
-            <Label>قرار السجل</Label>
-            <Select onValueChange={onDecisionChange} value={decision}>
-              <SelectTrigger>
-                <SelectValue placeholder="اختر قرارًا..." />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="مكررة">مكررة</SelectItem>
-                <SelectItem value="ليست تكرار">ليست تكرار</SelectItem>
-                <SelectItem value="تبقى">تبقى</SelectItem>
-                <SelectItem value="تحقق">تحقق</SelectItem>
-                <SelectItem value="مستبعدة">مستبعدة</SelectItem>
-              </SelectContent>
-            </Select>
-             {decision === 'مستبعدة' && (
-                <div className="mt-2">
-                    <Label>سبب الاستبعاد</Label>
-                    <Select onValueChange={onExclusionReasonChange} value={exclusionReason}>
-                        <SelectTrigger>
-                            <SelectValue placeholder="اختر سببًا..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="عدم انطباق المعايير على المستفيدة">عدم انطباق المعايير على المستفيدة</SelectItem>
-                            <SelectItem value="تكرار في الاستفادة مثقفة/مستفيدة">تكرار في الاستفادة مثقفة/مستفيدة</SelectItem>
-                            <SelectItem value="انتقال سكن وإقامة المستفيدة خارج منطقة المشروع">انتقال سكن وإقامة المستفيدة خارج منطقة المشروع</SelectItem>
-                        </SelectContent>
-                    </Select>
-                </div>
-            )}
-          </div>
-        </CardContent>
-      )}
-    </Card>
-  );
-};
