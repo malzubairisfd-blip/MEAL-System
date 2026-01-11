@@ -158,7 +158,7 @@ export default function ReviewPage() {
   }, [selectedClusterIndex, selectedCluster, allClusters, toast]);
 
 
-  const handleSaveAndNext = useCallback(async () => {
+ const handleSaveAndNext = useCallback(async () => {
     const success = await validateAndSave();
     if (success) {
       if (selectedClusterIndex !== null && selectedClusterIndex < allClusters.length - 1) {
@@ -298,9 +298,9 @@ export default function ReviewPage() {
         </Card>
 
         {/* Main Content Area */}
-        <div className="lg:col-span-2 flex flex-col gap-6">
+        <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
           {selectedCluster ? (
-             <div className="border border-gray-800 bg-gray-800 rounded-[1rem] p-1 flex-1 flex flex-col">
+             <div className="md:col-span-2 border border-gray-800 bg-gray-800 rounded-[1rem] p-1 flex-1 flex flex-col">
                 <SmartphoneScreen
                   cluster={selectedCluster}
                   activeRecordIndex={activeRecordIndex}
@@ -314,7 +314,7 @@ export default function ReviewPage() {
                 />
             </div>
           ) : (
-            <div className="text-center text-muted-foreground flex-1 flex items-center justify-center">
+            <div className="md:col-span-2 text-center text-muted-foreground flex-1 flex items-center justify-center">
               <div>
                 <Users className="mx-auto h-12 w-12" />
                 <p className="mt-2">حدد مجموعة من القائمة لبدء المراجعة.</p>
@@ -324,7 +324,7 @@ export default function ReviewPage() {
           
           {/* Decision Summary Panel */}
           {selectedCluster && (
-              <Card>
+              <Card className="md:col-span-2">
                 <CardHeader>
                   <CardTitle>ملخص القرار</CardTitle>
                 </CardHeader>
@@ -450,7 +450,7 @@ const SmartphoneScreen = ({
       </div>
 
       {/* Decision Panel */}
-      <div className="p-4 border-t bg-muted/50 space-y-4 flex-shrink-0">
+       <div className={cn("p-4 border-t bg-muted/50 space-y-4 flex-shrink-0 transition-all", activeRecordIndex === null ? "block" : "hidden md:block")}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <Label className="text-sm font-semibold mb-2 block">قرار المجموعة</Label>
@@ -466,39 +466,43 @@ const SmartphoneScreen = ({
                 ))}
             </div>
           </div>
-          
-          {activeRecord && (
-              <div className="transition-all duration-300">
-                  <Label className="text-sm font-semibold mb-2 block">قرار السجل لـ: <span className="text-primary">{activeRecord.womanName}</span></Label>
-                  <div className="flex items-center gap-2">
-                      {recordDecisionOptions.map(opt => (
-                          <DecisionButton
-                              key={opt.value}
-                              icon={opt.icon}
-                              label={opt.label}
-                              onClick={() => onRecordDecisionChange(activeRecord._internalId!, opt.value)}
-                              isActive={cluster.recordDecisions?.[activeRecord._internalId!] === opt.value}
-                          />
-                      ))}
-                  </div>
-                  {cluster.recordDecisions?.[activeRecord._internalId!] === 'مستبعدة' && (
-                      <div className="mt-2">
-                          <Select onValueChange={(val) => onExclusionReasonChange(activeRecord._internalId!, val)} value={cluster.decisionReasons?.[activeRecord._internalId!]}>
-                              <SelectTrigger className="h-8 text-xs">
-                                  <SelectValue placeholder="اختر سببًا..." />
-                              </SelectTrigger>
-                              <SelectContent>
-                                  <SelectItem value="عدم انطباق المعايير على المستفيدة">عدم انطباق المعايير</SelectItem>
-                                  <SelectItem value="تكرار في الاستفادة مثقفة/مستفيدة">تكرار في الاستفادة</SelectItem>
-                                  <SelectItem value="انتقال سكن وإقامة المستفيدة خارج منطقة المشروع">انتقال السكن</SelectItem>
-                              </SelectContent>
-                          </Select>
-                      </div>
-                  )}
-              </div>
-          )}
         </div>
       </div>
+      
+      {activeRecord && (
+          <div className="p-4 border-t bg-muted/50 space-y-4 flex-shrink-0">
+              <div className="grid grid-cols-1 gap-4">
+                  <div>
+                      <Label className="text-sm font-semibold mb-2 block">قرار السجل لـ: <span className="text-primary">{activeRecord.womanName}</span></Label>
+                      <div className="flex items-center gap-2">
+                          {recordDecisionOptions.map(opt => (
+                              <DecisionButton
+                                  key={opt.value}
+                                  icon={opt.icon}
+                                  label={opt.label}
+                                  onClick={() => onRecordDecisionChange(activeRecord._internalId!, opt.value)}
+                                  isActive={cluster.recordDecisions?.[activeRecord._internalId!] === opt.value}
+                              />
+                          ))}
+                      </div>
+                      {cluster.recordDecisions?.[activeRecord._internalId!] === 'مستبعدة' && (
+                          <div className="mt-2">
+                              <Select onValueChange={(val) => onExclusionReasonChange(activeRecord._internalId!, val)} value={cluster.decisionReasons?.[activeRecord._internalId!]}>
+                                  <SelectTrigger className="h-8 text-xs">
+                                      <SelectValue placeholder="اختر سببًا..." />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                      <SelectItem value="عدم انطباق المعايير على المستفيدة">عدم انطباق المعايير</SelectItem>
+                                      <SelectItem value="تكرار في الاستفادة مثقفة/مستفيدة">تكرار في الاستفادة</SelectItem>
+                                      <SelectItem value="انتقال سكن وإقامة المستفيدة خارج منطقة المشروع">انتقال السكن</SelectItem>
+                                  </SelectContent>
+                              </Select>
+                          </div>
+                      )}
+                  </div>
+              </div>
+          </div>
+      )}
     </div>
   );
 };
