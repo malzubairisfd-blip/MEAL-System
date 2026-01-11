@@ -152,8 +152,8 @@ const preprocessRow = (raw: any): PreprocessedRow => {
     village_normalized,
     subdistrict_normalized,
     children_normalized,
-    parts: raw._parts || splitParts(womanName_normalized),
-    husbandParts: raw._husbandParts || splitParts(husbandName_normalized),
+    parts: raw.parts || splitParts(womanName_normalized),
+    husbandParts: raw.husbandParts || splitParts(husbandName_normalized),
   };
 };
 

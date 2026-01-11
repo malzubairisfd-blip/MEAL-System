@@ -1,3 +1,4 @@
+
 // src/workers/export.worker.ts
 import ExcelJS from "exceljs";
 import type { AuditFinding } from "@/lib/auditEngine";
@@ -37,6 +38,9 @@ type EnrichedRecord = RecordRow & {
     locationScore?: number | null;
     'تصنيف المجموعة المبدئي'?: string;
     'نتائج تحليل المجموعة'?: string;
+    groupDecision?: string;
+    recordDecision?: string;
+    decisionReason?: string;
     [key: string]: any;
 };
 
@@ -158,13 +162,16 @@ function enrichData(cachedData: any): { enrichedRecords: EnrichedRecord[], enric
 
         const maxPairScoreForCluster = clusterMaxScores.get(enrichedCluster.clusterId) || 0;
 
-        const baseRecord = {
+        const baseRecord: EnrichedRecord = {
             ...record,
             Generated_Cluster_ID: generatedClusterId,
             Cluster_Size: enrichedCluster.records.length,
             Max_PairScore: maxPairScoreForCluster,
             'تصنيف المجموعة المبدئي': enrichedCluster['تصنيف المجموعة المبدئي'],
             'نتائج تحليل المجموعة': enrichedCluster['نتائج تحليل المجموعة'],
+            groupDecision: enrichedCluster.groupDecision,
+            recordDecision: enrichedCluster.recordDecisions?.[record._internalId!],
+            decisionReason: enrichedCluster.decisionReasons?.[record._internalId!],
         };
 
         if (!scoredRecord) {
@@ -239,11 +246,12 @@ function createEnrichedDataSheet(wb: ExcelJS.Workbook, data: EnrichedRecord[], o
     const enrichmentHeaders = [
         "Generated_Cluster_ID", "Cluster_Size", "Flag", "Max_PairScore",
         "pairScore", "nameScore", "husbandScore", "childrenScore", "idScore", "phoneScore", "locationScore",
+        "groupDecision", "recordDecision", "decisionReason",
         "تصنيف المجموعة المبدئي", "نتائج تحليل المجموعة"
     ];
 
     const internalDataHeaders = [
-        "womanName_normalized", "husbandName_normalized", "children_normalized", "subdistrict_normalized", "village_normalized", "_parts", "_husbandParts"
+        "womanName_normalized", "husbandName_normalized", "children_normalized", "subdistrict_normalized", "village_normalized", "parts", "husbandParts"
     ];
     
     const finalOriginalHeaders = originalHeaders.filter(h => !h.startsWith('_'));
