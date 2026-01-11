@@ -73,7 +73,7 @@ self.onmessage = async (event) => {
           [arrayBuffer]
         );
         
-    } catch (error: any) => {
+    } catch (error: any) {
         safePostMessage({ type: 'error', data: error instanceof Error ? error.message : String(error) });
     }
 };
