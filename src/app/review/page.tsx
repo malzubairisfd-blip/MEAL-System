@@ -38,9 +38,9 @@ import {
 } from "@/components/ui/select";
 import {
   Tooltip,
-  TooltipContent,
   TooltipProvider,
   TooltipTrigger,
+  TooltipContent,
 } from "@/components/ui/tooltip";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
@@ -139,8 +139,8 @@ export default function ReviewPage() {
         return false;
       }
       if (keptRecords !== 1) {
-        setValidationError("يجب تحديد سجل واحد فقط لـ 'تبقى' عند وجود تكرار.");
-        toast({ title: "خطأ في التحقق", description: "يجب تحديد سجل واحد فقط لـ 'تبقى' عند وجود تكرار.", variant: "destructive" });
+        setValidationError("عندما تكون المجموعة مكررة، يجب تحديد سجل واحد فقط لـ 'تبقى'.");
+        toast({ title: "خطأ في التحقق", description: "عندما تكون المجموعة مكررة، يجب تحديد سجل واحد فقط لـ 'تبقى'.", variant: "destructive" });
         return false;
       }
     }
@@ -238,121 +238,121 @@ export default function ReviewPage() {
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full max-h-[calc(100vh-10rem)]">
-      {/* Cluster List */}
-      <Card className="lg:col-span-1 flex flex-col">
-        <CardHeader>
-          <CardTitle>قائمة المجموعات</CardTitle>
-          <CardDescription>
-            تم العثور على {allClusters.length} مجموعات، مرتبة حسب الثقة.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex-1 overflow-y-auto">
-          <div className="space-y-2">
-            {allClusters.map((cluster, index) => (
-              <button
-                key={index}
-                onClick={() => {
-                  setSelectedClusterIndex(index);
-                  setActiveRecordIndex(null); // Reset active record on cluster change
-                }}
-                className={cn(
-                  "w-full text-left p-3 rounded-lg border transition-colors",
-                  selectedClusterIndex === index
-                    ? "bg-primary text-primary-foreground border-primary"
-                    : "hover:bg-muted",
-                  cluster.groupDecision && "bg-green-100 dark:bg-green-900/30 border-green-500"
-                )}
-              >
-                <div className="flex justify-between items-center">
-                  <span className="font-semibold">
-                    المجموعة {index + 1} ({cluster.records.length} سجلات)
-                  </span>
-                  <span
-                    className={cn(
-                      "font-bold text-lg",
-                      (cluster.Max_PairScore || 0) >= 0.8
-                        ? "text-red-500"
-                        : (cluster.Max_PairScore || 0) >= 0.7
-                        ? "text-orange-500"
-                        : "text-green-500"
-                    )}
-                  >
-                    {Math.round((cluster.Max_PairScore || 0) * 100)}%
-                  </span>
-                </div>
-                <p className="text-xs truncate">
-                  {cluster.records.map((r) => r.womanName).join(" | ")}
-                </p>
-                 {cluster.groupDecision && (
-                    <div className="flex items-center gap-1 text-xs mt-1 text-green-700 dark:text-green-300">
-                        <Check className="h-3 w-3" />
-                        <span>مكتمل</span>
-                    </div>
-                 )}
-              </button>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Main Content Area */}
-      <div className="lg:col-span-2 flex flex-col gap-6">
-        {selectedCluster ? (
-           <SmartphoneShellLandscape>
-            <TooltipProvider>
-              <SmartphoneScreen
-                cluster={selectedCluster}
-                activeRecordIndex={activeRecordIndex}
-                onGroupDecisionChange={handleGroupDecisionChange}
-                onRecordDecisionChange={handleRecordDecisionChange}
-                onExclusionReasonChange={(recordId, reason) => {
-                    if (selectedClusterIndex === null) return;
-                    handleUpdateClusterDecision(selectedClusterIndex, c => ({...c, decisionReasons: {...(c.decisionReasons || {}), [recordId]: reason}}))
-                }}
-                validationError={validationError}
-              />
-            </TooltipProvider>
-          </SmartphoneShellLandscape>
-        ) : (
-          <div className="text-center text-muted-foreground flex-1 flex items-center justify-center">
-            <div>
-              <Users className="mx-auto h-12 w-12" />
-              <p className="mt-2">حدد مجموعة من القائمة لبدء المراجعة.</p>
-            </div>
-          </div>
-        )}
-        
-        {/* Decision Summary Panel */}
-        {selectedCluster && (
-            <Card>
-              <CardHeader>
-                <CardTitle>ملخص القرار</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2 text-sm">
-                  <p><strong>قرار المجموعة:</strong> {selectedCluster.groupDecision || 'لم يحدد'}</p>
-                   <div><strong>قرارات السجلات:</strong>
-                     <ul className="list-disc pl-5">
-                      {selectedCluster.records.map(r => (
-                          <li key={r._internalId}>
-                              <span className="font-semibold">{r.womanName}:</span> 
-                              <span className="ml-2">{selectedCluster.recordDecisions?.[r._internalId!] || 'لم يحدد'}</span>
-                              {selectedCluster.decisionReasons?.[r._internalId!] && <span className="text-xs text-muted-foreground ml-2">({selectedCluster.decisionReasons[r._internalId!]})</span>}
-                          </li>
-                      ))}
-                     </ul>
+    <TooltipProvider>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full max-h-[calc(100vh-10rem)]">
+        {/* Cluster List */}
+        <Card className="lg:col-span-1 flex flex-col">
+          <CardHeader>
+            <CardTitle>قائمة المجموعات</CardTitle>
+            <CardDescription>
+              تم العثور على {allClusters.length} مجموعات، مرتبة حسب الثقة.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex-1 overflow-y-auto">
+            <div className="space-y-2">
+              {allClusters.map((cluster, index) => (
+                <button
+                  key={index}
+                  onClick={() => {
+                    setSelectedClusterIndex(index);
+                    setActiveRecordIndex(null); // Reset active record on cluster change
+                  }}
+                  className={cn(
+                    "w-full text-left p-3 rounded-lg border transition-colors",
+                    selectedClusterIndex === index
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "hover:bg-muted",
+                    cluster.groupDecision && "bg-green-100 dark:bg-green-900/30 border-green-500"
+                  )}
+                >
+                  <div className="flex justify-between items-center">
+                    <span className="font-semibold">
+                      المجموعة {index + 1} ({cluster.records.length} سجلات)
+                    </span>
+                    <span
+                      className={cn(
+                        "font-bold text-lg",
+                        (cluster.Max_PairScore || 0) >= 0.8
+                          ? "text-red-500"
+                          : (cluster.Max_PairScore || 0) >= 0.7
+                          ? "text-orange-500"
+                          : "text-green-500"
+                      )}
+                    >
+                      {Math.round((cluster.Max_PairScore || 0) * 100)}%
+                    </span>
                   </div>
-                   <div className="flex justify-end pt-4">
-                    <Button onClick={handleSaveAndNext} disabled={isSaving}>
-                        {isSaving ? <Loader2 className="animate-spin mr-2" /> : <Save className="mr-2" />}
-                        حفظ وتحميل المجموعة التالية
-                    </Button>
-                   </div>
-              </CardContent>
-           </Card>
-        )}
+                  <p className="text-xs truncate">
+                    {cluster.records.map((r) => r.womanName).join(" | ")}
+                  </p>
+                   {cluster.groupDecision && (
+                      <div className="flex items-center gap-1 text-xs mt-1 text-green-700 dark:text-green-300">
+                          <Check className="h-3 w-3" />
+                          <span>مكتمل</span>
+                      </div>
+                   )}
+                </button>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Main Content Area */}
+        <div className="lg:col-span-2 flex flex-col gap-6">
+          {selectedCluster ? (
+             <SmartphoneShellLandscape>
+                <SmartphoneScreen
+                  cluster={selectedCluster}
+                  activeRecordIndex={activeRecordIndex}
+                  onGroupDecisionChange={handleGroupDecisionChange}
+                  onRecordDecisionChange={handleRecordDecisionChange}
+                  onExclusionReasonChange={(recordId, reason) => {
+                      if (selectedClusterIndex === null) return;
+                      handleUpdateClusterDecision(selectedClusterIndex, c => ({...c, decisionReasons: {...(c.decisionReasons || {}), [recordId]: reason}}))
+                  }}
+                  validationError={validationError}
+                />
+            </SmartphoneShellLandscape>
+          ) : (
+            <div className="text-center text-muted-foreground flex-1 flex items-center justify-center">
+              <div>
+                <Users className="mx-auto h-12 w-12" />
+                <p className="mt-2">حدد مجموعة من القائمة لبدء المراجعة.</p>
+              </div>
+            </div>
+          )}
+          
+          {/* Decision Summary Panel */}
+          {selectedCluster && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>ملخص القرار</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2 text-sm">
+                    <p><strong>قرار المجموعة:</strong> {selectedCluster.groupDecision || 'لم يحدد'}</p>
+                     <div><strong>قرارات السجلات:</strong>
+                       <ul className="list-disc pl-5">
+                        {selectedCluster.records.map(r => (
+                            <li key={r._internalId}>
+                                <span className="font-semibold">{r.womanName}:</span> 
+                                <span className="ml-2">{selectedCluster.recordDecisions?.[r._internalId!] || 'لم يحدد'}</span>
+                                {selectedCluster.decisionReasons?.[r._internalId!] && <span className="text-xs text-muted-foreground ml-2">({selectedCluster.decisionReasons[r._internalId!]})</span>}
+                            </li>
+                        ))}
+                       </ul>
+                    </div>
+                     <div className="flex justify-end pt-4">
+                      <Button onClick={handleSaveAndNext} disabled={isSaving}>
+                          {isSaving ? <Loader2 className="animate-spin mr-2" /> : <Save className="mr-2" />}
+                          حفظ وتحميل المجموعة التالية
+                      </Button>
+                     </div>
+                </CardContent>
+             </Card>
+          )}
+        </div>
       </div>
-    </div>
+    </TooltipProvider>
   );
 }
 
