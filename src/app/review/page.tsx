@@ -15,11 +15,15 @@ import {
   Loader2,
   ChevronLeft,
   Smartphone,
-  ChevronDown,
-  ChevronUp,
   Save,
   Users,
   Check,
+  Copy,
+  ShieldOff,
+  CheckCircle,
+  HelpCircle,
+  Trash2,
+  Ban,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
@@ -33,6 +37,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Separator } from "@/components/ui/separator";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
@@ -239,9 +249,8 @@ export default function ReviewPage() {
                   "w-full text-left p-3 rounded-lg border transition-colors",
                   selectedClusterIndex === index
                     ? "bg-primary text-primary-foreground border-primary"
-                    : cluster.groupDecision // Mark completed clusters
-                    ? "bg-green-100 dark:bg-green-900/30 border-green-500"
-                    : "hover:bg-muted"
+                    : "hover:bg-muted",
+                  cluster.groupDecision && selectedClusterIndex !== index && "bg-green-100 dark:bg-green-900/30 border-green-500"
                 )}
               >
                 <div className="flex justify-between items-center">
@@ -280,16 +289,18 @@ export default function ReviewPage() {
       <div className="lg:col-span-2 flex flex-col gap-6">
         {selectedCluster ? (
            <SmartphoneShellLandscape>
-            <SmartphoneScreen
-              cluster={selectedCluster}
-              activeRecordIndex={activeRecordIndex}
-              onGroupDecisionChange={handleGroupDecisionChange}
-              onRecordDecisionChange={handleRecordDecisionChange}
-              onExclusionReasonChange={(recordId, reason) => {
-                  if (selectedClusterIndex === null) return;
-                  handleUpdateClusterDecision(selectedClusterIndex, c => ({...c, decisionReasons: {...(c.decisionReasons || {}), [recordId]: reason}}))
-              }}
-            />
+            <TooltipProvider>
+              <SmartphoneScreen
+                cluster={selectedCluster}
+                activeRecordIndex={activeRecordIndex}
+                onGroupDecisionChange={handleGroupDecisionChange}
+                onRecordDecisionChange={handleRecordDecisionChange}
+                onExclusionReasonChange={(recordId, reason) => {
+                    if (selectedClusterIndex === null) return;
+                    handleUpdateClusterDecision(selectedClusterIndex, c => ({...c, decisionReasons: {...(c.decisionReasons || {}), [recordId]: reason}}))
+                }}
+              />
+            </TooltipProvider>
           </SmartphoneShellLandscape>
         ) : (
           <div className="text-center text-muted-foreground flex-1 flex items-center justify-center">
@@ -335,15 +346,39 @@ export default function ReviewPage() {
 
 const SmartphoneShellLandscape = ({ children }: { children: React.ReactNode }) => (
   <div className="relative mx-auto border-gray-800 bg-gray-800 border-[14px] rounded-[2.5rem] h-[350px] w-[700px] shadow-xl">
-    <div className="h-[46px] w-[3px] bg-gray-800 absolute -top-[17px] left-[124px] rounded-t-lg"></div>
-    <div className="h-[46px] w-[3px] bg-gray-800 absolute -top-[17px] left-[178px] rounded-t-lg"></div>
-    <div className="h-[64px] w-[3px] bg-gray-800 absolute -right-[17px] top-[142px] rounded-r-lg transform -rotate-90 origin-top-right"></div>
     <div className="rounded-[2rem] overflow-hidden w-full h-full bg-background">
       {children}
     </div>
   </div>
 );
 
+const IconButton = ({
+  icon: Icon,
+  label,
+  onClick,
+  isActive,
+}: {
+  icon: React.ElementType;
+  label: string;
+  onClick: () => void;
+  isActive: boolean;
+}) => (
+  <Tooltip>
+    <TooltipTrigger asChild>
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={onClick}
+        className={cn("h-8 w-8", isActive && "bg-primary/20 text-primary")}
+      >
+        <Icon className="h-5 w-5" />
+      </Button>
+    </TooltipTrigger>
+    <TooltipContent>
+      <p>{label}</p>
+    </TooltipContent>
+  </Tooltip>
+);
 
 const SmartphoneScreen = ({
   cluster,
@@ -358,24 +393,36 @@ const SmartphoneScreen = ({
   onRecordDecisionChange: (recordId: string, decision: string) => void;
   onExclusionReasonChange: (recordId: string, reason: string) => void;
 }) => {
+  const groupDecisionOptions = [
+    { label: "تكرار", value: "تكرار", icon: Copy },
+    { label: "ليست تكرار", value: "ليست تكرار", icon: ShieldOff },
+  ] as const;
 
-  const decisionOptions = ["مكررة", "ليست تكرار", "تبقى", "تحقق", "مستبعدة"];
+  const recordDecisionOptions = [
+    { label: "مكررة", value: "مكررة", icon: Copy },
+    { label: "ليست تكرار", value: "ليست تكرار", icon: ShieldOff },
+    { label: "تبقى", value: "تبقى", icon: CheckCircle },
+    { label: "تحقق", value: "تحقق", icon: HelpCircle },
+    { label: "مستبعدة", value: "مستبعدة", icon: Ban },
+  ] as const;
 
   return (
     <div className="h-full flex flex-col">
       <div className="p-3 border-b flex justify-between items-center">
         <h2 className="font-bold text-center text-sm">المجموعة ({cluster.records.length} سجلات)</h2>
-         <div className="w-48">
-            <Label>قرار المجموعة</Label>
-            <Select onValueChange={onGroupDecisionChange} value={cluster.groupDecision}>
-              <SelectTrigger className="h-8">
-                <SelectValue placeholder="اختر قرارًا..." />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="تكرار">تكرار</SelectItem>
-                <SelectItem value="ليست تكرار">ليست تكرار</SelectItem>
-              </SelectContent>
-            </Select>
+         <div className="flex items-center gap-2">
+            <Label className="text-sm">قرار المجموعة:</Label>
+            <div className="flex items-center gap-1 rounded-md bg-muted p-1">
+                {groupDecisionOptions.map(opt => (
+                    <IconButton 
+                        key={opt.value}
+                        icon={opt.icon}
+                        label={opt.label}
+                        onClick={() => onGroupDecisionChange(opt.value)}
+                        isActive={cluster.groupDecision === opt.value}
+                    />
+                ))}
+            </div>
           </div>
       </div>
       <ScrollArea className="flex-1">
@@ -385,42 +432,46 @@ const SmartphoneScreen = ({
               <TableHead className="w-1/4">اسم السيدة</TableHead>
               <TableHead>اسم الزوج</TableHead>
               <TableHead>الرقم القومي</TableHead>
-              <TableHead className="w-1/3">القرار</TableHead>
+              <TableHead className="w-1/3 text-center">القرار</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {cluster.records.map((record, index) => {
               const isActive = index === activeRecordIndex;
               const decision = cluster.recordDecisions?.[record._internalId!];
-              const isDecided = !!decision;
               return (
                 <TableRow key={record._internalId} className={cn(isActive && "bg-blue-100 dark:bg-blue-900/30")}>
                   <TableCell>{record.womanName}</TableCell>
                   <TableCell>{record.husbandName}</TableCell>
                   <TableCell>{record.nationalId}</TableCell>
                   <TableCell>
-                    <Select onValueChange={(val) => onRecordDecisionChange(record._internalId!, val)} value={decision} disabled={cluster.groupDecision === undefined}>
-                      <SelectTrigger className="h-8">
-                        <SelectValue placeholder="اختر قرارًا..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                         {decisionOptions.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                     {decision === 'مستبعدة' && (
-                        <div className="mt-1">
-                            <Select onValueChange={(val) => onExclusionReasonChange(record._internalId!, val)} value={cluster.decisionReasons?.[record._internalId!]}>
-                                <SelectTrigger className="h-7 text-xs">
-                                    <SelectValue placeholder="اختر سببًا..." />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="عدم انطباق المعايير على المستفيدة">عدم انطباق المعايير على المستفيدة</SelectItem>
-                                    <SelectItem value="تكرار في الاستفادة مثقفة/مستفيدة">تكرار في الاستفادة مثقفة/مستفيدة</SelectItem>
-                                    <SelectItem value="انتقال سكن وإقامة المستفيدة خارج منطقة المشروع">انتقال سكن وإقامة المستفيدة خارج منطقة المشروع</SelectItem>
-                                </SelectContent>
-                            </Select>
+                    <div className="flex flex-col items-center gap-1">
+                        <div className="flex items-center gap-1 rounded-md bg-muted p-1">
+                            {recordDecisionOptions.map(opt => (
+                                <IconButton
+                                    key={opt.value}
+                                    icon={opt.icon}
+                                    label={opt.label}
+                                    onClick={() => onRecordDecisionChange(record._internalId!, opt.value)}
+                                    isActive={decision === opt.value}
+                                />
+                            ))}
                         </div>
-                    )}
+                         {decision === 'مستبعدة' && (
+                            <div className="mt-1 w-full">
+                                <Select onValueChange={(val) => onExclusionReasonChange(record._internalId!, val)} value={cluster.decisionReasons?.[record._internalId!]}>
+                                    <SelectTrigger className="h-7 text-xs">
+                                        <SelectValue placeholder="اختر سببًا..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="عدم انطباق المعايير على المستفيدة">عدم انطباق المعايير</SelectItem>
+                                        <SelectItem value="تكرار في الاستفادة مثقفة/مستفيدة">تكرار في الاستفادة</SelectItem>
+                                        <SelectItem value="انتقال سكن وإقامة المستفيدة خارج منطقة المشروع">انتقال السكن</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        )}
+                    </div>
                   </TableCell>
                 </TableRow>
               );
