@@ -105,16 +105,20 @@ export default function ReviewPage() {
     loadClusters();
   }, [loadClusters]);
   
-  // Effect to show toast on validation error
   useEffect(() => {
     if (validationError) {
-      toast({
-        title: "خطأ في التحقق",
-        description: validationError,
-        variant: "destructive",
-      });
+        // We need to use an effect to show toast to avoid state update during render
+        setTimeout(() => {
+            toast({
+                title: "خطأ في التحقق",
+                description: validationError,
+                variant: "destructive",
+            });
+            setValidationError(null); // Reset after showing
+        }, 0);
     }
-  }, [validationError, toast]);
+}, [validationError, toast]);
+
 
   const selectedCluster = useMemo(() => {
     if (selectedClusterIndex === null || !allClusters[selectedClusterIndex]) {
@@ -136,7 +140,6 @@ export default function ReviewPage() {
  const validateAndSave = useCallback(async () => {
     if (selectedClusterIndex === null || !selectedCluster) return false;
 
-    // --- VALIDATION LOGIC ---
     if (!selectedCluster.groupDecision) {
       setValidationError("يجب تحديد قرار للمجموعة (تكرار أو ليست تكرار).");
       return false;
@@ -160,7 +163,6 @@ export default function ReviewPage() {
       }
     }
     
-    // --- SAVE LOGIC ---
     setIsSaving(true);
     const currentData = await loadCachedResult();
     const newClusters = [...allClusters];
@@ -254,6 +256,24 @@ export default function ReviewPage() {
     setActiveRecordIndex(0);
   }, [selectedClusterIndex, handleUpdateClusterDecision]);
 
+  const handleExclusionReasonChange = useCallback((recordId: string, reason: string) => {
+      if (selectedClusterIndex === null) return;
+      
+      handleUpdateClusterDecision(selectedClusterIndex, c => ({ ...c, decisionReasons: { ...(c.decisionReasons || {}), [recordId]: reason } }));
+      
+      // Auto-advance logic
+      const totalRecords = selectedCluster?.records.length ?? 0;
+      const currentIndex = selectedCluster?.records.findIndex(r => r._internalId === recordId) ?? -1;
+
+      if (currentIndex === totalRecords - 1) {
+          // Last record, save and move to next cluster
+          setTimeout(() => handleSaveAndNext(), 100);
+      } else {
+          // Not the last record, move to next
+          setActiveRecordIndex(currentIndex + 1);
+      }
+  }, [selectedClusterIndex, selectedCluster, handleUpdateClusterDecision, handleSaveAndNext]);
+
 
   if (loading) {
     return (
@@ -333,10 +353,7 @@ export default function ReviewPage() {
                   activeRecordIndex={activeRecordIndex}
                   onGroupDecisionChange={handleGroupDecisionChange}
                   onRecordDecisionChange={handleRecordDecisionChange}
-                  onExclusionReasonChange={(recordId, reason) => {
-                      if (selectedClusterIndex === null) return;
-                      handleUpdateClusterDecision(selectedClusterIndex, c => ({...c, decisionReasons: {...(c.decisionReasons || {}), [recordId]: reason}}))
-                  }}
+                  onExclusionReasonChange={handleExclusionReasonChange}
                   validationError={validationError}
                 />
             </div>
@@ -468,8 +485,12 @@ const SmartphoneScreen = ({
   }
 
   const reviewedCount = useMemo(() => {
-    return Object.keys(cluster.recordDecisions || {}).length;
-  }, [cluster.recordDecisions]);
+    if (!cluster.recordDecisions) return 0;
+    const decisions = Object.values(cluster.recordDecisions);
+    if (!decisions.length) return 0;
+    return decisions.filter(Boolean).length;
+}, [cluster.recordDecisions]);
+
 
   return (
     <div className="h-full flex flex-col bg-background rounded-[1rem] overflow-hidden">
@@ -479,7 +500,7 @@ const SmartphoneScreen = ({
         </h2>
         {cluster.groupDecision === 'تكرار' && (
             <span className="text-xs font-mono px-2 py-1 rounded bg-muted">
-                {reviewedCount} / {cluster.records.length} reviewed
+                {reviewedCount} / {cluster.records.length} records to review
             </span>
         )}
       </div>
