@@ -23,6 +23,9 @@ import {
   HelpCircle,
   Trash2,
   Ban,
+  XCircle,
+  FileText,
+  UserCheck,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
@@ -100,6 +103,17 @@ export default function ReviewPage() {
   useEffect(() => {
     loadClusters();
   }, [loadClusters]);
+  
+  // Effect to show toast on validation error
+  useEffect(() => {
+    if (validationError) {
+      toast({
+        title: "خطأ في التحقق",
+        description: validationError,
+        variant: "destructive",
+      });
+    }
+  }, [validationError, toast]);
 
   const selectedCluster = useMemo(() => {
     if (selectedClusterIndex === null || !allClusters[selectedClusterIndex]) {
@@ -136,6 +150,13 @@ export default function ReviewPage() {
         setValidationError("عندما تكون المجموعة مكررة، يجب تحديد سجل واحد على الأقل لـ 'تبقى'.");
         return false;
       }
+      
+      for(const record of selectedCluster.records) {
+        if (recordDecisions[record._internalId!] === 'مستبعدة' && !selectedCluster.decisionReasons?.[record._internalId!]) {
+            setValidationError(`يجب تحديد سبب استبعاد للسجل: ${record.womanName}`);
+            return false;
+        }
+      }
     }
     
     // --- SAVE LOGIC ---
@@ -149,18 +170,6 @@ export default function ReviewPage() {
     return true;
 
   }, [selectedClusterIndex, selectedCluster, allClusters, toast]);
-
-  // Effect to show toast on validation error
-  useEffect(() => {
-    if (validationError) {
-      toast({
-        title: "خطأ في التحقق",
-        description: validationError,
-        variant: "destructive",
-      });
-    }
-  }, [validationError, toast]);
-
 
  const handleSaveAndNext = useCallback(async () => {
     const success = await validateAndSave();
@@ -177,44 +186,54 @@ export default function ReviewPage() {
   const [updateQueue, setUpdateQueue] = useState<{ recordId: string, decision: string } | null>(null);
 
   useEffect(() => {
-    if (!updateQueue || selectedClusterIndex === null) return;
-  
-    const { recordId, decision } = updateQueue;
-  
-    handleUpdateClusterDecision(selectedClusterIndex, (currentCluster) => {
-      let newDecisions = { ...(currentCluster.recordDecisions || {}), [recordId]: decision };
-      const newReasons: { [key: string]: string } = {};
-  
-      const keptRecord = currentCluster.records.find(r => newDecisions[r._internalId!] === "تبقى");
-      const verifyRecords = currentCluster.records.filter(r => newDecisions[r._internalId!] === "تحقق");
-  
-      currentCluster.records.forEach(record => {
-        const currentDecision = newDecisions[record._internalId!];
-        if (currentDecision === "مكررة") {
-          const targetRecord = keptRecord || verifyRecords[0];
-          if (targetRecord) {
-            newReasons[record._internalId!] = `مستفيدة مكررة مع ${targetRecord.beneficiaryId} - ${targetRecord.womanName || ""}`;
-          }
-        } else if (currentDecision === "تحقق") {
-          const otherVerify = verifyRecords.find(r => r._internalId !== record._internalId);
-          const target = otherVerify || keptRecord || currentCluster.records.find(r => newDecisions[r._internalId!] === "ليست تكرار") || currentCluster.records.find(r => newDecisions[r._internalId!] === "مكررة");
-          if (target) {
-            newReasons[record._internalId!] = `اشتباه تكرار مع ${target.beneficiaryId} - ${target.womanName || ""}`;
-          }
+    const performUpdate = async () => {
+        if (!updateQueue || selectedClusterIndex === null) return;
+      
+        const { recordId, decision } = updateQueue;
+      
+        handleUpdateClusterDecision(selectedClusterIndex, (currentCluster) => {
+          let newDecisions = { ...(currentCluster.recordDecisions || {}), [recordId]: decision };
+          const newReasons: { [key: string]: string } = {};
+      
+          const keptRecord = currentCluster.records.find(r => newDecisions[r._internalId!] === "تبقى");
+          const verifyRecords = currentCluster.records.filter(r => newDecisions[r._internalId!] === "تحقق");
+      
+          currentCluster.records.forEach(record => {
+            const currentDecision = newDecisions[record._internalId!];
+            if (currentDecision === "مكررة") {
+              const targetRecord = keptRecord || verifyRecords[0];
+              if (targetRecord) {
+                newReasons[record._internalId!] = `مستفيدة مكررة مع ${targetRecord.beneficiaryId} - ${targetRecord.womanName || ""}`;
+              }
+            } else if (currentDecision === "تحقق") {
+              const otherVerify = verifyRecords.find(r => r._internalId !== record._internalId);
+              const target = otherVerify || keptRecord || currentCluster.records.find(r => newDecisions[r._internalId!] === "ليست تكرار") || currentCluster.records.find(r => newDecisions[r._internalId!] === "مكررة");
+              if (target) {
+                newReasons[record._internalId!] = `اشتباه تكرار مع ${target.beneficiaryId} - ${target.womanName || ""}`;
+              }
+            }
+          });
+      
+          return { ...currentCluster, recordDecisions: newDecisions, decisionReasons: { ...(currentCluster.decisionReasons || {}), ...newReasons } };
+        });
+      
+        const reviewedCount = Object.keys(selectedCluster?.recordDecisions || {}).length + 1;
+        const totalRecords = selectedCluster?.records.length ?? 0;
+
+        if (decision !== 'مستبعدة' && reviewedCount === totalRecords) {
+           setTimeout(() => handleSaveAndNext(), 100);
+        } else {
+             const currentIndex = selectedCluster?.records.findIndex(r => r._internalId === recordId) ?? -1;
+             if (decision !== 'مستبعدة' && currentIndex !== -1 && currentIndex < totalRecords - 1) {
+                setActiveRecordIndex(currentIndex + 1);
+             }
         }
-      });
-  
-      return { ...currentCluster, recordDecisions: newDecisions, decisionReasons: { ...(currentCluster.decisionReasons || {}), ...newReasons } };
-    });
-  
-    const currentIndex = selectedCluster?.records.findIndex(r => r._internalId === recordId) ?? -1;
-    if (currentIndex !== -1 && currentIndex < (selectedCluster?.records.length ?? 0) - 1) {
-      setActiveRecordIndex(currentIndex + 1);
-    } else {
-      setTimeout(() => handleSaveAndNext(), 100);
-    }
-  
-    setUpdateQueue(null); // Clear the queue after processing
+      
+        setUpdateQueue(null); // Clear the queue after processing
+    };
+
+    performUpdate();
+
   }, [updateQueue, handleUpdateClusterDecision, selectedClusterIndex, selectedCluster, handleSaveAndNext]);
   
   const handleRecordDecisionChange = useCallback((recordId: string, decision: string) => {
@@ -224,13 +243,12 @@ export default function ReviewPage() {
   const handleGroupDecisionChange = useCallback((value: "تكرار" | "ليست تكرار") => {
     if (selectedClusterIndex === null) return;
     
-    handleUpdateClusterDecision(selectedClusterIndex, (c) => {
-      const newDecisions = { ...(c.recordDecisions || {}) };
-      if (value === "تكرار" && c.records.length > 0) {
-         // Do not auto-select, let user decide.
-      }
-      return { ...c, groupDecision: value, recordDecisions: newDecisions };
-    });
+    handleUpdateClusterDecision(selectedClusterIndex, (c) => ({
+        ...c, 
+        groupDecision: value, 
+        recordDecisions: {}, // Reset individual decisions
+        decisionReasons: {},
+    }));
     // Start the workflow
     setActiveRecordIndex(0);
   }, [selectedClusterIndex, handleUpdateClusterDecision]);
@@ -306,9 +324,9 @@ export default function ReviewPage() {
         </Card>
 
         {/* Main Content Area */}
-        <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="lg:col-span-2 flex flex-col gap-6">
           {selectedCluster ? (
-             <div className="md:col-span-2 border border-gray-800 bg-gray-800 rounded-[1rem] p-1 flex-1 flex flex-col">
+             <div className="border border-gray-800 bg-gray-800 rounded-[1rem] p-1 flex-1 flex flex-col">
                 <SmartphoneScreen
                   cluster={selectedCluster}
                   activeRecordIndex={activeRecordIndex}
@@ -322,7 +340,7 @@ export default function ReviewPage() {
                 />
             </div>
           ) : (
-            <div className="md:col-span-2 text-center text-muted-foreground flex-1 flex items-center justify-center">
+            <div className="text-center text-muted-foreground flex-1 flex items-center justify-center">
               <div>
                 <Users className="mx-auto h-12 w-12" />
                 <p className="mt-2">حدد مجموعة من القائمة لبدء المراجعة.</p>
@@ -332,7 +350,7 @@ export default function ReviewPage() {
           
           {/* Decision Summary Panel */}
           {selectedCluster && (
-              <Card className="md:col-span-2">
+              <Card>
                 <CardHeader>
                   <CardTitle>ملخص القرار</CardTitle>
                 </CardHeader>
@@ -386,6 +404,27 @@ const DecisionButton = ({
     </Tooltip>
 );
 
+const ReasonCard = ({
+    icon: Icon,
+    label,
+    onClick,
+    isActive,
+}: {
+    icon: React.ElementType,
+    label: string,
+    onClick: () => void,
+    isActive: boolean
+}) => (
+    <Button
+        variant={isActive ? "secondary" : "outline"}
+        onClick={onClick}
+        className={cn("flex flex-col items-center justify-center h-24 w-24 gap-2", isActive && "border-primary border-2")}
+    >
+        <Icon className="h-6 w-6"/>
+        <span className="text-xs text-center">{label}</span>
+    </Button>
+)
+
 const SmartphoneScreen = ({
   cluster,
   activeRecordIndex,
@@ -414,18 +453,22 @@ const SmartphoneScreen = ({
     { label: "ليست تكرار", value: "ليست تكرار", icon: ShieldOff },
   ] as const;
 
+  const exclusionReasonOptions = [
+      { label: "عدم انطباق المعايير", value: "عدم انطباق المعايير على المستفيدة", icon: XCircle },
+      { label: "تكرار في الاستفادة", value: "تكرار في الاستفادة مثقفة/مستفيدة", icon: FileText },
+      { label: "انتقال السكن", value: "انتقال سكن وإقامة المستفيدة خارج منطقة المشروع", icon: UserCheck },
+  ] as const;
+
   const activeRecord = activeRecordIndex !== null ? cluster.records[activeRecordIndex] : null;
 
   const getChildrenText = (record: RecordRow | undefined) => {
     if (!record || !record.children) return '';
     return Array.isArray(record.children) ? record.children.join(', ') : String(record.children);
   }
-  
-  const reviewedCount = useMemo(() => {
-    if (!cluster.groupDecision || cluster.groupDecision !== 'تكرار') return 0;
-    return Object.values(cluster.recordDecisions || {}).filter(Boolean).length;
-  }, [cluster.recordDecisions, cluster.groupDecision]);
 
+  const reviewedCount = useMemo(() => {
+    return Object.keys(cluster.recordDecisions || {}).length;
+  }, [cluster.recordDecisions]);
 
   return (
     <div className="h-full flex flex-col bg-background rounded-[1rem] overflow-hidden">
@@ -435,7 +478,7 @@ const SmartphoneScreen = ({
         </h2>
         {cluster.groupDecision === 'تكرار' && (
             <span className="text-xs font-mono px-2 py-1 rounded bg-muted">
-                {reviewedCount} / {cluster.records.length} records reviewed
+                {reviewedCount} / {cluster.records.length} reviewed
             </span>
         )}
       </div>
@@ -505,17 +548,19 @@ const SmartphoneScreen = ({
                         ))}
                     </div>
                     {cluster.recordDecisions?.[activeRecord._internalId!] === 'مستبعدة' && (
-                        <div className="mt-2">
-                            <Select onValueChange={(val) => onExclusionReasonChange(activeRecord._internalId!, val)} value={cluster.decisionReasons?.[activeRecord._internalId!]}>
-                                <SelectTrigger className="h-8 text-xs">
-                                    <SelectValue placeholder="اختر سببًا..." />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="عدم انطباق المعايير على المستفيدة">عدم انطباق المعايير</SelectItem>
-                                    <SelectItem value="تكرار في الاستفادة مثقفة/مستفيدة">تكرار في الاستفادة</SelectItem>
-                                    <SelectItem value="انتقال سكن وإقامة المستفيدة خارج منطقة المشروع">انتقال السكن</SelectItem>
-                                </SelectContent>
-                            </Select>
+                        <div className="mt-4">
+                             <Label className="text-sm font-semibold mb-2 block">سبب الاستبعاد</Label>
+                             <div className="flex flex-wrap items-center gap-2">
+                                {exclusionReasonOptions.map(opt => (
+                                    <ReasonCard
+                                        key={opt.value}
+                                        icon={opt.icon}
+                                        label={opt.label}
+                                        onClick={() => onExclusionReasonChange(activeRecord._internalId!, opt.value)}
+                                        isActive={cluster.decisionReasons?.[activeRecord._internalId!] === opt.value}
+                                    />
+                                ))}
+                             </div>
                         </div>
                     )}
                 </div>
