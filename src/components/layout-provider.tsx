@@ -4,7 +4,6 @@
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import {
-  FileBarChart2,
   Upload,
   Microscope,
   ClipboardList,
@@ -19,7 +18,6 @@ import {
   Monitor,
   Target,
   Palette,
-  ChevronLeft
 } from "lucide-react";
 import { useTranslation } from "@/hooks/use-translation";
 import { useLanguage } from "@/context/language-context";
@@ -117,8 +115,8 @@ export function LayoutProvider({ children, year }: { children: React.ReactNode, 
       >
         <div className="flex items-center justify-between p-4 border-b h-14">
            <div className={cn("flex items-center gap-2", isCollapsed && "hidden")}>
-             <FileBarChart2 className="size-6 text-primary" />
-             <span className="text-lg font-semibold">Beneficiary Insights</span>
+             <Briefcase className="size-6 text-primary" />
+             <span className="text-lg font-semibold">MEAL System</span>
            </div>
         </div>
         <nav className="flex-1 px-4 py-4 space-y-2 overflow-y-auto">
@@ -151,10 +149,10 @@ export function LayoutProvider({ children, year }: { children: React.ReactNode, 
 
       <div className={cn("flex flex-col flex-1 transition-all duration-300 ease-in-out", isCollapsed ? "pl-20" : "pl-64")}>
         <header className="flex h-14 items-center gap-4 border-b bg-card px-6 sticky top-0 z-40">
-            <div className="flex-1">
-                {isTranslationLoading ? <Skeleton className="h-6 w-32" /> : <h1 className="text-lg font-semibold capitalize">{pageTitle}</h1>}
-            </div>
-             <ClientOnlyLanguageSwitcher />
+          <div className="flex-1">
+            {isTranslationLoading ? <Skeleton className="h-6 w-32" /> : <h1 className="text-lg font-semibold capitalize">{pageTitle}</h1>}
+          </div>
+          <ClientOnlyLanguageSwitcher />
         </header>
         <main className="flex-1 overflow-auto p-4 md:p-6 bg-background">
             {children}

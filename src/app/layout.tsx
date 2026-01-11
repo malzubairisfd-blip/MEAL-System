@@ -1,3 +1,4 @@
+
 import type { Metadata } from "next";
 import { LayoutProvider } from "@/components/layout-provider";
 import { Toaster } from "@/components/ui/toaster";
@@ -5,7 +6,7 @@ import { LanguageProvider } from "@/context/language-context";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Beneficiary Insights",
+  title: "MEAL System",
   description: "AI-powered data analysis for beneficiary information.",
 };
 
