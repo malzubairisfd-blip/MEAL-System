@@ -300,7 +300,7 @@ export default function ReviewPage() {
         {/* Main Content Area */}
         <div className="lg:col-span-2 flex flex-col gap-6">
           {selectedCluster ? (
-             <SmartphoneShellLandscape>
+             <div className="border border-gray-800 bg-gray-800 rounded-[1rem] p-1 flex-1 flex flex-col">
                 <SmartphoneScreen
                   cluster={selectedCluster}
                   activeRecordIndex={activeRecordIndex}
@@ -312,7 +312,7 @@ export default function ReviewPage() {
                   }}
                   validationError={validationError}
                 />
-            </SmartphoneShellLandscape>
+            </div>
           ) : (
             <div className="text-center text-muted-foreground flex-1 flex items-center justify-center">
               <div>
@@ -341,12 +341,6 @@ export default function ReviewPage() {
                         ))}
                        </ul>
                     </div>
-                     <div className="flex justify-end pt-4">
-                      <Button onClick={handleSaveAndNext} disabled={isSaving}>
-                          {isSaving ? <Loader2 className="animate-spin mr-2" /> : <Save className="mr-2" />}
-                          حفظ وتحميل المجموعة التالية
-                      </Button>
-                     </div>
                 </CardContent>
              </Card>
           )}
@@ -355,14 +349,6 @@ export default function ReviewPage() {
     </TooltipProvider>
   );
 }
-
-const SmartphoneShellLandscape = ({ children }: { children: React.ReactNode }) => (
-  <div className="relative mx-auto border-gray-800 bg-gray-800 border-[14px] rounded-[2.5rem] h-[350px] w-full max-w-[700px] shadow-xl">
-    <div className="rounded-[2rem] overflow-hidden w-full h-full bg-background">
-      {children}
-    </div>
-  </div>
-);
 
 const DecisionButton = ({
   icon: Icon,
@@ -428,7 +414,7 @@ const SmartphoneScreen = ({
   }
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col bg-background rounded-[1rem] overflow-hidden">
       <div className="p-3 border-b flex justify-between items-center">
         <h2 className="font-bold text-center text-sm">المجموعة ({cluster.records.length} سجلات)</h2>
       </div>
@@ -465,7 +451,7 @@ const SmartphoneScreen = ({
 
       {/* Decision Panel */}
       <div className="p-4 border-t bg-muted/50 space-y-4 flex-shrink-0">
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <Label className="text-sm font-semibold mb-2 block">قرار المجموعة</Label>
             <div className="flex items-center gap-2">
