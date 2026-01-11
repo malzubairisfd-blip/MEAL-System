@@ -118,7 +118,7 @@ export default function ReviewPage() {
     []
   );
 
-  const validateAndSave = useCallback(async () => {
+ const validateAndSave = useCallback(async () => {
     if (selectedClusterIndex === null || !selectedCluster) return false;
 
     // --- VALIDATION LOGIC ---
@@ -205,8 +205,8 @@ export default function ReviewPage() {
     if (currentIndex < selectedCluster.records.length - 1) {
       setActiveRecordIndex(currentIndex + 1);
     } else {
-      // Last record decided, trigger auto-save and next
-      handleSaveAndNext();
+      // Auto-save and move to next cluster after the last record
+      setTimeout(() => handleSaveAndNext(), 100);
     }
   }, [selectedClusterIndex, selectedCluster, handleUpdateClusterDecision, handleSaveAndNext]);
 
