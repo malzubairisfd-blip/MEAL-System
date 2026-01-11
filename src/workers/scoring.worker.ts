@@ -219,13 +219,18 @@ self.onmessage = (event) => {
           avgWomanNameScore: 0,
           avgHusbandNameScore: 0,
           avgFinalScore: 0,
+          Max_PairScore: 0,
         };
       }
       
       const pairScores: PairScore[] = [];
+      let maxPairScore = 0;
       for (let i = 0; i < records.length; i++) {
         for (let j = i + 1; j < records.length; j++) {
             const result = computePairScore(records[i], records[j], options || {});
+            if (result.score > maxPairScore) {
+              maxPairScore = result.score;
+            }
             const nameAvgs = totalAverageNameScore(records[i], records[j]);
             pairScores.push({
                 aId: records[i]._internalId,
@@ -268,6 +273,7 @@ self.onmessage = (event) => {
         avgWomanNameScore: confidenceResult.avgWomanScore,
         avgHusbandNameScore: confidenceResult.avgHusbandScore,
         avgFinalScore: confidenceResult.totalAverageScore,
+        Max_PairScore: maxPairScore,
       };
     });
 

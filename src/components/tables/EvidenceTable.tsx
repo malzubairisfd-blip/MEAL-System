@@ -1,4 +1,6 @@
 // components/tables/EvidenceTable.tsx
+"use client";
+
 import { StatusBadge } from "@/components/feedback/StatusBadge";
 
 interface EvidenceRow {
