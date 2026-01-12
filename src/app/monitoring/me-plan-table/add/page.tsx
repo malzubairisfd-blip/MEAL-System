@@ -187,7 +187,7 @@ function AddMEPlanForm() {
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
                      <Card>
                         <CardHeader>
-                            <CardTitle className="text-black">Project Selection</CardTitle>
+                            <CardTitle className="text-white">Project Selection</CardTitle>
                         </CardHeader>
                         <CardContent>
                              <FormField
