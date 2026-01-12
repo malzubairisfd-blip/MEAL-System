@@ -135,7 +135,7 @@ export default function PrepareIndicatorsPage() {
         <div className="space-y-6">
             <div className="flex justify-between items-center">
                 <div>
-                    <h1 className="text-3xl font-bold">Indicator Tracking Table</h1>
+                    <h1 className="text-3xl font-bold">Monitoring Indicators</h1>
                     <p className="text-muted-foreground">View the detailed indicator tracking plan for each project.</p>
                 </div>
                  <div className="flex gap-2">
@@ -237,3 +237,4 @@ export default function PrepareIndicatorsPage() {
         </div>
     );
 }
+
