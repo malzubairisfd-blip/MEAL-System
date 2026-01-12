@@ -1,3 +1,4 @@
+
 // src/app/monitoring/me-plan-table/add/page.tsx
 "use client";
 
@@ -172,7 +173,7 @@ function AddMEPlanForm() {
         <div className="space-y-6">
             <div className="flex justify-between items-center">
                 <div>
-                    <h1 className="text-3xl font-bold text-black">Create/Edit M&E Plan</h1>
+                    <h1 className="text-3xl font-bold text-white">Create/Edit M&E Plan</h1>
                     <p className="text-muted-foreground">Define the M&E details for each indicator in your project's logical framework.</p>
                 </div>
                  <Button variant="outline" asChild>
@@ -358,3 +359,4 @@ export default function AddMEPlanTablePage() {
         </Suspense>
     );
 }
+
