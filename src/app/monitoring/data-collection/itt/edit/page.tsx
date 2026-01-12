@@ -137,10 +137,36 @@ function EditITTForm() {
 
         setIsSaving(true);
         try {
+            // Ensure all data is included in the payload
+            const payload = {
+                projectId: data.projectId,
+                indicators: data.indicators.map(indicator => ({
+                    indicatorId: indicator.indicatorId,
+                    indicatorCode: indicator.indicatorCode,
+                    type: indicator.type,
+                    outcome: indicator.outcome,
+                    output: indicator.output,
+                    activity: indicator.activity,
+                    startDate: indicator.startDate,
+                    endDate: indicator.endDate,
+                    units: indicator.units,
+                    lopTarget: indicator.lopTarget,
+                    annualTarget: indicator.annualTarget,
+                    q1Target: indicator.q1Target,
+                    q1Actual: indicator.q1Actual,
+                    q2Target: indicator.q2Target,
+                    q2Actual: indicator.q2Actual,
+                    q3Target: indicator.q3Target,
+                    q3Actual: indicator.q3Actual,
+                    q4Target: indicator.q4Target,
+                    q4Actual: indicator.q4Actual,
+                })),
+            };
+
             const response = await fetch('/api/indicator-tracking', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data),
+                body: JSON.stringify(payload),
             });
             const result = await response.json();
             if (!response.ok) throw new Error(result.error || "Failed to save data");
@@ -284,3 +310,5 @@ export default function EditITTPage() {
     );
 }
 
+
+    
