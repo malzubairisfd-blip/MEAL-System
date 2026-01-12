@@ -1,3 +1,4 @@
+
 // src/app/monitoring/data-collection/itt/page.tsx
 "use client";
 
@@ -7,7 +8,7 @@ import { useIttData } from '@/hooks/use-itt-data';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { ArrowLeft, Loader2, Edit } from 'lucide-react';
 import { ProjectInfo } from '@/components/itt/ProjectInfo';
 import { ImpactCards } from '@/components/itt/ImpactCards';
 import { IndicatorTable } from '@/components/itt/IndicatorTable';
@@ -19,11 +20,18 @@ export default function ITTPage() {
         <div className="space-y-6">
             <div className="flex justify-between items-center">
                 <h1 className="text-3xl font-bold">Indicator Tracking Table</h1>
-                 <Button variant="outline" asChild>
-                    <Link href="/monitoring/data-collection">
-                        <ArrowLeft className="mr-2 h-4 w-4" /> Back to Data Collection
-                    </Link>
-                </Button>
+                 <div className="flex gap-2">
+                    <Button variant="outline" asChild>
+                        <Link href="/monitoring/data-collection">
+                            <ArrowLeft className="mr-2 h-4 w-4" /> Back to Data Collection
+                        </Link>
+                    </Button>
+                    <Button asChild>
+                        <Link href={`/monitoring/data-collection/itt/edit?projectId=${selectedProject?.projectId || ''}`}>
+                            <Edit className="mr-2 h-4 w-4" /> Edit Plan
+                        </Link>
+                    </Button>
+                </div>
             </div>
             
              <Card>
@@ -32,7 +40,7 @@ export default function ITTPage() {
                     <CardDescription>Choose a project to view its Indicator Tracking Table.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                     <Select onValueChange={selectProject} disabled={loading.projects}>
+                     <Select onValueChange={selectProject} value={selectedProject?.projectId || ''} disabled={loading.projects}>
                         <SelectTrigger className="w-full md:w-1/2">
                             <SelectValue placeholder={loading.projects ? "Loading projects..." : "Select a project..."} />
                         </SelectTrigger>
@@ -63,3 +71,4 @@ export default function ITTPage() {
         </div>
     );
 }
+
