@@ -3,7 +3,7 @@
 import React, { useEffect, useState, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useForm, useFieldArray } from 'react-hook-form';
+import { useForm, useFieldArray, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { IndicatorTrackingPlanSchema, type IndicatorTrackingPlan, type Indicator } from '@/types/monitoring-indicators';
 import { Logframe } from '@/lib/logframe';
@@ -210,7 +210,7 @@ function EditITTForm() {
 }
 
 const IndicatorCard = ({ control, index }: { control: any, index: number }) => {
-    const indicator = watch({ control, name: `indicators.${index}` });
+    const indicator = useWatch({ control, name: `indicators.${index}` });
 
     return (
         <Card>
