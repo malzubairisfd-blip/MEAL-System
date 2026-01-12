@@ -32,6 +32,15 @@ export const IndicatorSchema = z.object({
   q3Actual: z.coerce.number().min(0).optional(),
   q4Target: z.coerce.number().min(0).optional(),
   q4Actual: z.coerce.number().min(0).optional(),
+  // Calculated fields
+  lopActual: z.coerce.number().optional(),
+  lopPercentage: z.coerce.number().optional(),
+  ytdActual: z.coerce.number().optional(),
+  annualPercentage: z.coerce.number().optional(),
+  q1Percentage: z.coerce.number().optional(),
+  q2Percentage: z.coerce.number().optional(),
+  q3Percentage: z.coerce.number().optional(),
+  q4Percentage: z.coerce.number().optional(),
 }).refine(data => data.isNew || (
     data.lopTarget !== undefined && data.annualTarget !== undefined &&
     data.q1Target !== undefined && data.q1Actual !== undefined &&
@@ -52,4 +61,5 @@ export const IndicatorTrackingPlanSchema = z.object({
 export type IndicatorUnit = z.infer<typeof IndicatorUnitSchema>;
 export type Indicator = z.infer<typeof IndicatorSchema>;
 export type IndicatorTrackingPlan = z.infer<typeof IndicatorTrackingPlanSchema>;
+
 

@@ -7,6 +7,8 @@ import { useForm, useFieldArray, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { IndicatorTrackingPlanSchema, type IndicatorTrackingPlan, type Indicator } from '@/types/monitoring-indicators';
 import { Logframe } from '@/lib/logframe';
+import { calculateLoPActual, calculateYearToDateActual, calculatePercentage } from '@/lib/itt-calculations';
+
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -137,30 +139,45 @@ function EditITTForm() {
 
         setIsSaving(true);
         try {
-            // Ensure all data is included in the payload
+            // Ensure all data is included in the payload, including calculated fields
             const payload = {
                 projectId: data.projectId,
-                indicators: data.indicators.map(indicator => ({
-                    indicatorId: indicator.indicatorId,
-                    indicatorCode: indicator.indicatorCode,
-                    type: indicator.type,
-                    outcome: indicator.outcome,
-                    output: indicator.output,
-                    activity: indicator.activity,
-                    startDate: indicator.startDate,
-                    endDate: indicator.endDate,
-                    units: indicator.units,
-                    lopTarget: indicator.lopTarget,
-                    annualTarget: indicator.annualTarget,
-                    q1Target: indicator.q1Target,
-                    q1Actual: indicator.q1Actual,
-                    q2Target: indicator.q2Target,
-                    q2Actual: indicator.q2Actual,
-                    q3Target: indicator.q3Target,
-                    q3Actual: indicator.q3Actual,
-                    q4Target: indicator.q4Target,
-                    q4Actual: indicator.q4Actual,
-                })),
+                indicators: data.indicators.map(indicator => {
+                    const lopActual = calculateLoPActual(indicator);
+                    const ytdActual = calculateYearToDateActual(indicator);
+
+                    return {
+                        indicatorId: indicator.indicatorId,
+                        indicatorCode: indicator.indicatorCode,
+                        type: indicator.type,
+                        outcome: indicator.outcome,
+                        output: indicator.output,
+                        activity: indicator.activity,
+                        startDate: indicator.startDate,
+                        endDate: indicator.endDate,
+                        units: indicator.units,
+                        lopTarget: indicator.lopTarget,
+                        annualTarget: indicator.annualTarget,
+                        q1Target: indicator.q1Target,
+                        q1Actual: indicator.q1Actual,
+                        q2Target: indicator.q2Target,
+                        q2Actual: indicator.q2Actual,
+                        q3Target: indicator.q3Target,
+                        q3Actual: indicator.q3Actual,
+                        q4Target: indicator.q4Target,
+                        q4Actual: indicator.q4Actual,
+                        
+                        // Calculated fields
+                        lopActual: lopActual,
+                        lopPercentage: calculatePercentage(lopActual, indicator.lopTarget),
+                        ytdActual: ytdActual,
+                        annualPercentage: calculatePercentage(ytdActual, indicator.annualTarget),
+                        q1Percentage: calculatePercentage(indicator.q1Actual, indicator.q1Target),
+                        q2Percentage: calculatePercentage(indicator.q2Actual, indicator.q2Target),
+                        q3Percentage: calculatePercentage(indicator.q3Actual, indicator.q3Target),
+                        q4Percentage: calculatePercentage(indicator.q4Actual, indicator.q4Target),
+                    }
+                }),
             };
 
             const response = await fetch('/api/indicator-tracking', {
