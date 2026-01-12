@@ -1,5 +1,5 @@
 // src/hooks/use-itt-data.ts
-import { useState, useEffect, useCallback } from 'use-sync-external-store/shim';
+import { useState, useEffect, useCallback } from 'react';
 import { useToast } from './use-toast';
 import type { Logframe } from '@/lib/logframe';
 import type { IndicatorTrackingPlan } from '@/types/monitoring-indicators';
