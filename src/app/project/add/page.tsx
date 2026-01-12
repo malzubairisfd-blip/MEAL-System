@@ -351,7 +351,7 @@ export default function AddProjectPage() {
                                     <FormControl>
                                       <textarea
                                           {...field}
-                                          className="w-full min-h-[150px] p-3 rounded-md border border-input text-sm"
+                                          className="w-full min-h-[150px] p-3 rounded-md border border-input text-sm text-black"
                                           placeholder="Write your project summary here..."
                                       />
                                     </FormControl>
