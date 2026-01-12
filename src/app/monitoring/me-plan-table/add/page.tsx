@@ -197,7 +197,7 @@ function AddMEPlanForm() {
                                     <FormItem>
                                         <Select onValueChange={(val) => setValue('projectId', val)} value={field.value} disabled={loading.projects}>
                                             <FormControl>
-                                                <SelectTrigger>
+                                                <SelectTrigger className="text-black">
                                                     <SelectValue placeholder={loading.projects ? "Loading projects..." : "Select a project..."} />
                                                 </SelectTrigger>
                                             </FormControl>
