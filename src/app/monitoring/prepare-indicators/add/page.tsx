@@ -10,6 +10,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { IndicatorTrackingPlanSchema, type IndicatorTrackingPlan } from '@/types/monitoring-indicators';
 import { Logframe } from '@/lib/logframe';
+import { GanttTask } from '@/types/gantt';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -33,6 +34,7 @@ function AddIndicatorPlanForm() {
     
     const [projects, setProjects] = useState<Project[]>([]);
     const [logframe, setLogframe] = useState<Logframe | null>(null);
+    const [projectPlan, setProjectPlan] = useState<{ tasks: GanttTask[] } | null>(null);
     const [loading, setLoading] = useState({ projects: true, data: false });
     const [isSaving, setIsSaving] = useState(false);
 
@@ -74,6 +76,7 @@ function AddIndicatorPlanForm() {
     useEffect(() => {
         if (!selectedProjectId) {
             setLogframe(null);
+            setProjectPlan(null);
             replaceIndicators([]);
             return;
         };
@@ -81,9 +84,10 @@ function AddIndicatorPlanForm() {
         const fetchData = async () => {
             setLoading(prev => ({...prev, data: true}));
             try {
-                 const [logframeRes, planRes] = await Promise.all([
+                 const [logframeRes, planRes, projectPlanRes] = await Promise.all([
                     fetch(`/api/logframe?projectId=${selectedProjectId}`),
-                    fetch(`/api/monitoring-indicators?projectId=${selectedProjectId}`)
+                    fetch(`/api/monitoring-indicators?projectId=${selectedProjectId}`),
+                    fetch(`/api/project-plan?projectId=${selectedProjectId}`)
                 ]);
 
                 let logframeData: Logframe | null = null;
@@ -101,11 +105,19 @@ function AddIndicatorPlanForm() {
                        planMap = new Map(planData.indicators.map((p: any) => [p.indicatorId, p]));
                     }
                 }
+                
+                let projectPlanData: { tasks: GanttTask[] } | null = null;
+                if (projectPlanRes.ok) {
+                    projectPlanData = await projectPlanRes.json();
+                    setProjectPlan(projectPlanData);
+                }
 
                 if (logframeData && logframeData.outcome) {
                     const flattenedIndicators = logframeData.outputs.flatMap((output, oIdx) => 
-                        output.activities.flatMap((activity, aIdx) => 
-                            activity.indicators.map((indicator, iIdx) => {
+                        output.activities.flatMap((activity, aIdx) => {
+                            const mainActivity = projectPlanData?.tasks.find(t => t.title === activity.description);
+                            
+                            return activity.indicators.map((indicator, iIdx) => {
                                 const existingPlan = planMap.get(indicator.description);
                                 return {
                                     indicatorId: indicator.description,
@@ -115,10 +127,12 @@ function AddIndicatorPlanForm() {
                                     outcome: logframeData.outcome.description,
                                     output: output.description,
                                     activity: activity.description,
+                                    startDate: mainActivity?.start,
+                                    endDate: mainActivity?.end,
                                     units: existingPlan?.units || []
                                 };
                             })
-                        )
+                        })
                     );
                     replaceIndicators(flattenedIndicators);
                 } else {

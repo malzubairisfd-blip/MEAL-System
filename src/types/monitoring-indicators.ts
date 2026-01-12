@@ -18,6 +18,8 @@ export const IndicatorSchema = z.object({
   outcome: z.string().optional(),
   output: z.string().optional(),
   activity: z.string().optional(),
+  startDate: z.string().optional(),
+  endDate: z.string().optional(),
   units: z.array(IndicatorUnitSchema).min(1, "At least one unit must be defined for each indicator."),
 });
 
