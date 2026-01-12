@@ -99,8 +99,8 @@ export function IndicatorTable({ logframe, indicatorPlan }: { logframe: Logframe
                                              <TableRow className="bg-muted/50">
                                                 <TableCell colSpan={22} className="font-semibold pl-8">{output}</TableCell>
                                             </TableRow>
-                                            {indicators.map(indicator => (
-                                                <IndicatorRow key={`${indicator.indicatorId}-${indicator.indicatorCode}`} indicator={indicator} />
+                                            {indicators.map((indicator, index) => (
+                                                <IndicatorRow key={`${indicator.indicatorId}-${indicator.indicatorCode}-${index}`} indicator={indicator} />
                                             ))}
                                          </React.Fragment>
                                     ))}
