@@ -155,7 +155,7 @@ function AddTaskFormContent() {
     return (
         <div className="space-y-6">
              <div className="flex justify-between items-center">
-                <h1 className="text-3xl font-bold">Add New Activities</h1>
+                <h1 className="text-3xl font-bold text-black">Add New Activities</h1>
                 <Button variant="outline" asChild>
                     <Link href={`/project/plan?projectId=${selectedProjectId}`}>
                         <ArrowLeft className="mr-2 h-4 w-4" /> Back to Project Plan
@@ -167,7 +167,7 @@ function AddTaskFormContent() {
                 <form onSubmit={form.handleSubmit(onAddTaskSubmit)} className="space-y-8">
                      <Card>
                         <CardHeader>
-                            <CardTitle>Select Project</CardTitle>
+                            <CardTitle className="text-black">Select Project</CardTitle>
                         </CardHeader>
                         <CardContent>
                             <Select onValueChange={setSelectedProjectId} value={selectedProjectId}>
@@ -229,7 +229,10 @@ function RecursiveTaskItem({ control, index, remove, parentPath, logframe, baseA
         if (parentPath) {
             const pathParts = parentPath.split('.subTasks');
             // The first part is always `tasks.${index}`
-            const topLevelIndex = parseInt(pathParts[0].split('.')[1], 10);
+            const topLevelIndexStr = pathParts[0].split('.')[1];
+             if (!topLevelIndexStr) return `${index + 1}`; // Fallback
+
+            const topLevelIndex = parseInt(topLevelIndexStr, 10);
             
             let finalNumbering = `${(baseActivityNumber !== undefined ? baseActivityNumber : topLevelIndex + 1)}`;
             
@@ -261,7 +264,7 @@ function RecursiveTaskItem({ control, index, remove, parentPath, logframe, baseA
     return (
         <Card className="p-4 relative bg-card border-border" style={{ marginLeft: `${(parentPath.split('subTasks').length -1) * 20}px` }}>
             <div className="flex justify-between items-start mb-4">
-                <h3 className="text-lg font-semibold">{`Activity ${activityNumbering}`}</h3>
+                <h3 className="text-lg font-semibold text-black">{`Activity ${activityNumbering}`}</h3>
                 <Button type="button" variant="ghost" size="icon" onClick={() => remove(index)}>
                     <Trash2 className="h-4 w-4 text-destructive"/>
                 </Button>
@@ -271,7 +274,7 @@ function RecursiveTaskItem({ control, index, remove, parentPath, logframe, baseA
                     <div className="col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
                        <FormField control={control} name={`${currentPath}.outcome`} render={({ field }) => (
                            <FormItem>
-                               <FormLabel>Outcome</FormLabel>
+                               <FormLabel className="text-black">Outcome</FormLabel>
                                <Select onValueChange={field.onChange} value={field.value}>
                                    <FormControl><SelectTrigger><SelectValue placeholder="Select Outcome" /></SelectTrigger></FormControl>
                                    <SelectContent>
@@ -282,7 +285,7 @@ function RecursiveTaskItem({ control, index, remove, parentPath, logframe, baseA
                        )} />
                         <FormField control={control} name={`${currentPath}.output`} render={({ field }) => (
                            <FormItem>
-                               <FormLabel>Output</FormLabel>
+                               <FormLabel className="text-black">Output</FormLabel>
                                <Select onValueChange={field.onChange} value={field.value}>
                                    <FormControl><SelectTrigger><SelectValue placeholder="Select Output" /></SelectTrigger></FormControl>
                                    <SelectContent>
@@ -295,7 +298,7 @@ function RecursiveTaskItem({ control, index, remove, parentPath, logframe, baseA
                 )}
                 <FormField control={control} name={`${currentPath}.title`} render={({ field }) => (
                    <FormItem className="col-span-2">
-                       <FormLabel>{`Activity ${activityNumbering} Title`}</FormLabel>
+                       <FormLabel className="text-black">{`Activity ${activityNumbering} Title`}</FormLabel>
                        {isTopLevel && filteredActivities.length > 0 ? (
                             <Select onValueChange={field.onChange} value={field.value} disabled={!selectedOutput}>
                                <FormControl><SelectTrigger><SelectValue placeholder="Select Activity" /></SelectTrigger></FormControl>
@@ -312,7 +315,7 @@ function RecursiveTaskItem({ control, index, remove, parentPath, logframe, baseA
                  {hasSubTasks === 'no' && (
                     <div className="col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
-                            <Label>Start Date</Label>
+                            <Label className="text-black">Start Date</Label>
                             <div className="grid grid-cols-3 gap-2">
                                 <FormField control={control} name={`${currentPath}.startDay`} render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Day" /></SelectTrigger></FormControl><SelectContent>{days.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
                                 <FormField control={control} name={`${currentPath}.startMonth`} render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Month" /></SelectTrigger></FormControl><SelectContent>{months.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
@@ -320,14 +323,14 @@ function RecursiveTaskItem({ control, index, remove, parentPath, logframe, baseA
                             </div>
                         </div>
                         <div className="space-y-2">
-                            <Label>End Date</Label>
+                            <Label className="text-black">End Date</Label>
                             <div className="grid grid-cols-3 gap-2">
                                 <FormField control={control} name={`${currentPath}.endDay`} render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Day" /></SelectTrigger></FormControl><SelectContent>{days.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
                                 <FormField control={control} name={`${currentPath}.endMonth`} render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Month" /></SelectTrigger></FormControl><SelectContent>{months.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
                                 <FormField control={control} name={`${currentPath}.endYear`} render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Year" /></SelectTrigger></FormControl><SelectContent>{years.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>)} />
                             </div>
                         </div>
-                         <FormField control={control} name={`${currentPath}.progress`} render={({ field }) => (<FormItem><FormLabel>Progress (%)</FormLabel><FormControl><Input type="number" min="0" max="100" {...field} className="w-24" /></FormControl><FormMessage /></FormItem>)} />
+                         <FormField control={control} name={`${currentPath}.progress`} render={({ field }) => (<FormItem><FormLabel className="text-black">Progress (%)</FormLabel><FormControl><Input type="number" min="0" max="100" {...field} className="w-24" /></FormControl><FormMessage /></FormItem>)} />
                     </div>
                  )}
                  <FormField
@@ -335,7 +338,7 @@ function RecursiveTaskItem({ control, index, remove, parentPath, logframe, baseA
                     name={`${currentPath}.hasSubTasks`}
                     render={({ field }) => (
                         <FormItem className="col-span-2 space-y-3">
-                            <FormLabel>{`Include Activity ${activityNumbering}.1?`}</FormLabel>
+                            <FormLabel className="text-black">{`Include Activity ${activityNumbering}.1?`}</FormLabel>
                             <FormControl>
                                 <RadioGroup
                                     onValueChange={field.onChange}
@@ -344,11 +347,11 @@ function RecursiveTaskItem({ control, index, remove, parentPath, logframe, baseA
                                 >
                                     <FormItem className="flex items-center space-x-2 space-y-0">
                                         <FormControl><RadioGroupItem value="yes" /></FormControl>
-                                        <FormLabel className="font-normal">Yes</FormLabel>
+                                        <FormLabel className="font-normal text-black">Yes</FormLabel>
                                     </FormItem>
                                     <FormItem className="flex items-center space-x-2 space-y-0">
                                         <FormControl><RadioGroupItem value="no" /></FormControl>
-                                        <FormLabel className="font-normal">No</FormLabel>
+                                        <FormLabel className="font-normal text-black">No</FormLabel>
                                     </FormItem>
                                 </RadioGroup>
                             </FormControl>
