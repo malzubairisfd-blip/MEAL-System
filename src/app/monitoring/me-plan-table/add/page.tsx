@@ -172,7 +172,7 @@ function AddMEPlanForm() {
         <div className="space-y-6">
             <div className="flex justify-between items-center">
                 <div>
-                    <h1 className="text-3xl font-bold">Create/Edit M&E Plan</h1>
+                    <h1 className="text-3xl font-bold text-black">Create/Edit M&E Plan</h1>
                     <p className="text-muted-foreground">Define the M&E details for each indicator in your project's logical framework.</p>
                 </div>
                  <Button variant="outline" asChild>
@@ -186,7 +186,7 @@ function AddMEPlanForm() {
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
                      <Card>
                         <CardHeader>
-                            <CardTitle>Project Selection</CardTitle>
+                            <CardTitle className="text-black">Project Selection</CardTitle>
                         </CardHeader>
                         <CardContent>
                              <FormField
@@ -223,7 +223,7 @@ function AddMEPlanForm() {
                         outputFields.map((outputField, outputIndex) => (
                           <Card key={outputField.id} className="border-blue-200 border-2">
                             <CardHeader>
-                              <CardTitle>Output {outputIndex + 1}: {outputField.description}</CardTitle>
+                              <CardTitle className="text-black">Output {outputIndex + 1}: {outputField.description}</CardTitle>
                             </CardHeader>
                             <CardContent className="space-y-6 pl-10">
                               <ActivitiesArray control={control} outputIndex={outputIndex} />
@@ -255,7 +255,7 @@ const ActivitiesArray = ({ control, outputIndex }: { control: any, outputIndex: 
   return activityFields.map((activityField, activityIndex) => (
     <Card key={activityField.id} className="bg-slate-50">
       <CardHeader>
-        <CardTitle className="text-lg">Activity {outputIndex + 1}.{activityIndex + 1}: {activityField.description}</CardTitle>
+        <CardTitle className="text-lg text-black">Activity {outputIndex + 1}.{activityIndex + 1}: {activityField.description}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <IndicatorsArray control={control} outputIndex={outputIndex} activityIndex={activityIndex} />
@@ -282,7 +282,7 @@ const IndicatorsArray = ({ control, outputIndex, activityIndex }: { control: any
           <CardHeader className='p-0 pb-4'>
             <FormField control={control} name={`outputs.${outputIndex}.activities.${activityIndex}.indicators.${indicatorIndex}.description`} render={({ field }) => (
               <FormItem>
-                <FormLabel>Indicator {outputIndex + 1}.{activityIndex+1}.{indicatorIndex+1} Title</FormLabel>
+                <FormLabel className="text-black">Indicator {outputIndex + 1}.{activityIndex+1}.{indicatorIndex+1} Title</FormLabel>
                 <FormControl>
                   <Input {...field} readOnly={!(indicatorField as any).isNew} placeholder={(indicatorField as any).isNew ? "Enter new indicator title..." : ""} />
                 </FormControl>
@@ -293,35 +293,35 @@ const IndicatorsArray = ({ control, outputIndex, activityIndex }: { control: any
           <CardContent className="p-0 space-y-4">
             <FormField control={control} name={`outputs.${outputIndex}.activities.${activityIndex}.indicators.${indicatorIndex}.definition`} render={({ field }) => (
                 <FormItem>
-                    <FormLabel>Indicator Definition</FormLabel>
+                    <FormLabel className="text-black">Indicator Definition</FormLabel>
                     <FormControl><Textarea maxLength={1000} {...field} /></FormControl>
                     <FormMessage />
                 </FormItem>
             )} />
             <FormField control={control} name={`outputs.${outputIndex}.activities.${activityIndex}.indicators.${indicatorIndex}.collectionMethods`} render={({ field }) => (
               <FormItem>
-                  <FormLabel>Data Collection Methods</FormLabel>
+                  <FormLabel className="text-black">Data Collection Methods</FormLabel>
                   <FormControl><Textarea {...field} /></FormControl>
                   <FormMessage />
               </FormItem>
             )} />
             <FormField control={control} name={`outputs.${outputIndex}.activities.${activityIndex}.indicators.${indicatorIndex}.frequency`} render={({ field }) => (
                 <FormItem>
-                    <FormLabel>Frequency and Schedule</FormLabel>
+                    <FormLabel className="text-black">Frequency and Schedule</FormLabel>
                     <FormControl><Textarea {...field} /></FormControl>
                     <FormMessage />
                 </FormItem>
             )} />
             <FormField control={control} name={`outputs.${outputIndex}.activities.${activityIndex}.indicators.${indicatorIndex}.responsibilities`} render={({ field }) => (
                 <FormItem>
-                    <FormLabel>Responsibilities</FormLabel>
+                    <FormLabel className="text-black">Responsibilities</FormLabel>
                     <FormControl><Textarea {...field} /></FormControl>
                     <FormMessage />
                 </FormItem>
             )} />
             <FormField control={control} name={`outputs.${outputIndex}.activities.${activityIndex}.indicators.${indicatorIndex}.informationUse`} render={({ field }) => (
                 <FormItem>
-                    <FormLabel>Information Use</FormLabel>
+                    <FormLabel className="text-black">Information Use</FormLabel>
                     <FormControl><Textarea {...field} /></FormControl>
                     <FormMessage />
                 </FormItem>
