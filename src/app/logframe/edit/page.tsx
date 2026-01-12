@@ -252,7 +252,7 @@ const ActivitiesArray = ({ control, outputIndex }: { control: any, outputIndex: 
     });
     return <div className="space-y-4 pl-4 border-l-2">
         {fields.map((activity, activityIndex) => (
-            <Card key={activity.id} className='bg-slate-50'>
+            <Card key={activity.id} className='bg-background'>
                  <CardHeader>
                     <div className="flex justify-between items-center">
                         <CardTitle className="text-lg">Activity {outputIndex + 1}.{activityIndex + 1}</CardTitle>
@@ -286,7 +286,7 @@ const IndicatorsArray = ({ control, outputIndex, activityIndex }: { control: any
     return <div className="space-y-4 pl-4">
         <FormLabel>Indicators</FormLabel>
         {fields.map((indicator, indicatorIndex) => (
-            <div key={indicator.id} className="p-4 border rounded-md relative bg-white">
+            <div key={indicator.id} className="p-4 border rounded-md relative bg-card">
                 {fields.length > 1 && <Button type="button" variant="ghost" size="icon" className="absolute top-2 right-2 h-6 w-6" onClick={() => remove(indicatorIndex)}><Trash2 className="h-4 w-4 text-destructive"/></Button>}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                      <FormField control={control} name={`outputs.${outputIndex}.activities.${activityIndex}.indicators.${indicatorIndex}.description`} render={({ field }) => (
@@ -333,7 +333,7 @@ const RisksAndAssumptionsArray = ({ control, outputIndex, activityIndex }: { con
     return <div className="space-y-4 pl-4">
         <FormLabel>Risks and Assumptions</FormLabel>
         {fields.map((item, index) => (
-            <div key={item.id} className="p-4 border rounded-md relative bg-white">
+            <div key={item.id} className="p-4 border rounded-md relative bg-card">
                  {fields.length > 1 && <Button type="button" variant="ghost" size="icon" className="absolute top-2 right-2 h-6 w-6" onClick={() => remove(index)}><Trash2 className="h-4 w-4 text-destructive"/></Button>}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                      <FormField control={control} name={`outputs.${outputIndex}.activities.${activityIndex}.risksAndAssumptions.${index}.risk`} render={({ field }) => (
@@ -356,5 +356,3 @@ const RisksAndAssumptionsArray = ({ control, outputIndex, activityIndex }: { con
          <Button type="button" variant="outline" size="sm" onClick={() => append({ risk: '', assumption: '' })}><Plus className="mr-2 h-4 w-4" /> Add Risk/Assumption</Button>
     </div>
 }
-
-    

@@ -120,8 +120,8 @@ export function PairwiseModal({ cluster, isOpen, onClose }: PairwiseModalProps) 
                         <Table>
                           <TableHeader className="bg-primary text-primary-foreground">
                             <TableRow>
-                              <TableHead className="font-bold text-black">{t('review.pairwiseModal.component')}</TableHead>
-                              <TableHead className="text-right font-bold text-black">{t('review.pairwiseModal.score')}</TableHead>
+                              <TableHead className="font-bold text-primary-foreground">{t('review.pairwiseModal.component')}</TableHead>
+                              <TableHead className="text-right font-bold text-primary-foreground">{t('review.pairwiseModal.score')}</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>

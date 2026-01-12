@@ -217,12 +217,12 @@ export default function ExportPage() {
                                     <p className="text-sm text-muted-foreground text-center py-4">{t('export.downloadPanel.empty')}</p>
                                 ) : (
                                     <Table>
-                                        <TableHeader className="bg-primary text-primary-foreground">
+                                        <TableHeader>
                                             <TableRow>
-                                                <TableHead className="font-bold text-black">{t('export.downloadPanel.fileName')}</TableHead>
-                                                <TableHead className="font-bold text-black">{t('export.downloadPanel.version')}</TableHead>
-                                                <TableHead className="font-bold text-black">{t('export.downloadPanel.created')}</TableHead>
-                                                <TableHead className="text-right font-bold text-black">{t('export.downloadPanel.actions')}</TableHead>
+                                                <TableHead>{t('export.downloadPanel.fileName')}</TableHead>
+                                                <TableHead>{t('export.downloadPanel.version')}</TableHead>
+                                                <TableHead>{t('export.downloadPanel.created')}</TableHead>
+                                                <TableHead className="text-right">{t('export.downloadPanel.actions')}</TableHead>
                                             </TableRow>
                                         </TableHeader>
                                         <TableBody>

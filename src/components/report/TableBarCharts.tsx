@@ -45,8 +45,8 @@ const TableWithBarChart = ({ title, data, dataKeyLabel }: { title: string; data:
           <Table>
             <TableHeader className="bg-primary text-primary-foreground">
               <TableRow>
-                <TableHead className="font-bold text-black">{dataKeyLabel}</TableHead>
-                <TableHead className="text-right font-bold text-black">{t('report.charts.beneficiaries')}</TableHead>
+                <TableHead className="font-bold text-primary-foreground">{dataKeyLabel}</TableHead>
+                <TableHead className="text-right font-bold text-primary-foreground">{t('report.charts.beneficiaries')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>

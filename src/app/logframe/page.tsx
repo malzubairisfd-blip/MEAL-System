@@ -201,8 +201,8 @@ export default function LogicalFrameworkDashboardPage() {
                                 <table className="w-full text-sm">
                                     <thead className="bg-primary text-primary-foreground">
                                         <tr>
-                                            <th className="p-3 text-left w-1/4 font-bold text-black">Title</th>
-                                            <th className="p-3 text-left font-bold text-black">Description</th>
+                                            <th className="p-3 text-left w-1/4 font-bold text-primary-foreground">Title</th>
+                                            <th className="p-3 text-left font-bold text-primary-foreground">Description</th>
                                         </tr>
                                     </thead>
                                     <tbody>

@@ -183,13 +183,13 @@ export default function PrepareIndicatorsPage() {
                             <Table>
                                 <TableHeader>
                                     <TableRow className="bg-primary text-primary-foreground">
-                                        <TableHead className="w-[15%] font-bold text-black">Indicator</TableHead>
-                                        <TableHead className="w-[10%] font-bold text-black">Unit</TableHead>
-                                        <TableHead className="font-bold text-black">Targeted</TableHead>
-                                        <TableHead className="font-bold text-black">Actual</TableHead>
-                                        <TableHead className="font-bold text-black">Percentage</TableHead>
-                                        <TableHead className="font-bold text-black">Data Sources</TableHead>
-                                        <TableHead className="font-bold text-black">Responsibilities</TableHead>
+                                        <TableHead className="w-[15%] font-bold text-primary-foreground">Indicator</TableHead>
+                                        <TableHead className="w-[10%] font-bold text-primary-foreground">Unit</TableHead>
+                                        <TableHead className="font-bold text-primary-foreground">Targeted</TableHead>
+                                        <TableHead className="font-bold text-primary-foreground">Actual</TableHead>
+                                        <TableHead className="font-bold text-primary-foreground">Percentage</TableHead>
+                                        <TableHead className="font-bold text-primary-foreground">Data Sources</TableHead>
+                                        <TableHead className="font-bold text-primary-foreground">Responsibilities</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>

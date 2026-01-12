@@ -16,10 +16,10 @@ export function EvidenceTable({ rows }: { rows: EvidenceRow[] }) {
       <table className="w-full text-sm">
         <thead className="bg-primary text-primary-foreground">
           <tr>
-            <th className="px-4 py-3 text-left font-bold text-black">Indicator</th>
-            <th className="px-4 py-3 font-bold text-black">Target</th>
-            <th className="px-4 py-3 font-bold text-black">Actual</th>
-            <th className="px-4 py-3 font-bold text-black">Status</th>
+            <th className="px-4 py-3 text-left font-bold text-primary-foreground">Indicator</th>
+            <th className="px-4 py-3 font-bold text-primary-foreground">Target</th>
+            <th className="px-4 py-3 font-bold text-primary-foreground">Actual</th>
+            <th className="px-4 py-3 font-bold text-primary-foreground">Status</th>
           </tr>
         </thead>
         <tbody>

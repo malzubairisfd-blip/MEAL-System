@@ -134,7 +134,7 @@ export const TaskListItem = ({ task, onDelete, onUpdateStatus, onUpdateProgress,
 
     return (
         <div 
-          className={cn("h-full px-3 flex items-start text-sm group py-2 min-h-[4rem]", level > 0 && 'bg-slate-900/50')} 
+          className={cn("h-full px-3 flex items-start text-sm group py-2 min-h-[4rem]", level > 0 && 'bg-slate-800/50')} 
           style={{ paddingLeft: `${0.75 + level * 1.5}rem`}}
         >
             {/* Column 1: Activity Number */}

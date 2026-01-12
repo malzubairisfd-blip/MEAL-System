@@ -183,13 +183,13 @@ export default function MEPlanTablePage() {
                             <Table>
                                 <TableHeader>
                                     <TableRow className="bg-primary text-primary-foreground">
-                                        <TableHead className="w-[15%] font-bold text-black">Output/Activity/Indicator</TableHead>
-                                        <TableHead className="w-[15%] font-bold text-black">Indicator Details</TableHead>
-                                        <TableHead className="font-bold text-black">Indicator Definition</TableHead>
-                                        <TableHead className="font-bold text-black">Data Collection</TableHead>
-                                        <TableHead className="font-bold text-black">Frequency</TableHead>
-                                        <TableHead className="font-bold text-black">Responsibilities</TableHead>
-                                        <TableHead className="font-bold text-black">Information Use</TableHead>
+                                        <TableHead className="w-[15%] font-bold text-primary-foreground">Output/Activity/Indicator</TableHead>
+                                        <TableHead className="w-[15%] font-bold text-primary-foreground">Indicator Details</TableHead>
+                                        <TableHead className="font-bold text-primary-foreground">Indicator Definition</TableHead>
+                                        <TableHead className="font-bold text-primary-foreground">Data Collection</TableHead>
+                                        <TableHead className="font-bold text-primary-foreground">Frequency</TableHead>
+                                        <TableHead className="font-bold text-primary-foreground">Responsibilities</TableHead>
+                                        <TableHead className="font-bold text-primary-foreground">Information Use</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
