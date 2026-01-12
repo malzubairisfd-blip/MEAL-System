@@ -1,3 +1,4 @@
+
 // src/hooks/use-itt-data.ts
 import { useState, useEffect, useCallback } from 'react';
 import { useToast } from './use-toast';
@@ -50,9 +51,10 @@ export function useIttData() {
         }
         setLoading(prev => ({...prev, data: true }));
         try {
-            const [logframeRes, indicatorPlanRes] = await Promise.all([
+            const [logframeRes, indicatorPlanRes, trackingDataRes] = await Promise.all([
                 fetch(`/api/logframe?projectId=${projectId}`),
-                fetch(`/api/monitoring-indicators?projectId=${projectId}`)
+                fetch(`/api/monitoring-indicators?projectId=${projectId}`),
+                fetch(`/api/indicator-tracking?projectId=${projectId}`) // Fetch the saved tracking data
             ]);
 
             if (!logframeRes.ok) {
@@ -66,7 +68,21 @@ export function useIttData() {
                  toast({ title: "Indicator Plan Not Found", description: "No indicator plan found for this project. Please create one first.", variant: 'destructive'});
                  setIndicatorPlan(null);
             } else {
-                 setIndicatorPlan(await indicatorPlanRes.json());
+                 const basePlan = await indicatorPlanRes.json();
+                 if (trackingDataRes.ok) {
+                     const trackingData = await trackingDataRes.json();
+                     const trackingMap = new Map(trackingData.indicators.map((i: any) => [i.indicatorId, i]));
+                     
+                     // Merge tracking data into the base plan
+                     const mergedIndicators = basePlan.indicators.map((indicator: any) => {
+                         const savedData = trackingMap.get(indicator.indicatorId);
+                         return savedData ? { ...indicator, ...savedData } : indicator;
+                     });
+
+                     setIndicatorPlan({ ...basePlan, indicators: mergedIndicators });
+                 } else {
+                    setIndicatorPlan(basePlan);
+                 }
             }
 
         } catch (error: any) {
