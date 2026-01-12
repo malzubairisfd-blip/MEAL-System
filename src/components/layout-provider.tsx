@@ -18,6 +18,7 @@ import {
   Monitor,
   Target,
   Palette,
+  Sheet,
 } from "lucide-react";
 import { useTranslation } from "@/hooks/use-translation";
 import { useLanguage } from "@/context/language-context";
@@ -82,6 +83,7 @@ export function LayoutProvider({ children, year }: { children: React.ReactNode, 
     { href: "/logframe", icon: <ListChecks />, label: "Logical Framework" },
     { href: "/monitoring", icon: <Monitor />, label: "M&E Lifecycle" },
     { href: "/monitoring/prepare-indicators", icon: <Target />, label: "Prepare Indicators" },
+    { href: "/monitoring/data-collection/itt", icon: <Sheet />, label: "Indicator Tracking" },
     { href: "/upload", icon: <Upload />, label: t("sidebar.upload") },
     { href: "/correction", icon: <Wrench />, label: 'Correction' },
     { href: "/review", icon: <Microscope />, label: t("sidebar.review") },
