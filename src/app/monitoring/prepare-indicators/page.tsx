@@ -45,7 +45,9 @@ interface ActivityGroup {
 }
 
 interface IndicatorWithUnits {
-    description: string;
+    indicatorId: string;
+    indicatorCode?: string;
+    type?: '#' | '%';
     units: {
         unit: string;
         targeted: number;
@@ -108,20 +110,25 @@ export default function PrepareIndicatorsPage() {
     const groupedData = useMemo((): GroupedData | null => {
         if (!logframe) return null;
         
-        const planMap = new Map(indicatorPlan?.indicators.map(p => [p.indicatorId, p.units]));
+        const planMap = new Map(indicatorPlan?.indicators.map(p => [p.indicatorId, p]));
 
+        let indicatorCounter = 0;
         return {
             goal: logframe.goal,
             outcome: {
                 ...logframe.outcome,
-                outputs: logframe.outputs.map(output => ({
+                outputs: logframe.outputs.map((output, oIdx) => ({
                     ...output,
-                    activities: output.activities.map(activity => ({
+                    activities: output.activities.map((activity, aIdx) => ({
                         ...activity,
-                        indicators: activity.indicators.map(indicator => {
-                            const units = planMap.get(indicator.description) || [];
+                        indicators: activity.indicators.map((indicator, iIdx) => {
+                            const planIndicator = planMap.get(indicator.description);
+                            indicatorCounter++;
+                            const units = planIndicator?.units || [];
                             return {
-                                ...indicator,
+                                indicatorId: indicator.description,
+                                indicatorCode: `${oIdx + 1}.${aIdx + 1}.${iIdx + 1}`,
+                                type: planIndicator?.type || indicator.type,
                                 units: units.map(u => ({...u, percentage: u.targeted > 0 ? (u.actual / u.targeted) * 100 : 0 }))
                             };
                         })
@@ -183,7 +190,9 @@ export default function PrepareIndicatorsPage() {
                             <Table>
                                 <TableHeader>
                                     <TableRow className="bg-primary text-primary-foreground">
-                                        <TableHead className="w-[15%] font-bold text-primary-foreground">Indicator</TableHead>
+                                        <TableHead className="font-bold text-primary-foreground">Indicator</TableHead>
+                                        <TableHead className="font-bold text-primary-foreground">Code</TableHead>
+                                        <TableHead className="font-bold text-primary-foreground">Type</TableHead>
                                         <TableHead className="w-[10%] font-bold text-primary-foreground">Unit</TableHead>
                                         <TableHead className="font-bold text-primary-foreground">Targeted</TableHead>
                                         <TableHead className="font-bold text-primary-foreground">Actual</TableHead>
@@ -196,18 +205,20 @@ export default function PrepareIndicatorsPage() {
                                     {groupedData.outcome.outputs.map((output, oIdx) => (
                                         <React.Fragment key={oIdx}>
                                             <TableRow className="bg-primary/10 hover:bg-primary/20">
-                                                <TableCell colSpan={7} className="font-bold p-3">Output {oIdx + 1}: {output.description}</TableCell>
+                                                <TableCell colSpan={9} className="font-bold p-3">Output {oIdx + 1}: {output.description}</TableCell>
                                             </TableRow>
                                             {output.activities.map((activity, aIdx) => (
                                                 <React.Fragment key={aIdx}>
                                                     <TableRow className="bg-muted/50 hover:bg-muted">
-                                                        <TableCell colSpan={7} className="font-semibold p-3 pl-8">Activity {oIdx + 1}.{aIdx+1}: {activity.description}</TableCell>
+                                                        <TableCell colSpan={9} className="font-semibold p-3 pl-8">Activity {oIdx + 1}.{aIdx+1}: {activity.description}</TableCell>
                                                     </TableRow>
                                                     {activity.indicators.map((indicator, iIdx) => (
                                                         <React.Fragment key={iIdx}>
                                                             {indicator.units.map((unit, uIdx) => (
                                                                 <TableRow key={uIdx}>
-                                                                    {uIdx === 0 && <TableCell rowSpan={indicator.units.length} className="pl-12 font-medium align-top">{indicator.description}</TableCell>}
+                                                                    {uIdx === 0 && <TableCell rowSpan={indicator.units.length} className="pl-12 font-medium align-top">{indicator.indicatorId}</TableCell>}
+                                                                    {uIdx === 0 && <TableCell rowSpan={indicator.units.length} className="align-top font-mono">{indicator.indicatorCode}</TableCell>}
+                                                                    {uIdx === 0 && <TableCell rowSpan={indicator.units.length} className="align-top font-mono">{indicator.type}</TableCell>}
                                                                     <TableCell>{unit.unit}</TableCell>
                                                                     <TableCell>{unit.targeted}</TableCell>
                                                                     <TableCell>{unit.actual}</TableCell>
@@ -218,7 +229,9 @@ export default function PrepareIndicatorsPage() {
                                                             ))}
                                                              {indicator.units.length === 0 && (
                                                                 <TableRow>
-                                                                    <TableCell className="pl-12 font-medium">{indicator.description}</TableCell>
+                                                                    <TableCell className="pl-12 font-medium">{indicator.indicatorId}</TableCell>
+                                                                    <TableCell className="font-mono">{indicator.indicatorCode}</TableCell>
+                                                                    <TableCell className="font-mono">{indicator.type}</TableCell>
                                                                     <TableCell colSpan={6} className="text-center text-muted-foreground">No units defined for this indicator.</TableCell>
                                                                 </TableRow>
                                                             )}
@@ -237,4 +250,3 @@ export default function PrepareIndicatorsPage() {
         </div>
     );
 }
-

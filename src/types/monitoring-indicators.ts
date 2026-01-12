@@ -12,6 +12,8 @@ export const IndicatorUnitSchema = z.object({
 
 export const IndicatorSchema = z.object({
   indicatorId: z.string().min(1, "New indicator title is required."),
+  indicatorCode: z.string().optional(),
+  type: z.enum(['#', '%']).optional(),
   isNew: z.boolean().optional(),
   outcome: z.string().optional(),
   output: z.string().optional(),

@@ -103,12 +103,14 @@ function AddIndicatorPlanForm() {
                 }
 
                 if (logframeData && logframeData.outcome) {
-                    const flattenedIndicators = logframeData.outputs.flatMap(output => 
-                        output.activities.flatMap(activity => 
-                            activity.indicators.map(indicator => {
+                    const flattenedIndicators = logframeData.outputs.flatMap((output, oIdx) => 
+                        output.activities.flatMap((activity, aIdx) => 
+                            activity.indicators.map((indicator, iIdx) => {
                                 const existingPlan = planMap.get(indicator.description);
                                 return {
                                     indicatorId: indicator.description,
+                                    indicatorCode: `${oIdx + 1}.${aIdx + 1}.${iIdx + 1}`,
+                                    type: existingPlan?.type || indicator.type,
                                     isNew: false, // Flag for pre-existing indicators
                                     outcome: logframeData.outcome.description,
                                     output: output.description,
@@ -239,8 +241,15 @@ function AddIndicatorPlanForm() {
                                             variant="outline"
                                             onClick={() => {
                                                 const lastIndicatorInGroup = indicators[indicators.length - 1];
+                                                const newIndex = currentIndicators.length;
+                                                const indicatorCountForActivity = indicators.filter((ind:any) => ind.activity === lastIndicatorInGroup.activity).length
+                                                const codeParts = lastIndicatorInGroup.indicatorCode.split('.');
+                                                const newCode = `${codeParts[0]}.${codeParts[1]}.${parseInt(codeParts[2]) + indicatorCountForActivity}`;
+
                                                 appendIndicator({
-                                                    indicatorId: '', // User will fill this
+                                                    indicatorId: '',
+                                                    indicatorCode: newCode,
+                                                    type: '#',
                                                     isNew: true,
                                                     outcome: lastIndicatorInGroup.outcome,
                                                     output: lastIndicatorInGroup.output,
@@ -289,12 +298,12 @@ const IndicatorCard = ({ control, indicatorIndex, removeIndicator }: { control: 
                     <Trash2 className="h-4 w-4 text-destructive" />
                 </Button>
             )}
-             <CardHeader className="p-0 mb-4">
+             <CardHeader className="p-0 mb-4 grid grid-cols-1 md:grid-cols-4 gap-4">
                  <FormField
                     control={control}
                     name={`indicators.${indicatorIndex}.indicatorId`}
                     render={({ field }) => (
-                        <FormItem>
+                        <FormItem className="md:col-span-2">
                             <FormLabel className='font-semibold'>Indicator Title</FormLabel>
                             <FormControl>
                                 <Input {...field} readOnly={!indicator.isNew} placeholder={indicator.isNew ? "Enter new indicator title..." : ""}/>
@@ -303,6 +312,35 @@ const IndicatorCard = ({ control, indicatorIndex, removeIndicator }: { control: 
                         </FormItem>
                     )}
                 />
+                 <FormField
+                    control={control}
+                    name={`indicators.${indicatorIndex}.indicatorCode`}
+                    render={({ field }) => (
+                        <FormItem>
+                            <FormLabel className='font-semibold'>Indicator Code</FormLabel>
+                            <FormControl>
+                                <Input {...field} readOnly />
+                            </FormControl>
+                            <FormMessage />
+                        </FormItem>
+                    )}
+                />
+                 <FormField
+                    control={control}
+                    name={`indicators.${indicatorIndex}.type`}
+                    render={({ field }) => (
+                         <FormItem>
+                             <FormLabel>Type</FormLabel>
+                             <Select onValueChange={field.onChange} value={field.value}>
+                                 <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                                 <SelectContent>
+                                    <SelectItem value="#">#</SelectItem>
+                                    <SelectItem value="%">%</SelectItem>
+                                 </SelectContent>
+                             </Select>
+                             <FormMessage />
+                         </FormItem>
+                    )} />
             </CardHeader>
             <CardContent className="space-y-6 p-0">
                 {unitFields.map((unitField, unitIndex) => (
@@ -348,6 +386,3 @@ export default function AddIndicatorTrackingPage() {
         </Suspense>
     );
 }
-
-
-    
