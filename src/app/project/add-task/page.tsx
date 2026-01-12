@@ -1,4 +1,3 @@
-
 // src/app/project/add-task/page.tsx
 "use client";
 
@@ -226,16 +225,20 @@ export default function AddTaskPage() {
 function RecursiveTaskItem({ control, index, remove, parentPath, logframe, baseActivityNumber }: { control: any; index: number; remove: (index: number) => void; parentPath: string; logframe: Logframe | null; baseActivityNumber?: number; }) {
     const currentPath = parentPath ? `${parentPath}.subTasks.${index}` : `tasks.${index}`;
     
-    const activityNumbering = useMemo(() => {
-        if(parentPath){
-            const pathParts = parentPath.split('.');
-            let finalNumbering = '';
+     const activityNumbering = useMemo(() => {
+        if (parentPath) {
+            const pathParts = parentPath.split('.subTasks');
+            // The first part is always `tasks.${index}`
+            const topLevelIndex = parseInt(pathParts[0].split('.')[1], 10);
             
-            const topLevelIndex = parseInt(pathParts[1], 10);
-            finalNumbering += (baseActivityNumber !== undefined ? baseActivityNumber + topLevelIndex -1 : topLevelIndex + 1);
-
-            for(let i=3; i < pathParts.length; i+=2) {
-                finalNumbering += `.${parseInt(pathParts[i], 10) + 1}`;
+            let finalNumbering = `${(baseActivityNumber !== undefined ? baseActivityNumber : topLevelIndex + 1)}`;
+            
+            // Subsequent parts are just indices
+            for(let i = 1; i < pathParts.length; i++) {
+                 const subIndex = parseInt(pathParts[i].substring(1), 10); // Remove leading '.'
+                 if(!isNaN(subIndex)){
+                    finalNumbering += `.${subIndex + 1}`;
+                 }
             }
 
             return `${finalNumbering}.${index + 1}`;
@@ -388,5 +391,3 @@ function RecursiveTaskArray({ control, parentPath, logframe, parentActivityNumbe
         </div>
     );
 }
-
-    
