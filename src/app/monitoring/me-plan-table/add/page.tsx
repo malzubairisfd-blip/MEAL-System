@@ -223,7 +223,7 @@ function AddMEPlanForm() {
                         outputFields.map((outputField, outputIndex) => (
                           <Card key={outputField.id} className="border-blue-200 border-2">
                             <CardHeader>
-                              <CardTitle className="text-blue-800">Output {outputIndex + 1}: {outputField.description}</CardTitle>
+                              <CardTitle className="text-white">Output {outputIndex + 1}: {outputField.description}</CardTitle>
                             </CardHeader>
                             <CardContent className="space-y-6 pl-10">
                               <ActivitiesArray control={control} outputIndex={outputIndex} />
