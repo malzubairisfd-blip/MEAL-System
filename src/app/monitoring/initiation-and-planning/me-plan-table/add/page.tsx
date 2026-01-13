@@ -1,4 +1,3 @@
-
 // src/app/monitoring/me-plan-table/add/page.tsx
 "use client";
 
@@ -161,7 +160,7 @@ function AddMEPlanForm() {
             const result = await response.json();
             if (!response.ok) throw new Error(result.error || "Failed to save M&E Plan");
             toast({ title: "Success!", description: "The M&E plan has been saved successfully." });
-            router.push('/monitoring/me-plan-table');
+            router.push('/monitoring/initiation-and-planning/me-plan-table');
         } catch(e: any) {
             toast({ title: "Save failed", description: e.message, variant: 'destructive' });
         } finally {
@@ -177,7 +176,7 @@ function AddMEPlanForm() {
                     <p className="text-muted-foreground">Define the M&E details for each indicator in your project's logical framework.</p>
                 </div>
                  <Button variant="outline" asChild>
-                    <Link href="/monitoring/me-plan-table">
+                    <Link href="/monitoring/initiation-and-planning/me-plan-table">
                         <ArrowLeft className="mr-2 h-4 w-4" /> Back to View
                     </Link>
                 </Button>
@@ -359,4 +358,3 @@ export default function AddMEPlanTablePage() {
         </Suspense>
     );
 }
-

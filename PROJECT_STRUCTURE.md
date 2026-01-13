@@ -69,29 +69,29 @@ This document outlines the high-level architecture of the application, showing h
     │   ├── organizational/page.tsx
     │   ├── process/page.tsx
     │   └── results/page.tsx
-    ├── initiation-and-planning/
-    │   ├── page.tsx
-    │   ├── budget/page.tsx
-    │   ├── data-analysis/page.tsx
-    │   ├── hr/page.tsx
-    │   └── reporting/page.tsx
-    ├── data-collection/
-    │   ├── page.tsx
-    │   ├── itt/
-    │   │   ├── page.tsx
-    │   │   └── edit/page.tsx
-    │   ├── data-types/page.tsx
-    │   ├── secondary-data/page.tsx
-    │   ├── staff-criteria/page.tsx
-    │   └── surveys/page.tsx
-    ├── me-plan-table/
-    │   ├── page.tsx
-    │   └── add/page.tsx
-    ├── prepare-indicators/
-    │   ├── page.tsx
-    │   └── add/page.tsx
-    ├── purpose-and-scope/
-    │   ├── page.tsx
-    │   └── add/page.tsx
-    └── sampling-calculator/page.tsx
+    └── initiation-and-planning/
+        ├── page.tsx
+        ├── budget/page.tsx
+        ├── data-analysis/page.tsx
+        ├── hr/page.tsx
+        ├── reporting/page.tsx
+        ├── data-collection/
+        │   ├── page.tsx
+        │   ├── itt/
+        │   │   ├── page.tsx
+        │   │   └── edit/page.tsx
+        │   ├── data-types/page.tsx
+        │   ├── secondary-data/page.tsx
+        │   ├── staff-criteria/page.tsx
+        │   └── surveys/page.tsx
+        ├── me-plan-table/
+        │   ├── page.tsx
+        │   └── add/page.tsx
+        ├── prepare-indicators/
+        │   ├── page.tsx
+        │   └── add/page.tsx
+        ├── purpose-and-scope/
+        │   ├── page.tsx
+        │   └── add/page.tsx
+        └── sampling-calculator/page.tsx
 ```

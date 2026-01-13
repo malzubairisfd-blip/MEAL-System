@@ -1,5 +1,4 @@
-
-// src/app/monitoring/prepare-indicators/page.tsx
+// src/app/monitoring/me-plan-table/page.tsx
 "use client";
 
 import React, { useEffect, useState, useMemo } from 'react';
@@ -10,9 +9,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ArrowLeft, Edit, Plus, Loader2 } from 'lucide-react';
 import { Logframe } from '@/lib/logframe';
+import { MEPlan, IndicatorPlan } from '@/types/monitoring-plan';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import { IndicatorTrackingPlan } from '@/types/monitoring-indicators';
+import { IndicatorTrackingPlan, IndicatorUnit } from '@/types/monitoring-indicators';
 
 interface Project {
   projectId: string;
@@ -29,23 +29,9 @@ const renderTextWithBreaks = (text: string | undefined) => {
     ));
 }
 
-interface IndicatorWithUnits {
-    indicatorId: string;
-    indicatorCode?: string;
-    type?: '#' | '%';
-    units: {
-        unit: string;
-        targeted: number;
-        actual: number;
-        percentage: number;
-        dataSource: string;
-        responsibilities: string;
-    }[];
-}
-
-interface ActivityGroup {
-    description: string;
-    indicators: IndicatorWithUnits[];
+interface GroupedData {
+    goal: { description: string };
+    outcome: { description: string; outputs: OutputGroup[] };
 }
 
 interface OutputGroup {
@@ -53,17 +39,25 @@ interface OutputGroup {
     activities: ActivityGroup[];
 }
 
-interface GroupedData {
-    goal: { description: string };
-    outcome: { description: string; outputs: OutputGroup[] };
+interface ActivityGroup {
+    description: string;
+    indicators: IndicatorWithPlan[];
 }
 
+interface IndicatorWithPlan {
+    description: string;
+    type: '#' | '%';
+    meansOfVerification: string[];
+    plan?: Partial<IndicatorPlan>;
+    units: IndicatorUnit[];
+}
 
-export default function PrepareIndicatorsPage() {
+export default function MEPlanTablePage() {
     const { toast } = useToast();
     const [projects, setProjects] = useState<Project[]>([]);
     const [selectedProjectId, setSelectedProjectId] = useState('');
     const [logframe, setLogframe] = useState<Logframe | null>(null);
+    const [mePlan, setMePlan] = useState<MEPlan | null>(null);
     const [indicatorPlan, setIndicatorPlan] = useState<IndicatorTrackingPlan | null>(null);
     const [loading, setLoading] = useState({ projects: true, data: false });
 
@@ -88,16 +82,21 @@ export default function PrepareIndicatorsPage() {
         const fetchData = async () => {
             setLoading(prev => ({...prev, data: true}));
             try {
-                const [logframeRes, indicatorPlanRes] = await Promise.all([
+                const [logframeRes, mePlanRes, indicatorPlanRes] = await Promise.all([
                     fetch(`/api/logframe?projectId=${selectedProjectId}`),
+                    fetch(`/api/monitoring-plan?projectId=${selectedProjectId}`),
                     fetch(`/api/monitoring-indicators?projectId=${selectedProjectId}`)
                 ]);
 
                 if (logframeRes.ok) setLogframe(await logframeRes.json());
-                else { setLogframe(null); toast({ title: "Logframe Not Found", description: "This project doesn't have a logical framework yet." }); }
+                else setLogframe(null);
 
-                if (indicatorPlanRes.ok) setIndicatorPlan(await indicatorPlanRes.json());
+                if (mePlanRes.ok) setMePlan(await mePlanRes.json());
+                else setMePlan(null);
+
+                if(indicatorPlanRes.ok) setIndicatorPlan(await indicatorPlanRes.json());
                 else setIndicatorPlan(null);
+
 
             } catch (error: any) {
                  toast({ title: "Error", description: "Failed to load project data.", variant: 'destructive' });
@@ -108,84 +107,65 @@ export default function PrepareIndicatorsPage() {
         fetchData();
     }, [selectedProjectId, toast]);
 
-    const groupedData = useMemo((): GroupedData | null => {
-        if (!logframe || !logframe.goal || !logframe.outcome) {
-            return null;
-        }
+    const groupedData = useMemo(() => {
+        if (!indicatorPlan || !indicatorPlan.indicators) return null;
 
-        const planMap = new Map(indicatorPlan?.indicators.map(p => [p.indicatorId, p]));
-        const hierarchy: { [output: string]: { [activity: string]: Set<string> } } = {};
+        const mePlanMap = new Map(mePlan?.indicators.map(p => [p.indicatorId, p]));
+        
+        const hierarchy: { [outcome: string]: { [output: string]: { [activity: string]: any[] } } } = {};
 
-        // 1. Build hierarchy from logframe
-        (logframe.outputs || []).forEach(output => {
-            hierarchy[output.description] = hierarchy[output.description] || {};
-            (output.activities || []).forEach(activity => {
-                hierarchy[output.description][activity.description] = hierarchy[output.description][activity.description] || new Set();
-                (activity.indicators || []).forEach(indicator => {
-                    hierarchy[output.description][activity.description].add(indicator.description);
-                });
-            });
-        });
-
-        // 2. Add new indicators from monitoring plan
-        (indicatorPlan?.indicators || []).forEach(indicator => {
+        indicatorPlan.indicators.forEach(indicator => {
+            const outcomeKey = indicator.outcome || 'Uncategorized';
             const outputKey = indicator.output || 'Uncategorized';
             const activityKey = indicator.activity || 'Uncategorized';
-            
-            if (!hierarchy[outputKey]) {
-                hierarchy[outputKey] = {};
-            }
-            if (!hierarchy[outputKey][activityKey]) {
-                hierarchy[outputKey][activityKey] = new Set();
-            }
-            hierarchy[outputKey][activityKey].add(indicator.indicatorId);
+
+            if (!hierarchy[outcomeKey]) hierarchy[outcomeKey] = {};
+            if (!hierarchy[outcomeKey][outputKey]) hierarchy[outcomeKey][outputKey] = {};
+            if (!hierarchy[outcomeKey][outputKey][activityKey]) hierarchy[outcomeKey][outputKey][activityKey] = [];
+
+            hierarchy[outcomeKey][outputKey][activityKey].push({
+                description: indicator.indicatorId,
+                type: indicator.type,
+                meansOfVerification: [], // This info is not in monitoring-indicators.json, but the schema requires it.
+                plan: mePlanMap.get(indicator.indicatorId),
+                units: indicator.units || [],
+            });
         });
         
-        // 3. Build the final data structure with enriched data
-        const finalOutputs: OutputGroup[] = Object.keys(hierarchy).map(outputKey => ({
+        const finalOutputs: OutputGroup[] = Object.entries(hierarchy[logframe?.outcome.description || "Uncategorized"] || {}).map(([outputKey, activities]) => ({
             description: outputKey,
-            activities: Object.keys(hierarchy[outputKey]).map(activityKey => ({
+            activities: Object.entries(activities).map(([activityKey, indicators]) => ({
                 description: activityKey,
-                indicators: Array.from(hierarchy[outputKey][activityKey]).map((indicatorId, iIdx) => {
-                    const planIndicator = planMap.get(indicatorId);
-                    const units = planIndicator?.units || [];
-                    
-                    const code = planIndicator?.indicatorCode || `${Object.keys(hierarchy).indexOf(outputKey) + 1}.${Object.keys(hierarchy[outputKey]).indexOf(activityKey) + 1}.${iIdx + 1}`;
-
-                    return {
-                        indicatorId: indicatorId,
-                        indicatorCode: code,
-                        type: planIndicator?.type || '#',
-                        units: units.map(u => ({ ...u, percentage: u.targeted > 0 ? (u.actual / u.targeted) * 100 : 0 }))
-                    };
-                })
+                indicators: indicators as IndicatorWithPlan[]
             }))
         }));
 
         return {
-            goal: logframe.goal,
+            goal: logframe?.goal || { description: "Project Goal" },
             outcome: {
-                ...logframe.outcome,
-                outputs: finalOutputs,
-            },
+                description: logframe?.outcome.description || "Project Outcome",
+                outputs: finalOutputs
+            }
         };
-    }, [logframe, indicatorPlan]);
+
+    }, [indicatorPlan, mePlan, logframe]);
+
 
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center">
                 <div>
-                    <h1 className="text-3xl font-bold">Monitoring Indicators</h1>
-                    <p className="text-muted-foreground">View the detailed indicator tracking plan for each project.</p>
+                    <h1 className="text-3xl font-bold">M&E Plan Table</h1>
+                    <p className="text-muted-foreground">View the detailed Monitoring & Evaluation plan for each project.</p>
                 </div>
                  <div className="flex gap-2">
                     <Button variant="outline" asChild>
-                        <Link href="/monitoring/data-collection">
+                        <Link href="/monitoring/initiation-and-planning/data-collection">
                             <ArrowLeft className="mr-2 h-4 w-4" /> Back
                         </Link>
                     </Button>
                     <Button asChild>
-                        <Link href={`/monitoring/prepare-indicators/add?projectId=${selectedProjectId}`}>
+                        <Link href={`/monitoring/initiation-and-planning/me-plan-table/add?projectId=${selectedProjectId}`}>
                             <Edit className="mr-2 h-4 w-4" /> Edit/Create Plan
                         </Link>
                     </Button>
@@ -223,15 +203,15 @@ export default function PrepareIndicatorsPage() {
                             <Table>
                                 <TableHeader>
                                     <TableRow className="bg-primary text-primary-foreground">
-                                        <TableHead className="font-bold text-primary-foreground">Indicator</TableHead>
-                                        <TableHead className="font-bold text-primary-foreground">Code</TableHead>
-                                        <TableHead className="font-bold text-primary-foreground">Type</TableHead>
-                                        <TableHead className="w-[10%] font-bold text-primary-foreground">Unit</TableHead>
-                                        <TableHead className="font-bold text-primary-foreground">Targeted</TableHead>
-                                        <TableHead className="font-bold text-primary-foreground">Actual</TableHead>
-                                        <TableHead className="font-bold text-primary-foreground">Percentage</TableHead>
-                                        <TableHead className="font-bold text-primary-foreground">Data Sources</TableHead>
+                                        <TableHead className="w-[15%] font-bold text-primary-foreground">Output/Activity/Indicator</TableHead>
+                                        <TableHead className="font-bold text-primary-foreground">Unit</TableHead>
+                                        <TableHead className="font-bold text-primary-foreground">Target</TableHead>
+                                        <TableHead className="font-bold text-primary-foreground">MoV</TableHead>
+                                        <TableHead className="font-bold text-primary-foreground">Indicator Definition</TableHead>
+                                        <TableHead className="font-bold text-primary-foreground">Data Collection</TableHead>
+                                        <TableHead className="font-bold text-primary-foreground">Frequency</TableHead>
                                         <TableHead className="font-bold text-primary-foreground">Responsibilities</TableHead>
+                                        <TableHead className="font-bold text-primary-foreground">Information Use</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -246,26 +226,24 @@ export default function PrepareIndicatorsPage() {
                                                         <TableCell colSpan={9} className="font-semibold p-3 pl-8">Activity {oIdx + 1}.{aIdx+1}: {activity.description}</TableCell>
                                                     </TableRow>
                                                     {activity.indicators.map((indicator, iIdx) => (
-                                                        <React.Fragment key={iIdx}>
+                                                         <React.Fragment key={iIdx}>
                                                             {indicator.units.map((unit, uIdx) => (
                                                                 <TableRow key={uIdx}>
-                                                                    {uIdx === 0 && <TableCell rowSpan={indicator.units.length} className="pl-12 font-medium align-top">{indicator.indicatorId}</TableCell>}
-                                                                    {uIdx === 0 && <TableCell rowSpan={indicator.units.length} className="align-top font-mono">{indicator.indicatorCode}</TableCell>}
-                                                                    {uIdx === 0 && <TableCell rowSpan={indicator.units.length} className="align-top font-mono">{indicator.type}</TableCell>}
+                                                                    {uIdx === 0 && <TableCell rowSpan={indicator.units.length} className="pl-12 font-medium align-top">{indicator.description}</TableCell>}
                                                                     <TableCell>{unit.unit}</TableCell>
                                                                     <TableCell>{indicator.type === '%' ? `${unit.targeted}%` : unit.targeted}</TableCell>
-                                                                    <TableCell>{indicator.type === '%' ? `${unit.actual}%` : unit.actual}</TableCell>
-                                                                    <TableCell>{unit.percentage.toFixed(2)}%</TableCell>
-                                                                    <TableCell>{renderTextWithBreaks(unit.dataSource)}</TableCell>
-                                                                    <TableCell>{renderTextWithBreaks(unit.responsibilities)}</TableCell>
+                                                                    {uIdx === 0 && <TableCell rowSpan={indicator.units.length} className="align-top">{indicator.meansOfVerification.join(', ')}</TableCell>}
+                                                                    {uIdx === 0 && <TableCell rowSpan={indicator.units.length} className="align-top">{renderTextWithBreaks(indicator.plan?.definition)}</TableCell>}
+                                                                    {uIdx === 0 && <TableCell rowSpan={indicator.units.length} className="align-top">{renderTextWithBreaks(indicator.plan?.collectionMethods)}</TableCell>}
+                                                                    {uIdx === 0 && <TableCell rowSpan={indicator.units.length} className="align-top">{renderTextWithBreaks(indicator.plan?.frequency)}</TableCell>}
+                                                                    {uIdx === 0 && <TableCell rowSpan={indicator.units.length} className="align-top">{renderTextWithBreaks(indicator.plan?.responsibilities)}</TableCell>}
+                                                                    {uIdx === 0 && <TableCell rowSpan={indicator.units.length} className="align-top">{renderTextWithBreaks(indicator.plan?.informationUse)}</TableCell>}
                                                                 </TableRow>
                                                             ))}
                                                              {indicator.units.length === 0 && (
                                                                 <TableRow>
-                                                                    <TableCell className="pl-12 font-medium">{indicator.indicatorId}</TableCell>
-                                                                    <TableCell className="font-mono">{indicator.indicatorCode}</TableCell>
-                                                                    <TableCell className="font-mono">{indicator.type}</TableCell>
-                                                                    <TableCell colSpan={6} className="text-center text-muted-foreground">No units defined for this indicator.</TableCell>
+                                                                    <TableCell className="pl-12 font-medium">{indicator.description}</TableCell>
+                                                                    <TableCell colSpan={8} className="text-center text-muted-foreground">No units defined for this indicator.</TableCell>
                                                                 </TableRow>
                                                             )}
                                                         </React.Fragment>

@@ -8,8 +8,8 @@ import { ArrowLeft, ArrowRight, Target, Database, BarChart3, FileText, Users, Ci
 
 export default function InitiationAndPlanningPage() {
   const planningSteps = [
-    { href: "/monitoring/purpose-and-scope", icon: <Target className="h-8 w-8 text-indigo-500" />, title: "Identify the purpose and scope of the M&E system" },
-    { href: "/monitoring/data-collection", icon: <Database className="h-8 w-8 text-blue-500" />, title: "Plan for data collection and management" },
+    { href: "/monitoring/initiation-and-planning/purpose-and-scope", icon: <Target className="h-8 w-8 text-indigo-500" />, title: "Identify the purpose and scope of the M&E system" },
+    { href: "/monitoring/initiation-and-planning/data-collection", icon: <Database className="h-8 w-8 text-blue-500" />, title: "Plan for data collection and management" },
     { href: "/monitoring/initiation-and-planning/data-analysis", icon: <BarChart3 className="h-8 w-8 text-green-500" />, title: "Plan for data analysis" },
     { href: "/monitoring/initiation-and-planning/reporting", icon: <FileText className="h-8 w-8 text-sky-500" />, title: "Plan for information reporting and utilization" },
     { href: "/monitoring/initiation-and-planning/hr", icon: <Users className="h-8 w-8 text-purple-500" />, title: "Plan for M&E human resources and capacity building" },

@@ -1,4 +1,3 @@
-
 // src/app/monitoring/prepare-indicators/add/page.tsx
 "use client";
 
@@ -178,7 +177,7 @@ function AddIndicatorPlanForm() {
             const result = await response.json();
             if (!response.ok) throw new Error(result.error || "Failed to save Indicator Tracking Plan");
             toast({ title: "Success!", description: "The Indicator Tracking Plan has been saved successfully." });
-            router.push('/monitoring/prepare-indicators');
+            router.push('/monitoring/initiation-and-planning/prepare-indicators');
         } catch(e: any) {
             toast({ title: "Save failed", description: e.message, variant: 'destructive' });
         } finally {
@@ -207,7 +206,7 @@ function AddIndicatorPlanForm() {
                     <p className="text-muted-foreground">Define units and targets for each indicator.</p>
                 </div>
                  <Button variant="outline" asChild>
-                    <Link href="/monitoring/prepare-indicators">
+                    <Link href="/monitoring/initiation-and-planning/prepare-indicators">
                         <ArrowLeft className="mr-2 h-4 w-4" /> Back to View
                     </Link>
                 </Button>
@@ -418,4 +417,3 @@ export default function AddIndicatorTrackingPage() {
         </Suspense>
     );
 }
-

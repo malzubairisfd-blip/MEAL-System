@@ -1,4 +1,3 @@
-
 // src/app/monitoring/data-collection/itt/page.tsx
 "use client";
 
@@ -39,12 +38,12 @@ export default function ITTPage() {
                 <h1 className="text-3xl font-bold">Indicator Tracking Table</h1>
                  <div className="flex gap-2">
                     <Button variant="outline" asChild>
-                        <Link href="/monitoring/data-collection">
+                        <Link href="/monitoring/initiation-and-planning/data-collection">
                             <ArrowLeft className="mr-2 h-4 w-4" /> Back to Data Collection
                         </Link>
                     </Button>
                     <Button asChild>
-                        <Link href={`/monitoring/data-collection/itt/edit?projectId=${selectedProject?.projectId || ''}`}>
+                        <Link href={`/monitoring/initiation-and-planning/data-collection/itt/edit?projectId=${selectedProject?.projectId || ''}`}>
                             <Edit className="mr-2 h-4 w-4" /> Edit Plan
                         </Link>
                     </Button>

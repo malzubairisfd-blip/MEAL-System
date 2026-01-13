@@ -1,4 +1,3 @@
-
 // src/app/monitoring/sampling-calculator/page.tsx
 "use client";
 
@@ -186,7 +185,7 @@ export default function SamplingCalculatorPage() {
                 </div>
                  <div className="flex gap-2">
                     <Button variant="outline" asChild>
-                        <Link href="/monitoring/data-collection">
+                        <Link href="/monitoring/initiation-and-planning/data-collection">
                             <ArrowLeft className="mr-2 h-4 w-4" /> Back to Data Collection
                         </Link>
                     </Button>
@@ -292,5 +291,3 @@ export default function SamplingCalculatorPage() {
         </div>
     );
 }
-
-    

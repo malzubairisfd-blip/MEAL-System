@@ -1,4 +1,3 @@
-
 // src/app/monitoring/purpose-and-scope/page.tsx
 "use client";
 
@@ -126,12 +125,12 @@ export default function PurposeAndScopePage() {
                 </div>
                 <div className="flex gap-2">
                     <Button variant="outline" asChild>
-                        <Link href="/monitoring">
+                        <Link href="/monitoring/initiation-and-planning">
                             <ArrowLeft className="mr-2 h-4 w-4" /> Back to M&E Planning
                         </Link>
                     </Button>
                     <Button asChild>
-                        <Link href={`/monitoring/purpose-and-scope/add`}>
+                        <Link href={`/monitoring/initiation-and-planning/purpose-and-scope/add`}>
                             <Plus className="mr-2 h-4 w-4" /> Add/Edit Plan
                         </Link>
                     </Button>

@@ -1,4 +1,3 @@
-
 "use client";
 import React, { useEffect, useState, Suspense } from 'react';
 import Link from 'next/link';
@@ -188,7 +187,7 @@ function EditITTForm() {
             const result = await response.json();
             if (!response.ok) throw new Error(result.error || "Failed to save data");
             toast({ title: "Success!", description: "The indicator tracking data has been saved." });
-            router.push(`/monitoring/data-collection/itt?projectId=${selectedProjectId}`);
+            router.push(`/monitoring/initiation-and-planning/data-collection/itt?projectId=${selectedProjectId}`);
         } catch (e: any) {
             toast({ title: "Save failed", description: e.message, variant: 'destructive' });
         } finally {
@@ -201,7 +200,7 @@ function EditITTForm() {
             <div className="flex justify-between items-center">
                 <h1 className="text-3xl font-bold">Edit Indicator Tracking Data</h1>
                 <Button variant="outline" asChild>
-                    <Link href={`/monitoring/data-collection/itt?projectId=${selectedProjectId || ''}`}>
+                    <Link href={`/monitoring/initiation-and-planning/data-collection/itt?projectId=${selectedProjectId || ''}`}>
                         <ArrowLeft className="mr-2 h-4 w-4" /> Back to View
                     </Link>
                 </Button>
@@ -326,6 +325,3 @@ export default function EditITTPage() {
         </Suspense>
     );
 }
-
-
-    

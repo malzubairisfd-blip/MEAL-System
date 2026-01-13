@@ -1,4 +1,3 @@
-
 // src/app/monitoring/purpose-and-scope/add/page.tsx
 "use client";
 
@@ -135,7 +134,7 @@ export default function AddMonitoringPlanPage() {
                 throw new Error(result.error || "An unknown error occurred.");
             }
             toast({ title: "Monitoring Plan Saved!", description: `The plan has been successfully saved.` });
-            router.push('/monitoring/purpose-and-scope');
+            router.push('/monitoring/initiation-and-planning/purpose-and-scope');
         } catch (error: any) {
              toast({ title: "Save Failed", description: error.message, variant: 'destructive' });
         } finally {
@@ -151,7 +150,7 @@ export default function AddMonitoringPlanPage() {
                     <p className="text-muted-foreground">Define the monitoring details for each main project activity.</p>
                 </div>
                  <Button variant="outline" asChild>
-                    <Link href="/monitoring/purpose-and-scope">
+                    <Link href="/monitoring/initiation-and-planning/purpose-and-scope">
                         <ArrowLeft className="mr-2 h-4 w-4" /> Back to View
                     </Link>
                 </Button>
