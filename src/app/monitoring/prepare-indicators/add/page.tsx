@@ -46,7 +46,7 @@ function AddIndicatorPlanForm() {
         },
     });
 
-    const { control, setValue, watch } = form;
+    const { control, setValue, watch, reset } = form;
     
     const { fields: indicatorFields, replace: replaceIndicators, append: appendIndicator, remove: removeIndicator } = useFieldArray({
       control,
@@ -98,12 +98,9 @@ function AddIndicatorPlanForm() {
                      toast({title: "Logframe not found", description: "Please create a logframe for this project first.", variant: 'destructive'});
                 }
                 
-                let planMap = new Map<string, any>();
+                let planData: IndicatorTrackingPlan | null = null;
                 if (planRes.ok) {
-                    const planData = await planRes.json();
-                    if(planData.indicators) {
-                       planMap = new Map(planData.indicators.map((p: any) => [p.indicatorId, p]));
-                    }
+                    planData = await planRes.json();
                 }
                 
                 let projectPlanData: { tasks: GanttTask[] } | null = null;
@@ -111,33 +108,54 @@ function AddIndicatorPlanForm() {
                     projectPlanData = await projectPlanRes.json();
                     setProjectPlan(projectPlanData);
                 }
+                
+                const finalIndicators = [];
+                const processedIndicatorIds = new Set<string>();
 
-                if (logframeData && logframeData.outcome) {
-                    const flattenedIndicators = logframeData.outputs.flatMap((output, oIdx) => 
-                        output.activities.flatMap((activity, aIdx) => {
-                            const mainActivity = projectPlanData?.tasks.find(t => t.title === activity.description);
-                            
-                            return activity.indicators.map((indicator, iIdx) => {
-                                const existingPlan = planMap.get(indicator.description);
-                                return {
+                // First, process indicators from the logframe
+                if (logframeData?.outcome?.outputs) {
+                    for (const output of logframeData.outcome.outputs) {
+                        for (const activity of output.activities) {
+                             const mainActivity = projectPlanData?.tasks.find(t => t.title === activity.description);
+                             for (const indicator of activity.indicators) {
+                                const existingPlan = planData?.indicators.find(p => p.indicatorId === indicator.description);
+                                processedIndicatorIds.add(indicator.description);
+
+                                finalIndicators.push({
                                     indicatorId: indicator.description,
-                                    indicatorCode: `${oIdx + 1}.${aIdx + 1}.${iIdx + 1}`,
+                                    indicatorCode: existingPlan?.indicatorCode || '', // Use saved code or generate
                                     type: existingPlan?.type || indicator.type,
-                                    isNew: false, // Flag for pre-existing indicators
+                                    isNew: false,
                                     outcome: logframeData.outcome.description,
                                     output: output.description,
                                     activity: activity.description,
                                     startDate: mainActivity?.start,
                                     endDate: mainActivity?.end,
                                     units: existingPlan?.units || []
-                                };
-                            })
-                        })
-                    );
-                    replaceIndicators(flattenedIndicators);
-                } else {
-                    replaceIndicators([]);
+                                });
+                            }
+                        }
+                    }
                 }
+
+                // Now, add any new indicators from the plan that weren't in the logframe
+                if (planData?.indicators) {
+                    for (const planIndicator of planData.indicators) {
+                        if (!processedIndicatorIds.has(planIndicator.indicatorId)) {
+                             finalIndicators.push({
+                                ...planIndicator,
+                                isNew: true, // Mark it as manually added
+                            });
+                        }
+                    }
+                }
+                
+                replaceIndicators(finalIndicators);
+
+                if (planData) {
+                    toast({title: "Existing Plan Loaded", description: "Loaded the existing indicator plan for this project."});
+                }
+
 
             } catch(e: any) {
                 toast({ title: "Error loading data", description: e.message, variant: 'destructive' });
@@ -400,3 +418,4 @@ export default function AddIndicatorTrackingPage() {
         </Suspense>
     );
 }
+
