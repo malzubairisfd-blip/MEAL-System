@@ -13,18 +13,19 @@ import { ProjectInfo } from '@/components/itt/ProjectInfo';
 import { ImpactCards } from '@/components/itt/ImpactCards';
 import { IndicatorTable } from '@/components/itt/IndicatorTable';
 import { Logframe } from '@/lib/logframe';
+import { Indicator, IndicatorTrackingPlan } from '@/types/monitoring-indicators';
 
 export default function ITTPage() {
     const { projects, selectedProject, logframe, indicatorPlan, trackingData, loading, selectProject } = useIttData();
 
-    const enrichedIndicatorPlan = useMemo(() => {
+    const enrichedIndicatorPlan: IndicatorTrackingPlan | null = useMemo(() => {
         if (!indicatorPlan) return null;
 
         const trackingMap = new Map(trackingData?.indicators.map((i: any) => [i.indicatorId, i]));
 
         return {
             ...indicatorPlan,
-            indicators: indicatorPlan.indicators.map(indicator => {
+            indicators: indicatorPlan.indicators.map((indicator: Indicator) => {
                 const savedTrackingData = trackingMap.get(indicator.indicatorId);
                 return savedTrackingData ? { ...indicator, ...savedTrackingData } : indicator;
             }),
