@@ -1,3 +1,4 @@
+
 // src/app/monitoring/me-plan-table/page.tsx
 "use client";
 
@@ -12,6 +13,7 @@ import { Logframe } from '@/lib/logframe';
 import { MEPlan, IndicatorPlan } from '@/types/monitoring-plan';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { IndicatorTrackingPlan } from '@/types/monitoring-indicators';
 
 interface Project {
   projectId: string;
@@ -57,6 +59,7 @@ export default function MEPlanTablePage() {
     const [selectedProjectId, setSelectedProjectId] = useState('');
     const [logframe, setLogframe] = useState<Logframe | null>(null);
     const [mePlan, setMePlan] = useState<MEPlan | null>(null);
+    const [indicatorPlan, setIndicatorPlan] = useState<IndicatorTrackingPlan | null>(null);
     const [loading, setLoading] = useState({ projects: true, data: false });
 
     useEffect(() => {
@@ -80,23 +83,21 @@ export default function MEPlanTablePage() {
         const fetchData = async () => {
             setLoading(prev => ({...prev, data: true}));
             try {
-                const [logframeRes, mePlanRes] = await Promise.all([
+                const [logframeRes, mePlanRes, indicatorPlanRes] = await Promise.all([
                     fetch(`/api/logframe?projectId=${selectedProjectId}`),
-                    fetch(`/api/monitoring-plan?projectId=${selectedProjectId}`)
+                    fetch(`/api/monitoring-plan?projectId=${selectedProjectId}`),
+                    fetch(`/api/monitoring-indicators?projectId=${selectedProjectId}`)
                 ]);
 
-                if (logframeRes.ok) {
-                    setLogframe(await logframeRes.json());
-                } else {
-                    setLogframe(null);
-                    toast({ title: "Logframe Not Found", description: "This project doesn't have a logical framework yet." });
-                }
+                if (logframeRes.ok) setLogframe(await logframeRes.json());
+                else setLogframe(null);
 
-                if (mePlanRes.ok) {
-                    setMePlan(await mePlanRes.json());
-                } else {
-                    setMePlan(null);
-                }
+                if (mePlanRes.ok) setMePlan(await mePlanRes.json());
+                else setMePlan(null);
+
+                if(indicatorPlanRes.ok) setIndicatorPlan(await indicatorPlanRes.json());
+                else setIndicatorPlan(null);
+
 
             } catch (error: any) {
                  toast({ title: "Error", description: "Failed to load project data.", variant: 'destructive' });
@@ -107,28 +108,48 @@ export default function MEPlanTablePage() {
         fetchData();
     }, [selectedProjectId, toast]);
 
-    const groupedData = useMemo((): GroupedData | null => {
-        if (!logframe) return null;
+    const groupedData = useMemo(() => {
+        if (!indicatorPlan || !indicatorPlan.indicators) return null;
+
+        const mePlanMap = new Map(mePlan?.indicators.map(p => [p.indicatorId, p]));
         
-        const planMap = new Map(mePlan?.indicators.map(p => [p.indicatorId, p]));
+        const hierarchy: { [outcome: string]: { [output: string]: { [activity: string]: any[] } } } = {};
+
+        indicatorPlan.indicators.forEach(indicator => {
+            const outcomeKey = indicator.outcome || 'Uncategorized';
+            const outputKey = indicator.output || 'Uncategorized';
+            const activityKey = indicator.activity || 'Uncategorized';
+
+            if (!hierarchy[outcomeKey]) hierarchy[outcomeKey] = {};
+            if (!hierarchy[outcomeKey][outputKey]) hierarchy[outcomeKey][outputKey] = {};
+            if (!hierarchy[outcomeKey][outputKey][activityKey]) hierarchy[outcomeKey][outputKey][activityKey] = [];
+
+            hierarchy[outcomeKey][outputKey][activityKey].push({
+                description: indicator.indicatorId,
+                type: indicator.type,
+                target: indicator.units.reduce((sum, u) => sum + u.targeted, 0),
+                meansOfVerification: [], // This info is not in monitoring-indicators.json, but the schema requires it.
+                plan: mePlanMap.get(indicator.indicatorId)
+            });
+        });
+        
+        const finalOutputs: OutputGroup[] = Object.entries(hierarchy[logframe?.outcome.description || "Uncategorized"] || {}).map(([outputKey, activities]) => ({
+            description: outputKey,
+            activities: Object.entries(activities).map(([activityKey, indicators]) => ({
+                description: activityKey,
+                indicators: indicators as IndicatorWithPlan[]
+            }))
+        }));
 
         return {
-            goal: logframe.goal,
+            goal: logframe?.goal || { description: "Project Goal" },
             outcome: {
-                ...logframe.outcome,
-                outputs: logframe.outputs.map(output => ({
-                    ...output,
-                    activities: output.activities.map(activity => ({
-                        ...activity,
-                        indicators: activity.indicators.map(indicator => ({
-                            ...indicator,
-                            plan: planMap.get(indicator.description)
-                        }))
-                    }))
-                }))
+                description: logframe?.outcome.description || "Project Outcome",
+                outputs: finalOutputs
             }
         };
-    }, [logframe, mePlan]);
+
+    }, [indicatorPlan, mePlan, logframe]);
 
 
     return (
