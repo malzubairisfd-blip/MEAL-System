@@ -108,19 +108,21 @@ export default function PrepareIndicatorsPage() {
     }, [selectedProjectId, toast]);
 
     const groupedData = useMemo((): GroupedData | null => {
-        if (!logframe || !logframe.outcome || !logframe.outputs) return null;
-        
+        if (!logframe || !logframe.goal || !logframe.outcome) {
+            return null;
+        }
+
         const planMap = new Map(indicatorPlan?.indicators.map(p => [p.indicatorId, p]));
 
         return {
             goal: logframe.goal,
             outcome: {
                 ...logframe.outcome,
-                outputs: logframe.outputs.map((output, oIdx) => ({
+                outputs: (logframe.outputs || []).map((output, oIdx) => ({
                     ...output,
-                    activities: output.activities.map((activity, aIdx) => ({
+                    activities: (output.activities || []).map((activity, aIdx) => ({
                         ...activity,
-                        indicators: activity.indicators.map((indicator, iIdx) => {
+                        indicators: (activity.indicators || []).map((indicator, iIdx) => {
                             const planIndicator = planMap.get(indicator.description);
                             const units = planIndicator?.units || [];
                             return {
