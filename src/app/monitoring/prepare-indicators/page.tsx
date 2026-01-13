@@ -117,7 +117,7 @@ export default function PrepareIndicatorsPage() {
         const hierarchy: { [output: string]: { [activity: string]: Set<string> } } = {};
 
         // 1. Build hierarchy from logframe
-        (logframe.outcome.outputs || []).forEach(output => {
+        (logframe.outputs || []).forEach(output => {
             hierarchy[output.description] = hierarchy[output.description] || {};
             (output.activities || []).forEach(activity => {
                 hierarchy[output.description][activity.description] = hierarchy[output.description][activity.description] || new Set();
@@ -253,8 +253,8 @@ export default function PrepareIndicatorsPage() {
                                                                     {uIdx === 0 && <TableCell rowSpan={indicator.units.length} className="align-top font-mono">{indicator.indicatorCode}</TableCell>}
                                                                     {uIdx === 0 && <TableCell rowSpan={indicator.units.length} className="align-top font-mono">{indicator.type}</TableCell>}
                                                                     <TableCell>{unit.unit}</TableCell>
-                                                                    <TableCell>{indicator.type === '%' ? `${(unit.targeted * 100).toFixed(0)}%` : unit.targeted}</TableCell>
-                                                                    <TableCell>{indicator.type === '%' ? `${(unit.actual * 100).toFixed(0)}%` : unit.actual}</TableCell>
+                                                                    <TableCell>{indicator.type === '%' ? `${unit.targeted}%` : unit.targeted}</TableCell>
+                                                                    <TableCell>{indicator.type === '%' ? `${unit.actual}%` : unit.actual}</TableCell>
                                                                     <TableCell>{unit.percentage.toFixed(2)}%</TableCell>
                                                                     <TableCell>{renderTextWithBreaks(unit.dataSource)}</TableCell>
                                                                     <TableCell>{renderTextWithBreaks(unit.responsibilities)}</TableCell>

@@ -28,23 +28,23 @@ export function IndicatorRow({ indicator }: { indicator: ITTIndicator }) {
             <TableCell>{indicator.indicatorCode}</TableCell>
             <TableCell>{indicator.type}</TableCell>
             <TableCell>{indicator.endDate ? new Date(indicator.endDate).toLocaleDateString() : 'N/A'}</TableCell>
-            <TableCell>{indicator.type === '%' ? `${(lopTarget * 100).toFixed(0)}%` : lopTarget}</TableCell>
-            <TableCell>{indicator.type === '%' ? `${(lopActual * 100).toFixed(0)}%` : lopActual}</TableCell>
+            <TableCell>{indicator.type === '%' ? `${lopTarget}%` : lopTarget}</TableCell>
+            <TableCell>{indicator.type === '%' ? `${lopActual}%` : lopActual}</TableCell>
             <TableCell>{lopPercentage.toFixed(2)}%</TableCell>
-            <TableCell>{indicator.type === '%' ? `${(annualTarget * 100).toFixed(0)}%` : annualTarget}</TableCell>
-            <TableCell>{indicator.type === '%' ? `${(ytdActual * 100).toFixed(0)}%` : ytdActual}</TableCell>
+            <TableCell>{indicator.type === '%' ? `${annualTarget}%` : annualTarget}</TableCell>
+            <TableCell>{indicator.type === '%' ? `${ytdActual}%` : ytdActual}</TableCell>
             <TableCell>{annualPercentage.toFixed(2)}%</TableCell>
-            <TableCell>{indicator.q1Target ? (indicator.type === '%' ? `${(indicator.q1Target * 100).toFixed(0)}%` : indicator.q1Target) : '-'}</TableCell>
-            <TableCell>{indicator.q1Actual ? (indicator.type === '%' ? `${(indicator.q1Actual * 100).toFixed(0)}%` : indicator.q1Actual) : '-'}</TableCell>
+            <TableCell>{indicator.q1Target ? (indicator.type === '%' ? `${indicator.q1Target}%` : indicator.q1Target) : '-'}</TableCell>
+            <TableCell>{indicator.q1Actual ? (indicator.type === '%' ? `${indicator.q1Actual}%` : indicator.q1Actual) : '-'}</TableCell>
             <TableCell>{q1Percentage.toFixed(2)}%</TableCell>
-            <TableCell>{indicator.q2Target ? (indicator.type === '%' ? `${(indicator.q2Target * 100).toFixed(0)}%` : indicator.q2Target) : '-'}</TableCell>
-            <TableCell>{indicator.q2Actual ? (indicator.type === '%' ? `${(indicator.q2Actual * 100).toFixed(0)}%` : indicator.q2Actual) : '-'}</TableCell>
+            <TableCell>{indicator.q2Target ? (indicator.type === '%' ? `${indicator.q2Target}%` : indicator.q2Target) : '-'}</TableCell>
+            <TableCell>{indicator.q2Actual ? (indicator.type === '%' ? `${indicator.q2Actual}%` : indicator.q2Actual) : '-'}</TableCell>
             <TableCell>{q2Percentage.toFixed(2)}%</TableCell>
-            <TableCell>{indicator.q3Target ? (indicator.type === '%' ? `${(indicator.q3Target * 100).toFixed(0)}%` : indicator.q3Target) : '-'}</TableCell>
-            <TableCell>{indicator.q3Actual ? (indicator.type === '%' ? `${(indicator.q3Actual * 100).toFixed(0)}%` : indicator.q3Actual) : '-'}</TableCell>
+            <TableCell>{indicator.q3Target ? (indicator.type === '%' ? `${indicator.q3Target}%` : indicator.q3Target) : '-'}</TableCell>
+            <TableCell>{indicator.q3Actual ? (indicator.type === '%' ? `${indicator.q3Actual}%` : indicator.q3Actual) : '-'}</TableCell>
             <TableCell>{q3Percentage.toFixed(2)}%</TableCell>
-            <TableCell>{indicator.q4Target ? (indicator.type === '%' ? `${(indicator.q4Target * 100).toFixed(0)}%` : indicator.q4Target) : '-'}</TableCell>
-            <TableCell>{indicator.q4Actual ? (indicator.type === '%' ? `${(indicator.q4Actual * 100).toFixed(0)}%` : indicator.q4Actual) : '-'}</TableCell>
+            <TableCell>{indicator.q4Target ? (indicator.type === '%' ? `${indicator.q4Target}%` : indicator.q4Target) : '-'}</TableCell>
+            <TableCell>{indicator.q4Actual ? (indicator.type === '%' ? `${indicator.q4Actual}%` : indicator.q4Actual) : '-'}</TableCell>
             <TableCell>{q4Percentage.toFixed(2)}%</TableCell>
         </TableRow>
     );
