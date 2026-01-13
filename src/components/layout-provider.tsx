@@ -19,6 +19,7 @@ import {
   Palette,
   Sheet,
   ChevronDown,
+  Users,
 } from "lucide-react";
 import { useTranslation } from "@/hooks/use-translation";
 import { useLanguage } from "@/context/language-context";
