@@ -48,7 +48,6 @@ interface ActivityGroup {
 interface IndicatorWithPlan {
     description: string;
     type: '#' | '%';
-    target: number;
     meansOfVerification: string[];
     plan?: Partial<IndicatorPlan>;
     units: IndicatorUnit[];
@@ -128,7 +127,6 @@ export default function MEPlanTablePage() {
             hierarchy[outcomeKey][outputKey][activityKey].push({
                 description: indicator.indicatorId,
                 type: indicator.type,
-                target: indicator.units.reduce((sum, u) => sum + u.targeted, 0),
                 meansOfVerification: [], // This info is not in monitoring-indicators.json, but the schema requires it.
                 plan: mePlanMap.get(indicator.indicatorId),
                 units: indicator.units || [],
@@ -207,8 +205,9 @@ export default function MEPlanTablePage() {
                                 <TableHeader>
                                     <TableRow className="bg-primary text-primary-foreground">
                                         <TableHead className="w-[15%] font-bold text-primary-foreground">Output/Activity/Indicator</TableHead>
-                                        <TableHead className="w-[15%] font-bold text-primary-foreground">Indicator Details</TableHead>
                                         <TableHead className="font-bold text-primary-foreground">Unit</TableHead>
+                                        <TableHead className="font-bold text-primary-foreground">Target</TableHead>
+                                        <TableHead className="font-bold text-primary-foreground">MoV</TableHead>
                                         <TableHead className="font-bold text-primary-foreground">Indicator Definition</TableHead>
                                         <TableHead className="font-bold text-primary-foreground">Data Collection</TableHead>
                                         <TableHead className="font-bold text-primary-foreground">Frequency</TableHead>
@@ -220,29 +219,35 @@ export default function MEPlanTablePage() {
                                     {groupedData.outcome.outputs.map((output, oIdx) => (
                                         <React.Fragment key={oIdx}>
                                             <TableRow className="bg-primary/10 hover:bg-primary/20">
-                                                <TableCell colSpan={8} className="font-bold p-3">Output {oIdx + 1}: {output.description}</TableCell>
+                                                <TableCell colSpan={9} className="font-bold p-3">Output {oIdx + 1}: {output.description}</TableCell>
                                             </TableRow>
                                             {output.activities.map((activity, aIdx) => (
                                                 <React.Fragment key={aIdx}>
                                                     <TableRow className="bg-muted/50 hover:bg-muted">
-                                                        <TableCell colSpan={8} className="font-semibold p-3 pl-8">Activity {oIdx + 1}.{aIdx+1}: {activity.description}</TableCell>
+                                                        <TableCell colSpan={9} className="font-semibold p-3 pl-8">Activity {oIdx + 1}.{aIdx+1}: {activity.description}</TableCell>
                                                     </TableRow>
                                                     {activity.indicators.map((indicator, iIdx) => (
-                                                        <TableRow key={iIdx}>
-                                                            <TableCell className="pl-12 font-medium">{indicator.description}</TableCell>
-                                                            <TableCell>
-                                                                <b>Target:</b> {indicator.target} ({indicator.type})<br/>
-                                                                <b>MoV:</b> {indicator.meansOfVerification.join(', ')}
-                                                            </TableCell>
-                                                             <TableCell>
-                                                                {(indicator.units || []).map(u => u.unit).join(', ')}
-                                                            </TableCell>
-                                                            <TableCell>{renderTextWithBreaks(indicator.plan?.definition)}</TableCell>
-                                                            <TableCell>{renderTextWithBreaks(indicator.plan?.collectionMethods)}</TableCell>
-                                                            <TableCell>{renderTextWithBreaks(indicator.plan?.frequency)}</TableCell>
-                                                            <TableCell>{renderTextWithBreaks(indicator.plan?.responsibilities)}</TableCell>
-                                                            <TableCell>{renderTextWithBreaks(indicator.plan?.informationUse)}</TableCell>
-                                                        </TableRow>
+                                                         <React.Fragment key={iIdx}>
+                                                            {indicator.units.map((unit, uIdx) => (
+                                                                <TableRow key={uIdx}>
+                                                                    {uIdx === 0 && <TableCell rowSpan={indicator.units.length} className="pl-12 font-medium align-top">{indicator.description}</TableCell>}
+                                                                    <TableCell>{unit.unit}</TableCell>
+                                                                    <TableCell>{indicator.type === '%' ? `${unit.targeted}%` : unit.targeted}</TableCell>
+                                                                    {uIdx === 0 && <TableCell rowSpan={indicator.units.length} className="align-top">{indicator.meansOfVerification.join(', ')}</TableCell>}
+                                                                    {uIdx === 0 && <TableCell rowSpan={indicator.units.length} className="align-top">{renderTextWithBreaks(indicator.plan?.definition)}</TableCell>}
+                                                                    {uIdx === 0 && <TableCell rowSpan={indicator.units.length} className="align-top">{renderTextWithBreaks(indicator.plan?.collectionMethods)}</TableCell>}
+                                                                    {uIdx === 0 && <TableCell rowSpan={indicator.units.length} className="align-top">{renderTextWithBreaks(indicator.plan?.frequency)}</TableCell>}
+                                                                    {uIdx === 0 && <TableCell rowSpan={indicator.units.length} className="align-top">{renderTextWithBreaks(indicator.plan?.responsibilities)}</TableCell>}
+                                                                    {uIdx === 0 && <TableCell rowSpan={indicator.units.length} className="align-top">{renderTextWithBreaks(indicator.plan?.informationUse)}</TableCell>}
+                                                                </TableRow>
+                                                            ))}
+                                                             {indicator.units.length === 0 && (
+                                                                <TableRow>
+                                                                    <TableCell className="pl-12 font-medium">{indicator.description}</TableCell>
+                                                                    <TableCell colSpan={8} className="text-center text-muted-foreground">No units defined for this indicator.</TableCell>
+                                                                </TableRow>
+                                                            )}
+                                                        </React.Fragment>
                                                     ))}
                                                 </React.Fragment>
                                             ))}

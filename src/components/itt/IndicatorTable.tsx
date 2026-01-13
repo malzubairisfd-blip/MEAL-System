@@ -64,7 +64,7 @@ export function IndicatorTable({ logframe, indicatorPlan }: { logframe: Logframe
                                 <TableHead>Unit</TableHead>
                                 <TableHead>Type</TableHead>
                                 <TableHead>Date</TableHead>
-                                <TableHead>LoP Target</TableHead>
+                                <TableHead>Unit Target</TableHead>
                                 <TableHead>LoP Actual</TableHead>
                                 <TableHead>% of LoP</TableHead>
                                 <TableHead>Annual Target</TableHead>
