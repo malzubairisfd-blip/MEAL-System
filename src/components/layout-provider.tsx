@@ -80,7 +80,7 @@ export function LayoutProvider({ children, year }: { children: React.ReactNode, 
   const sidebarLinks = [
     { href: "/", icon: <Home />, label: t("sidebar.dashboard") },
     { href: "/meal-system", icon: <Briefcase />, label: "MEAL System" },
-    { href: "/logframe", icon: <ListChecks />, label: "Logical Framework" },
+    { href: "/project/logframe", icon: <ListChecks />, label: "Logical Framework" },
     { href: "/monitoring", icon: <Monitor />, label: "M&E Lifecycle" },
     { href: "/monitoring/prepare-indicators", icon: <Target />, label: "Prepare Indicators" },
     { href: "/monitoring/data-collection/itt", icon: <Sheet />, label: "Indicator Tracking" },
@@ -163,3 +163,5 @@ export function LayoutProvider({ children, year }: { children: React.ReactNode, 
     </div>
   );
 }
+
+    

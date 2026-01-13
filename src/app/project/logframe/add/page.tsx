@@ -120,7 +120,7 @@ export default function AddLogframePage() {
                 title: "Logical Framework Saved!",
                 description: `Logframe for project "${selectedProject?.projectName}" has been successfully created.`,
             });
-            router.push('/logframe');
+            router.push('/project/logframe');
         } catch (error: any) {
             toast({
                 title: "Submission Failed",
@@ -140,7 +140,7 @@ export default function AddLogframePage() {
                     <p className="text-muted-foreground">Define the strategic elements of your project.</p>
                 </div>
                 <Button variant="outline" asChild>
-                    <Link href="/logframe">
+                    <Link href="/project/logframe">
                         <ArrowLeft className="mr-2 h-4 w-4" /> Back to Logframe Dashboard
                     </Link>
                 </Button>
@@ -367,6 +367,8 @@ const RisksAndAssumptionsArray = ({ control, outputIndex, activityIndex }: { con
          <Button type="button" variant="outline" size="sm" onClick={() => append({ risk: '', assumption: '' })}><Plus className="mr-2 h-4 w-4" /> Add Risk/Assumption</Button>
     </div>
 }
+
+    
 
     
 

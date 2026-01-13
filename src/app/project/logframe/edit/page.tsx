@@ -63,7 +63,7 @@ function EditLogframeForm() {
     useEffect(() => {
         if (!projectId) {
             toast({ title: "Error", description: "No project ID provided.", variant: 'destructive' });
-            router.push('/logframe');
+            router.push('/project/logframe');
             return;
         }
 
@@ -88,7 +88,7 @@ function EditLogframeForm() {
                 }
             } catch (error: any) {
                 toast({ title: "Error", description: error.message, variant: 'destructive' });
-                router.push('/logframe');
+                router.push('/project/logframe');
             } finally {
                 setLoading(false);
             }
@@ -118,7 +118,7 @@ function EditLogframeForm() {
                 title: "Logical Framework Updated!",
                 description: `Logframe for project "${project?.projectName}" has been successfully updated.`,
             });
-            router.push('/logframe');
+            router.push('/project/logframe');
         } catch (error: any) {
             toast({
                 title: "Update Failed",
@@ -142,7 +142,7 @@ function EditLogframeForm() {
                     <p className="text-muted-foreground">Modify the strategic elements for {project?.projectName}.</p>
                 </div>
                 <Button variant="outline" asChild>
-                    <Link href="/logframe">
+                    <Link href="/project/logframe">
                         <ArrowLeft className="mr-2 h-4 w-4" /> Back to Logframe Dashboard
                     </Link>
                 </Button>
@@ -356,3 +356,6 @@ const RisksAndAssumptionsArray = ({ control, outputIndex, activityIndex }: { con
          <Button type="button" variant="outline" size="sm" onClick={() => append({ risk: '', assumption: '' })}><Plus className="mr-2 h-4 w-4" /> Add Risk/Assumption</Button>
     </div>
 }
+
+
+    

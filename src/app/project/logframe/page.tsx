@@ -122,7 +122,7 @@ export default function LogicalFrameworkDashboardPage() {
                         </Link>
                     </Button>
                     <Button asChild disabled={!hasProjects} title={!hasProjects ? "Please create a project first" : ""}>
-                        <Link href="/logframe/add">
+                        <Link href="/project/logframe/add">
                             <Plus className="mr-2 h-4 w-4" /> Add New Logical Framework
                         </Link>
                     </Button>
@@ -153,7 +153,7 @@ export default function LogicalFrameworkDashboardPage() {
                             {selectedLogframe && (
                                 <div className="flex gap-2">
                                     <Button asChild variant="outline">
-                                        <Link href={`/logframe/edit?projectId=${selectedProject}`}>
+                                        <Link href={`/project/logframe/edit?projectId=${selectedProject}`}>
                                             <Edit className="h-4 w-4 mr-2" />
                                             Edit
                                         </Link>
@@ -258,7 +258,7 @@ export default function LogicalFrameworkDashboardPage() {
                         ) : (
                             <div className="text-center text-muted-foreground py-10">
                                 <p>No logical framework found for this project.</p>
-                                <Button variant="link" asChild><Link href="/logframe/add">Create one now</Link></Button>
+                                <Button variant="link" asChild><Link href="/project/logframe/add">Create one now</Link></Button>
                             </div>
                         )}
                     </CardContent>
@@ -267,3 +267,5 @@ export default function LogicalFrameworkDashboardPage() {
         </div>
     );
 }
+
+    
