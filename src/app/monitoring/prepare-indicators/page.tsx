@@ -108,11 +108,10 @@ export default function PrepareIndicatorsPage() {
     }, [selectedProjectId, toast]);
 
     const groupedData = useMemo((): GroupedData | null => {
-        if (!logframe) return null;
+        if (!logframe || !logframe.outcome || !logframe.outputs) return null;
         
         const planMap = new Map(indicatorPlan?.indicators.map(p => [p.indicatorId, p]));
 
-        let indicatorCounter = 0;
         return {
             goal: logframe.goal,
             outcome: {
@@ -123,11 +122,10 @@ export default function PrepareIndicatorsPage() {
                         ...activity,
                         indicators: activity.indicators.map((indicator, iIdx) => {
                             const planIndicator = planMap.get(indicator.description);
-                            indicatorCounter++;
                             const units = planIndicator?.units || [];
                             return {
                                 indicatorId: indicator.description,
-                                indicatorCode: `${oIdx + 1}.${aIdx + 1}.${iIdx + 1}`,
+                                indicatorCode: planIndicator?.indicatorCode || `${oIdx + 1}.${aIdx + 1}.${iIdx + 1}`,
                                 type: planIndicator?.type || indicator.type,
                                 units: units.map(u => ({...u, percentage: u.targeted > 0 ? (u.actual / u.targeted) * 100 : 0 }))
                             };
@@ -250,3 +248,4 @@ export default function PrepareIndicatorsPage() {
         </div>
     );
 }
+
