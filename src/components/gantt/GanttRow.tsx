@@ -185,7 +185,7 @@ export const TaskListItem = ({ task, onDelete, onUpdateStatus, onUpdateProgress,
                         </DropdownMenuTrigger>
                         <DropdownMenuContent>
                             <DropdownMenuItem asChild>
-                            <Link href={`/project/edit-task?projectId=${projectId}&taskId=${task.id}`}>
+                            <Link href={`/meal-system/project/plan/edit-task?projectId=${projectId}&taskId=${task.id}`}>
                                     <Edit className="mr-2 h-4 w-4"/>
                                     Edit Activity
                             </Link>

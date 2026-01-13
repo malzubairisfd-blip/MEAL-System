@@ -290,7 +290,7 @@ function ProjectPlanPageContent() {
                             </Button>
                             
                              <Button className="bg-blue-600 hover:bg-blue-700 text-white" asChild>
-                                <Link href={`/meal-system/project/add-task?projectId=${selectedProject.projectId}`}>
+                                <Link href={`/meal-system/project/plan/add-task?projectId=${selectedProject.projectId}`}>
                                     <Plus className="mr-2 h-4 w-4" />
                                     Add a new activity
                                 </Link>

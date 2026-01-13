@@ -46,11 +46,12 @@ This document outlines the high-level architecture of the application, showing h
 ├── project/                  # Pages for project management (dashboard, details, gantt plan).
 │   ├── page.tsx
 │   ├── add/page.tsx
-│   ├── add-task/page.tsx
 │   ├── dashboard/page.tsx
 │   ├── details/page.tsx
-│   ├── edit-task/page.tsx
-│   ├── plan/page.tsx
+│   ├── plan/
+│   │   ├── page.tsx
+│   │   ├── add-task/page.tsx
+│   │   └── edit-task/page.tsx
 │   └── logframe/                 # Pages for creating and viewing Logical Frameworks.
 │       ├── page.tsx
 │       ├── add/page.tsx
@@ -94,4 +95,3 @@ This document outlines the high-level architecture of the application, showing h
         │   └── add/page.tsx
         └── sampling-calculator/page.tsx
 ```
-    
