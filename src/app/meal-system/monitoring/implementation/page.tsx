@@ -12,7 +12,7 @@ export default function ImplementationPage() {
     { title: "Process (activity) monitoring", href: "/meal-system/monitoring/implementation/process", icon: <Activity className="h-8 w-8 text-green-500" /> },
     { title: "Compliance monitoring", href: "/meal-system/monitoring/implementation/compliance", icon: <ShieldCheck className="h-8 w-8 text-red-500" /> },
     { title: "Context (situation) monitoring", href: "/meal-system/monitoring/implementation/context", icon: <Globe className="h-8 w-8 text-purple-500" /> },
-    { title: "Beneficiary monitoring", href: "/meal-system/monitoring/implementation/beneficiary", icon: <Users className="h-8 w-8 text-orange-500" /> },
+    { title: "Beneficiary monitoring", href: "/meal-system/monitoring/implementation/beneficiary-monitoring", icon: <Users className="h-8 w-8 text-orange-500" /> },
     { title: "Financial monitoring", href: "/meal-system/monitoring/implementation/financial", icon: <DollarSign className="h-8 w-8 text-yellow-500" /> },
     { title: "Organizational monitoring", href: "/meal-system/monitoring/implementation/organizational", icon: <Building className="h-8 w-8 text-indigo-500" /> },
   ];
