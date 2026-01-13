@@ -35,7 +35,13 @@ This document outlines the high-level architecture of the application, showing h
 │
 ├── meal-system/              # Main hub for all MEAL features.
 │   ├── page.tsx
-│   └── settings/page.tsx
+│   ├── settings/page.tsx
+│   ├── analysis/page.tsx
+│   ├── compliant/page.tsx
+│   ├── evaluation/page.tsx
+│   ├── indicator/page.tsx
+│   ├── reporting/page.tsx
+│   └── risk/page.tsx
 │
 ├── project/                  # Pages for project management (dashboard, details, gantt plan).
 │   ├── page.tsx
@@ -54,13 +60,30 @@ This document outlines the high-level architecture of the application, showing h
 └── monitoring/               # Pages for the M&E lifecycle.
     ├── page.tsx
     ├── closure/page.tsx
-    ├── implementation/page.tsx
-    ├── initiation-and-planning/page.tsx
+    ├── implementation/
+    │   ├── page.tsx
+    │   ├── beneficiary/page.tsx
+    │   ├── compliance/page.tsx
+    │   ├── context/page.tsx
+    │   ├── financial/page.tsx
+    │   ├── organizational/page.tsx
+    │   ├── process/page.tsx
+    │   └── results/page.tsx
+    ├── initiation-and-planning/
+    │   ├── page.tsx
+    │   ├── budget/page.tsx
+    │   ├── data-analysis/page.tsx
+    │   ├── hr/page.tsx
+    │   └── reporting/page.tsx
     ├── data-collection/
     │   ├── page.tsx
-    │   └── itt/
-    │       ├── page.tsx
-    │       └── edit/page.tsx
+    │   ├── itt/
+    │   │   ├── page.tsx
+    │   │   └── edit/page.tsx
+    │   ├── data-types/page.tsx
+    │   ├── secondary-data/page.tsx
+    │   ├── staff-criteria/page.tsx
+    │   └── surveys/page.tsx
     ├── me-plan-table/
     │   ├── page.tsx
     │   └── add/page.tsx
