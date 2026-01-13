@@ -1,3 +1,4 @@
+
 // src/components/itt/IndicatorRow.tsx
 import React, { useMemo } from 'react';
 import { TableCell, TableRow } from '@/components/ui/table';
@@ -5,8 +6,9 @@ import { ITTIndicator, calculateLoPActual, calculateYearToDateActual, calculateP
 
 export function IndicatorRow({ indicator }: { indicator: ITTIndicator }) {
     
-    const lopTarget = useMemo(() => indicator.units?.reduce((sum, unit) => sum + (unit.targeted || 0), 0) || 0, [indicator.units]);
-    const annualTarget = lopTarget; // Assuming annual is same as LoP for this case
+    // Correctly use the lopTarget from the indicator object itself
+    const lopTarget = useMemo(() => indicator.lopTarget || 0, [indicator.lopTarget]);
+    const annualTarget = useMemo(() => indicator.annualTarget || 0, [indicator.annualTarget]); // Use annual target if available
 
     const lopActual = useMemo(() => calculateLoPActual(indicator), [indicator]);
     const ytdActual = useMemo(() => calculateYearToDateActual(indicator), [indicator]);
@@ -47,3 +49,4 @@ export function IndicatorRow({ indicator }: { indicator: ITTIndicator }) {
         </TableRow>
     );
 }
+
