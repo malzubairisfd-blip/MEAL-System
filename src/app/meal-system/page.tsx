@@ -25,7 +25,7 @@ export default function MealSystemPage() {
     { href: "/project", icon: <Briefcase className="h-8 w-8 text-indigo-500" />, title: "Project Page" },
     { href: "/monitoring", icon: <Monitor className="h-8 w-8 text-blue-500" />, title: "Monitoring Page" },
     { href: "#", icon: <ClipboardCheck className="h-8 w-8 text-green-500" />, title: "Evaluation Page" },
-    { href: "#", icon: <Database className="h-8 w-8 text-sky-500" />, title: "Data Collection Page" },
+    { href: "/monitoring/data-collection", icon: <Database className="h-8 w-8 text-sky-500" />, title: "Data Collection Page" },
     { href: "#", icon: <PieChart className="h-8 w-8 text-purple-500" />, title: "Analysis Page" },
     { href: "#", icon: <FileText className="h-8 w-8 text-slate-500" />, title: "Reporting Page" },
     { href: "#", icon: <ShieldAlert className="h-8 w-8 text-red-500" />, title: "Risk Page" },
