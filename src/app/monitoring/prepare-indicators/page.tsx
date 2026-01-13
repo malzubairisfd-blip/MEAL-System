@@ -253,8 +253,8 @@ export default function PrepareIndicatorsPage() {
                                                                     {uIdx === 0 && <TableCell rowSpan={indicator.units.length} className="align-top font-mono">{indicator.indicatorCode}</TableCell>}
                                                                     {uIdx === 0 && <TableCell rowSpan={indicator.units.length} className="align-top font-mono">{indicator.type}</TableCell>}
                                                                     <TableCell>{unit.unit}</TableCell>
-                                                                    <TableCell>{unit.targeted}</TableCell>
-                                                                    <TableCell>{unit.actual}</TableCell>
+                                                                    <TableCell>{indicator.type === '%' ? `${(unit.targeted * 100).toFixed(0)}%` : unit.targeted}</TableCell>
+                                                                    <TableCell>{indicator.type === '%' ? `${(unit.actual * 100).toFixed(0)}%` : unit.actual}</TableCell>
                                                                     <TableCell>{unit.percentage.toFixed(2)}%</TableCell>
                                                                     <TableCell>{renderTextWithBreaks(unit.dataSource)}</TableCell>
                                                                     <TableCell>{renderTextWithBreaks(unit.responsibilities)}</TableCell>
