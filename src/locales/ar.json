@@ -7,7 +7,16 @@
     "audit": "إجراء التدقيق",
     "report": "التقرير",
     "export": "تصدير التقرير",
-    "settings": "الإعدادات"
+    "settings": "الإعدادات",
+    "correction": "تصحيح",
+    "styleGuide": "دليل النمط",
+    "mealSystem": "نظام MEAL",
+    "beneficiaryAnalysis": "تحليل المستفيدين",
+    "projectManagement": "إدارة المشاريع",
+    "meLifecycle": "دورة حياة M&E",
+    "logframe": "الإطار المنطقي",
+    "prepareIndicators": "إعداد المؤشرات",
+    "indicatorTracking": "تتبع المؤشرات"
   },
   "header": {
     "dashboard": "لوحة التحكم",

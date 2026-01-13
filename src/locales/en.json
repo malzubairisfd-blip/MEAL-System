@@ -7,7 +7,16 @@
     "audit": "Run Audit",
     "report": "Report",
     "export": "Export Report",
-    "settings": "Settings"
+    "settings": "Settings",
+    "correction": "Correction",
+    "styleGuide": "Style Guide",
+    "mealSystem": "MEAL System",
+    "beneficiaryAnalysis": "Beneficiary Analysis",
+    "projectManagement": "Project Management",
+    "meLifecycle": "M&E Lifecycle",
+    "logframe": "Logical Framework",
+    "prepareIndicators": "Prepare Indicators",
+    "indicatorTracking": "Indicator Tracking"
   },
   "header": {
     "dashboard": "Dashboard",
