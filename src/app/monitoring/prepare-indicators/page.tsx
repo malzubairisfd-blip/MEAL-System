@@ -29,21 +29,6 @@ const renderTextWithBreaks = (text: string | undefined) => {
     ));
 }
 
-interface GroupedData {
-    goal: { description: string };
-    outcome: { description: string; outputs: OutputGroup[] };
-}
-
-interface OutputGroup {
-    description: string;
-    activities: ActivityGroup[];
-}
-
-interface ActivityGroup {
-    description: string;
-    indicators: IndicatorWithUnits[];
-}
-
 interface IndicatorWithUnits {
     indicatorId: string;
     indicatorCode?: string;
@@ -57,6 +42,22 @@ interface IndicatorWithUnits {
         responsibilities: string;
     }[];
 }
+
+interface ActivityGroup {
+    description: string;
+    indicators: IndicatorWithUnits[];
+}
+
+interface OutputGroup {
+    description: string;
+    activities: ActivityGroup[];
+}
+
+interface GroupedData {
+    goal: { description: string };
+    outcome: { description: string; outputs: OutputGroup[] };
+}
+
 
 export default function PrepareIndicatorsPage() {
     const { toast } = useToast();
@@ -113,28 +114,60 @@ export default function PrepareIndicatorsPage() {
         }
 
         const planMap = new Map(indicatorPlan?.indicators.map(p => [p.indicatorId, p]));
+        const hierarchy: { [output: string]: { [activity: string]: Set<string> } } = {};
+
+        // 1. Build hierarchy from logframe
+        (logframe.outcome.outputs || []).forEach(output => {
+            hierarchy[output.description] = hierarchy[output.description] || {};
+            (output.activities || []).forEach(activity => {
+                hierarchy[output.description][activity.description] = hierarchy[output.description][activity.description] || new Set();
+                (activity.indicators || []).forEach(indicator => {
+                    hierarchy[output.description][activity.description].add(indicator.description);
+                });
+            });
+        });
+
+        // 2. Add new indicators from monitoring plan
+        (indicatorPlan?.indicators || []).forEach(indicator => {
+            const outputKey = indicator.output || 'Uncategorized';
+            const activityKey = indicator.activity || 'Uncategorized';
+            
+            if (!hierarchy[outputKey]) {
+                hierarchy[outputKey] = {};
+            }
+            if (!hierarchy[outputKey][activityKey]) {
+                hierarchy[outputKey][activityKey] = new Set();
+            }
+            hierarchy[outputKey][activityKey].add(indicator.indicatorId);
+        });
+        
+        // 3. Build the final data structure with enriched data
+        const finalOutputs: OutputGroup[] = Object.keys(hierarchy).map(outputKey => ({
+            description: outputKey,
+            activities: Object.keys(hierarchy[outputKey]).map(activityKey => ({
+                description: activityKey,
+                indicators: Array.from(hierarchy[outputKey][activityKey]).map((indicatorId, iIdx) => {
+                    const planIndicator = planMap.get(indicatorId);
+                    const units = planIndicator?.units || [];
+                    
+                    const code = planIndicator?.indicatorCode || `${Object.keys(hierarchy).indexOf(outputKey) + 1}.${Object.keys(hierarchy[outputKey]).indexOf(activityKey) + 1}.${iIdx + 1}`;
+
+                    return {
+                        indicatorId: indicatorId,
+                        indicatorCode: code,
+                        type: planIndicator?.type || '#',
+                        units: units.map(u => ({ ...u, percentage: u.targeted > 0 ? (u.actual / u.targeted) * 100 : 0 }))
+                    };
+                })
+            }))
+        }));
 
         return {
             goal: logframe.goal,
             outcome: {
                 ...logframe.outcome,
-                outputs: (logframe.outputs || []).map((output, oIdx) => ({
-                    ...output,
-                    activities: (output.activities || []).map((activity, aIdx) => ({
-                        ...activity,
-                        indicators: (activity.indicators || []).map((indicator, iIdx) => {
-                            const planIndicator = planMap.get(indicator.description);
-                            const units = planIndicator?.units || [];
-                            return {
-                                indicatorId: indicator.description,
-                                indicatorCode: planIndicator?.indicatorCode || `${oIdx + 1}.${aIdx + 1}.${iIdx + 1}`,
-                                type: planIndicator?.type || indicator.type,
-                                units: units.map(u => ({...u, percentage: u.targeted > 0 ? (u.actual / u.targeted) * 100 : 0 }))
-                            };
-                        })
-                    }))
-                }))
-            }
+                outputs: finalOutputs,
+            },
         };
     }, [logframe, indicatorPlan]);
 
@@ -250,4 +283,3 @@ export default function PrepareIndicatorsPage() {
         </div>
     );
 }
-
