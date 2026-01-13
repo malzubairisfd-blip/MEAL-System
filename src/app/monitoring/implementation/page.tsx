@@ -8,13 +8,13 @@ import { ArrowLeft, ArrowRight, BarChart, Activity, ShieldCheck, Globe, Users, D
 
 export default function ImplementationPage() {
   const monitoringActivities = [
-    { title: "Results monitoring", icon: <BarChart className="h-8 w-8 text-blue-500" /> },
-    { title: "Process (activity) monitoring", icon: <Activity className="h-8 w-8 text-green-500" /> },
-    { title: "Compliance monitoring", icon: <ShieldCheck className="h-8 w-8 text-red-500" /> },
-    { title: "Context (situation) monitoring", icon: <Globe className="h-8 w-8 text-purple-500" /> },
-    { title: "Beneficiary monitoring", icon: <Users className="h-8 w-8 text-orange-500" /> },
-    { title: "Financial monitoring", icon: <DollarSign className="h-8 w-8 text-yellow-500" /> },
-    { title: "Organizational monitoring", icon: <Building className="h-8 w-8 text-indigo-500" /> },
+    { title: "Results monitoring", href: "/monitoring/implementation/results", icon: <BarChart className="h-8 w-8 text-blue-500" /> },
+    { title: "Process (activity) monitoring", href: "/monitoring/implementation/process", icon: <Activity className="h-8 w-8 text-green-500" /> },
+    { title: "Compliance monitoring", href: "/monitoring/implementation/compliance", icon: <ShieldCheck className="h-8 w-8 text-red-500" /> },
+    { title: "Context (situation) monitoring", href: "/monitoring/implementation/context", icon: <Globe className="h-8 w-8 text-purple-500" /> },
+    { title: "Beneficiary monitoring", href: "/monitoring/implementation/beneficiary", icon: <Users className="h-8 w-8 text-orange-500" /> },
+    { title: "Financial monitoring", href: "/monitoring/implementation/financial", icon: <DollarSign className="h-8 w-8 text-yellow-500" /> },
+    { title: "Organizational monitoring", href: "/monitoring/implementation/organizational", icon: <Building className="h-8 w-8 text-indigo-500" /> },
   ];
 
   return (
@@ -38,9 +38,11 @@ export default function ImplementationPage() {
             <CardHeader className="p-0">
                 <CardTitle className="text-base">{activity.title}</CardTitle>
             </CardHeader>
-            <CardContent className="p-4">
-                <Button variant="secondary" size="sm" className="mt-4">
-                    View Details
+            <CardContent className="p-4 mt-auto">
+                <Button variant="secondary" size="sm" className="group" asChild>
+                    <Link href={activity.href}>
+                      View Details <ArrowRight className="ml-1 h-4 w-4 transition-transform group-hover:translate-x-1" />
+                    </Link>
                 </Button>
             </CardContent>
           </Card>

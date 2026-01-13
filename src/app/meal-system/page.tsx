@@ -24,14 +24,14 @@ export default function MealSystemPage() {
   const mealFeatures = [
     { href: "/project", icon: <Briefcase className="h-8 w-8 text-indigo-500" />, title: "Project Page" },
     { href: "/monitoring", icon: <Monitor className="h-8 w-8 text-blue-500" />, title: "Monitoring Page" },
-    { href: "#", icon: <ClipboardCheck className="h-8 w-8 text-green-500" />, title: "Evaluation Page" },
+    { href: "/meal-system/evaluation", icon: <ClipboardCheck className="h-8 w-8 text-green-500" />, title: "Evaluation Page" },
     { href: "/monitoring/data-collection", icon: <Database className="h-8 w-8 text-sky-500" />, title: "Data Collection Page" },
-    { href: "#", icon: <PieChart className="h-8 w-8 text-purple-500" />, title: "Analysis Page" },
-    { href: "#", icon: <FileText className="h-8 w-8 text-slate-500" />, title: "Reporting Page" },
-    { href: "#", icon: <ShieldAlert className="h-8 w-8 text-red-500" />, title: "Risk Page" },
-    { href: "#", icon: <MessageSquareWarning className="h-8 w-8 text-yellow-500" />, title: "Compliant Page" },
+    { href: "/meal-system/analysis", icon: <PieChart className="h-8 w-8 text-purple-500" />, title: "Analysis Page" },
+    { href: "/meal-system/reporting", icon: <FileText className="h-8 w-8 text-slate-500" />, title: "Reporting Page" },
+    { href: "/meal-system/risk", icon: <ShieldAlert className="h-8 w-8 text-red-500" />, title: "Risk Page" },
+    { href: "/meal-system/compliant", icon: <MessageSquareWarning className="h-8 w-8 text-yellow-500" />, title: "Compliant Page" },
     { href: "/logframe", icon: <ListChecks className="h-8 w-8 text-cyan-500" />, title: "Logical Framework page" },
-    { href: "#", icon: <Target className="h-8 w-8 text-orange-500" />, title: "Indicator Page" },
+    { href: "/meal-system/indicator", icon: <Target className="h-8 w-8 text-orange-500" />, title: "Indicator Page" },
     { href: "/meal-system/settings", icon: <Settings className="h-8 w-8 text-gray-500" />, title: "Settings" },
   ];
 
