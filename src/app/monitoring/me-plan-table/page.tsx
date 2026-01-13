@@ -13,7 +13,7 @@ import { Logframe } from '@/lib/logframe';
 import { MEPlan, IndicatorPlan } from '@/types/monitoring-plan';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import { IndicatorTrackingPlan } from '@/types/monitoring-indicators';
+import { IndicatorTrackingPlan, IndicatorUnit } from '@/types/monitoring-indicators';
 
 interface Project {
   projectId: string;
@@ -51,6 +51,7 @@ interface IndicatorWithPlan {
     target: number;
     meansOfVerification: string[];
     plan?: Partial<IndicatorPlan>;
+    units: IndicatorUnit[];
 }
 
 export default function MEPlanTablePage() {
@@ -129,7 +130,8 @@ export default function MEPlanTablePage() {
                 type: indicator.type,
                 target: indicator.units.reduce((sum, u) => sum + u.targeted, 0),
                 meansOfVerification: [], // This info is not in monitoring-indicators.json, but the schema requires it.
-                plan: mePlanMap.get(indicator.indicatorId)
+                plan: mePlanMap.get(indicator.indicatorId),
+                units: indicator.units || [],
             });
         });
         
@@ -206,6 +208,7 @@ export default function MEPlanTablePage() {
                                     <TableRow className="bg-primary text-primary-foreground">
                                         <TableHead className="w-[15%] font-bold text-primary-foreground">Output/Activity/Indicator</TableHead>
                                         <TableHead className="w-[15%] font-bold text-primary-foreground">Indicator Details</TableHead>
+                                        <TableHead className="font-bold text-primary-foreground">Unit</TableHead>
                                         <TableHead className="font-bold text-primary-foreground">Indicator Definition</TableHead>
                                         <TableHead className="font-bold text-primary-foreground">Data Collection</TableHead>
                                         <TableHead className="font-bold text-primary-foreground">Frequency</TableHead>
@@ -217,12 +220,12 @@ export default function MEPlanTablePage() {
                                     {groupedData.outcome.outputs.map((output, oIdx) => (
                                         <React.Fragment key={oIdx}>
                                             <TableRow className="bg-primary/10 hover:bg-primary/20">
-                                                <TableCell colSpan={7} className="font-bold p-3">Output {oIdx + 1}: {output.description}</TableCell>
+                                                <TableCell colSpan={8} className="font-bold p-3">Output {oIdx + 1}: {output.description}</TableCell>
                                             </TableRow>
                                             {output.activities.map((activity, aIdx) => (
                                                 <React.Fragment key={aIdx}>
                                                     <TableRow className="bg-muted/50 hover:bg-muted">
-                                                        <TableCell colSpan={7} className="font-semibold p-3 pl-8">Activity {oIdx + 1}.{aIdx+1}: {activity.description}</TableCell>
+                                                        <TableCell colSpan={8} className="font-semibold p-3 pl-8">Activity {oIdx + 1}.{aIdx+1}: {activity.description}</TableCell>
                                                     </TableRow>
                                                     {activity.indicators.map((indicator, iIdx) => (
                                                         <TableRow key={iIdx}>
@@ -230,6 +233,9 @@ export default function MEPlanTablePage() {
                                                             <TableCell>
                                                                 <b>Target:</b> {indicator.target} ({indicator.type})<br/>
                                                                 <b>MoV:</b> {indicator.meansOfVerification.join(', ')}
+                                                            </TableCell>
+                                                             <TableCell>
+                                                                {(indicator.units || []).map(u => u.unit).join(', ')}
                                                             </TableCell>
                                                             <TableCell>{renderTextWithBreaks(indicator.plan?.definition)}</TableCell>
                                                             <TableCell>{renderTextWithBreaks(indicator.plan?.collectionMethods)}</TableCell>

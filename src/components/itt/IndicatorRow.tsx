@@ -21,11 +21,17 @@ export function IndicatorRow({ indicator }: { indicator: ITTIndicator }) {
     const q3Percentage = useMemo(() => calculatePercentage(indicator.q3Actual, indicator.q3Target), [indicator.q3Actual, indicator.q3Target]);
     const q4Percentage = useMemo(() => calculatePercentage(indicator.q4Actual, indicator.q4Target), [indicator.q4Actual, indicator.q4Target]);
 
+    const unitsDisplay = useMemo(() => {
+        if (!indicator.units || indicator.units.length === 0) return 'N/A';
+        return indicator.units.map(u => u.unit).join(', ');
+    }, [indicator.units]);
+
 
     return (
         <TableRow>
             <TableCell className="font-medium pl-12">{indicator.indicatorId}</TableCell>
             <TableCell>{indicator.indicatorCode}</TableCell>
+            <TableCell>{unitsDisplay}</TableCell>
             <TableCell>{indicator.type}</TableCell>
             <TableCell>{indicator.endDate ? new Date(indicator.endDate).toLocaleDateString() : 'N/A'}</TableCell>
             <TableCell>{indicator.type === '%' ? `${lopTarget}%` : lopTarget}</TableCell>

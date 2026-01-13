@@ -16,7 +16,7 @@ interface GroupedData {
 export function IndicatorTable({ logframe, indicatorPlan }: { logframe: Logframe | null, indicatorPlan: IndicatorTrackingPlan | null }) {
     
     const groupedIndicators = useMemo(() => {
-        if (!indicatorPlan) return {};
+        if (!indicatorPlan || !indicatorPlan.indicators) return {};
 
         const groups: GroupedData = {};
 
@@ -61,6 +61,7 @@ export function IndicatorTable({ logframe, indicatorPlan }: { logframe: Logframe
                             <TableRow>
                                 <TableHead className="w-[200px]">Indicator</TableHead>
                                 <TableHead>Code</TableHead>
+                                <TableHead>Unit</TableHead>
                                 <TableHead>Type</TableHead>
                                 <TableHead>Date</TableHead>
                                 <TableHead>LoP Target</TableHead>
@@ -87,12 +88,12 @@ export function IndicatorTable({ logframe, indicatorPlan }: { logframe: Logframe
                             {Object.entries(groupedIndicators).map(([outcome, outputs]) => (
                                 <React.Fragment key={outcome}>
                                     <TableRow className="bg-secondary/10">
-                                        <TableCell colSpan={22} className="font-bold text-secondary-foreground">{outcome}</TableCell>
+                                        <TableCell colSpan={23} className="font-bold text-secondary-foreground">{outcome}</TableCell>
                                     </TableRow>
                                     {Object.entries(outputs).map(([output, indicators]) => (
                                          <React.Fragment key={output}>
                                              <TableRow className="bg-muted/50">
-                                                <TableCell colSpan={22} className="font-semibold pl-8">{output}</TableCell>
+                                                <TableCell colSpan={23} className="font-semibold pl-8">{output}</TableCell>
                                             </TableRow>
                                             {indicators.map((indicator, index) => (
                                                 <IndicatorRow key={`${indicator.indicatorId}-${indicator.indicatorCode}-${index}`} indicator={indicator} />
