@@ -2,7 +2,7 @@
 // src/app/monitoring/data-collection/itt/page.tsx
 "use client";
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import Link from 'next/link';
 import { useIttData } from '@/hooks/use-itt-data';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -12,9 +12,25 @@ import { ArrowLeft, Loader2, Edit } from 'lucide-react';
 import { ProjectInfo } from '@/components/itt/ProjectInfo';
 import { ImpactCards } from '@/components/itt/ImpactCards';
 import { IndicatorTable } from '@/components/itt/IndicatorTable';
+import { Logframe } from '@/lib/logframe';
 
 export default function ITTPage() {
-    const { projects, selectedProject, logframe, indicatorPlan, loading, selectProject } = useIttData();
+    const { projects, selectedProject, logframe, indicatorPlan, trackingData, loading, selectProject } = useIttData();
+
+    const enrichedIndicatorPlan = useMemo(() => {
+        if (!indicatorPlan) return null;
+
+        const trackingMap = new Map(trackingData?.indicators.map((i: any) => [i.indicatorId, i]));
+
+        return {
+            ...indicatorPlan,
+            indicators: indicatorPlan.indicators.map(indicator => {
+                const savedTrackingData = trackingMap.get(indicator.indicatorId);
+                return savedTrackingData ? { ...indicator, ...savedTrackingData } : indicator;
+            }),
+        };
+
+    }, [indicatorPlan, trackingData]);
 
     return (
         <div className="space-y-6">
@@ -61,7 +77,7 @@ export default function ITTPage() {
                  <div className="space-y-6">
                     <ProjectInfo project={selectedProject} />
                     <ImpactCards />
-                    <IndicatorTable logframe={logframe} indicatorPlan={indicatorPlan} />
+                    <IndicatorTable logframe={logframe} indicatorPlan={enrichedIndicatorPlan} />
                 </div>
             ) : (
                 <Card className="flex items-center justify-center h-40">
@@ -71,4 +87,3 @@ export default function ITTPage() {
         </div>
     );
 }
-

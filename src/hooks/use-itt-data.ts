@@ -25,6 +25,7 @@ export function useIttData() {
     const [loading, setLoading] = useState({ projects: true, data: false });
     const [logframe, setLogframe] = useState<Logframe | null>(null);
     const [indicatorPlan, setIndicatorPlan] = useState<IndicatorTrackingPlan | null>(null);
+    const [trackingData, setTrackingData] = useState<IndicatorTrackingPlan | null>(null);
 
     useEffect(() => {
         const fetchProjects = async () => {
@@ -47,6 +48,7 @@ export function useIttData() {
         if (!projectId) {
             setLogframe(null);
             setIndicatorPlan(null);
+            setTrackingData(null);
             return;
         }
         setLoading(prev => ({...prev, data: true }));
@@ -54,35 +56,26 @@ export function useIttData() {
             const [logframeRes, indicatorPlanRes, trackingDataRes] = await Promise.all([
                 fetch(`/api/logframe?projectId=${projectId}`),
                 fetch(`/api/monitoring-indicators?projectId=${projectId}`),
-                fetch(`/api/indicator-tracking?projectId=${projectId}`) // Fetch the saved tracking data
+                fetch(`/api/indicator-tracking?projectId=${projectId}`)
             ]);
 
-            if (!logframeRes.ok) {
-                 toast({ title: "Logframe Not Found", description: "No logical framework found for this project. Please create one first.", variant: 'destructive'});
-                 setLogframe(null);
-            } else {
+            if (logframeRes.ok) {
                 setLogframe(await logframeRes.json());
+            } else {
+                 setLogframe(null);
             }
             
-            if (!indicatorPlanRes.ok) {
-                 toast({ title: "Indicator Plan Not Found", description: "No indicator plan found for this project. Please create one first.", variant: 'destructive'});
-                 setIndicatorPlan(null);
+            if (indicatorPlanRes.ok) {
+                 setIndicatorPlan(await indicatorPlanRes.json());
             } else {
-                 const basePlan = await indicatorPlanRes.json();
-                 if (trackingDataRes.ok) {
-                     const trackingData = await trackingDataRes.json();
-                     const trackingMap = new Map(trackingData.indicators.map((i: any) => [i.indicatorId, i]));
-                     
-                     // Merge tracking data into the base plan
-                     const mergedIndicators = basePlan.indicators.map((indicator: any) => {
-                         const savedData = trackingMap.get(indicator.indicatorId);
-                         return savedData ? { ...indicator, ...savedData } : indicator;
-                     });
+                toast({ title: "Indicator Plan Not Found", description: "No indicator plan found for this project. Please create one first.", variant: 'destructive'});
+                setIndicatorPlan(null);
+            }
 
-                     setIndicatorPlan({ ...basePlan, indicators: mergedIndicators });
-                 } else {
-                    setIndicatorPlan(basePlan);
-                 }
+            if(trackingDataRes.ok) {
+                setTrackingData(await trackingDataRes.json());
+            } else {
+                setTrackingData(null);
             }
 
         } catch (error: any) {
@@ -98,6 +91,7 @@ export function useIttData() {
         selectedProject: projects.find(p => p.projectId === selectedProjectId) || null,
         logframe,
         indicatorPlan,
+        trackingData,
         loading,
         selectProject,
     };

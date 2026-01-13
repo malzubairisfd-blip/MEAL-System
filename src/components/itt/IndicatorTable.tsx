@@ -1,3 +1,4 @@
+
 // src/components/itt/IndicatorTable.tsx
 import React, { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -15,40 +16,34 @@ interface GroupedData {
 export function IndicatorTable({ logframe, indicatorPlan }: { logframe: Logframe | null, indicatorPlan: IndicatorTrackingPlan | null }) {
     
     const groupedIndicators = useMemo(() => {
-        if (!logframe || !indicatorPlan) return {};
+        if (!indicatorPlan) return {};
 
-        const planMap = new Map(indicatorPlan.indicators.map(ind => [ind.indicatorId, ind]));
-        
         const groups: GroupedData = {};
 
-        logframe.outputs.forEach(output => {
-            output.activities.forEach(activity => {
-                 activity.indicators.forEach(logframeIndicator => {
-                    const planIndicator = planMap.get(logframeIndicator.description);
-                    if (planIndicator) {
-                        
-                        const outcomeKey = logframe.outcome.description;
-                        const outputKey = output.description;
+        indicatorPlan.indicators.forEach(indicator => {
+            const outcomeKey = indicator.outcome || 'Uncategorized';
+            const outputKey = indicator.output || 'Uncategorized';
 
-                        if (!groups[outcomeKey]) groups[outcomeKey] = {};
-                        if (!groups[outcomeKey][outputKey]) groups[outcomeKey][outputKey] = [];
-                        
-                        groups[outcomeKey][outputKey].push(planIndicator);
-                    }
-                });
-            });
+            if (!groups[outcomeKey]) groups[outcomeKey] = {};
+            if (!groups[outcomeKey][outputKey]) groups[outcomeKey][outputKey] = [];
+            
+            groups[outcomeKey][outputKey].push(indicator);
         });
         
         return groups;
 
-    }, [logframe, indicatorPlan]);
+    }, [indicatorPlan]);
 
-    if (!logframe || !indicatorPlan) {
+    const goalDescription = logframe?.goal?.description || "Project Goal";
+    const outcomeDescription = logframe?.outcome?.description || "Project Outcome";
+
+
+    if (!indicatorPlan) {
         return (
              <Card className="mt-6">
                 <CardHeader><CardTitle>Indicator Details</CardTitle></CardHeader>
                 <CardContent className="text-center text-muted-foreground p-10">
-                    <p>No logframe or indicator plan loaded for the selected project.</p>
+                    <p>No indicator plan loaded for the selected project.</p>
                 </CardContent>
             </Card>
         );
@@ -57,7 +52,7 @@ export function IndicatorTable({ logframe, indicatorPlan }: { logframe: Logframe
     return (
         <Card>
             <CardHeader>
-                <CardTitle>{logframe.goal.description}</CardTitle>
+                <CardTitle>{goalDescription}</CardTitle>
             </CardHeader>
             <CardContent>
                  <div className="border rounded-lg overflow-x-auto">
