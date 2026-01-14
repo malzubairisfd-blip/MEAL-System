@@ -8,7 +8,8 @@ import { ArrowLeft, ArrowRight, Upload, Edit } from "lucide-react";
 
 export default function EducationAndPaymentCenterPage() {
   const features = [
-    { title: "Add Locations", href: "/meal-system/monitoring/implementation/beneficiary-monitoring/education-and-payment-center/add-locations", icon: <Upload className="h-8 w-8 text-blue-500" /> },
+    { title: "Upload Location Master File", href: "/meal-system/monitoring/implementation/beneficiary-monitoring/education-and-payment-center/add-locations", icon: <Upload className="h-8 w-8 text-blue-500" /> },
+    { title: "Upload Centers File", href: "/meal-system/monitoring/implementation/beneficiary-monitoring/education-and-payment-center/upload-centers", icon: <Upload className="h-8 w-8 text-teal-500" /> },
     { title: "Center Modification", href: "/meal-system/monitoring/implementation/beneficiary-monitoring/education-and-payment-center/modification", icon: <Edit className="h-8 w-8 text-green-500" /> },
   ];
 
@@ -24,7 +25,7 @@ export default function EducationAndPaymentCenterPage() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {features.map((feature) => (
           <Card key={feature.title} className="flex flex-col text-center items-center justify-center p-6 transition-all duration-300 hover:shadow-xl hover:-translate-y-2">
             <div className="p-4 bg-muted rounded-full mb-4">
