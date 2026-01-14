@@ -37,7 +37,7 @@ const CenterSchema = z.object({
   PC_ID: z.string().min(1, "PC_ID is required."),
   NOTES: z.string().optional(),
   PC_NAME2: z.string().optional(),
-  IS_PC2: z.number().optional(),
+  IS_PC2: z.coerce.number().optional(),
   PC_LOC2: z.string().optional(),
   SAME_OZLA: z.boolean().optional(),
   same_ec_pc: z.boolean().optional(),
@@ -224,7 +224,7 @@ function EditCenterPageContent() {
         if (isPc === '1' || isPc === 'yes') {
             setValue('SAME_OZLA', true);
         } else if (locId && pcLoc2) {
-            setValue('SAME_OZLA', locId.substring(0, 6) === pcLoc2.substring(0, 6));
+            setValue('SAME_OZLA', String(locId).substring(0, 6) === String(pcLoc2).substring(0, 6));
         }
     }, [isPc, watch, setValue]);
     
@@ -238,7 +238,7 @@ function EditCenterPageContent() {
              const payload = {
               ...data,
               IS_PC: data.IS_PC === 'yes' ? 1 : data.IS_PC === 'no' ? 0 : Number(data.IS_PC),
-              IS_EC: data.IS_EC === 'yes' ? 1 : data.IS_EC === 'no' ? 0 : Number(data.IS_EC),
+              IS_EC: data.IS_EC === 'yes' ? 'yes' : 'no',
             };
             const response = await fetch('/api/education-payment-centers', {
                 method: 'PUT',
