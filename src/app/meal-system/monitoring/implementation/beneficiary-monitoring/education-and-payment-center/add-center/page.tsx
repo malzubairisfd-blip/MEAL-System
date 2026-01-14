@@ -67,7 +67,7 @@ interface Epc {
   FAC_NAME: string;
   MUD_NAME: string; // Add MUD_NAME to EPC interface for filtering
   LOC_ID: string;
-  IS_PC: '1' | '0';
+  IS_PC: '1' | '0' | 'yes' | 'no';
 }
 
 const normalizeArabic = (s: string | null | undefined): string => {
@@ -166,7 +166,7 @@ export default function AddCenterPage() {
 
     const paymentCenterOptions = useMemo(() => {
         if (!selectedMudName) return [];
-        return epcs.filter(e => e.IS_PC === '1' && normalizeArabic(e.MUD_NAME) === normalizeArabic(selectedMudName));
+        return epcs.filter(e => (e.IS_PC === '1' || e.IS_PC === 'yes') && normalizeArabic(e.MUD_NAME) === normalizeArabic(selectedMudName));
     }, [epcs, selectedMudName]);
 
     // Update form values based on selections
