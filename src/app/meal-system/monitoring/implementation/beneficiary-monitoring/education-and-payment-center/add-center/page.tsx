@@ -69,6 +69,19 @@ interface Epc {
   IS_PC: '1' | '0';
 }
 
+const normalizeArabic = (s: string | null | undefined): string => {
+    if (!s) return "";
+    return String(s)
+        .replace(/[أإآ]/g, "ا")
+        .replace(/ى/g, "ي")
+        .replace(/ؤ/g, "و")
+        .replace(/ئ/g, "ي")
+        .replace(/ة/g, "ه")
+        .replace(/\s+/g, ' ')
+        .trim();
+};
+
+
 export default function AddCenterPage() {
     const router = useRouter();
     const { toast } = useToast();
@@ -129,28 +142,30 @@ export default function AddCenterPage() {
 
     // Derived options for selects
     const projectOptions = useMemo(() => projects, [projects]);
+    
     const mudOptions = useMemo(() => {
         if (!selectedProject) return [];
         const project = projects.find(p => p.projectId === selectedProject);
         if (!project) return [];
+        const projectDistricts = new Set(project.districts.map(d => normalizeArabic(d)));
         return Array.from(new Set(locations
-            .filter(l => project.districts.includes(l.mud_name))
+            .filter(l => projectDistricts.has(normalizeArabic(l.mud_name)))
             .map(l => l.mud_name)));
     }, [selectedProject, projects, locations]);
 
     const ozlaOptions = useMemo(() => {
         if (!selectedMudName) return [];
-        return Array.from(new Set(locations.filter(l => l.mud_name === selectedMudName).map(l => l.ozla_name)));
+        return Array.from(new Set(locations.filter(l => normalizeArabic(l.mud_name) === normalizeArabic(selectedMudName)).map(l => l.ozla_name)));
     }, [selectedMudName, locations]);
     
     const villOptions = useMemo(() => {
         if (!selectedOzlaName) return [];
-        return Array.from(new Set(locations.filter(l => l.ozla_name === selectedOzlaName).map(l => l.vill_name)));
+        return Array.from(new Set(locations.filter(l => normalizeArabic(l.ozla_name) === normalizeArabic(selectedOzlaName)).map(l => l.vill_name)));
     }, [selectedOzlaName, locations]);
 
     // Update form values based on selections
     useEffect(() => {
-        const location = locations.find(l => l.mud_name === selectedMudName && l.ozla_name === selectedOzlaName && l.vill_name === selectedVillName);
+        const location = locations.find(l => normalizeArabic(l.mud_name) === normalizeArabic(selectedMudName) && normalizeArabic(l.ozla_name) === normalizeArabic(selectedOzlaName) && normalizeArabic(l.vill_name) === normalizeArabic(selectedVillName));
         if (location) {
             setValue('MUD_NO', location.mud_loc_id);
             setValue('OZLA_NO', location.ozla_loc_id);
