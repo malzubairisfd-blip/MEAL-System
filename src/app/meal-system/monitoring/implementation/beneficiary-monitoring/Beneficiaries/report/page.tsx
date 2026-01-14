@@ -65,38 +65,32 @@ async function saveReportDataToCache(data: { chartImages: Record<string, string>
     await tx.done;
 }
 
-const normalizeArabic = (s: string | null | undefined): string => {
+const normalizeArabicSimple = (s: string | null | undefined): string => {
     if (!s) return "";
-    let str = String(s);
-    str = str.normalize("NFKC");
-    str = str.replace(/يحيي/g, "يحي");
-    str = str.replace(/يحيى/g, "يحي");
-    str = str.replace(/عبد /g, "عبد");
-    str = str.replace(/[ًٌٍََُِّْـء]/g, "");
-    str = str.replace(/[أإآ]/g, "ا");
-    str = str.replace(/ى/g, "ي");
-    str = str.replace(/ؤ/g, "و");
-    str = str.replace(/ئ/g, "ي");
-    str = str.replace(/ة/g, "ه");
-    str = str.replace(/گ/g, "ك");
-    str = str.replace(/[^ء-ي0-9a-zA-Z\s]/g, " ");
-    str = str.replace(/\s+/g, " ").trim();
-    return str.toLowerCase();
+    return String(s)
+        .replace(/[أإآ]/g, "ا")
+        .replace(/ى/g, "ي")
+        .replace(/ؤ/g, "و")
+        .replace(/ئ/g, "ي")
+        .replace(/ة/g, "ه")
+        .replace(/\s+/g, ' ')
+        .trim();
 };
 
 
 const normalizeLocationName = (name: string | null | undefined): string => {
     if (!name) return "";
-    const arabicNormalized = normalizeArabic(name);
-    const englishNormalized = String(name)
-        .toLowerCase()
-        .replace(/^(al|el|ad|ad-)/, '') 
-        .replace(/[^a-z0-9\s]/g, '')
-        .trim();
+    // First, simple normalization for direct matching
+    const simpleNormalized = normalizeArabicSimple(name).toLowerCase();
     
-    // Return the version that seems more relevant or combine them
-    // For simplicity, we assume if it contains Arabic characters, it's Arabic.
-    return arabicNormalized.match(/[\u0600-\u06FF]/) ? arabicNormalized : englishNormalized;
+    // More aggressive normalization for broader matching if simple fails
+    const aggressiveNormalized = simpleNormalized
+        .replace(/^(al|el|ad|ad-)\s*/, '') // Remove common prefixes
+        .replace(/[^a-z0-9\u0621-\u064A\s]/g, '') // Keep Arabic, English letters, numbers, spaces
+        .trim();
+
+    // Use simple normalization for keys, but we can be flexible in matching
+    return simpleNormalized;
 };
 
 
@@ -263,6 +257,7 @@ export default function ReportPage() {
             const adm1 = normalizeLocationName(feature.properties?.ADM1_AR);
             const adm2 = normalizeLocationName(feature.properties?.ADM2_AR);
             const adm3 = normalizeLocationName(feature.properties?.ADM3_AR);
+
             if (adm1 && adm2 && adm3) {
                 const featureLocationKey = `${adm1}-${adm2}-${adm3}`;
                 if (dataLocations.has(featureLocationKey)) {
@@ -468,7 +463,3 @@ export default function ReportPage() {
     </DashboardContext.Provider>
   );
 }
-
-    
-
-    

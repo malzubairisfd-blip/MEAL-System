@@ -4,7 +4,7 @@
 import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { useDashboard } from "@/app/report/page";
+import { DashboardContext, useDashboard } from "@/app/meal-system/monitoring/implementation/beneficiary-monitoring/Beneficiaries/report/page";
 import type { Feature, FeatureCollection } from 'geojson';
 
 // Helper function to create an SVG pie chart
