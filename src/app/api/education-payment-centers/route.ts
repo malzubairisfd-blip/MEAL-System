@@ -1,3 +1,4 @@
+
 // src/app/api/education-payment-centers/route.ts
 import { NextResponse } from "next/server";
 import fs from "fs/promises";
@@ -6,6 +7,18 @@ import * as XLSX from "xlsx";
 
 const getDataPath = () => path.join(process.cwd(), 'src/data');
 const getEpcFile = () => path.join(getDataPath(), 'epc.json');
+
+const normalizeArabic = (s: string | null | undefined): string => {
+    if (!s) return "";
+    return String(s)
+        .replace(/[أإآ]/g, "ا")
+        .replace(/ى/g, "ي")
+        .replace(/ؤ/g, "و")
+        .replace(/ئ/g, "ي")
+        .replace(/ة/g, "ه")
+        .replace(/\s+/g, ' ')
+        .trim();
+};
 
 async function getExistingCenters() {
     const EPC_FILE = getEpcFile();
@@ -51,7 +64,14 @@ export async function POST(req: Request) {
             const workbook = XLSX.read(buffer, { type: 'buffer' });
             const sheetName = workbook.SheetNames[0];
             const sheet = workbook.Sheets[sheetName];
-            const data = XLSX.utils.sheet_to_json(sheet);
+            const jsonData = XLSX.utils.sheet_to_json(sheet, { defval: 0 });
+            
+            const data = jsonData.map((row: any) => ({
+                ...row,
+                MUD_NAME: normalizeArabic(row.MUD_NAME),
+                IS_PC: row.IS_PC !== undefined ? String(row.IS_PC) : '0',
+            }));
+
             await fs.writeFile(getEpcFile(), JSON.stringify(data, null, 2), 'utf8');
             return NextResponse.json({ message: "Education and Payment Centers data saved successfully.", count: data.length });
         } catch (error: any) {
