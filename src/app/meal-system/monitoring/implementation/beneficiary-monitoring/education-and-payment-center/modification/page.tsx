@@ -1,14 +1,24 @@
 // src/app/meal-system/monitoring/implementation/beneficiary-monitoring/education-and-payment-center/modification/page.tsx
 "use client";
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, Loader2, Plus } from 'lucide-react';
+import { ArrowLeft, Loader2, Plus, Edit, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface Project {
   projectId: string;
@@ -51,31 +61,52 @@ export default function CenterModificationPage() {
     const [centers, setCenters] = useState<Center[]>([]);
     const [selectedProjectId, setSelectedProjectId] = useState('all');
     const [loading, setLoading] = useState({ projects: true, centers: true });
+    const [deletingCenterId, setDeletingCenterId] = useState<string | null>(null);
+
+    const fetchData = useCallback(async () => {
+        setLoading({ projects: true, centers: true });
+        try {
+            const [projRes, centerRes] = await Promise.all([
+                fetch('/api/projects'),
+                fetch('/api/education-payment-centers')
+            ]);
+
+            if (projRes.ok) setProjects(await projRes.json());
+            else throw new Error("Failed to load projects");
+            
+            if (centerRes.ok) setCenters(await centerRes.json());
+            else setCenters([]);
+            
+        } catch (error: any) {
+            toast({ title: "Error", description: error.message, variant: "destructive" });
+        } finally {
+            setLoading({ projects: false, centers: false });
+        }
+    }, [toast]);
 
     useEffect(() => {
-        const fetchData = async () => {
-            setLoading({ projects: true, centers: true });
-            try {
-                const [projRes, centerRes] = await Promise.all([
-                    fetch('/api/projects'),
-                    fetch('/api/education-payment-centers')
-                ]);
-
-                if (projRes.ok) setProjects(await projRes.json());
-                else throw new Error("Failed to load projects");
-                
-                if (centerRes.ok) setCenters(await centerRes.json());
-                else setCenters([]);
-                
-            } catch (error: any) {
-                toast({ title: "Error", description: error.message, variant: "destructive" });
-            } finally {
-                setLoading({ projects: false, centers: false });
-            }
-        };
         fetchData();
-    }, [toast]);
+    }, [fetchData]);
     
+    const handleDelete = async () => {
+        if (!deletingCenterId) return;
+        try {
+            const response = await fetch('/api/education-payment-centers', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ FAC_ID: deletingCenterId }),
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || 'Failed to delete center');
+            toast({ title: "Center Deleted", description: "The center has been removed." });
+            setCenters(prev => prev.filter(c => c.FAC_ID !== deletingCenterId));
+        } catch (error: any) {
+            toast({ title: "Error", description: error.message, variant: "destructive" });
+        } finally {
+            setDeletingCenterId(null);
+        }
+    };
+
     const filteredCenters = useMemo(() => {
         if (selectedProjectId === 'all') {
             return centers;
@@ -141,12 +172,25 @@ export default function CenterModificationPage() {
                             <Table>
                                 <TableHeader>
                                     <TableRow>
+                                        <TableHead>Actions</TableHead>
                                         {tableHeaders.map(header => <TableHead key={header}>{header}</TableHead>)}
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                     {filteredCenters.map((center, index) => (
                                         <TableRow key={index}>
+                                            <TableCell className="sticky left-0 bg-card z-10">
+                                                <div className="flex gap-1">
+                                                    <Button variant="outline" size="icon" asChild>
+                                                        <Link href={`/meal-system/monitoring/implementation/beneficiary-monitoring/education-and-payment-center/edit-center?FAC_ID=${center.FAC_ID}`}>
+                                                            <Edit className="h-4 w-4" />
+                                                        </Link>
+                                                    </Button>
+                                                    <Button variant="destructive" size="icon" onClick={() => setDeletingCenterId(center.FAC_ID)}>
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
+                                            </TableCell>
                                             {tableHeaders.map(header => (
                                                 <TableCell key={header}>
                                                     {String((center as any)[header] ?? '')}
@@ -161,6 +205,22 @@ export default function CenterModificationPage() {
                     )}
                 </CardContent>
             </Card>
+            
+            <AlertDialog open={!!deletingCenterId} onOpenChange={() => setDeletingCenterId(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This will permanently delete the center. This action cannot be undone.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleDelete}>Delete</AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }
+
