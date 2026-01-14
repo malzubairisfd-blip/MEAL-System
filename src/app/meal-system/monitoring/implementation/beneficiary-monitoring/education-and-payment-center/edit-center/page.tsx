@@ -73,7 +73,14 @@ interface Epc {
 
 const normalizeArabic = (s: string | null | undefined): string => {
     if (!s) return "";
-    return String(s).replace(/[أإآ]/g, "ا").replace(/ى/g, "ي").replace(/ة/g, "ه").trim();
+    return String(s)
+        .replace(/[أإآ]/g, "ا")
+        .replace(/ى/g, "ي")
+        .replace(/ؤ/g, "و")
+        .replace(/ئ/g, "ي")
+        .replace(/ة/g, "ه")
+        .replace(/\s+/g, ' ')
+        .trim();
 };
 
 function EditCenterPageContent() {
@@ -191,4 +198,5 @@ export default function EditCenterPage() {
         </Suspense>
     );
 }
+
 
