@@ -19,27 +19,28 @@ import { ArrowLeft, Save, Loader2 } from 'lucide-react';
 
 const CenterSchema = z.object({
   PROJ_NO: z.literal(2),
-  MUD_NO: z.number(),
-  MUD_NAME: z.string(),
-  OZLA_NO: z.number(),
-  OZLA_NAME: z.string(),
-  VILL_NO: z.number(),
-  VILL_NAME: z.string(),
-  FAC_ID: z.string(),
-  FAC_TYPE: z.string(), // "مدرسة" or "ملحق جامع"
-  FAC_TEXT: z.string(), // "عمر ابن الخطاب القابل"
-  FAC_NAME: z.string(),
-  LOC_ID: z.string(),
-  LOC_FULL_NAME: z.string(),
-  IS_EC: z.enum(['yes', 'no']),
-  IS_PC: z.enum(['1', '0']),
-  PC_ID: z.string(),
+  MUD_NO: z.number({ required_error: "MUD_NO is required." }),
+  MUD_NAME: z.string().min(1, "District name is required."),
+  OZLA_NO: z.number({ required_error: "OZLA_NO is required." }),
+  OZLA_NAME: z.string().min(1, "Sub-district name is required."),
+  VILL_NO: z.number({ required_error: "VILL_NO is required." }),
+  VILL_NAME: z.string().min(1, "Village name is required."),
+  FAC_ID: z.string().min(1, "Facility ID is required."),
+  FAC_TYPE: z.string().min(1, "Facility type is required."),
+  FAC_TEXT: z.string().min(1, "Facility text is required."),
+  FAC_NAME: z.string().min(1, "Facility name is required."),
+  LOC_ID: z.string().min(1, "Location ID is required."),
+  LOC_FULL_NAME: z.string().min(1, "Full location name is required."),
+  IS_EC: z.enum(['yes', 'no'], { required_error: "IS_EC is required." }),
+  IS_PC: z.enum(['1', '0'], { required_error: "IS_PC is required." }),
+  PC_ID: z.string().min(1, "PC_ID is required."),
   NOTES: z.string().optional(),
   PC_NAME2: z.string().optional(),
   IS_PC2: z.number().optional(),
   PC_LOC2: z.string().optional(),
   SAME_OZLA: z.boolean().optional(),
   same_ec_pc: z.boolean().optional(),
+  projectId: z.string().min(1, "Project is required."),
 });
 
 type FormValues = z.infer<typeof CenterSchema>;
@@ -245,6 +246,7 @@ export default function AddCenterPage() {
                                         <FormControl><SelectTrigger><SelectValue placeholder="Select Project" /></SelectTrigger></FormControl>
                                         <SelectContent>{projectOptions.map(p => <SelectItem key={p.projectId} value={p.projectId}>{p.projectName}</SelectItem>)}</SelectContent>
                                     </Select>
+                                    <FormMessage />
                                 </FormItem>
                             )} />
                             <FormField control={control} name="MUD_NAME" render={({ field }) => (
@@ -254,6 +256,7 @@ export default function AddCenterPage() {
                                         <FormControl><SelectTrigger><SelectValue placeholder="Select District" /></SelectTrigger></FormControl>
                                         <SelectContent>{mudOptions.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
                                     </Select>
+                                     <FormMessage />
                                 </FormItem>
                             )} />
                              <FormField control={control} name="OZLA_NAME" render={({ field }) => (
@@ -263,6 +266,7 @@ export default function AddCenterPage() {
                                         <FormControl><SelectTrigger><SelectValue placeholder="Select Sub-District" /></SelectTrigger></FormControl>
                                         <SelectContent>{ozlaOptions.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent>
                                     </Select>
+                                     <FormMessage />
                                 </FormItem>
                             )} />
                              <FormField control={control} name="VILL_NAME" render={({ field }) => (
@@ -272,6 +276,7 @@ export default function AddCenterPage() {
                                         <FormControl><SelectTrigger><SelectValue placeholder="Select Village" /></SelectTrigger></FormControl>
                                         <SelectContent>{villOptions.map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}</SelectContent>
                                     </Select>
+                                     <FormMessage />
                                 </FormItem>
                             )} />
                         </CardContent>
@@ -284,6 +289,7 @@ export default function AddCenterPage() {
                                 <FormItem>
                                     <FormLabel>Facility ID (FAC_ID)</FormLabel>
                                     <FormControl><Input {...field} readOnly /></FormControl>
+                                    <FormMessage />
                                 </FormItem>
                             )} />
                             <div className="space-y-2">
@@ -297,16 +303,19 @@ export default function AddCenterPage() {
                                                 <SelectItem value="ملحق جامع">ملحق جامع</SelectItem>
                                             </SelectContent>
                                         </Select>
+                                        <FormMessage />
                                     </FormItem>
                                 )} />
                                  <FormField control={control} name="FAC_TEXT" render={({ field }) => (
                                     <FormItem>
                                         <FormControl><Input {...field} placeholder="Enter facility text..." /></FormControl>
+                                        <FormMessage />
                                     </FormItem>
                                 )} />
                                  <FormField control={control} name="FAC_NAME" render={({ field }) => (
                                     <FormItem>
                                         <FormControl><Input {...field} readOnly placeholder="Generated Name..." /></FormControl>
+                                        <FormMessage />
                                     </FormItem>
                                 )} />
                             </div>
@@ -326,6 +335,7 @@ export default function AddCenterPage() {
                                             <SelectItem value="no">No</SelectItem>
                                         </SelectContent>
                                     </Select>
+                                    <FormMessage />
                                 </FormItem>
                             )} />
                              <FormField control={control} name="IS_PC" render={({ field }) => (
@@ -338,6 +348,7 @@ export default function AddCenterPage() {
                                             <SelectItem value="0">No</SelectItem>
                                         </SelectContent>
                                     </Select>
+                                    <FormMessage />
                                 </FormItem>
                             )} />
                             {isPc === '0' && (
@@ -352,6 +363,7 @@ export default function AddCenterPage() {
                                                 ))}
                                             </SelectContent>
                                         </Select>
+                                        <FormMessage />
                                     </FormItem>
                                 )} />
                             )}
@@ -365,6 +377,7 @@ export default function AddCenterPage() {
                                 <FormItem>
                                     <FormLabel>Notes</FormLabel>
                                     <FormControl><Textarea {...field} /></FormControl>
+                                    <FormMessage />
                                 </FormItem>
                             )} />
                         </CardContent>
@@ -373,7 +386,7 @@ export default function AddCenterPage() {
                      <div className="flex justify-end">
                          <Button type="submit" size="lg" disabled={isSaving}>
                             {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                            Save Center
+                            Save & Submit Center
                         </Button>
                     </div>
                 </form>
