@@ -1,3 +1,4 @@
+
 "use client";
 
 import { usePathname } from "next/navigation";
@@ -85,6 +86,7 @@ const NavLink = ({ href, icon, label, isActive, isCollapsed }: { href: string; i
 const CollapsibleNavGroup = ({
   groupName,
   groupIcon,
+  href,
   links,
   pathname,
   isCollapsed,
@@ -92,35 +94,45 @@ const CollapsibleNavGroup = ({
 }: {
   groupName: string;
   groupIcon: React.ReactNode;
+  href: string;
   links: { href: string; labelKey: string; icon: React.ReactNode }[];
   pathname: string;
   isCollapsed: boolean;
   t: (key: string) => string;
 }) => {
-  const isGroupActive = links.some(l => pathname.startsWith(l.href));
-  const [isOpen, setIsOpen] = useState(isGroupActive);
+  const isGroupOrChildActive = links.some(l => pathname.startsWith(l.href)) || pathname === href;
+  const [isOpen, setIsOpen] = useState(isGroupOrChildActive);
 
   useEffect(() => {
-    if (isGroupActive) {
+    if (isGroupOrChildActive) {
       setIsOpen(true);
     }
-  }, [isGroupActive, pathname]);
+  }, [isGroupOrChildActive, pathname]);
 
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
-      <CollapsibleTrigger asChild>
-        <button
-          className={cn(
-            "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary hover:bg-muted",
-            isGroupActive && "text-primary",
-            isCollapsed && "justify-center"
-          )}
-        >
-          {groupIcon}
-          <span className={cn("flex-1 text-left whitespace-nowrap", isCollapsed && "hidden")}>{groupName}</span>
-          {!isCollapsed && <ChevronDown className={cn("h-4 w-4 shrink-0 transition-transform duration-200", isOpen && "rotate-180")} />}
-        </button>
-      </CollapsibleTrigger>
+      <div
+        className={cn(
+          "flex w-full items-center rounded-lg transition-colors hover:bg-muted",
+          pathname === href && "bg-primary/10",
+          isGroupOrChildActive && "text-primary"
+        )}
+      >
+        <Link href={href} className="flex-1">
+          <div className={cn("flex items-center gap-3 px-3 py-2 text-muted-foreground", isCollapsed && "justify-center", isGroupOrChildActive && "text-primary")}>
+            {groupIcon}
+            <span className={cn("whitespace-nowrap", isCollapsed && "hidden")}>{groupName}</span>
+          </div>
+        </Link>
+        {!isCollapsed && (
+          <CollapsibleTrigger asChild>
+            <Button variant="ghost" size="sm" className="w-9 p-0">
+              <ChevronDown className={cn("h-4 w-4 shrink-0 transition-transform duration-200", isOpen && "rotate-180")} />
+              <span className="sr-only">Toggle</span>
+            </Button>
+          </CollapsibleTrigger>
+        )}
+      </div>
       <CollapsibleContent className={cn("space-y-1 py-1", !isCollapsed && "pl-8")}>
         {links.map(link => (
             <NavLink 
@@ -204,6 +216,7 @@ export function LayoutProvider({ children, year }: { children: React.ReactNode, 
                 <CollapsibleNavGroup
                     groupName={t('sidebar.mealSystem')}
                     groupIcon={<Briefcase />}
+                    href="/meal-system"
                     links={mealSystemLinks}
                     pathname={pathname}
                     isCollapsed={isCollapsed}
@@ -212,6 +225,7 @@ export function LayoutProvider({ children, year }: { children: React.ReactNode, 
                  <CollapsibleNavGroup
                     groupName={t('sidebar.beneficiaryAnalysis')}
                     groupIcon={<Users />}
+                    href="/meal-system/monitoring/implementation/beneficiary-monitoring"
                     links={beneficiaryAnalysisLinks}
                     pathname={pathname}
                     isCollapsed={isCollapsed}
