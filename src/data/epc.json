@@ -614,5 +614,31 @@
     "SAME_OZLA": true,
     "same_ec_pc": false,
     "pc_ec_cnt": 3
+  },
+  {
+    "PROJ_NO": 2,
+    "MUD_NO": 261300000,
+    "MUD_NAME": "مأرب",
+    "OZLA_NO": 261326000,
+    "OZLA_NAME": "ال شبوان",
+    "VILL_NO": 261326103,
+    "VILL_NAME": "الحاني",
+    "FAC_ID": "2-30076",
+    "FAC_TYPE": "مدرسة",
+    "FAC_TEXT": "عمر ابن الخطاب",
+    "FAC_NAME": "مدرسة عمر ابن الخطاب - الحاني",
+    "LOC_ID": "261326103",
+    "LOC_FULL_NAME": "مارب/مأرب/ال شبوان/الحاني",
+    "IS_EC": "yes",
+    "IS_PC": "1",
+    "PC_ID": "2-30076",
+    "NOTES": "Nothing",
+    "PC_NAME2": "مدرسة عمر ابن الخطاب - الحاني",
+    "IS_PC2": 1,
+    "PC_LOC2": "261326103",
+    "SAME_OZLA": true,
+    "same_ec_pc": false,
+    "projectId": "200-23596",
+    "S": 27
   }
 ]

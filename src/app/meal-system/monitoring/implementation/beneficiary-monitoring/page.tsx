@@ -9,7 +9,7 @@ import { ArrowLeft, ArrowRight, User, Users, UserCheck, Home } from "lucide-reac
 export default function BeneficiaryMonitoringPage() {
   const features = [
     { title: "Beneficiaries", href: "/meal-system/monitoring/implementation/beneficiary-monitoring/Beneficiaries", icon: <Users className="h-8 w-8 text-blue-500" /> },
-    { title: "Community Educators", href: "#", icon: <UserCheck className="h-8 w-8 text-green-500" /> },
+    { title: "Community Educators", href: "/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators", icon: <UserCheck className="h-8 w-8 text-green-500" /> },
     { title: "Field Coordinator", href: "#", icon: <User className="h-8 w-8 text-orange-500" /> },
     { title: "Education and Payment Center", href: "/meal-system/monitoring/implementation/beneficiary-monitoring/education-and-payment-center", icon: <Home className="h-8 w-8 text-purple-500" /> },
   ];
