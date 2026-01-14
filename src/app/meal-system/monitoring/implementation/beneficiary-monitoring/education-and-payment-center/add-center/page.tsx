@@ -65,6 +65,7 @@ interface Location {
 interface Epc {
   FAC_ID: string;
   FAC_NAME: string;
+  MUD_NAME: string; // Add MUD_NAME to EPC interface for filtering
   LOC_ID: string;
   IS_PC: '1' | '0';
 }
@@ -162,6 +163,11 @@ export default function AddCenterPage() {
         if (!selectedOzlaName) return [];
         return Array.from(new Set(locations.filter(l => normalizeArabic(l.ozla_name) === normalizeArabic(selectedOzlaName)).map(l => l.vill_name)));
     }, [selectedOzlaName, locations]);
+
+    const paymentCenterOptions = useMemo(() => {
+        if (!selectedMudName) return [];
+        return epcs.filter(e => e.IS_PC === '1' && normalizeArabic(e.MUD_NAME) === normalizeArabic(selectedMudName));
+    }, [epcs, selectedMudName]);
 
     // Update form values based on selections
     useEffect(() => {
@@ -370,10 +376,10 @@ export default function AddCenterPage() {
                                 <FormField control={control} name="PC_ID" render={({ field }) => (
                                     <FormItem>
                                         <FormLabel>Payment Center ID (PC_ID)</FormLabel>
-                                        <Select onValueChange={field.onChange} value={field.value}>
+                                        <Select onValueChange={field.onChange} value={field.value} disabled={!selectedMudName}>
                                             <FormControl><SelectTrigger><SelectValue placeholder="Select Payment Center" /></SelectTrigger></FormControl>
                                             <SelectContent>
-                                                {epcs.filter(e => e.IS_PC === '1').map(e => (
+                                                {paymentCenterOptions.map(e => (
                                                     <SelectItem key={e.FAC_ID} value={e.FAC_ID}>{e.FAC_NAME} ({e.FAC_ID})</SelectItem>
                                                 ))}
                                             </SelectContent>
