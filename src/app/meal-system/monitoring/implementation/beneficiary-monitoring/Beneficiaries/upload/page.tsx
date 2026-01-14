@@ -501,7 +501,7 @@ export default function UploadPage() {
         <CardHeader className="flex flex-row items-start justify-between">
           <div>
             <CardTitle>{isTranslationLoading ? <Skeleton className="h-8 w-48" /> : t("upload.steps.1.title")}</CardTitle>
-            <CardDescription>{isTranslationLoading ? <Skeleton className="h-5 w-64 mt-1" /> : t("upload.steps.1.description")}</CardDescription>
+            {isTranslationLoading ? <Skeleton className="h-5 w-64 mt-2" /> : <CardDescription>{t("upload.steps.1.description")}</CardDescription>}
           </div>
           <Button variant="outline" asChild>
             <Link href="/meal-system/settings">
@@ -567,7 +567,7 @@ export default function UploadPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <CardTitle>{isTranslationLoading ? <Skeleton className="h-8 w-48" /> : t("upload.steps.2.title")}</CardTitle>
-                  <CardDescription>{isTranslationLoading ? <Skeleton className="h-5 w-64 mt-1" /> : t("upload.steps.2.description")}</CardDescription>
+                  {isTranslationLoading ? <Skeleton className="h-5 w-64 mt-2" /> : <CardDescription>{t("upload.steps.2.description")}</CardDescription>}
                 </div>
                 <CollapsibleTrigger asChild>
                   <Button variant="ghost" size="sm">
@@ -631,7 +631,7 @@ export default function UploadPage() {
         <Card>
           <CardHeader>
             <CardTitle>{isTranslationLoading ? <Skeleton className="h-8 w-48" /> : t("upload.steps.3.title")}</CardTitle>
-            <CardDescription>{isTranslationLoading ? <Skeleton className="h-5 w-64 mt-1" /> : t("upload.steps.3.description")}</CardDescription>
+            {isTranslationLoading ? <Skeleton className="h-5 w-64 mt-2" /> : <CardDescription>{t("upload.steps.3.description")}</CardDescription>}
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
@@ -679,9 +679,7 @@ export default function UploadPage() {
         <Card>
           <CardHeader>
             <CardTitle>{isTranslationLoading ? <Skeleton className="h-8 w-48" /> : t("upload.steps.4.title")}</CardTitle>
-            <CardDescription>
-              {isTranslationLoading ? <Skeleton className="h-5 w-64 mt-1" /> : t("upload.steps.4.description")}
-            </CardDescription>
+            {isTranslationLoading ? <Skeleton className="h-5 w-64 mt-2" /> : <CardDescription>{t("upload.steps.4.description")}</CardDescription>}
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-4">
