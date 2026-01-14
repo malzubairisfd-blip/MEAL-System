@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
@@ -293,8 +294,3 @@ export default function EducatorUploadPage() {
     );
 }
 
-```
-  </change>
-  <change>
-    <file>src/data/ed-selection.json</file>
-    <content><![CDATA[[]
