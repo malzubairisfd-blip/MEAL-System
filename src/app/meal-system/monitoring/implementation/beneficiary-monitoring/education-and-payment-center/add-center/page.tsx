@@ -134,7 +134,7 @@ export default function AddCenterPage() {
         const project = projects.find(p => p.projectId === selectedProject);
         if (!project) return [];
         return Array.from(new Set(locations
-            .filter(l => project.districts.includes(l.mud_name) && project.governorates.includes(l.gov_name))
+            .filter(l => project.districts.includes(l.mud_name))
             .map(l => l.mud_name)));
     }, [selectedProject, projects, locations]);
 
