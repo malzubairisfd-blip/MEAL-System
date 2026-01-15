@@ -43,7 +43,7 @@ export default function ExportStatementsPage() {
     const [selectedApplicants, setSelectedApplicants] = useState<Set<string>>(new Set());
     const [selectedHall, setSelectedHall] = useState('');
     
-    const [loading, setLoading] = useState({ projects: true, applicants: false, linking: false });
+    const [loading, setLoading] = useState({ projects: true, applicants: false, linking: false, exporting: false });
 
     // Fetch projects on load
     useEffect(() => {
@@ -151,6 +151,40 @@ export default function ExportStatementsPage() {
             setLoading(prev => ({ ...prev, linking: false }));
         }
     };
+    
+    const handleGeneratePdf = async () => {
+        if (!selectedProjectId) {
+            toast({ title: "Project Required", description: "Please select a project to generate statements for.", variant: "destructive" });
+            return;
+        }
+        setLoading(prev => ({ ...prev, exporting: true }));
+        try {
+            const response = await fetch(`/api/interview-statements?projectId=${selectedProjectId}`);
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || "Could not generate PDF.");
+            }
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `interview_statements_${selectedProjectId}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+            toast({ title: "PDF Generated", description: "Your interview statements PDF has been downloaded." });
+        } catch (error: any) {
+            toast({ title: "Export Error", description: error.message, variant: "destructive" });
+        } finally {
+            setLoading(prev => ({ ...prev, exporting: false }));
+        }
+    };
+
+    const allApplicantsAssigned = useMemo(() => {
+        return allAccepted.length > 0 && unassignedApplicants.length === 0;
+    }, [allAccepted, unassignedApplicants]);
+
 
   return (
     <div className="space-y-6">
@@ -259,13 +293,8 @@ export default function ExportStatementsPage() {
             <CardDescription>Once all applicants are assigned, generate the final PDF documents for all halls.</CardDescription>
         </CardHeader>
         <CardContent>
-            <Button disabled>
-                <FileDown className="mr-2 h-4 w-4" />
+            <Button onClick={handleGeneratePdf} disabled={!allApplicantsAssigned || loading.exporting}>
+                {loading.exporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
                 Generate Interview Statements PDF
             </Button>
-        </CardContent>
-      </Card>
-
-    </div>
-  );
-}
+            {!allApplicantsAssigned && <p className="text-xs text-muted-foreground mt-2">This
