@@ -1,5 +1,3 @@
-
-// src/app/api/interview-statements/route.ts
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
@@ -21,7 +19,7 @@ interface Project {
 
 interface Applicant {
   _id: string;
-  "المتقدم/ة رباعيا مع اللقب": string;
+  applicantName: string;
   hallName?: string | null;
   hallNumber?: string | null;
   phoneNumber?: string;
@@ -77,7 +75,7 @@ const statements = [
 async function generateApplicantQR(applicant: Applicant) {
   const payload = [
     `ID:${String(applicant["_id"] ?? "")}`,
-    `NAME:${String(applicant["المتقدم/ة رباعيا مع اللقب"] ?? "")}`,
+    `NAME:${String(applicant["applicantName"] ?? "")}`,
     `PHONE:${String(applicant["phoneNumber"] ?? "")}`,
   ]
     .filter(Boolean)
@@ -152,7 +150,7 @@ export async function POST(req: Request) {
                 const baseData = [
                     i + 1,
                     safeText(applicant["_id"]),
-                    safeText(applicant["المتقدم/ة رباعيا مع اللقب"]),
+                    safeText(applicant["applicantName"]),
                 ];
                 if (stmt.title.includes("التواصل")) {
                     return [...baseData.slice(0,3), safeText(applicant["phoneNumber"]), '', '', ''];
