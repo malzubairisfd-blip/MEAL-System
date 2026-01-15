@@ -1,3 +1,4 @@
+
 // src/workers/ed-selection.worker.ts
 import dayjs from 'dayjs';
 
@@ -58,27 +59,29 @@ function processRecords(rows: any[], mapping: any, recipientsDateStr: string) {
 
   const records = rows.map(r => ({
     ...r,
-    _birthDate: r[mapping.birthDate],
+    applicant_name: r[mapping.applicantName],
+    applicant_id: r[mapping.applicantId],
+    birth_date: r[mapping.birthDate],
+    applicant_qualification: r[mapping.qualification] || "بدون",
+    id_type: (r[mapping.idType] || '').trim(),
+    previous_experience: (r[mapping.previousExperience] || '').trim(),
+    diploma_starting_date: r[mapping.diplomaStartDate],
+    diploma_end_date: r[mapping.diplomaEndDate],
+    village: r[mapping.village],
+    // Internal fields for processing
     _nameNorm: normalizeArabicWithCompounds(r[mapping.applicantName]),
-    _id: r[mapping.applicantId],
-    _village: r[mapping.village],
-    _qualification: r[mapping.qualification] || "بدون",
-    _idType: (r[mapping.idType] || '').trim(),
-    _experience: (r[mapping.previousExperience] || '').trim(),
-    _diplomaStart: r[mapping.diplomaStartDate],
-    _diplomaEnd: r[mapping.diplomaEndDate],
   }));
 
   // --- AGE ---
   records.forEach(r => {
-    const birthDate = excelSerialToDate(r._birthDate);
+    const birthDate = excelSerialToDate(r.birth_date);
     if (birthDate && selectedRecipientsDate) {
       const diffMs = selectedRecipientsDate.getTime() - birthDate.getTime();
-      r["Age in days"] = diffMs / 86400000;
-      r["Age in Years"] = +(r["Age in days"] / 365.2425).toFixed(2);
+      r.age_days = diffMs / 86400000;
+      r.age_years = +(r.age_days / 365.2425).toFixed(2);
     } else {
-      r["Age in days"] = 0;
-      r["Age in Years"] = 0;
+      r.age_days = 0;
+      r.age_years = 0;
     }
   });
 
@@ -91,42 +94,42 @@ function processRecords(rows: any[], mapping: any, recipientsDateStr: string) {
 
   Object.values(groups).forEach(g => {
     if (g.length > 1) {
-      const minId = Math.min(...g.map(x => x._id));
-      const maxId = Math.max(...g.map(x => x._id));
+      const minId = Math.min(...g.map(x => x.applicant_id));
+      const maxId = Math.max(...g.map(x => x.applicant_id));
       g.forEach(r => {
-        if (r._id !== minId) {
-          r["Duplicated Applicant"] = `متقدمة متكررة مع ${minId} ${g[0][mapping.applicantName]}`;
+        if (r.applicant_id !== minId) {
+          r.duplicated_applicants = `متقدمة متكررة مع ${minId} ${g[0].applicant_name}`;
         }
-        r["Duplicated Applicant Cluster ID"] = maxId;
+        r.duplicated_cluster_id = maxId;
       });
     }
   });
 
   // --- DIPLOMA ---
   records.forEach(r => {
-    const s = excelSerialToDate(r._diplomaStart);
-    const e = excelSerialToDate(r._diplomaEnd);
+    const s = excelSerialToDate(r.diploma_starting_date);
+    const e = excelSerialToDate(r.diploma_end_date);
     if (s && e) {
       const d = (e.getTime() - s.getTime()) / 86400000;
-      r["Diploma in days"] = d;
-      r["Diploma in Years"] = +(d / 365.25).toFixed(2);
+      r.diploma_duration_days = d;
+      r.diploma_duration_years = +(d / 365.25).toFixed(2);
     }
   });
 
   // --- AGE RANK PER VILLAGE ---
   const villageGroups: any = {};
   records.forEach(r=>{
-    if(!villageGroups[r._village]) villageGroups[r._village]=[];
-    villageGroups[r._village].push(r);
+    if(!villageGroups[r.village]) villageGroups[r.village]=[];
+    villageGroups[r.village].push(r);
   });
 
   Object.values(villageGroups).forEach((list:any)=>{
-    list.sort((a:any,b:any)=>b["Age in days"]-a["Age in days"]);
+    list.sort((a:any,b:any)=>b.age_days-a.age_days);
     list.forEach((r:any,i:number)=>{
-       if (r["Age in Years"] < 18 || r["Age in Years"] > 35 || r._qualification === "بدون" || r["Duplicated Applicant"]) {
-        r["Age per village Ranking"] = 0;
+       if (r.age_years < 18 || r.age_years > 35 || r.applicant_qualification === "بدون" || r.duplicated_applicants) {
+        r.age_per_village_ranking = 0;
        } else {
-        r["Age per village Ranking"] = i + 1;
+        r.age_per_village_ranking = i + 1;
        }
     });
   });
@@ -134,48 +137,48 @@ function processRecords(rows: any[], mapping: any, recipientsDateStr: string) {
   // --- SCORING ---
   records.forEach(r=>{
     const invalid =
-      r["Age in Years"]<18 ||
-      r["Age in Years"]>35 ||
-      r._qualification==="بدون" ||
-      r["Duplicated Applicant"];
+      r.age_years<18 ||
+      r.age_years>35 ||
+      r.applicant_qualification==="بدون" ||
+      r.duplicated_applicants;
 
-    r["Qualification Score"] = invalid ? 0 :
-      r._qualification==="بكالوريوس" ? 5 :
-      r._qualification==="دبلوم" ?
-        (r["Diploma in Years"]>=1.5?3:2) :
-      r._qualification==="ثانوية" ? 2 : 0;
+    r.qualification_score = invalid ? 0 :
+      r.applicant_qualification==="بكالوريوس" ? 5 :
+      r.applicant_qualification==="دبلوم" ?
+        (r.diploma_duration_years>=1.5?3:2) :
+      r.applicant_qualification==="ثانوية" ? 2 : 0;
 
-    r["Identity Score"] = invalid ? 0 :
-      ["بطاقه شخصيه","بطاقة شخصية","جواز سفر"].includes(r._idType) ? 2 : 0;
+    r.id_score = invalid ? 0 :
+      ["بطاقه شخصيه","بطاقة شخصية","جواز سفر"].includes(r.id_type) ? 2 : 0;
 
-    r["Previous Experience Score"] = invalid ? 0 :
-      ["نعم","1"].includes(r._experience) ? 3 : 0;
+    r.previous_experience_score = invalid ? 0 :
+      ["نعم","1"].includes(r.previous_experience) ? 3 : 0;
 
-    r["Applicants Total Score"] =
-      r["Qualification Score"] +
-      r["Identity Score"] +
-      r["Previous Experience Score"];
+    r.total_score =
+      r.qualification_score +
+      r.id_score +
+      r.previous_experience_score;
 
-    r["Acceptance Statement"] =
-      r["Applicants Total Score"] > 0 ? "مقبولة" : "غير مقبولة";
+    r.acceptance_results =
+      r.total_score > 0 ? "مقبولة" : "غير مقبولة";
   });
 
   // --- DISQUALIFICATION REASON ---
   records.forEach(r => {
     const reasons: string[] = [];
-    if (r["Age in Years"] < 18 && r["Age in Years"] > 0) {
+    if (r.age_years < 18 && r.age_years > 0) {
       reasons.push("تم الاستبعاد بسبب العمر اقل من ١٨ سنة");
     }
-    if (r["Age in Years"] > 35) {
+    if (r.age_years > 35) {
       reasons.push("تم الاستبعاد بسبب العمر اكبر من ٣٥ سنة");
     }
-    if (r._qualification === "بدون") {
+    if (r.applicant_qualification === "بدون") {
       reasons.push("تم الاستبعاد بسبب عدم وجود مؤهل تعليمي");
     }
-    if (r["Duplicated Applicant"]) {
+    if (r.duplicated_applicants) {
       reasons.push("تكرار في التقديم");
     }
-    r["Disqualification Reason"] = reasons.length > 0 ? reasons.join(" + ") : "";
+    r.disqualification_reason = reasons.length > 0 ? reasons.join(" + ") : "";
   });
 
   return records;
@@ -190,7 +193,7 @@ self.onmessage = async (event) => {
 
         postMessage({ type: 'progress', status: 'processing', progress: 70 });
 
-        let totalAccepted = finalResults.filter(r => r["Acceptance Statement"] === 'مقبولة').length;
+        let totalAccepted = finalResults.filter(r => r.acceptance_results === 'مقبولة').length;
         
         postMessage({ type: 'progress', status: 'saving', progress: 90 });
 
@@ -201,6 +204,7 @@ self.onmessage = async (event) => {
             totalAccepted,
             totalUnaccepted: finalResults.length - totalAccepted,
             results: finalResults,
+            mapping: mapping,
         };
         
         const url = new URL('/api/ed-selection', self.location.origin);
