@@ -1,4 +1,3 @@
-
 // src/app/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/interview/page.tsx
 "use client";
 
@@ -18,7 +17,7 @@ export default function CommunityEducatorsInterviewPage() {
     {
       title: "Analyzing Interview Results",
       description: "Analyze scores and results from the interviews.",
-      href: "#", // This will be a placeholder for now
+      href: "/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/selection/review",
       icon: <BarChart2 className="h-8 w-8 text-teal-500" />,
     },
   ];
@@ -54,6 +53,29 @@ export default function CommunityEducatorsInterviewPage() {
             </CardContent>
           </Card>
         ))}
+        <Card className="flex flex-col text-center items-center justify-center p-6 transition-all duration-300 hover:shadow-xl hover:-translate-y-2">
+            <div className="p-4 bg-muted rounded-full mb-4">
+                <FileText className="h-8 w-8 text-green-500" />
+            </div>
+            <CardHeader className="p-0">
+              <CardTitle className="text-lg">Download Reports</CardTitle>
+               <CardDescription className="pt-2">Download generated PDF or Excel reports.</CardDescription>
+            </CardHeader>
+            <CardContent className="p-4 mt-auto flex flex-col gap-2">
+                <Button variant="default" size="sm" className="group" asChild>
+                    <Link href="/api/interview-statements">
+                        Download PDF Statements
+                        <ArrowRight className="ml-1 h-4 w-4 transition-transform group-hover:translate-x-1" />
+                    </Link>
+                </Button>
+                <Button variant="secondary" size="sm" className="group" asChild>
+                    <Link href="/api/interview-statements?type=excel">
+                        Download Excel Report
+                        <ArrowRight className="ml-1 h-4 w-4 transition-transform group-hover:translate-x-1" />
+                    </Link>
+                </Button>
+            </CardContent>
+        </Card>
       </div>
     </div>
   );

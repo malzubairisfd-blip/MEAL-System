@@ -1,4 +1,3 @@
-
 import ExcelJS from "exceljs";
 
 export async function generateExcel(applicants: any[]) {
@@ -17,7 +16,7 @@ export async function generateExcel(applicants: any[]) {
     sheet.addRow({
       i: i + 1,
       id: a._id,
-      name: a.applicantName,
+      name: a["المتقدم/ة رباعيا مع اللقب"],
       phone: a.phoneNumber || "",
       decision: a["Acceptance Statement"],
     });
