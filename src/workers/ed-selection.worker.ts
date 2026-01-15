@@ -1,5 +1,5 @@
 
-"use client";
+// src/workers/ed-selection.worker.ts
 import dayjs from 'dayjs';
 
 // --- Normalization & Similarity (same as cluster worker) ---
@@ -35,148 +35,136 @@ function normalizeArabicWithCompounds(value: any): string {
     return result.join(" ");
 }
 
+function processRecords(rows: any[], mapping: any, recipientsDate: string) {
+  const refDate = dayjs(recipientsDate).toDate();
+
+  const records = rows.map(r => ({
+    ...r,
+    _birth: dayjs(r[mapping.birthDate]).toDate(),
+    _nameNorm: normalizeArabicWithCompounds(r[mapping.applicantName]),
+    _id: r[mapping.applicantId],
+    _village: r[mapping.village],
+    _qualification: r[mapping.qualification] || "بدون",
+    _idType: (r[mapping.idType] || '').trim(),
+    _experience: (r[mapping.previousExperience] || '').trim(),
+  }));
+
+  // --- AGE ---
+  records.forEach(r => {
+    const diffMs = refDate.getTime() - r._birth.getTime();
+    r["Age in days"] = diffMs / 86400000;
+    r["Age in Years"] = +(r["Age in days"] / 365.25).toFixed(2);
+  });
+
+  // --- DUPLICATES ---
+  const groups: Record<string, any[]> = {};
+  records.forEach(r => {
+    groups[r._nameNorm] = groups[r._nameNorm] || [];
+    groups[r._nameNorm].push(r);
+  });
+
+  Object.values(groups).forEach(g => {
+    if (g.length > 1) {
+      const minId = Math.min(...g.map(x => x._id));
+      const maxId = Math.max(...g.map(x => x._id));
+      g.forEach(r => {
+        if (r._id !== minId) {
+          r["Duplicated Applicant"] = `متقدمة متكررة مع ${minId} ${g[0][mapping.applicantName]}`;
+        }
+        r["Duplicated Applicant Cluster ID"] = maxId;
+      });
+    }
+  });
+
+  // --- DIPLOMA ---
+  records.forEach(r => {
+    const s = dayjs(r[mapping.diplomaStartDate]).toDate();
+    const e = dayjs(r[mapping.diplomaEndDate]).toDate();
+    if (s && e) {
+      const d = (e.getTime() - s.getTime()) / 86400000;
+      r["Diploma in days"] = d;
+      r["Diploma in Years"] = +(d / 365.25).toFixed(2);
+    }
+  });
+
+  // --- AGE RANK PER VILLAGE ---
+  const villageGroups: any = {};
+  records.forEach(r=>{
+    if(!villageGroups[r._village]) villageGroups[r._village]=[];
+    villageGroups[r._village].push(r);
+  });
+
+  Object.values(villageGroups).forEach((list:any)=>{
+    list.sort((a:any,b:any)=>b["Age in days"]-a["Age in days"]);
+    list.forEach((r:any,i:number)=>{
+       if (r["Age in Years"] < 18 || r["Age in Years"] > 35 || r._qualification === "بدون" || r["Duplicated Applicant"]) {
+        r["Age per village Ranking"] = 0;
+       } else {
+        r["Age per village Ranking"] = i + 1;
+       }
+    });
+  });
+
+  // --- SCORING ---
+  records.forEach(r=>{
+    const invalid =
+      r["Age in Years"]<18 ||
+      r["Age in Years"]>35 ||
+      r._qualification==="بدون" ||
+      r["Duplicated Applicant"];
+
+    r["Qualification Score"] = invalid ? 0 :
+      r._qualification==="بكالوريوس" ? 5 :
+      r._qualification==="دبلوم" ?
+        (r["Diploma in Years"]>=1.5?3:2) :
+      r._qualification==="ثانوية" ? 2 : 0;
+
+    r["Identity Score"] = invalid ? 0 :
+      ["بطاقه شخصيه","بطاقة شخصية","جواز سفر"].includes(r._idType) ? 2 : 0;
+
+    r["Previous Experience Score"] = invalid ? 0 :
+      ["نعم","1"].includes(r._experience) ? 3 : 0;
+
+    r["Applicants Total Score"] =
+      r["Qualification Score"] +
+      r["Identity Score"] +
+      r["Previous Experience Score"];
+
+    r["Acceptance Statement"] =
+      r["Applicants Total Score"] > 0 ? "مقبولة" : "غير مقبولة";
+  });
+
+  // --- DISQUALIFICATION REASON ---
+  records.forEach(r => {
+    const reasons: string[] = [];
+    if (r["Age in Years"] < 18) {
+      reasons.push("تم الاستبعاد بسبب العمر اقل من ١٨ سنة");
+    }
+    if (r["Age in Years"] > 35) {
+      reasons.push("تم الاستبعاد بسبب العمر اكبر من ٣٥ سنة");
+    }
+    if (r._qualification === "بدون") {
+      reasons.push("تم الاستبعاد بسبب عدم وجود مؤهل تعليمي");
+    }
+    if (r["Duplicated Applicant"]) {
+      reasons.push("تكرار في التقديم");
+    }
+    r["Disqualification Reason"] =
+      reasons.length > 0 ? reasons.join(" + ") : "";
+  });
+  return records;
+}
+
 self.onmessage = async (event) => {
     const { rows, mapping, recipientsDate, projectName } = event.data;
     try {
         postMessage({ type: 'progress', status: 'processing', progress: 10 });
 
-        const processedRows = rows.map((row: any, index: number) => {
-            let ageInYears = 0;
-            let ageInDays = 0;
-            const birthDate = dayjs(row[mapping.birthDate]);
-            const recipientDateObj = dayjs(recipientsDate);
-            if (birthDate.isValid() && recipientDateObj.isValid()) {
-                ageInYears = recipientDateObj.diff(birthDate, 'year', true);
-                ageInDays = recipientDateObj.diff(birthDate, 'day');
-            }
-
-            let diplomaInDays = 0;
-            let diplomaInYears = 0;
-            const diplomaStart = dayjs(row[mapping.diplomaStartDate]);
-            const diplomaEnd = dayjs(row[mapping.diplomaEndDate]);
-            if (diplomaStart.isValid() && diplomaEnd.isValid()) {
-                diplomaInDays = diplomaEnd.diff(diplomaStart, 'day');
-                diplomaInYears = diplomaEnd.diff(diplomaStart, 'year', true);
-            }
-            
-            return {
-                ...row,
-                _internalId: `applicant_${index}`,
-                'Age in Years': ageInYears,
-                'Age in days': ageInDays,
-                'Diploma in days': diplomaInDays,
-                'Diploma in Years': diplomaInYears,
-                'Normalized Applicant Name': normalizeArabicWithCompounds(row[mapping.applicantName])
-            };
-        });
-
-        postMessage({ type: 'progress', status: 'processing', progress: 30 });
-        
-        // Duplicate Analysis
-        const nameToApplicants = new Map<string, any[]>();
-        processedRows.forEach(row => {
-            const name = row['Normalized Applicant Name'];
-            if (!nameToApplicants.has(name)) {
-                nameToApplicants.set(name, []);
-            }
-            nameToApplicants.get(name)!.push(row);
-        });
-
-        nameToApplicants.forEach(applicants => {
-            if (applicants.length > 1) {
-                applicants.sort((a, b) => (a[mapping.applicantId] || 0) - (b[mapping.applicantId] || 0));
-                const masterApplicant = applicants[0];
-                const clusterId = Math.max(...applicants.map(a => a[mapping.applicantId]));
-                applicants.forEach(applicant => {
-                    applicant['Duplicated Applicant Cluster ID'] = clusterId;
-                    if (applicant._internalId !== masterApplicant._internalId) {
-                         applicant['Duplicated Applicant'] = `متقدمة متكررة مع ${masterApplicant[mapping.applicantId]} ${masterApplicant[mapping.applicantName]}`;
-                    }
-                });
-            }
-        });
-        
-        postMessage({ type: 'progress', status: 'processing', progress: 50 });
-
-        // Scoring and Ranking
-        const villageGroups = new Map<string, any[]>();
-        processedRows.forEach(row => {
-            const village = row[mapping.village];
-            if (!villageGroups.has(village)) {
-                villageGroups.set(village, []);
-            }
-            villageGroups.get(village)!.push(row);
-        });
-
-        villageGroups.forEach(applicants => {
-            applicants.sort((a, b) => b['Age in days'] - a['Age in days']);
-            applicants.forEach((applicant, index) => {
-                const isDisqualifiedByAge = applicant['Age in Years'] < 18.0 || applicant['Age in Years'] > 35.0;
-                const isDisqualifiedByQualification = (applicant[mapping.qualification] || '').trim() === 'بدون';
-                const isDisqualifiedByDuplication = !!applicant['Duplicated Applicant'];
-
-                if (isDisqualifiedByAge || isDisqualifiedByQualification || isDisqualifiedByDuplication) {
-                    applicant['Age per village Ranking'] = 0;
-                } else {
-                    applicant['Age per village Ranking'] = index + 1;
-                }
-            });
-        });
+        const finalResults = processRecords(rows, mapping, recipientsDate);
 
         postMessage({ type: 'progress', status: 'processing', progress: 70 });
 
-        let totalAccepted = 0;
-        const finalResults = processedRows.map(row => {
-             const isDisqualifiedByAge = row['Age in Years'] < 18.0 || row['Age in Years'] > 35.0;
-             const isDisqualifiedByQualification = (row[mapping.qualification] || '').trim() === 'بدون';
-             const isDisqualifiedByDuplication = !!row['Duplicated Applicant'];
-
-             let qualificationScore = 0;
-             let identityScore = 0;
-             let experienceScore = 0;
-             
-             if (!isDisqualifiedByAge && !isDisqualifiedByQualification && !isDisqualifiedByDuplication) {
-                const qual = (row[mapping.qualification] || '').trim();
-                if (qual === 'بكالوريوس') {
-                    qualificationScore = 5;
-                } else if (qual === 'دبلوم') {
-                    qualificationScore = row['Diploma in Years'] >= 1.5 ? 3 : 2;
-                } else if (qual === 'ثانوية') {
-                    qualificationScore = 2;
-                }
-
-                const idType = (row[mapping.idType] || '').trim();
-                if (['بطاقه شخصيه', 'بطاقة شخصية', 'بطاقة شخصيه', 'بطاقه شخصية', 'جواز سفر'].includes(idType)) {
-                    identityScore = 2;
-                }
-                
-                const exp = (row[mapping.previousExperience] || '').trim();
-                if (exp === 'نعم' || exp === '1') {
-                    experienceScore = 3;
-                }
-             }
-
-             const totalScore = qualificationScore + identityScore + experienceScore;
-             const acceptance = totalScore > 0 ? 'مقبولة' : 'غير مقبولة';
-             if (acceptance === 'مقبولة') totalAccepted++;
-
-             let disqualificationReasons = [];
-             if (row['Age in Years'] < 18.0) disqualificationReasons.push('تم الاستبعاد بسبب العمر اقل من ١٨ سنة');
-             if (row['Age in Years'] > 35.0) disqualificationReasons.push('تم الاستبعاد بسبب العمر اكبر من ٣٥ سنة');
-             if (isDisqualifiedByQualification) disqualificationReasons.push('تم الاستبعاد بسبب عدم وجود مؤهل تعليمي');
-             if (isDisqualifiedByDuplication) disqualificationReasons.push('تكرار في التقديم');
-
-
-            return {
-                ...row,
-                'Qualification Score': qualificationScore,
-                'Identity Score': identityScore,
-                'Previous Experience Score': experienceScore,
-                'Applicants Total Score': totalScore,
-                'Acceptance Statement': acceptance,
-                'Disqualification Reason': disqualificationReasons.join(' + ')
-            };
-        });
+        let totalAccepted = finalResults.filter(r => r["Acceptance Statement"] === 'مقبولة').length;
         
         postMessage({ type: 'progress', status: 'saving', progress: 90 });
 
@@ -188,7 +176,7 @@ self.onmessage = async (event) => {
             totalUnaccepted: finalResults.length - totalAccepted,
             results: finalResults,
         };
-
+        
         const url = new URL('/api/ed-selection', self.location.origin);
         await fetch(url.href, {
             method: 'POST',
