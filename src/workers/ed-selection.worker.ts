@@ -1,3 +1,4 @@
+
 "use client";
 import dayjs from 'dayjs';
 
@@ -145,7 +146,7 @@ self.onmessage = async (event) => {
                 }
 
                 const idType = (row[mapping.idType] || '').trim();
-                if (['بطاقه شخصيه', 'بطاقة شخصية', 'جواز سفر'].includes(idType)) {
+                if (['بطاقه شخصيه', 'بطاقة شخصية', 'بطاقة شخصيه', 'بطاقه شخصية', 'جواز سفر'].includes(idType)) {
                     identityScore = 2;
                 }
                 
@@ -188,9 +189,8 @@ self.onmessage = async (event) => {
             results: finalResults,
         };
 
-        // This is where you would typically post to an API
-        // For now we'll just return the data to the main thread
-        await fetch('/api/ed-selection', {
+        const url = new URL('/api/ed-selection', self.location.origin);
+        await fetch(url.href, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(output)
