@@ -297,4 +297,9 @@ export default function ExportStatementsPage() {
                 {loading.exporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
                 Generate Interview Statements PDF
             </Button>
-            {!allApplicantsAssigned && <p className="text-xs text-muted-foreground mt-2">This
+            {!allApplicantsAssigned && <p className="text-xs text-muted-foreground mt-2">This button will be enabled once all accepted applicants for the selected project have been assigned to a hall.</p>}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
