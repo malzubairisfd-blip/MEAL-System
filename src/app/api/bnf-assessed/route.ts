@@ -8,7 +8,7 @@ const getDataPath = () => path.join(process.cwd(), 'src/data');
 const getDbPath = () => path.join(getDataPath(), 'bnf-assessed.db');
 
 const DB_COLUMNS = [
-    "project_id", "project_name", "Generated_Cluster_ID", "Size", "Flag", "Max_PairScore", 
+    "internalId", "project_id", "project_name", "Generated_Cluster_ID", "Size", "Flag", "Max_PairScore", 
     "pairScore", "nameScore", "husbandScore", "childrenScore", "idScore", "phoneScore", 
     "locationScore", "groupDecision", "recordDecision", "decisionReason", "s", "cluster_id", 
     "dup_cluster_id2", "eq_clusters", "dup_flag2", "new_dup_flag1", "dup_flag", "cluster_size", 
@@ -62,41 +62,56 @@ const DB_COLUMNS = [
     "PHONE_NO_2", "IS_TERMINATED", "TERM_DATE", "TERM_REASON_2", "TERM_NOTES", "NOTES_2", 
     "PC_FAC_ID", "EC_FAC_ID", "BENEF_CLASS", "BENEF_CLASS_DESC_2", "OLD_BNF_NAME_2", 
     "OLD_HSBND_NAME_2", "OLD_PHONE_NO", "OLD_ID_CARD_NO", "enrollment_modification_type", 
-    "eligible_woman_modify_type", "eligible_woman_name_correction", "eligible_woman_phone_correction", 
-    "eligible_woman_ID_correction", "eligible_woman_husband_name_correction", "pregnancy_month", 
-    "educational_level_of_the_targeted_woman", "new_bnf_name", "the_corrected_part_of_the_targets_name", 
-    "corrected_part_of_the_targets_namefirst_name", "the_corrected_part_of_the_targets_namefathers_name", 
-    "the_corrected_part_of_the_targets_namegrandfathers_name", "corrected_part_of_the_targets_namefourth_name", 
-    "corrected_part_of_the_targets_nametitle", "correcting_the_first_name", 
-    "correcting_the_fathers_name", "correcting_the_grandfathers_name", "correcting_the_fourth_name", 
-    "correcting_the_title", "bnf_1name_flag", "bnf_2name_flag", "bnf_3name_flag", "bnf_4name_flag", 
-    "bnf_5name_flag", "bnf_1name_is_valid", "bnf_2name_is_valid", "bnf_3name_is_valid", 
-    "bnf_4name_is_valid", "bnf_5name_is_valid", "bnf_1name_valid_note", "bnf_2name_valid_note", 
-    "bnf_3name_valid_note", "bnf_4name_valid_note", "bnf_5name_valid_note", 
-    "reference_under_which_the_name_was_corrected", "reference_under_which_the_namepersonal_ID_card_correction_was_made", 
-    "reference_under_which_the_namefamily_card_correction_was_made", "reference_under_which_the_namepassport_correction_was_made", 
-    "reference_under_which_the_name_correctionmarriage_contract_was_made", "reference_under_which_the_nameelectoral_card_correction_was_made", 
-    "reference_under_which_the_name_correctionquestionnaire_was_made", "reference_used_to_correct_the_nameaccording_to_the_womans_statement", 
-    "reference_under_which_the_nameseat_number_was_corrected", "reference_under_which_the_name_correction_was_madeother_mentioned", 
-    "another_reference_under_which_the_name_was_modified", "the_corrected_part_of_the_husbands_name", 
-    "corrected_part_of_husbands_namefirst_name", "corrected_part_of_husbands_namefathers_name", 
-    "the_corrected_part_of_the_husbands_namegrandfathers_name", "corrected_part_of_husbands_namefourth_name", 
-    "corrected_part_of_husbands_namesurname", "new_hsbnd_name", "correcting_the_first_name_6", 
-    "correcting_the_fathers_name_8", "correcting_the_grandfathers_name_10", "correcting_the_fourth_name_12", 
-    "title_correction_14", "hsbnd_1name_flag", "hsbnd_2name_flag", "hsbnd_3name_flag", "hsbnd_4name_flag", 
-    "hsbnd_5name_flag", "hsbnd_1name_is_valid", "hsbnd_2name_is_valid", "hsbnd_3name_is_valid", 
-    "hsbnd_4name_is_valid", "hsbnd_5name_is_valid", "hsbnd_1name_valid_note", "hsbnd_2name_valid_note", 
-    "hsbnd_3name_valid_note", "hsbnd_4name_valid_note", "hsbnd_5name_valid_note", 
-    "reference_under_which_the_name_was_corrected_16", "reference_under_which_the_namepersonal_ID_card_correction_was_made_17", 
-    "reference_under_which_the_namefamily_card_correction_was_made_18", "reference_under_which_the_namepassport_correction_was_made_19", 
-    "reference_under_which_the_name_correction_was_mademarriage_contract_20", "reference_under_which_the_name_correction_was_madeelectoral_card_21", 
-    "reference_under_which_the_name_correction_was_madeQuestionnaire_22", "reference_used_to_correct_the_nameaccording_to_what_the_woman_stated23", 
-    "reference_under_which_the_nameseat_number_was_corrected_24", "reference_under_which_the_name_correction_was_madeother_mentions_25", 
-    "another_reference_under_which_the_name_was_modified26", "telephone_number", "ID_card_type_3", 
-    "other_determines", "ID_card_number", "day_of_signing_the_form", "month", 
-    "the_reason_for_not_joining_the_project_is_stated", "other_things_to_mention", 
-    "do_you_want_to_repackage_the_beneficiary_for_another_educator", "please_select_the_alternative_educator", 
-    "the_name_of_the_new_intellectual", "comments", "data"
+    "eligible_woman_modify_type", "eligible_woman_name_correction", 
+    "eligible_woman_phone_correction", "eligible_woman_ID_correction", 
+    "eligible_woman_husband_name_correction", "pregnancy_month", 
+    "educational_level_of_the_targeted_woman", "new_bnf_name", 
+    "the_corrected_part_of_the_targets_name", "corrected_part_of_the_targets_namefirst_name", 
+    "the_corrected_part_of_the_targets_namefathers_name", 
+    "the_corrected_part_of_the_targets_namegrandfathers_name", 
+    "corrected_part_of_the_targets_namefourth_name", "corrected_part_of_the_targets_nametitle", 
+    "correcting_the_first_name", "correcting_the_fathers_name", 
+    "correcting_the_grandfathers_name", "correcting_the_fourth_name", "correcting_the_title", 
+    "bnf_1name_flag", "bnf_2name_flag", "bnf_3name_flag", "bnf_4name_flag", "bnf_5name_flag", 
+    "bnf_1name_is_valid", "bnf_2name_is_valid", "bnf_3name_is_valid", "bnf_4name_is_valid", 
+    "bnf_5name_is_valid", "bnf_1name_valid_note", "bnf_2name_valid_note", "bnf_3name_valid_note", 
+    "bnf_4name_valid_note", "bnf_5name_valid_note", 
+    "reference_under_which_the_name_was_corrected", 
+    "reference_under_which_the_namepersonal_ID_card_correction_was_made", 
+    "reference_under_which_the_namefamily_card_correction_was_made", 
+    "reference_under_which_the_namepassport_correction_was_made", 
+    "reference_under_which_the_name_correctionmarriage_contract_was_made", 
+    "reference_under_which_the_nameelectoral_card_correction_was_made", 
+    "reference_under_which_the_name_correctionquestionnaire_was_made", 
+    "reference_used_to_correct_the_nameaccording_to_the_womans_statement", 
+    "reference_under_which_the_nameseat_number_was_corrected", 
+    "reference_under_which_the_name_correction_was_madeother_mentioned", 
+    "another_reference_under_which_the_name_was_modified", 
+    "the_corrected_part_of_the_husbands_name", "corrected_part_of_husbands_namefirst_name", 
+    "corrected_part_of_husbands_namefathers_name", 
+    "the_corrected_part_of_the_husbands_namegrandfathers_name", 
+    "corrected_part_of_husbands_namefourth_name", "corrected_part_of_husbands_namesurname", 
+    "new_hsbnd_name", "correcting_the_first_name_6", "correcting_the_fathers_name_8", 
+    "correcting_the_grandfathers_name_10", "correcting_the_fourth_name_12", 
+    "title_correction_14", "hsbnd_1name_flag", "hsbnd_2name_flag", "hsbnd_3name_flag", 
+    "hsbnd_4name_flag", "hsbnd_5name_flag", "hsbnd_1name_is_valid", "hsbnd_2name_is_valid", 
+    "hsbnd_3name_is_valid", "hsbnd_4name_is_valid", "hsbnd_5name_is_valid", "hsbnd_1name_valid_note", 
+    "hsbnd_2name_valid_note", "hsbnd_3name_valid_note", "hsbnd_4name_valid_note", 
+    "hsbnd_5name_valid_note", "reference_under_which_the_name_was_corrected_16", 
+    "reference_under_which_the_namepersonal_ID_card_correction_was_made_17", 
+    "reference_under_which_the_namefamily_card_correction_was_made_18", 
+    "reference_under_which_the_namepassport_correction_was_made_19", 
+    "reference_under_which_the_name_correction_was_mademarriage_contract_20", 
+    "reference_under_which_the_name_correction_was_madeelectoral_card_21", 
+    "reference_under_which_the_name_correction_was_madeQuestionnaire_22", 
+    "reference_used_to_correct_the_nameaccording_to_what_the_woman_stated23", 
+    "reference_under_which_the_nameseat_number_was_corrected_24", 
+    "reference_under_which_the_name_correction_was_madeother_mentions_25", 
+    "another_reference_under_which_the_name_was_modified26", "telephone_number", 
+    "ID_card_type_3", "other_determines", "ID_card_number", "day_of_signing_the_form", 
+    "month", "the_reason_for_not_joining_the_project_is_stated", "other_things_to_mention", 
+    "do_you_want_to_repackage_the_beneficiary_for_another_educator", 
+    "please_select_the_alternative_educator", "the_name_of_the_new_intellectual", "comments"
 ];
 
 
@@ -506,6 +521,7 @@ function initializeDatabase() {
     please_select_the_alternative_educator TEXT,
     the_name_of_the_new_intellectual TEXT,
     comments TEXT,
+    internalId TEXT,
     data JSON
 );
     `;
@@ -527,7 +543,7 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: "Invalid payload: projectName and a 'results' array are required." }, { status: 400 });
         }
         
-        const columnsWithData = [...DB_COLUMNS]; // All columns including 'data'
+        const columnsWithData = [...DB_COLUMNS, 'data'];
         const columnsToInsert = columnsWithData.join(', ');
         const placeholders = columnsWithData.map(() => '?').join(', ');
         const insert = db.prepare(`INSERT INTO assessed_data (${columnsToInsert}) VALUES (${placeholders})`);

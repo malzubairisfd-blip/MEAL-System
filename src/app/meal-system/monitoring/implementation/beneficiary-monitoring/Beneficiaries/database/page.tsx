@@ -102,8 +102,8 @@ export default function BeneficiaryDatabasePage() {
   }
 
   const handleSaveToDatabase = async () => {
-      if (!selectedProjectId || !cacheData || selectedColumns.size === 0) {
-          toast({ title: "Incomplete Selection", description: "Please select a project and at least one column to save.", variant: "destructive" });
+      if (!selectedProjectId || !cacheData) {
+          toast({ title: "Incomplete Selection", description: "Please select a project.", variant: "destructive" });
           return;
       }
 
@@ -115,9 +115,8 @@ export default function BeneficiaryDatabasePage() {
         if (!project) throw new Error("Selected project not found.");
         
         const dataToSave = cacheData.rows.map((row: any) => {
-            const enriched = { ...row };
+            const enriched: any = { ...row };
             
-            // Find cluster info for this row
             const cluster = cacheData.clusters.find((c:any) => c.records.some((r:any) => r._internalId === row._internalId));
             if(cluster) {
                 enriched['Generated_Cluster_ID'] = cluster.clusterId;
@@ -131,13 +130,13 @@ export default function BeneficiaryDatabasePage() {
                     enriched['decisionReason'] = cluster.decisionReasons?.[row._internalId] || '';
                 }
             }
+            
+            // Add internalId and remove original _id properties
+            enriched.internalId = enriched._internalId;
+            delete enriched._id;
+            delete enriched._internalId;
 
-            const finalRecord: any = { _id: row._internalId };
-            selectedColumns.forEach(col => {
-                finalRecord[col] = enriched[col];
-            });
-
-            return finalRecord;
+            return enriched;
         });
         
         const payload = {
@@ -211,30 +210,8 @@ export default function BeneficiaryDatabasePage() {
         <>
           <Card>
             <CardHeader>
-              <CardTitle>2. Select Columns to Save</CardTitle>
-              <CardDescription>Choose the columns you want to include in the final database. All columns are selected by default.</CardDescription>
-            </CardHeader>
-            <CardContent>
-                <ScrollArea className="h-96 p-4 border rounded-md">
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                        {availableColumns.map(col => (
-                            <div key={col} className="flex items-center space-x-2">
-                                <Checkbox 
-                                    id={col} 
-                                    checked={selectedColumns.has(col)}
-                                    onCheckedChange={(checked) => handleSelectColumn(col, checked)}
-                                />
-                                <Label htmlFor={col} className="font-normal">{col}</Label>
-                            </div>
-                        ))}
-                    </div>
-                </ScrollArea>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-                <CardTitle>3. Save to Database</CardTitle>
+                <CardTitle>2. Save to Database</CardTitle>
+                <CardDescription>This will save all enriched record data to the `bnf-assessed.db` database.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
                  <Button onClick={handleSaveToDatabase} disabled={loading.saving || !selectedProjectId}>
