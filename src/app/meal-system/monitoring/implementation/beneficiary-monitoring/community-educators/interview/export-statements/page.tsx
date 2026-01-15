@@ -1,3 +1,4 @@
+
 // src/app/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/interview/export-statements/page.tsx
 "use client";
 
@@ -17,11 +18,15 @@ import { useToast } from '@/hooks/use-toast';
 interface Project {
   projectId: string;
   projectName: string;
+  governorates: string[];
+  districts: string[];
 }
 
 interface Applicant {
   _id: string;
-  "المتقدم/ة رباعيا مع اللقب": string;
+  applicantName: string;
+  hallName?: string | null;
+  hallNumber?: string | null;
   [key: string]: any;
 }
 
@@ -36,14 +41,14 @@ export default function ExportStatementsPage() {
     const [selectedProjectId, setSelectedProjectId] = useState('');
     
     const [numberOfHalls, setNumberOfHalls] = useState(1);
-    const [halls, setHalls] = useState<Hall[]>([{ name: '', number: '' }]);
+    const [halls, setHalls] = useState<Hall[]>([{ name: '', number: '1' }]);
     
     const [allAccepted, setAllAccepted] = useState<Applicant[]>([]);
-    const [unassignedApplicants, setUnassignedApplicants] = useState<Applicant[]>([]);
     const [selectedApplicants, setSelectedApplicants] = useState<Set<string>>(new Set());
     const [selectedHall, setSelectedHall] = useState('');
     
     const [loading, setLoading] = useState({ projects: true, applicants: false, linking: false, exporting: false });
+    const [allInitiallyAssigned, setAllInitiallyAssigned] = useState(false);
 
     // Fetch projects on load
     useEffect(() => {
@@ -62,10 +67,10 @@ export default function ExportStatementsPage() {
         fetchProjects();
     }, [toast]);
     
-    const fetchApplicants = useCallback(async () => {
-        if (!selectedProjectId) {
+    const fetchApplicants = useCallback(async (projectId: string) => {
+        if (!projectId) {
             setAllAccepted([]);
-            setUnassignedApplicants([]);
+            setAllInitiallyAssigned(false);
             return;
         }
         setLoading(prev => ({ ...prev, applicants: true }));
@@ -73,52 +78,56 @@ export default function ExportStatementsPage() {
             const res = await fetch('/api/ed-selection');
             if (!res.ok) throw new Error('Failed to fetch applicant data.');
             const allApplicants: Applicant[] = await res.json();
+            
+            // This logic is simplified; in a real app, you might filter by projectId if the API returns all.
             const accepted = allApplicants.filter(a => a['Acceptance Statement'] === 'مقبولة');
             setAllAccepted(accepted);
-            // Filter out those who already have a hall assigned
-            setUnassignedApplicants(accepted.filter(a => !a.hallName && !a.hallNumber));
+
+            // Verification step
+            const unassigned = accepted.filter(a => !a.hallName || !a.hallNumber);
+            setAllInitiallyAssigned(unassigned.length === 0 && accepted.length > 0);
+            if (unassigned.length === 0 && accepted.length > 0) {
+                 toast({ title: "Verification Complete", description: "All accepted applicants are already assigned to halls. You can generate PDFs now." });
+            }
+
         } catch (error: any) {
             toast({ title: "Error", description: error.message, variant: 'destructive' });
         } finally {
             setLoading(prev => ({ ...prev, applicants: false }));
         }
-    }, [selectedProjectId, toast]);
-
-    // Fetch accepted applicants when project changes
+    }, [toast]);
+    
     useEffect(() => {
-        fetchApplicants();
-    }, [fetchApplicants]);
+        if(selectedProjectId) {
+            fetchApplicants(selectedProjectId);
+        }
+    }, [selectedProjectId, fetchApplicants]);
 
-    // Handle dynamic hall inputs
+
     useEffect(() => {
         setHalls(prev => {
-            const newHalls = Array.from({ length: numberOfHalls }, (_, i) => prev[i] || { name: '', number: '' });
-            return newHalls;
+           const newHalls = Array.from({ length: numberOfHalls }, (_, i) => prev[i] || { name: '', number: String(i + 1) });
+           // Ensure hall numbers are sequential if length changes
+           return newHalls.map((h, i) => ({...h, number: String(i+1)}));
         });
     }, [numberOfHalls]);
 
     const handleHallChange = (index: number, field: 'name' | 'number', value: string) => {
-        const newHalls = [...halls];
-        newHalls[index][field] = value;
-        setHalls(newHalls);
+        setHalls(prev => prev.map((h, i) => i === index ? { ...h, [field]: value } : h));
     };
     
     const handleSelectApplicant = (applicantId: string) => {
         setSelectedApplicants(prev => {
             const newSet = new Set(prev);
-            if (newSet.has(applicantId)) {
-                newSet.delete(applicantId);
-            } else {
-                newSet.add(applicantId);
-            }
+            newSet.has(applicantId) ? newSet.delete(applicantId) : newSet.add(applicantId);
             return newSet;
         });
     };
 
     const handleLinkApplicants = async () => {
-        const hallInfo = halls.find(h => h.name === selectedHall);
-        if (!hallInfo) {
-            toast({ title: "Hall not found", description: "Please ensure the selected hall has a name and number.", variant: "destructive" });
+        const hallInfo = halls.find(h => h.number === selectedHall);
+        if (!hallInfo || !hallInfo.name) {
+            toast({ title: "Hall not configured", description: "Please ensure the selected hall has a name.", variant: "destructive" });
             return;
         }
         setLoading(prev => ({ ...prev, linking: true }));
@@ -126,25 +135,13 @@ export default function ExportStatementsPage() {
             const res = await fetch('/api/ed-selection', {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    applicantIds: Array.from(selectedApplicants),
-                    hallName: hallInfo.name,
-                    hallNumber: hallInfo.number,
-                }),
+                body: JSON.stringify({ applicantIds: Array.from(selectedApplicants), hallName: hallInfo.name, hallNumber: hallInfo.number }),
             });
-
-            if (!res.ok) {
-                const errorData = await res.json();
-                throw new Error(errorData.error || "Failed to assign applicants.");
-            }
-
-            toast({ title: "Success", description: `${selectedApplicants.size} applicants have been assigned to ${hallInfo.name}.` });
-            
-            // Clear selections and refresh applicant list
+            if (!res.ok) throw new Error((await res.json()).error || "Failed to assign applicants.");
+            toast({ title: "Success", description: `${selectedApplicants.size} applicants assigned to ${hallInfo.name}.` });
             setSelectedApplicants(new Set());
             setSelectedHall('');
-            await fetchApplicants();
-
+            await fetchApplicants(selectedProjectId); // Refresh the data to update UI
         } catch (error: any) {
             toast({ title: "Error", description: error.message, variant: "destructive" });
         } finally {
@@ -152,38 +149,50 @@ export default function ExportStatementsPage() {
         }
     };
     
-    const handleGeneratePdf = async () => {
-        if (!selectedProjectId) {
-            toast({ title: "Project Required", description: "Please select a project to generate statements for.", variant: "destructive" });
-            return;
+    const generatePdfForHall = async (hall: Hall) => {
+      setLoading(prev => ({ ...prev, exporting: true }));
+      try {
+        const payload = {
+          projectId: selectedProjectId,
+          hall: hall,
         }
-        setLoading(prev => ({ ...prev, exporting: true }));
-        try {
-            const response = await fetch(`/api/interview-statements?projectId=${selectedProjectId}`);
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || "Could not generate PDF.");
-            }
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = `interview_statements_${selectedProjectId}.pdf`;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            window.URL.revokeObjectURL(url);
-            toast({ title: "PDF Generated", description: "Your interview statements PDF has been downloaded." });
-        } catch (error: any) {
-            toast({ title: "Export Error", description: error.message, variant: "destructive" });
-        } finally {
-            setLoading(prev => ({ ...prev, exporting: false }));
+        const response = await fetch('/api/interview-statements', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || "Could not generate PDF.");
         }
+        
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `Interview_Statements_${hall.name}_${hall.number}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+        toast({ title: `PDF Generated for Hall ${hall.name}` });
+
+      } catch (error: any) {
+        toast({ title: "PDF Export Error", description: error.message, variant: "destructive" });
+      } finally {
+        setLoading(prev => ({ ...prev, exporting: false }));
+      }
     };
 
-    const allApplicantsAssigned = useMemo(() => {
-        return allAccepted.length > 0 && unassignedApplicants.length === 0;
-    }, [allAccepted, unassignedApplicants]);
+    const unassignedApplicants = useMemo(() => allAccepted.filter(a => !a.hallName || !a.hallNumber), [allAccepted]);
+    
+    // Check if we have any data loaded first, and if everything is assigned
+    const canExport = useMemo(() => {
+        if (!selectedProjectId || allAccepted.length === 0) return false;
+        // Export is enabled if everyone is assigned (unassigned length is 0)
+        return unassignedApplicants.length === 0;
+    }, [selectedProjectId, allAccepted, unassignedApplicants]);
 
 
   return (
@@ -192,7 +201,7 @@ export default function ExportStatementsPage() {
         <h1 className="text-3xl font-bold">Export Interview Statements</h1>
         <Button variant="outline" asChild>
           <Link href="/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/interview">
-            <ArrowLeft className="mr-2 h-4 w-4" /> Back to Interview Page
+            <ArrowLeft className="mr-2 h-4 w-4" /> Back
           </Link>
         </Button>
       </div>
@@ -219,85 +228,94 @@ export default function ExportStatementsPage() {
                     </div>
                   </div>
               </div>
-              
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {halls.map((hall, index) => (
                       <Card key={index} className="p-4 space-y-2">
                           <Label className="font-semibold">Hall {index + 1}</Label>
                           <Input placeholder="Hall Name" value={hall.name} onChange={(e) => handleHallChange(index, 'name', e.target.value)} />
-                          <Input placeholder="Hall Number" value={hall.number} onChange={(e) => handleHallChange(index, 'number', e.target.value)} />
+                          <Input placeholder="Hall Number" value={hall.number} readOnly />
                       </Card>
                   ))}
               </div>
           </CardContent>
       </Card>
+      
+      {loading.applicants && (
+         <div className="flex justify-center p-8"><Loader2 className="animate-spin" /></div>
+      )}
 
-      <Card>
-          <CardHeader>
-              <CardTitle>2. Assign Applicants to Halls</CardTitle>
-          </CardHeader>
-          <CardContent>
-              {loading.applicants ? <div className="flex justify-center p-8"><Loader2 className="animate-spin" /></div> : 
-              unassignedApplicants.length > 0 ? (
-                  <div className="space-y-4">
-                      <ScrollArea className="h-96 border rounded-md">
-                          <Table>
-                              <TableHeader>
-                                  <TableRow>
-                                      <TableHead className="w-12"><Checkbox onCheckedChange={(checked) => {
-                                          if (checked) setSelectedApplicants(new Set(unassignedApplicants.map(a => a._id)));
-                                          else setSelectedApplicants(new Set());
-                                      }} /></TableHead>
-                                      <TableHead>Applicant ID</TableHead>
-                                      <TableHead>Applicant Name</TableHead>
-                                  </TableRow>
-                              </TableHeader>
-                              <TableBody>
-                                  {unassignedApplicants.map(app => (
-                                      <TableRow key={app._id} onClick={() => handleSelectApplicant(app._id)} className="cursor-pointer">
-                                          <TableCell><Checkbox checked={selectedApplicants.has(app._id)} onCheckedChange={() => handleSelectApplicant(app._id)}/></TableCell>
-                                          <TableCell>{app._id}</TableCell>
-                                          <TableCell>{app["المتقدم/ة رباعيا مع اللقب"]}</TableCell>
-                                      </TableRow>
-                                  ))}
-                              </TableBody>
-                          </Table>
-                      </ScrollArea>
-                      <div className="flex flex-col md:flex-row gap-4 items-center">
-                           <p className="text-sm font-medium">{selectedApplicants.size} applicants selected</p>
-                           <div className="flex-1 flex gap-2 items-center">
-                               <Select onValueChange={setSelectedHall} value={selectedHall}>
-                                   <SelectTrigger className="md:w-72">
-                                       <SelectValue placeholder="Select a hall to assign..." />
-                                   </SelectTrigger>
-                                   <SelectContent>
-                                       {halls.filter(h => h.name && h.number).map((h, i) => (
-                                           <SelectItem key={i} value={h.name}>{h.name} (No. {h.number})</SelectItem>
-                                       ))}
-                                   </SelectContent>
-                               </Select>
-                               <Button onClick={handleLinkApplicants} disabled={selectedApplicants.size === 0 || !selectedHall || loading.linking}>
-                                   {loading.linking ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <LinkIcon className="mr-2 h-4 w-4"/>}
-                                   Link Applicants to Hall
-                               </Button>
-                           </div>
-                      </div>
-                  </div>
-              ) : <p className="text-center text-muted-foreground p-8">{selectedProjectId ? "All accepted applicants have been assigned." : "Please select a project to load applicants."}</p>}
-          </CardContent>
-      </Card>
+      {!loading.applicants && selectedProjectId && !allInitiallyAssigned && (
+        <Card>
+            <CardHeader>
+                <CardTitle>2. Assign Applicants to Halls</CardTitle>
+                <CardDescription>Select applicants from the table and assign them to a configured hall.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                {unassignedApplicants.length > 0 ? (
+                    <div className="space-y-4">
+                        <ScrollArea className="h-96 border rounded-md">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead className="w-12">
+                                            <Checkbox
+                                              checked={selectedApplicants.size === unassignedApplicants.length && unassignedApplicants.length > 0}
+                                              onCheckedChange={(checked) => setSelectedApplicants(checked ? new Set(unassignedApplicants.map(a => a._id)) : new Set())}
+                                            />
+                                        </TableHead>
+                                        <TableHead>Applicant ID</TableHead>
+                                        <TableHead>Applicant Name</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {unassignedApplicants.map(app => (
+                                        <TableRow key={app._id} onClick={() => handleSelectApplicant(app._id)} className="cursor-pointer">
+                                            <TableCell><Checkbox checked={selectedApplicants.has(app._id)} onCheckedChange={() => handleSelectApplicant(app._id)}/></TableCell>
+                                            <TableCell>{app._id}</TableCell>
+                                            <TableCell>{app.applicantName}</TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </ScrollArea>
+                        <div className="flex flex-col md:flex-row gap-4 items-center">
+                            <p className="text-sm font-medium">{selectedApplicants.size} applicants selected</p>
+                            <div className="flex-1 flex gap-2 items-center">
+                                <Select onValueChange={setSelectedHall} value={selectedHall}>
+                                    <SelectTrigger className="md:w-72">
+                                        <SelectValue placeholder="Select a hall to assign..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {halls.filter(h => h.name && h.number).map((h, i) => (
+                                            <SelectItem key={i} value={h.number}>{h.name} (Hall {h.number})</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                <Button onClick={handleLinkApplicants} disabled={selectedApplicants.size === 0 || !selectedHall || loading.linking}>
+                                    {loading.linking ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <LinkIcon className="mr-2 h-4 w-4"/>}
+                                    Link Applicants
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                ) : <p className="text-center text-muted-foreground p-8">All accepted applicants have been assigned.</p>}
+            </CardContent>
+        </Card>
+      )}
       
       <Card>
         <CardHeader>
             <CardTitle>3. Generate & Export</CardTitle>
-            <CardDescription>Once all applicants are assigned, generate the final PDF documents for all halls.</CardDescription>
+            <CardDescription>Once all applicants are assigned, generate the final PDF documents for each hall.</CardDescription>
         </CardHeader>
-        <CardContent>
-            <Button onClick={handleGeneratePdf} disabled={!allApplicantsAssigned || loading.exporting}>
-                {loading.exporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
-                Generate Interview Statements PDF
-            </Button>
-            {!allApplicantsAssigned && <p className="text-xs text-muted-foreground mt-2">This button will be enabled once all accepted applicants for the selected project have been assigned to a hall.</p>}
+        <CardContent className="flex flex-wrap gap-2">
+             {halls.map((hall, index) => (
+                <Button key={index} onClick={() => generatePdfForHall(hall)} disabled={!canExport || loading.exporting || !hall.name}>
+                    {loading.exporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
+                    Hall {hall.number || index + 1} PDF
+                </Button>
+            ))}
+            {selectedProjectId && !canExport && <p className="text-xs text-muted-foreground mt-2">This will be enabled once all accepted applicants for the selected project have been assigned.</p>}
         </CardContent>
       </Card>
     </div>
