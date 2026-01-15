@@ -26,6 +26,7 @@ import {
   XCircle,
   FileText,
   UserCheck,
+  Database,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
@@ -294,6 +295,14 @@ export default function ReviewPage() {
             <CardDescription>
               تم العثور على {allClusters.length} مجموعات، مرتبة حسب الثقة.
             </CardDescription>
+             <div className="flex gap-2">
+                <Button asChild>
+                    <Link href="/meal-system/monitoring/implementation/beneficiary-monitoring/Beneficiaries/database">
+                        <Database className="mr-2 h-4 w-4" />
+                        Go to Database
+                    </Link>
+                </Button>
+            </div>
           </CardHeader>
           <CardContent className="flex-1 overflow-y-auto">
             <div className="space-y-2">

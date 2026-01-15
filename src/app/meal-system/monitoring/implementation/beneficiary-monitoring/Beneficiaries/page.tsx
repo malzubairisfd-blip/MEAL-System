@@ -4,13 +4,14 @@
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Upload, Wrench, Microscope, ClipboardList, BarChartHorizontal, FileDown, ArrowRight } from "lucide-react";
+import { ArrowLeft, Upload, Wrench, Microscope, ClipboardList, BarChartHorizontal, FileDown, ArrowRight, Database } from "lucide-react";
 
 export default function BeneficiariesPage() {
     const features = [
         { title: "Upload Page", href: "/meal-system/monitoring/implementation/beneficiary-monitoring/Beneficiaries/upload", icon: <Upload className="h-8 w-8 text-blue-500" /> },
         { title: "Correction Page", href: "/meal-system/monitoring/implementation/beneficiary-monitoring/Beneficiaries/correction", icon: <Wrench className="h-8 w-8 text-teal-500" /> },
         { title: "Review Page", href: "/meal-system/monitoring/implementation/beneficiary-monitoring/Beneficiaries/review", icon: <Microscope className="h-8 w-8 text-purple-500" /> },
+        { title: "Beneficiaries Database", href: "/meal-system/monitoring/implementation/beneficiary-monitoring/Beneficiaries/database", icon: <Database className="h-8 w-8 text-indigo-500" /> },
         { title: "Audit Page", href: "/meal-system/monitoring/implementation/beneficiary-monitoring/Beneficiaries/audit", icon: <ClipboardList className="h-8 w-8 text-orange-500" /> },
         { title: "Report Page", href: "/meal-system/monitoring/implementation/beneficiary-monitoring/Beneficiaries/report", icon: <BarChartHorizontal className="h-8 w-8 text-green-500" /> },
         { title: "Export Page", href: "/meal-system/monitoring/implementation/beneficiary-monitoring/Beneficiaries/export", icon: <FileDown className="h-8 w-8 text-red-500" /> },
@@ -28,7 +29,7 @@ export default function BeneficiariesPage() {
         </Button>
       </div>
 
-       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {features.map((feature) => (
           <Card key={feature.title} className="flex flex-col text-center items-center justify-center p-6 transition-all duration-300 hover:shadow-xl hover:-translate-y-2">
             <div className="p-4 bg-muted rounded-full mb-4">
