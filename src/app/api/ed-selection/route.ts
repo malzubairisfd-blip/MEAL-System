@@ -85,3 +85,40 @@ export async function GET(req: Request) {
         return NextResponse.json({ error: "Failed to fetch educator selection data.", details: error.message }, { status: 500 });
     }
 }
+
+export async function PUT(req: Request) {
+    try {
+        const { applicantIds, hallName, hallNumber } = await req.json();
+
+        if (!Array.isArray(applicantIds) || applicantIds.length === 0 || !hallName || !hallNumber) {
+            return NextResponse.json({ error: "Invalid payload: applicantIds array, hallName, and hallNumber are required." }, { status: 400 });
+        }
+        
+        await fs.mkdir(getDataPath(), { recursive: true });
+        const db = initializeDatabase();
+
+        const getStmt = db.prepare('SELECT data FROM educators WHERE applicantId = ?');
+        const updateStmt = db.prepare('UPDATE educators SET data = ? WHERE applicantId = ?');
+
+        const updateMany = db.transaction(() => {
+            for (const applicantId of applicantIds) {
+                const row = getStmt.get(applicantId) as { data: string } | undefined;
+                if (row) {
+                    const applicantData = JSON.parse(row.data);
+                    applicantData['hallName'] = hallName;
+                    applicantData['hallNumber'] = hallNumber;
+                    updateStmt.run(JSON.stringify(applicantData), applicantId);
+                }
+            }
+        });
+
+        updateMany();
+        db.close();
+        
+        return NextResponse.json({ message: "Applicants successfully assigned to hall." });
+
+    } catch (error: any) {
+        console.error("[ED_SELECTION_API_PUT_ERROR]", error);
+        return NextResponse.json({ error: "Failed to update applicant hall assignments.", details: error.message }, { status: 500 });
+    }
+}

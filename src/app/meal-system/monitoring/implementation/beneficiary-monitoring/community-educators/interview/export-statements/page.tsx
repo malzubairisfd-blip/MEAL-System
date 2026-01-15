@@ -1,8 +1,7 @@
-
 // src/app/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/interview/export-statements/page.tsx
 "use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -29,7 +28,6 @@ interface Applicant {
 interface Hall {
   name: string;
   number: string;
-  applicants: string[];
 }
 
 export default function ExportStatementsPage() {
@@ -38,15 +36,14 @@ export default function ExportStatementsPage() {
     const [selectedProjectId, setSelectedProjectId] = useState('');
     
     const [numberOfHalls, setNumberOfHalls] = useState(1);
-    const [halls, setHalls] = useState<Hall[]>([{ name: '', number: '', applicants: [] }]);
+    const [halls, setHalls] = useState<Hall[]>([{ name: '', number: '' }]);
     
     const [allAccepted, setAllAccepted] = useState<Applicant[]>([]);
     const [unassignedApplicants, setUnassignedApplicants] = useState<Applicant[]>([]);
     const [selectedApplicants, setSelectedApplicants] = useState<Set<string>>(new Set());
     const [selectedHall, setSelectedHall] = useState('');
     
-    const [loading, setLoading] = useState({ projects: true, applicants: false });
-    const [isLinking, setIsLinking] = useState(false);
+    const [loading, setLoading] = useState({ projects: true, applicants: false, linking: false });
 
     // Fetch projects on load
     useEffect(() => {
@@ -65,35 +62,37 @@ export default function ExportStatementsPage() {
         fetchProjects();
     }, [toast]);
     
-    // Fetch accepted applicants when project changes
-    useEffect(() => {
+    const fetchApplicants = useCallback(async () => {
         if (!selectedProjectId) {
             setAllAccepted([]);
             setUnassignedApplicants([]);
             return;
         }
-        const fetchApplicants = async () => {
-            setLoading(prev => ({ ...prev, applicants: true }));
-            try {
-                const res = await fetch('/api/ed-selection');
-                if (!res.ok) throw new Error('Failed to fetch applicant data.');
-                const allApplicants: Applicant[] = await res.json();
-                const accepted = allApplicants.filter(a => a['Acceptance Statement'] === 'مقبولة');
-                setAllAccepted(accepted);
-                setUnassignedApplicants(accepted); // Initially, all are unassigned
-            } catch (error: any) {
-                toast({ title: "Error", description: error.message, variant: 'destructive' });
-            } finally {
-                setLoading(prev => ({ ...prev, applicants: false }));
-            }
-        };
-        fetchApplicants();
+        setLoading(prev => ({ ...prev, applicants: true }));
+        try {
+            const res = await fetch('/api/ed-selection');
+            if (!res.ok) throw new Error('Failed to fetch applicant data.');
+            const allApplicants: Applicant[] = await res.json();
+            const accepted = allApplicants.filter(a => a['Acceptance Statement'] === 'مقبولة');
+            setAllAccepted(accepted);
+            // Filter out those who already have a hall assigned
+            setUnassignedApplicants(accepted.filter(a => !a.hallName && !a.hallNumber));
+        } catch (error: any) {
+            toast({ title: "Error", description: error.message, variant: 'destructive' });
+        } finally {
+            setLoading(prev => ({ ...prev, applicants: false }));
+        }
     }, [selectedProjectId, toast]);
+
+    // Fetch accepted applicants when project changes
+    useEffect(() => {
+        fetchApplicants();
+    }, [fetchApplicants]);
 
     // Handle dynamic hall inputs
     useEffect(() => {
         setHalls(prev => {
-            const newHalls = Array.from({ length: numberOfHalls }, (_, i) => prev[i] || { name: '', number: '', applicants: [] });
+            const newHalls = Array.from({ length: numberOfHalls }, (_, i) => prev[i] || { name: '', number: '' });
             return newHalls;
         });
     }, [numberOfHalls]);
@@ -116,9 +115,41 @@ export default function ExportStatementsPage() {
         });
     };
 
-    const handleLinkApplicants = () => {
-        // This is where the logic to save to ed-interview.json will go
-        toast({ title: "Action Needed", description: "Save logic to be implemented in the next step." });
+    const handleLinkApplicants = async () => {
+        const hallInfo = halls.find(h => h.name === selectedHall);
+        if (!hallInfo) {
+            toast({ title: "Hall not found", description: "Please ensure the selected hall has a name and number.", variant: "destructive" });
+            return;
+        }
+        setLoading(prev => ({ ...prev, linking: true }));
+        try {
+            const res = await fetch('/api/ed-selection', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    applicantIds: Array.from(selectedApplicants),
+                    hallName: hallInfo.name,
+                    hallNumber: hallInfo.number,
+                }),
+            });
+
+            if (!res.ok) {
+                const errorData = await res.json();
+                throw new Error(errorData.error || "Failed to assign applicants.");
+            }
+
+            toast({ title: "Success", description: `${selectedApplicants.size} applicants have been assigned to ${hallInfo.name}.` });
+            
+            // Clear selections and refresh applicant list
+            setSelectedApplicants(new Set());
+            setSelectedHall('');
+            await fetchApplicants();
+
+        } catch (error: any) {
+            toast({ title: "Error", description: error.message, variant: "destructive" });
+        } finally {
+            setLoading(prev => ({ ...prev, linking: false }));
+        }
     };
 
   return (
@@ -211,8 +242,8 @@ export default function ExportStatementsPage() {
                                        ))}
                                    </SelectContent>
                                </Select>
-                               <Button onClick={handleLinkApplicants} disabled={selectedApplicants.size === 0 || !selectedHall || isLinking}>
-                                   <LinkIcon className="mr-2 h-4 w-4"/>
+                               <Button onClick={handleLinkApplicants} disabled={selectedApplicants.size === 0 || !selectedHall || loading.linking}>
+                                   {loading.linking ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <LinkIcon className="mr-2 h-4 w-4"/>}
                                    Link Applicants to Hall
                                </Button>
                            </div>
@@ -238,4 +269,3 @@ export default function ExportStatementsPage() {
     </div>
   );
 }
-
