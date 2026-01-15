@@ -1,4 +1,3 @@
-
 // src/workers/ed-selection.worker.ts
 import dayjs from 'dayjs';
 
@@ -35,25 +34,52 @@ function normalizeArabicWithCompounds(value: any): string {
     return result.join(" ");
 }
 
-function processRecords(rows: any[], mapping: any, recipientsDate: string) {
-  const refDate = dayjs(recipientsDate).toDate();
+function excelSerialToDate(value: any): Date | null {
+  if (value === null || value === undefined || value === "") return null;
+
+  // Already a JS Date
+  if (value instanceof Date) return value;
+
+  // Excel serial number (most important case)
+  if (typeof value === "number") {
+    // Excel epoch: 1899-12-30
+    const excelEpoch = new Date(Date.UTC(1899, 11, 30));
+    return new Date(excelEpoch.getTime() + value * 86400000);
+  }
+
+  // String date fallback
+  const parsed = new Date(value);
+  return isNaN(parsed.getTime()) ? null : parsed;
+}
+
+
+function processRecords(rows: any[], mapping: any, recipientsDateStr: string) {
+  const selectedRecipientsDate = excelSerialToDate(recipientsDateStr);
 
   const records = rows.map(r => ({
     ...r,
-    _birth: dayjs(r[mapping.birthDate]).toDate(),
+    _birthDate: r[mapping.birthDate],
     _nameNorm: normalizeArabicWithCompounds(r[mapping.applicantName]),
     _id: r[mapping.applicantId],
     _village: r[mapping.village],
     _qualification: r[mapping.qualification] || "بدون",
     _idType: (r[mapping.idType] || '').trim(),
     _experience: (r[mapping.previousExperience] || '').trim(),
+    _diplomaStart: r[mapping.diplomaStartDate],
+    _diplomaEnd: r[mapping.diplomaEndDate],
   }));
 
   // --- AGE ---
   records.forEach(r => {
-    const diffMs = refDate.getTime() - r._birth.getTime();
-    r["Age in days"] = diffMs / 86400000;
-    r["Age in Years"] = +(r["Age in days"] / 365.25).toFixed(2);
+    const birthDate = excelSerialToDate(r._birthDate);
+    if (birthDate && selectedRecipientsDate) {
+      const diffMs = selectedRecipientsDate.getTime() - birthDate.getTime();
+      r["Age in days"] = diffMs / 86400000;
+      r["Age in Years"] = +(r["Age in days"] / 365.2425).toFixed(2);
+    } else {
+      r["Age in days"] = 0;
+      r["Age in Years"] = 0;
+    }
   });
 
   // --- DUPLICATES ---
@@ -78,8 +104,8 @@ function processRecords(rows: any[], mapping: any, recipientsDate: string) {
 
   // --- DIPLOMA ---
   records.forEach(r => {
-    const s = dayjs(r[mapping.diplomaStartDate]).toDate();
-    const e = dayjs(r[mapping.diplomaEndDate]).toDate();
+    const s = excelSerialToDate(r._diplomaStart);
+    const e = excelSerialToDate(r._diplomaEnd);
     if (s && e) {
       const d = (e.getTime() - s.getTime()) / 86400000;
       r["Diploma in days"] = d;
@@ -137,7 +163,7 @@ function processRecords(rows: any[], mapping: any, recipientsDate: string) {
   // --- DISQUALIFICATION REASON ---
   records.forEach(r => {
     const reasons: string[] = [];
-    if (r["Age in Years"] < 18) {
+    if (r["Age in Years"] < 18 && r["Age in Years"] > 0) {
       reasons.push("تم الاستبعاد بسبب العمر اقل من ١٨ سنة");
     }
     if (r["Age in Years"] > 35) {
@@ -149,9 +175,9 @@ function processRecords(rows: any[], mapping: any, recipientsDate: string) {
     if (r["Duplicated Applicant"]) {
       reasons.push("تكرار في التقديم");
     }
-    r["Disqualification Reason"] =
-      reasons.length > 0 ? reasons.join(" + ") : "";
+    r["Disqualification Reason"] = reasons.length > 0 ? reasons.join(" + ") : "";
   });
+
   return records;
 }
 
