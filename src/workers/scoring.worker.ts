@@ -1,6 +1,7 @@
 // src/workers/scoring.worker.ts
 import { computePairScore, type PreprocessedRow } from "./cluster.worker";
 import { jaroWinkler } from "@/lib/similarity";
+import type { RecordRow } from "@/lib/types";
 
 export function averageWomanNameScore(a: PreprocessedRow, b: PreprocessedRow): number {
   const A = a.parts;
@@ -210,6 +211,13 @@ self.onmessage = (event) => {
       }
 
       const records = (cluster.records || []) as PreprocessedRow[];
+      
+      const maxBeneficiaryId = records.reduce((max: number, r: RecordRow) => {
+          const currentId = Number(r.beneficiaryId);
+          return !isNaN(currentId) && currentId > max ? currentId : max;
+      }, 0);
+      const generatedClusterId = maxBeneficiaryId > 0 ? maxBeneficiaryId : index + 1;
+
       if (records.length < 2) {
         return {
           ...cluster,
@@ -220,6 +228,7 @@ self.onmessage = (event) => {
           avgHusbandNameScore: 0,
           avgFinalScore: 0,
           Max_PairScore: 0,
+          Generated_Cluster_ID: generatedClusterId,
         };
       }
       
@@ -274,6 +283,7 @@ self.onmessage = (event) => {
         avgHusbandNameScore: confidenceResult.avgHusbandScore,
         avgFinalScore: confidenceResult.totalAverageScore,
         Max_PairScore: maxPairScore,
+        Generated_Cluster_ID: generatedClusterId
       };
     });
 

@@ -1,4 +1,3 @@
-
 // src/workers/export.worker.ts
 import ExcelJS from "exceljs";
 import type { AuditFinding } from "@/lib/auditEngine";
@@ -85,57 +84,13 @@ function enrichData(cachedData: any): { enrichedRecords: EnrichedRecord[], enric
     }
 
     const recordMap = new Map<string, RecordRow>(allRecords.map((r: RecordRow) => [r._internalId!, r]));
-    const clusterMaxScores = new Map<number, number>();
 
     const enrichedClusters = clusters.map((cluster: any, index: number) => {
-        const clusterId = index + 1;
-        const clusterRecords = cluster.records || [];
-        
-        let maxPairScoreInCluster = 0;
-
-        const recordsWithScores = clusterRecords.map((record: RecordRow) => {
-            const relatedPairs = (cluster.pairScores || []).filter((p: any) => p.aId === record._internalId || p.bId === record._internalId);
-            const safeAvg = (arr: (number | null | undefined)[]) => {
-                const valid = arr.filter(v => typeof v === 'number' && isFinite(v)) as number[];
-                return valid.length > 0 ? valid.reduce((a, b) => a + b, 0) / valid.length : 0;
-            };
-
-            const recordPairScore = safeAvg(relatedPairs.map((p: any) => p.score));
-            if (recordPairScore > maxPairScoreInCluster) {
-                maxPairScoreInCluster = recordPairScore;
-            }
-
-            let flag = '?';
-            if (recordPairScore >= 0.9) {
-                flag = 'm?';
-            } else if (recordPairScore >= 0.8) {
-                flag = 'm';
-            } else if (recordPairScore >= 0.7) {
-                flag = '??';
-            }
-            
-            return {
-                ...record,
-                pairScore: recordPairScore,
-                Flag: flag,
-                nameScore: safeAvg(relatedPairs.map((p: any) => p.tokenReorderScore)),
-                husbandScore: safeAvg(relatedPairs.map((p: any) => p.husbandScore)),
-                childrenScore: safeAvg(relatedPairs.map((p: any) => p.childrenScore)),
-                idScore: safeAvg(relatedPairs.map((p: any) => p.idScore)),
-                phoneScore: safeAvg(relatedPairs.map((p: any) => p.phoneScore)),
-                locationScore: safeAvg(relatedPairs.map((p: any) => p.locationScore)),
-            };
-        });
-        
-        clusterMaxScores.set(clusterId, maxPairScoreInCluster);
-
-        const { decision } = getDecisionAndNote(cluster.confidenceScore || 0);
-        const expertNote = generateArabicClusterSummary(cluster, cluster.records).replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]*>?/gm, '').trim();
+        const { decision, expertNote } = getDecisionAndNote(cluster.confidenceScore || 0);
         
         return {
             ...cluster,
-            clusterId,
-            records: recordsWithScores,
+            clusterId: index + 1, // simple index for reference
             'تصنيف المجموعة المبدئي': decision,
             'نتائج تحليل المجموعة': expertNote,
         };
@@ -156,18 +111,11 @@ function enrichData(cachedData: any): { enrichedRecords: EnrichedRecord[], enric
         
         const scoredRecord = enrichedCluster.records.find((r: RecordRow) => r._internalId === record._internalId);
         
-        const generatedClusterId = enrichedCluster.records.reduce((max: number, r: RecordRow) => {
-            const currentId = Number(r.beneficiaryId);
-            return !isNaN(currentId) && currentId > max ? currentId : max;
-        }, 0) || enrichedCluster.clusterId;
-
-        const maxPairScoreForCluster = clusterMaxScores.get(enrichedCluster.clusterId) || 0;
-
         const baseRecord: EnrichedRecord = {
             ...record,
-            Generated_Cluster_ID: generatedClusterId,
+            Generated_Cluster_ID: enrichedCluster.Generated_Cluster_ID,
             Cluster_Size: enrichedCluster.records.length,
-            Max_PairScore: maxPairScoreForCluster,
+            Max_PairScore: enrichedCluster.Max_PairScore ?? 0,
             'تصنيف المجموعة المبدئي': enrichedCluster['تصنيف المجموعة المبدئي'],
             'نتائج تحليل المجموعة': enrichedCluster['نتائج تحليل المجموعة'],
             groupDecision: enrichedCluster.groupDecision,
@@ -735,7 +683,7 @@ function createDashboardReportSheet(wb: ExcelJS.Workbook, chartImages: Record<st
     const titleCell = ws.getCell('B2');
     titleCell.value = "Analysis Dashboard Report";
     titleCell.font = { name: 'Calibri', size: 24, bold: true, color: { argb: 'FF002060' } };
-    titleCell.alignment = { horizontal: 'center' };
+    titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
     ws.getRow(2).height = 30;
 
     const kf = processedData.keyFigures;
