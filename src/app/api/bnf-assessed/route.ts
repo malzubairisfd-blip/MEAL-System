@@ -11,6 +11,9 @@ const getDbPath = () => path.join(getDataPath(), 'bnf-assessed.db');
 function initializeDatabase() {
     const db = new Database(getDbPath());
     
+    // Drop the table if it exists to ensure it's empty
+    db.exec('DROP TABLE IF EXISTS assessments');
+
     // Create a table for the assessment results
     const createTableStmt = `
         CREATE TABLE IF NOT EXISTS assessments (

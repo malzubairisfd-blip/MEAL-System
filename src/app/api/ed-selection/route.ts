@@ -11,6 +11,9 @@ const getDbPath = () => path.join(getDataPath(), 'educators.db');
 function initializeDatabase() {
     const db = new Database(getDbPath());
     
+    // Drop the table if it exists to ensure it's empty
+    db.exec('DROP TABLE IF EXISTS educators');
+
     // Create a table for the results, using the keys from one of the result objects
     // This is a dynamic way to create the table schema based on the processed data structure
     const createTableStmt = `
