@@ -112,14 +112,53 @@ export default function BeneficiaryDatabasePage() {
 
       try {
         const project = projects.find(p => p.projectId === selectedProjectId);
-        // This is a simplified representation. A real implementation would process and send all rows.
-        // For now, we simulate the process.
+        if (!project) throw new Error("Selected project not found.");
         
+        const dataToSave = cacheData.rows.map((row: any) => {
+            const enriched = { ...row };
+            
+            // Find cluster info for this row
+            const cluster = cacheData.clusters.find((c:any) => c.records.some((r:any) => r._internalId === row._internalId));
+            if(cluster) {
+                enriched['Generated_Cluster_ID'] = cluster.clusterId;
+                enriched['Cluster_Size'] = cluster.records.length;
+                enriched['Max_PairScore'] = cluster.Max_PairScore;
+                enriched['groupDecision'] = cluster.groupDecision;
+                
+                const recordDecision = cluster.recordDecisions?.[row._internalId];
+                if (recordDecision) {
+                    enriched['recordDecision'] = recordDecision;
+                    enriched['decisionReason'] = cluster.decisionReasons?.[row._internalId] || '';
+                }
+            }
+
+            const finalRecord: any = { _id: row._internalId };
+            selectedColumns.forEach(col => {
+                finalRecord[col] = enriched[col];
+            });
+
+            return finalRecord;
+        });
+        
+        const payload = {
+            projectName: project.projectName,
+            processedAt: new Date().toISOString(),
+            results: dataToSave,
+        }
+
         const CHUNK_SIZE = 100;
-        const totalRecords = cacheData.rows.length;
+        const totalRecords = dataToSave.length;
 
         for (let i = 0; i < totalRecords; i += CHUNK_SIZE) {
-            // In a real scenario, you'd slice and post chunks of data here.
+            const chunk = payload.results.slice(i, i + CHUNK_SIZE);
+            const chunkPayload = { ...payload, results: chunk };
+
+            await fetch('/api/bnf-assessed', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(chunkPayload)
+            });
+
             await new Promise(resolve => setTimeout(resolve, 50)); // Simulate network latency
             const currentProgress = Math.round(((i + CHUNK_SIZE) / totalRecords) * 100);
             setProgress(Math.min(100, currentProgress));
