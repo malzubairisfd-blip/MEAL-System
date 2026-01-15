@@ -60,3 +60,28 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: "Failed to save educator selection data to SQLite.", details: error.message }, { status: 500 });
     }
 }
+
+export async function GET(req: Request) {
+    try {
+        await fs.mkdir(getDataPath(), { recursive: true });
+        const db = initializeDatabase();
+        
+        const stmt = db.prepare('SELECT data FROM educators');
+        const rows = stmt.all();
+        
+        db.close();
+
+        const results = rows.map((row: any) => JSON.parse(row.data));
+
+        return NextResponse.json(results);
+
+    } catch (error: any) {
+        console.error("[ED_SELECTION_API_GET_ERROR]", error);
+        // If the DB file doesn't exist, better-sqlite3 throws an error.
+        // We can treat this as "no records found" and return an empty array.
+        if (error.code === 'SQLITE_CANTOPEN') {
+            return NextResponse.json([]);
+        }
+        return NextResponse.json({ error: "Failed to fetch educator selection data.", details: error.message }, { status: 500 });
+    }
+}
