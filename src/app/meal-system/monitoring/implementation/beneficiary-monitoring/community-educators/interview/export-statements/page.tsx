@@ -21,7 +21,7 @@ interface Project {
 
 interface Applicant {
   _id: string;
-  applicantName: string;
+  "المتقدم/ة رباعيا مع اللقب": string;
   [key: string]: any;
 }
 
@@ -223,7 +223,7 @@ export default function ExportStatementsPage() {
                                       <TableRow key={app._id} onClick={() => handleSelectApplicant(app._id)} className="cursor-pointer">
                                           <TableCell><Checkbox checked={selectedApplicants.has(app._id)} onCheckedChange={() => handleSelectApplicant(app._id)}/></TableCell>
                                           <TableCell>{app._id}</TableCell>
-                                          <TableCell>{app.applicantName}</TableCell>
+                                          <TableCell>{app["المتقدم/ة رباعيا مع اللقب"]}</TableCell>
                                       </TableRow>
                                   ))}
                               </TableBody>
