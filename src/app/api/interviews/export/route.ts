@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import path from "path";
 import { PDFDocument, rgb } from "pdf-lib";
 import fontkit from '@pdf-lib/fontkit';
 import Database from 'better-sqlite3';
+import path from "path";
 
 const getDbPath = () => path.join(process.cwd(), 'src', 'data', 'educators.db');
 
@@ -44,8 +44,8 @@ export async function GET(req: Request) {
       const fontUrl = 'https://fonts.gstatic.com/s/amiri/v26/J7aRnpd8CGxBHqUwcQ.ttf';
       const fontBytes = await fetch(fontUrl).then(res => res.arrayBuffer());
       
-      // Embed the custom font
-      const font = await pdfDoc.embedFont(fontBytes);
+      // Embed the custom font with subsetting
+      const arabicFont = await pdfDoc.embedFont(fontBytes, { subset: true });
       
       for (const hallNumber in halls) {
         const hall = halls[hallNumber];
@@ -58,32 +58,31 @@ export async function GET(req: Request) {
           const page = pdfDoc.addPage([595.28, 841.89]); // A4 size
           const { width, height } = page.getSize();
           
-          // Basic RTL attempt by placing text on the right.
           const rtlX = width - 50;
 
-          page.drawText(title, { x: rtlX - font.widthOfTextAtSize(title, 18), y: height - 50, size: 18, font, color: rgb(0, 0, 0) });
+          page.drawText(title, { x: rtlX - arabicFont.widthOfTextAtSize(title, 18), y: height - 50, size: 18, font: arabicFont, color: rgb(0, 0, 0) });
           const hallNameText = `القاعة: ${hall.hallName || `Hall ${hallNumber}`}`;
-          page.drawText(hallNameText, { x: rtlX - font.widthOfTextAtSize(hallNameText, 14), y: height - 70, size: 14, font, color: rgb(0, 0, 0) });
+          page.drawText(hallNameText, { x: rtlX - arabicFont.widthOfTextAtSize(hallNameText, 14), y: height - 70, size: 14, font: arabicFont, color: rgb(0, 0, 0) });
 
           let y = height - 100;
           
           // Table Header
-          page.drawText("م", { x: rtlX - 30, y: y, font, size: 10 });
-          page.drawText("اسم المتقدم", { x: rtlX - 250, y: y, font, size: 10 });
-          page.drawText("رقم المتقدم", { x: rtlX - 450, y: y, font, size: 10 });
+          page.drawText("م", { x: rtlX - 30, y: y, font: arabicFont, size: 10 });
+          page.drawText("اسم المتقدم", { x: rtlX - 250, y: y, font: arabicFont, size: 10 });
+          page.drawText("رقم المتقدم", { x: rtlX - 450, y: y, font: arabicFont, size: 10 });
           y -= 20;
 
           for (const [index, applicant] of hall.applicants.entries()) {
             if (y < 40) { // Add new page if content overflows
                 const newPage = pdfDoc.addPage([595.28, 841.89]);
-                newPage.drawText(title + " (تابع)", { x: rtlX - font.widthOfTextAtSize(title + " (تابع)", 18), y: height - 50, size: 18, font, color: rgb(0, 0, 0) });
+                newPage.drawText(title + " (تابع)", { x: rtlX - arabicFont.widthOfTextAtSize(title + " (تابع)", 18), y: height - 50, size: 18, font: arabicFont, color: rgb(0, 0, 0) });
                 y = height - 100;
             }
             if(applicant) {
               const nameText = applicant.applicant_name || '';
-              page.drawText(String(index + 1), { x: rtlX - 30, y, font, size: 10 });
-              page.drawText(nameText, { x: rtlX - 250, y, font, size: 10 });
-              page.drawText(String(applicant.applicant_id), { x: rtlX - 450, y, font, size: 10 });
+              page.drawText(String(index + 1), { x: rtlX - 30, y, font: arabicFont, size: 10 });
+              page.drawText(nameText, { x: rtlX - 250, y, font: arabicFont, size: 10 });
+              page.drawText(String(applicant.applicant_id), { x: rtlX - 450, y, font: arabicFont, size: 10 });
               y -= 20;
             }
           }
