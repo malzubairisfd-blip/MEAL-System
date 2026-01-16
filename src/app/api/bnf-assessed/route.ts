@@ -1,3 +1,4 @@
+
 // src/app/api/bnf-assessed/route.ts
 import { NextResponse } from "next/server";
 import fs from "fs/promises";
@@ -50,7 +51,26 @@ const DB_COLUMNS = [
     "hsbnd_f_name3", "hsbnd_f_name3c", "bnf_name_list", "hsbnd_name_list", "dup_cluster_id2_2", 
     "c_max_weight", "c_min_weight", "c_id_max_weight", "c_id_min_weight", "c_max_pct", "c_min_pct", 
     "c_id_max_pct", "c_id_min_pct", "c_min_proj", "c_max_proj", "c_proj2_cnt", "c_mud2_cnt", 
-    "c_id_min_proj", "c_id_max_proj", "c_id_proj2_cnt", "c_id_mud2_cnt", "pre_classified_result", 
+    "c_id_min_proj", "c_id_max_proj", "c_id_proj2_cnt", "c_id_mud2_cnt", 
+    'womanName',
+    'husbandName',
+    'nationalId',
+    'phone',
+    'village',
+    'subdistrict',
+    'children',
+    'beneficiaryId',
+    'avgPairScore',
+    'avgFirstNameScore',
+    'avgFamilyNameScore',
+    'avgAdvancedNameScore',
+    'avgTokenReorderScore',
+    'reasons',
+    'confidenceScore',
+    'avgWomanNameScore',
+    'avgHusbandNameScore',
+    'avgFinalScore',
+    "pre_classified_result", 
     "group_analysis", "womanName_normalized", "husbandName_normalized", "children_normalized", 
     "subdistrict_normalized", "village_normalized", "parts", "husbandParts", "ED_NO", "ED_ID", "EC_ID", 
     "PC_ID", "ED_NAME", "EC_NAME", "PC_NAME", "SRVY_HH_ID_2", "CANDID_SER_NO", "WOMAN_ID", 
@@ -367,6 +387,24 @@ function initializeDatabase(recreate: boolean = false) {
     c_id_max_proj REAL,
     c_id_proj2_cnt INTEGER,
     c_id_mud2_cnt INTEGER,
+    womanName TEXT,
+    husbandName TEXT,
+    nationalId TEXT,
+    phone TEXT,
+    village TEXT,
+    subdistrict TEXT,
+    children TEXT,
+    beneficiaryId TEXT,
+    avgPairScore REAL,
+    avgFirstNameScore REAL,
+    avgFamilyNameScore REAL,
+    avgAdvancedNameScore REAL,
+    avgTokenReorderScore REAL,
+    reasons TEXT,
+    confidenceScore REAL,
+    avgWomanNameScore REAL,
+    avgHusbandNameScore REAL,
+    avgFinalScore REAL,
     pre_classified_result TEXT,
     group_analysis TEXT,
     womanName_normalized TEXT,
@@ -602,3 +640,5 @@ export async function GET(req: Request) {
         return NextResponse.json({ error: "Failed to fetch assessed data.", details: error.message }, { status: 500 });
     }
 }
+
+    
