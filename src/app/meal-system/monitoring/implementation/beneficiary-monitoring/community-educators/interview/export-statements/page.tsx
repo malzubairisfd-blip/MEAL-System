@@ -13,7 +13,7 @@ import { Loader2, Plus, Download } from "lucide-react";
 
 type Project = { projectId: string; projectName: string };
 type Hall = { hallName: string; hallNumber: number };
-type Applicant = { applicantId: number; name: string };
+type Applicant = { applicant_id: number; applicant_name: string; [key: string]: any };
 
 export default function ExportStatementsPage() {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -42,9 +42,16 @@ export default function ExportStatementsPage() {
       return;
     }
     setLoading(prev => ({...prev, applicants: true}));
-    fetch(`/api/educators?projectId=${projectId}`)
+    fetch(`/api/ed-selection`)
       .then(r => r.json())
-      .then(data => setAccepted(data || []))
+      .then(data => {
+        if(Array.isArray(data)){
+          const projectApplicants = data.filter(r => r.project_id === projectId && r.acceptance_results === 'مقبولة');
+          setAccepted(projectApplicants);
+        } else {
+          setAccepted([]);
+        }
+      })
       .catch(err => toast({ title: "Failed to load applicants", variant: 'destructive'}))
       .finally(() => setLoading(prev => ({...prev, applicants: false})));
   }, [projectId, toast]);
@@ -65,18 +72,24 @@ export default function ExportStatementsPage() {
     }
     setIsLinking(true);
     try {
-      const hallName = halls.find(h => h.hallNumber === selectedHall)?.hallName;
-      await fetch("/api/interviews/link", {
+      const hall = halls.find(h => h.hallNumber === selectedHall);
+      const res = await fetch("/api/interviews/link", {
         method: "POST",
         headers: { 'Content-Type': 'application/json'},
         body: JSON.stringify({
           projectId,
           hallNumber: selectedHall,
-          hallName: hallName,
-          applicants: selectedApplicants,
+          hallName: hall?.hallName || `Hall ${selectedHall}`,
+          applicantIds: selectedApplicants,
         }),
       });
-      toast({ title: "تم الربط بنجاح", description: `تم ربط ${selectedApplicants.length} متقدم بالقاعة ${hallName}`});
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Failed to link applicants.");
+      }
+
+      toast({ title: "تم الربط بنجاح", description: `تم ربط ${selectedApplicants.length} متقدم بالقاعة ${hall?.hallName}`});
       setSelectedApplicants([]); // Clear selection after linking
     } catch(err: any) {
         toast({ title: "Linking failed", description: err.message, variant: "destructive" });
@@ -158,15 +171,15 @@ export default function ExportStatementsPage() {
                   </TableHeader>
                   <TableBody>
                     {accepted.map(a => (
-                      <TableRow key={a.applicantId}>
+                      <TableRow key={a.applicant_id}>
                         <TableCell>
                           <Checkbox
-                            checked={selectedApplicants.includes(a.applicantId)}
-                            onCheckedChange={(checked) => handleSelectApplicant(a.applicantId, checked)}
+                            checked={selectedApplicants.includes(a.applicant_id)}
+                            onCheckedChange={(checked) => handleSelectApplicant(a.applicant_id, checked)}
                           />
                         </TableCell>
-                        <TableCell>{a.name}</TableCell>
-                        <TableCell>{a.applicantId}</TableCell>
+                        <TableCell>{a.applicant_name}</TableCell>
+                        <TableCell>{a.applicant_id}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

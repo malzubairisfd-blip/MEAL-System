@@ -1,57 +1,44 @@
 import { NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
+import Database from 'better-sqlite3';
 
-const getInterviewsDbPath = () => path.join(process.cwd(), 'src', 'data', 'interviews.json');
 const getDataPath = () => path.join(process.cwd(), 'src', 'data');
+const getDbPath = () => path.join(getDataPath(), 'educators.db');
 
-
-async function readDb() {
-    try {
-        const content = await fs.readFile(getInterviewsDbPath(), 'utf8');
-        return JSON.parse(content);
-    } catch(e) {
-        // if file does not exist or is empty
-        return {};
-    }
-}
-
-async function writeDb(data: any) {
+async function ensureDb() {
     await fs.mkdir(getDataPath(), { recursive: true });
-    await fs.writeFile(getInterviewsDbPath(), JSON.stringify(data, null, 2));
+    // Check if db exists, if not, better-sqlite3 will create it.
 }
-
 
 export async function POST(req: Request) {
   try {
-      const body = await req.json();
-      const { projectId, hallNumber, hallName, applicants } = body;
+      await ensureDb();
+      const db = new Database(getDbPath());
 
-      if (!projectId || !hallNumber || !Array.isArray(applicants)) {
-          return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+      const body = await req.json();
+      const { projectId, hallNumber, hallName, applicantIds } = body;
+
+      if (!projectId || !hallNumber || !hallName || !Array.isArray(applicantIds) || applicantIds.length === 0) {
+          return NextResponse.json({ error: "Invalid request body. projectId, hallNumber, hallName, and a non-empty array of applicantIds are required." }, { status: 400 });
       }
 
-      const db = await readDb();
-
-      db[projectId] ??= { halls: [] };
-
-      let hall = db[projectId].halls.find(
-        (h: any) => h.hallNumber === hallNumber
+      const updateStmt = db.prepare(
+        'UPDATE educators SET interview_hall_no = ?, interview_hall_name = ? WHERE applicant_id = ? AND project_id = ?'
       );
 
-      if (!hall) {
-        hall = { hallName: hallName || `Hall ${hallNumber}`, hallNumber: hallNumber, applicants: [] };
-        db[projectId].halls.push(hall);
-      }
+      const updateMany = db.transaction((applicants) => {
+        for (const applicantId of applicants) {
+          updateStmt.run(hallNumber, hallName, applicantId, projectId);
+        }
+      });
+
+      updateMany(applicantIds);
       
-      const existingApplicants = new Set(hall.applicants);
-      applicants.forEach(appId => existingApplicants.add(appId));
-      hall.applicants = Array.from(existingApplicants);
-      
-      await writeDb(db);
-      return NextResponse.json({ ok: true });
+      db.close();
+      return NextResponse.json({ ok: true, message: `${applicantIds.length} applicants assigned to hall ${hallName}.` });
   } catch (error: any) {
       console.error("Link API Error:", error);
-      return NextResponse.json({ error: "Failed to link applicants." }, { status: 500 });
+      return NextResponse.json({ error: "Failed to link applicants to hall.", details: error.message }, { status: 500 });
   }
 }
