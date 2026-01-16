@@ -1,13 +1,12 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FileDown, Loader2 } from 'lucide-react';
 import jsPDF from "jspdf";
 import "jspdf-autotable";
-import { amiriFontBase64 } from "@/lib/amiri-font";
 import { useToast } from "@/hooks/use-toast";
 
 interface Project {
@@ -23,6 +22,18 @@ interface Applicant {
   interview_hall_no: number;
   interview_hall_name: string;
 }
+
+// Helper function to convert ArrayBuffer to Base64
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+    let binary = '';
+    const bytes = new Uint8Array(buffer);
+    const len = bytes.byteLength;
+    for (let i = 0; i < len; i++) {
+        binary += String.fromCharCode(bytes[i]);
+    }
+    return window.btoa(binary);
+}
+
 
 export default function ExportExactPDFPage() {
   const { toast } = useToast();
@@ -68,23 +79,27 @@ export default function ExportExactPDFPage() {
     fetchApplicants();
   }, [selectedProjectId, toast]);
 
-  const generateExactPDF = () => {
+  const generateExactPDF = async () => {
     if (applicants.length === 0) {
         toast({ title: "No Data", description: "No applicants with assigned halls for the selected project.", variant: "destructive"});
         return;
     }
-
     setLoading(true);
     try {
       const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+
+      // --- FETCH AND LOAD FONT ---
+      const fontResponse = await fetch('/fonts/Amiri-Regular.ttf');
+      if (!fontResponse.ok) throw new Error('Failed to fetch font file.');
+      const fontArrayBuffer = await fontResponse.arrayBuffer();
+      const fontBase64 = arrayBufferToBase64(fontArrayBuffer);
       
-      const fontData = amiriFontBase64.replace(/^data:font\/ttf;base64,/, "").replace(/\s/g, "");
-      doc.addFileToVFS("Amiri-Regular.ttf", fontData);
+      doc.addFileToVFS("Amiri-Regular.ttf", fontBase64);
       doc.addFont("Amiri-Regular.ttf", "Amiri", "normal");
       doc.setFont("Amiri");
 
       const pageWidth = doc.internal.pageSize.getWidth();
-
+      
       const groupedByHall = applicants.reduce((acc, app) => {
         const hallNum = app.interview_hall_no || 0;
         if (!acc[hallNum]) {
@@ -94,17 +109,17 @@ export default function ExportExactPDFPage() {
         return acc;
       }, {} as Record<number, { hallName: string, applicants: Applicant[] }>);
 
-
       Object.entries(groupedByHall).forEach(([hallNumber, hallData], hallIndex) => {
           if (hallIndex > 0) {
               doc.addPage();
           }
-          
-          // --- HEADER ---
+
+          // --- HEADER TEXT ---
           doc.setFontSize(10);
           doc.setTextColor(0, 0, 0);
-          doc.text("الصندوق الاجتماعي للتنمية", pageWidth - 15, 10, { align: 'right' });
-          doc.text("برنامج التحويلات النقدية المشروطة في التغذية", pageWidth - 15, 15, { align: 'right' });
+          const headerTextX = pageWidth - 15;
+          doc.text("الصندوق الاجتماعي للتنمية", headerTextX, 10, { align: 'right' });
+          doc.text("برنامج التحويلات النقدية المشروطة في التغذية", headerTextX, 15, { align: 'right' });
 
           // --- LOGO ---
           const logoX = 15, logoY = 10;
@@ -160,7 +175,7 @@ export default function ExportExactPDFPage() {
           doc.text("الاسم:", pageWidth - 20, finalY, { align: 'right' });
           doc.text("التوقيع:", pageWidth - 20, finalY + 10, { align: 'right' });
       });
-
+      
       doc.save("Interview_Scores_Exact_Replica.pdf");
 
     } catch (error) {
@@ -172,7 +187,7 @@ export default function ExportExactPDFPage() {
   };
 
   return (
-    <div className="space-y-6">
+     <div className="space-y-6">
       <Card>
         <CardHeader>
           <CardTitle>Export Interview Sheets</CardTitle>
