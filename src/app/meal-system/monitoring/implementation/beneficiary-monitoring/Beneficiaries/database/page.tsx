@@ -10,7 +10,6 @@ import type { RecordRow } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Progress } from "@/components/ui/progress";
@@ -23,6 +22,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 
 interface Project {
@@ -66,26 +75,26 @@ const DB_COLUMNS = [
     "calc_hsbnd_1name", "calc_hsbnd_2name", "calc_hsbnd_3name", "calc_hsbnd_4name", "calc_hsbnd_5name", 
     "cbnf_name", "chsbnd_name", "n_child_list", "b_1name", "b_2name", "b_3name", "b_4name", 
     "b_5name", "h_1name", "h_2name", "h_3name", "h_4name", "h_5name", "child_list", "bnf_name_2", 
-    "hsbnd_name_2", "bnf_name2", "bnf_name2b", "bnf_name2c", "bnf_name3", "bnf_name3b", "bnf_name3c", 
-    "bnf_name3d", "bnf_name4", "bnf_name4c", "bnf_name4b", "bnf_f_name4", "bnf_f_name3", 
-    "bnf_f_name3c", "hsbnd_name2", "hsbnd_name2b", "hsbnd_name2c", "hsbnd_name3", "hsbnd_name3b", 
-    "hsbnd_name3c", "hsbnd_name3d", "hsbnd_name4", "hsbnd_name4c", "hsbnd_name4b", "hsbnd_f_name4", 
-    "hsbnd_f_name3", "hsbnd_f_name3c", "bnf_name_list", "hsbnd_name_list", "dup_cluster_id2_2", 
-    "c_max_weight", "c_min_weight", "c_id_max_weight", "c_id_min_weight", "c_max_pct", "c_min_pct", 
-    "c_id_max_pct", "c_id_min_pct", "c_min_proj", "c_max_proj", "c_proj2_cnt", "c_mud2_cnt", 
-    "c_id_min_proj", "c_id_max_proj", "c_id_proj2_cnt", "c_id_mud2_cnt", "pre_classified_result", 
-    "group_analysis", "womanName_normalized", "husbandName_normalized", "children_normalized", 
-    "subdistrict_normalized", "village_normalized", "parts", "husbandParts", "ED_NO", "ED_ID", "EC_ID", 
-    "PC_ID", "ED_NAME", "EC_NAME", "PC_NAME", "SRVY_HH_ID_2", "CANDID_SER_NO", "WOMAN_ID", 
-    "source_ID_2", "BENEF_ID_2", "BENEF_NO", "HH_NAME_2", "BNF_RELATION_2", "BENEF_NAME_3", 
-    "HUSBAND_NAME_3", "IS_ACTIVE_2", "STATUS_2", "QUAL_STATUS", "STATUS_DESC", "QUAL_STATUS_DESC", 
-    "VERIFY_STATUS", "VERIFY_NOTES", "VERIFY_REASON", "VERIFY_DATE", "REG_STATUS", "REG_FORM_DATE_2", 
-    "REG_NOTES", "TOTAL_CHILD_COUNT", "MALE_CHILD_COUNT", "FEMALE_CHILD_COUNT", "LOC_ID_2", 
-    "LOC_NAME", "ID_CARD_TYPE_2", "ID_CARD_TYPE_DESC", "ID_CARD_NO_2", "AGE_YEARS_2", "ADDRESS", 
-    "PHONE_NO_2", "IS_TERMINATED", "TERM_DATE", "TERM_REASON_2", "TERM_NOTES", "NOTES_2", 
-    "PC_FAC_ID", "EC_FAC_ID", "BENEF_CLASS", "BENEF_CLASS_DESC_2", "OLD_BNF_NAME_2", 
-    "OLD_HSBND_NAME_2", "OLD_PHONE_NO", "OLD_ID_CARD_NO", "enrollment_modification_type", 
-    "eligible_woman_modify_type", "eligible_woman_name_correction", 
+    "hsbnd_name_2", "bnf_name2", "bnf_name2b", "bnf_name2c", "bnf_name3", "bnf_name3b", 
+    "bnf_name3c", "bnf_name3d", "bnf_name4", "bnf_name4c", "bnf_name4b", "bnf_f_name4", 
+    "bnf_f_name3", "bnf_f_name3c", "hsbnd_name2", "hsbnd_name2b", "hsbnd_name2c", "hsbnd_name3", 
+    "hsbnd_name3b", "hsbnd_name3c", "hsbnd_name3d", "hsbnd_name4", "hsbnd_name4c", "hsbnd_name4b", 
+    "hsbnd_f_name4", "hsbnd_f_name3", "hsbnd_f_name3c", "bnf_name_list", "hsbnd_name_list", 
+    "dup_cluster_id2_2", "c_max_weight", "c_min_weight", "c_id_max_weight", "c_id_min_weight", 
+    "c_max_pct", "c_min_pct", "c_id_max_pct", "c_id_min_pct", "c_min_proj", "c_max_proj", 
+    "c_proj2_cnt", "c_mud2_cnt", "c_id_min_proj", "c_id_max_proj", "c_id_proj2_cnt", "c_id_mud2_cnt", 
+    "pre_classified_result", "group_analysis", "womanName_normalized", "husbandName_normalized", 
+    "children_normalized", "subdistrict_normalized", "village_normalized", "parts", "husbandParts", 
+    "ED_NO", "ED_ID", "EC_ID", "PC_ID", "ED_NAME", "EC_NAME", "PC_NAME", "SRVY_HH_ID_2", 
+    "CANDID_SER_NO", "WOMAN_ID", "source_ID_2", "BENEF_ID_2", "BENEF_NO", "HH_NAME_2", 
+    "BNF_RELATION_2", "BENEF_NAME_3", "HUSBAND_NAME_3", "IS_ACTIVE_2", "STATUS_2", "QUAL_STATUS", 
+    "STATUS_DESC", "QUAL_STATUS_DESC", "VERIFY_STATUS", "VERIFY_NOTES", "VERIFY_REASON", "VERIFY_DATE", 
+    "REG_STATUS", "REG_FORM_DATE_2", "REG_NOTES", "TOTAL_CHILD_COUNT", "MALE_CHILD_COUNT", 
+    "FEMALE_CHILD_COUNT", "LOC_ID_2", "LOC_NAME", "ID_CARD_TYPE_2", "ID_CARD_TYPE_DESC", 
+    "ID_CARD_NO_2", "AGE_YEARS_2", "ADDRESS", "PHONE_NO_2", "IS_TERMINATED", "TERM_DATE", 
+    "TERM_REASON_2", "TERM_NOTES", "NOTES_2", "PC_FAC_ID", "EC_FAC_ID", "BENEF_CLASS", 
+    "BENEF_CLASS_DESC_2", "OLD_BNF_NAME_2", "OLD_HSBND_NAME_2", "OLD_PHONE_NO", "OLD_ID_CARD_NO", 
+    "enrollment_modification_type", "eligible_woman_modify_type", "eligible_woman_name_correction", 
     "eligible_woman_phone_correction", "eligible_woman_ID_correction", 
     "eligible_woman_husband_name_correction", "pregnancy_month", 
     "educational_level_of_the_targeted_woman", "new_bnf_name", 
@@ -150,13 +159,14 @@ export default function BeneficiaryDatabasePage() {
   const [loading, setLoading] = useState({ projects: true, cache: false, saving: false });
   const [cacheData, setCacheData] = useState<any>(null);
   
-  // Mapping state
   const [uiColumns, setUiColumns] = useState<string[]>([]);
   const [dbColumns] = useState<string[]>(DB_COLUMNS);
   const [columnMapping, setColumnMapping] = useState<Map<string, string>>(new Map());
   const [manualMapping, setManualMapping] = useState({ ui: '', db: '' });
 
   const [progress, setProgress] = useState(0);
+  const [duplicateDialog, setDuplicateDialog] = useState({ isOpen: false, duplicates: [], nonDuplicates: [] });
+  const [saveStats, setSaveStats] = useState({ saved: 0, skipped: 0, total: 0 });
   
   const isMappingComplete = useMemo(() => uiColumns.length > 0 && uiColumns.every(col => columnMapping.has(col)), [uiColumns, columnMapping]);
   const unmappedUiColumns = useMemo(() => uiColumns.filter(col => !columnMapping.has(col)), [uiColumns, columnMapping]);
@@ -188,6 +198,7 @@ export default function BeneficiaryDatabasePage() {
     setUiColumns([]);
     setColumnMapping(new Map());
     setManualMapping({ ui: '', db: '' });
+    setSaveStats({ saved: 0, skipped: 0, total: 0 });
 
     if (!projectId) return;
 
@@ -245,21 +256,16 @@ export default function BeneficiaryDatabasePage() {
       setManualMapping({ ui: '', db: '' });
   };
   
-
-  const handleSaveToDatabase = async () => {
-      if (!selectedProjectId || !cacheData || !isMappingComplete) {
-          toast({ title: "Incomplete Selection", description: "Please select a project and ensure all columns are mapped.", variant: "destructive" });
-          return;
-      }
-
+  const executeSave = async (recordsToSave: any[], isOverwrite: boolean) => {
       setLoading(prev => ({ ...prev, saving: true }));
       setProgress(0);
+      setSaveStats({ saved: 0, skipped: 0, total: 0 });
 
       try {
         const project = projects.find(p => p.projectId === selectedProjectId);
         if (!project) throw new Error("Selected project not found.");
         
-        const dataToSave = cacheData.rows.map((row: any) => {
+        const dataToSave = recordsToSave.map((row: any) => {
             const newRecord: any = {};
             for (const [uiCol, dbCol] of columnMapping.entries()) {
                 if(row[uiCol] !== undefined) {
@@ -272,21 +278,22 @@ export default function BeneficiaryDatabasePage() {
             return newRecord;
         });
         
-        const payload = {
-            projectName: project.projectName,
-            processedAt: new Date().toISOString(),
-            results: dataToSave,
+        const CHUNK_SIZE = 100;
+        const totalRecordsToSave = dataToSave.length;
+
+        if (totalRecordsToSave === 0) {
+            toast({ title: "No Records to Save", description: "All records were skipped." });
+            setSaveStats({ saved: 0, skipped: cacheData.rows.length, total: cacheData.rows.length });
+            setLoading(prev => ({ ...prev, saving: false }));
+            return;
         }
 
-        const CHUNK_SIZE = 100;
-        const totalRecords = dataToSave.length;
-
-        for (let i = 0; i < totalRecords; i += CHUNK_SIZE) {
-            const chunk = payload.results.slice(i, i + CHUNK_SIZE);
-            const chunkPayload = { ...payload, results: chunk };
+        for (let i = 0; i < totalRecordsToSave; i += CHUNK_SIZE) {
+            const chunk = dataToSave.slice(i, i + CHUNK_SIZE);
+            const chunkPayload = { projectName: project.projectName, processedAt: new Date().toISOString(), results: chunk };
 
             const isFirstChunk = i === 0;
-            const url = isFirstChunk ? '/api/bnf-assessed?init=true' : '/api/bnf-assessed';
+            const url = isFirstChunk && isOverwrite ? '/api/bnf-assessed?init=true' : '/api/bnf-assessed';
 
             const res = await fetch(url, {
                 method: 'POST',
@@ -300,18 +307,76 @@ export default function BeneficiaryDatabasePage() {
             }
 
             await new Promise(resolve => setTimeout(resolve, 50));
-            const currentProgress = Math.round(((i + CHUNK_SIZE) / totalRecords) * 100);
+            const currentProgress = Math.round(((i + CHUNK_SIZE) / totalRecordsToSave) * 100);
             setProgress(Math.min(100, currentProgress));
         }
 
-        toast({ title: "Save Successful", description: `All data for ${project?.projectName} has been saved to bnf-assessed.db.` });
+        toast({ title: "Save Successful", description: `${totalRecordsToSave} records saved for ${project?.projectName}.` });
         setProgress(100);
+        setSaveStats({
+            saved: totalRecordsToSave,
+            skipped: cacheData.rows.length - totalRecordsToSave,
+            total: cacheData.rows.length
+        });
         
       } catch (error: any) {
           toast({ title: "Save Failed", description: error.message, variant: "destructive" });
       } finally {
           setLoading(prev => ({ ...prev, saving: false }));
       }
+  };
+
+
+  const handleSaveToDatabase = async () => {
+      if (!selectedProjectId || !cacheData || !isMappingComplete) {
+          toast({ title: "Incomplete Selection", description: "Please select a project and ensure all columns are mapped.", variant: "destructive" });
+          return;
+      }
+
+      setLoading(prev => ({ ...prev, saving: true }));
+      setProgress(0);
+      setSaveStats({ saved: 0, skipped: 0, total: 0 });
+
+      try {
+        const existingRes = await fetch('/api/bnf-assessed');
+        if (!existingRes.ok) throw new Error("Could not fetch existing records from database.");
+        const existingRecords = await existingRes.json();
+        
+        const uiBeneficiaryIdColumn = 'benef_id'; // This is now hardcoded as per DB schema
+        const mappedUiColumn = Array.from(columnMapping.entries()).find(([uiCol, dbCol]) => dbCol === uiBeneficiaryIdColumn)?.[0];
+
+        if (!mappedUiColumn) {
+          // If benef_id is not mapped, we cannot check for duplicates. Save all as overwrite.
+          await executeSave(cacheData.rows, true);
+          return;
+        }
+
+        const existingBeneficiaryIds = new Set(existingRecords.map((r: any) => r[uiBeneficiaryIdColumn]));
+        
+        const duplicates: any[] = [];
+        const nonDuplicates: any[] = [];
+
+        cacheData.rows.forEach((row: any) => {
+            const newBeneficiaryId = row[mappedUiColumn];
+            if (newBeneficiaryId && existingBeneficiaryIds.has(newBeneficiaryId)) {
+                duplicates.push(row);
+            } else {
+                nonDuplicates.push(row);
+            }
+        });
+
+        if (duplicates.length > 0) {
+            setDuplicateDialog({ isOpen: true, duplicates, nonDuplicates });
+            setLoading(prev => ({...prev, saving: false}));
+        } else {
+            // No duplicates, but this is the first save for this dataset, so overwrite.
+            await executeSave(cacheData.rows, true);
+        }
+
+    } catch (error: any) {
+        toast({ title: "Validation Failed", description: error.message, variant: "destructive" });
+        setLoading(prev => ({ ...prev, saving: false }));
+    }
   };
 
 
@@ -439,6 +504,25 @@ export default function BeneficiaryDatabasePage() {
                             <p className="text-sm text-muted-foreground text-center">{progress}% Complete</p>
                         </div>
                     )}
+                    {progress === 100 && saveStats.total > 0 && (
+                        <Card className="mt-4">
+                            <CardHeader><CardTitle>Save Summary</CardTitle></CardHeader>
+                            <CardContent className="grid grid-cols-3 gap-4">
+                                <div className="text-center p-4 rounded-lg bg-muted">
+                                    <p className="text-sm font-medium text-muted-foreground">Total Records Processed</p>
+                                    <p className="text-2xl font-bold">{saveStats.total}</p>
+                                </div>
+                                <div className="text-center p-4 rounded-lg bg-green-100 dark:bg-green-900/30">
+                                    <p className="text-sm font-medium text-green-700 dark:text-green-300">Records Saved</p>
+                                    <p className="text-2xl font-bold text-green-600 dark:text-green-400">{saveStats.saved}</p>
+                                </div>
+                                <div className="text-center p-4 rounded-lg bg-yellow-100 dark:bg-yellow-900/30">
+                                    <p className="text-sm font-medium text-yellow-700 dark:text-yellow-300">Records Skipped</p>
+                                    <p className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{saveStats.skipped}</p>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
                      {progress === 100 && (
                          <Button onClick={() => router.push('/meal-system/monitoring/implementation/beneficiary-monitoring/Beneficiaries/audit')}>
                             Go to Audit Page <ArrowRight className="ml-2 h-4 w-4"/>
@@ -448,6 +532,32 @@ export default function BeneficiaryDatabasePage() {
             </Card>
         </>
       )}
+
+      <AlertDialog open={duplicateDialog.isOpen} onOpenChange={(isOpen) => setDuplicateDialog(prev => ({...prev, isOpen}))}>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+                <AlertDialogTitle>Duplicate Records Found</AlertDialogTitle>
+                <AlertDialogDescription>
+                    Found {duplicateDialog.duplicates.length} record(s) in your upload that may already exist in the database based on the Beneficiary ID. How would you like to proceed?
+                </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <Button variant="outline" onClick={async () => {
+                    setDuplicateDialog(prev => ({...prev, isOpen: false}));
+                    await executeSave(duplicateDialog.nonDuplicates, false);
+                }}>
+                    Skip Duplicates
+                </Button>
+                <AlertDialogAction onClick={async () => {
+                    setDuplicateDialog(prev => ({...prev, isOpen: false}));
+                    await executeSave(cacheData.rows, true);
+                }}>
+                    Replace Existing
+                </AlertDialogAction>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+    </AlertDialog>
 
     </div>
   );
