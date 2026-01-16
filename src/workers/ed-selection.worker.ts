@@ -220,7 +220,7 @@ self.onmessage = async (event) => {
             results: finalResults,
         };
         
-        postMessage({ type: 'done', data: output });
+        postMessage({ type: 'done', data: { ...output, selectedProjectId } });
 
     } catch (e: any) {
         postMessage({ type: 'error', error: e.message || 'An unknown error occurred in the worker.' });

@@ -1,7 +1,7 @@
 // src/app/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/selection/upload/page.tsx
 "use client";
 
-import React, { useState, useEffect, useMemo, useRef, useCallback, use } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import * as XLSX from 'xlsx';
@@ -62,6 +62,8 @@ const DB_COLUMNS = [
 
 
 const REQUIRED_MAPPING_FIELDS = ["applicant_id"];
+const LOCAL_STORAGE_MAPPING_PREFIX = "educator-mapping-";
+
 
 const SummaryCard = ({ icon, title, value }: { icon: React.ReactNode, title: string, value: string | number }) => (
     <Card>
@@ -112,6 +114,14 @@ export default function EducatorUploadPage() {
         return REQUIRED_MAPPING_FIELDS.every(field => mappedDbCols.has(field));
     }, [columnMapping]);
 
+    // Save mapping to localStorage whenever it changes
+    useEffect(() => {
+        if (columns.length > 0 && columnMapping.size > 0) {
+            const storageKey = `${LOCAL_STORAGE_MAPPING_PREFIX}${columns.join(',')}`;
+            localStorage.setItem(storageKey, JSON.stringify(Object.fromEntries(columnMapping)));
+        }
+    }, [columnMapping, columns]);
+
 
     useEffect(() => {
         const fetchInitialData = async () => {
@@ -146,7 +156,7 @@ export default function EducatorUploadPage() {
                 setWorkerStatus('processed');
                 setProgressInfo({ status: 'processed', progress: 100 });
                 toast({ title: "Processing Complete!", description: `Processed ${data.totalApplicants} applicants. Ready to save.` });
-                handleSaveToDatabase(data.results);
+                handleSaveToDatabase(data.results, data.selectedProjectId);
             } else if (type === 'error') {
                 setWorkerStatus('error');
                 setProgressInfo({ status: 'error', progress: 0 });
@@ -195,10 +205,28 @@ export default function EducatorUploadPage() {
             const json = XLSX.utils.sheet_to_json<any>(sheet, { defval: "" });
             
             rawRowsRef.current = json;
-            setColumns(Object.keys(json[0] || {}));
+            const detectedColumns = Object.keys(json[0] || {});
+            setColumns(detectedColumns);
+
+            // Load saved mapping from local storage
+            const storageKey = `${LOCAL_STORAGE_MAPPING_PREFIX}${detectedColumns.join(',')}`;
+            const savedMapping = localStorage.getItem(storageKey);
+            if(savedMapping) {
+                try {
+                    const parsed = JSON.parse(savedMapping);
+                    setColumnMapping(new Map(Object.entries(parsed)));
+                    toast({ title: "Mapping Loaded", description: "Restored your column mappings for this file structure." });
+                } catch {
+                    // Parsing failed, start fresh
+                    setColumnMapping(new Map());
+                }
+            } else {
+                setColumnMapping(new Map());
+            }
+
         };
         reader.readAsArrayBuffer(file);
-    }, [file, selectedSheet]);
+    }, [file, selectedSheet, toast]);
 
     const handleAutoMatch = () => {
       const newMapping = new Map<string, string>();
@@ -254,7 +282,7 @@ export default function EducatorUploadPage() {
         });
     };
 
-    const handleSaveToDatabase = async (processedRecords: any[]) => {
+    const handleSaveToDatabase = async (processedRecords: any[], projectIdForSave: string) => {
         setProgressInfo({ status: "validating", progress: 0 });
         try {
             const existingRes = await fetch('/api/ed-selection');
@@ -276,10 +304,13 @@ export default function EducatorUploadPage() {
                 }
             });
 
+            const project = projects.find(p => p.projectId === projectIdForSave);
+            if (!project) throw new Error("Selected project not found during save operation.");
+
             if (duplicates.length > 0) {
                 setDuplicateDialog({ isOpen: true, duplicates, nonDuplicates });
             } else {
-                await executeSave(processedRecords, false);
+                await executeSave(processedRecords, false, project);
             }
 
         } catch (error: any) {
@@ -288,7 +319,7 @@ export default function EducatorUploadPage() {
         }
     };
 
-    const executeSave = async (recordsToSave: any[], isOverwrite: boolean) => {
+    const executeSave = async (recordsToSave: any[], isOverwrite: boolean, project: Project) => {
         setWorkerStatus('saving');
         setProgressInfo({ status: 'saving', progress: 0 });
         const CHUNK_SIZE = 100;
@@ -296,9 +327,6 @@ export default function EducatorUploadPage() {
         const totalInFile = rawRowsRef.current.length;
 
         try {
-            const project = projects.find(p => p.projectId === selectedProjectId);
-            if (!project) throw new Error("Selected project not found.");
-            
             for (let i = 0; i < totalToSave; i += CHUNK_SIZE) {
                 const chunk = recordsToSave.slice(i, i + CHUNK_SIZE);
                 
@@ -475,13 +503,15 @@ export default function EducatorUploadPage() {
                         <AlertDialogCancel onClick={() => setWorkerStatus('processed')}>Cancel</AlertDialogCancel>
                         <Button variant="outline" onClick={async () => {
                             setDuplicateDialog({ isOpen: false, duplicates: [], nonDuplicates: [] });
-                            await executeSave(duplicateDialog.nonDuplicates, false);
+                            const project = projects.find(p => p.projectId === selectedProjectId);
+                            if (project) await executeSave(duplicateDialog.nonDuplicates, false, project);
                         }}>
                             Skip Duplicates
                         </Button>
                         <AlertDialogAction onClick={async () => {
                             setDuplicateDialog({ isOpen: false, duplicates: [], nonDuplicates: [] });
-                            await executeSave([...duplicateDialog.nonDuplicates, ...duplicateDialog.duplicates], true);
+                            const project = projects.find(p => p.projectId === selectedProjectId);
+                            if (project) await executeSave([...duplicateDialog.nonDuplicates, ...duplicateDialog.duplicates], true, project);
                         }}>
                             Replace Existing
                         </AlertDialogAction>
