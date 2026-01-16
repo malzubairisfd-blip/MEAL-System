@@ -3,6 +3,7 @@ import { PDFDocument, rgb } from "pdf-lib";
 import fontkit from '@pdf-lib/fontkit';
 import Database from 'better-sqlite3';
 import path from "path";
+import fs from "fs";
 
 const getDbPath = () => path.join(process.cwd(), 'src', 'data', 'educators.db');
 
@@ -40,11 +41,8 @@ export async function GET(req: Request) {
       // Register fontkit
       pdfDoc.registerFontkit(fontkit);
 
-      // Fetch a font that supports Arabic characters - Noto Naskh Arabic
-      const fontUrl = 'https://fonts.gstatic.com/s/notonaskharabic/v17/o-0NIpQlx3QUlC5SYVw-txUjZQ44iA.ttf';
-      const fontBytes = await fetch(fontUrl).then(res => res.arrayBuffer());
-      
-      // Embed the custom font with subsetting
+      const fontPath = path.join(process.cwd(), "public/fonts/NotoNaskhArabic-Regular.ttf");
+      const fontBytes = fs.readFileSync(fontPath);
       const arabicFont = await pdfDoc.embedFont(fontBytes, { subset: true });
       
       for (const hallNumber in halls) {
