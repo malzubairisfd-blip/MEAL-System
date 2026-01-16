@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import fs from "fs/promises";
 import path from "path";
-import { PDFDocument, StandardFonts, rgb, PDFFont } from "pdf-lib";
+import { PDFDocument, rgb } from "pdf-lib";
+import fontkit from '@pdf-lib/fontkit';
 import Database from 'better-sqlite3';
 
 const getDbPath = () => path.join(process.cwd(), 'src', 'data', 'educators.db');
@@ -36,9 +36,16 @@ export async function GET(req: Request) {
       });
 
       const pdfDoc = await PDFDocument.create();
-      // Note: StandardFonts.Helvetica does not support Arabic.
-      // For proper rendering, a font that supports Arabic script should be embedded.
-      const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+      
+      // Register fontkit
+      pdfDoc.registerFontkit(fontkit);
+
+      // Fetch a font that supports Arabic characters
+      const fontUrl = 'https://fonts.gstatic.com/s/amiri/v26/J7aRnpd8CGxBHqUwcQ.ttf';
+      const fontBytes = await fetch(fontUrl).then(res => res.arrayBuffer());
+      
+      // Embed the custom font
+      const font = await pdfDoc.embedFont(fontBytes);
       
       for (const hallNumber in halls) {
         const hall = halls[hallNumber];
