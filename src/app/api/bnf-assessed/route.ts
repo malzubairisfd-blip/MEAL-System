@@ -8,7 +8,7 @@ const getDataPath = () => path.join(process.cwd(), 'src/data');
 const getDbPath = () => path.join(getDataPath(), 'bnf-assessed.db');
 
 const DB_COLUMNS = [
-    "internalId", "project_id", "project_name", "Generated_Cluster_ID", "Size", "Flag", "Max_PairScore", 
+    "id", "project_id", "project_name", "Generated_Cluster_ID", "Size", "Flag", "Max_PairScore", 
     "pairScore", "nameScore", "husbandScore", "childrenScore", "idScore", "phoneScore", 
     "locationScore", "groupDecision", "recordDecision", "decisionReason", "s", "cluster_id", 
     "dup_cluster_id2", "eq_clusters", "dup_flag2", "new_dup_flag1", "dup_flag", "cluster_size", 
@@ -66,7 +66,8 @@ const DB_COLUMNS = [
     "eligible_woman_phone_correction", "eligible_woman_ID_correction", 
     "eligible_woman_husband_name_correction", "pregnancy_month", 
     "educational_level_of_the_targeted_woman", "new_bnf_name", 
-    "the_corrected_part_of_the_targets_name", "corrected_part_of_the_targets_namefirst_name", 
+    "the_corrected_part_of_the_targets_name", 
+    "corrected_part_of_the_targets_namefirst_name", 
     "the_corrected_part_of_the_targets_namefathers_name", 
     "the_corrected_part_of_the_targets_namegrandfathers_name", 
     "corrected_part_of_the_targets_namefourth_name", "corrected_part_of_the_targets_nametitle", 
@@ -96,8 +97,9 @@ const DB_COLUMNS = [
     "title_correction_14", "hsbnd_1name_flag", "hsbnd_2name_flag", "hsbnd_3name_flag", 
     "hsbnd_4name_flag", "hsbnd_5name_flag", "hsbnd_1name_is_valid", "hsbnd_2name_is_valid", 
     "hsbnd_3name_is_valid", "hsbnd_4name_is_valid", "hsbnd_5name_is_valid", "hsbnd_1name_valid_note", 
-    "hsbnd_2name_valid_note", "hsbnd_3name_valid_note", "hsbnd_4name_valid_note", 
-    "hsbnd_5name_valid_note", "reference_under_which_the_name_was_corrected_16", 
+    "hsbnd_2name_valid_note", "hsbnd_3name_valid_note", 
+    "hsbnd_4name_valid_note", "hsbnd_5name_valid_note", 
+    "reference_under_which_the_name_was_corrected_16", 
     "reference_under_which_the_namepersonal_ID_card_correction_was_made_17", 
     "reference_under_which_the_namefamily_card_correction_was_made_18", 
     "reference_under_which_the_namepassport_correction_was_made_19", 
@@ -111,19 +113,21 @@ const DB_COLUMNS = [
     "ID_card_type_3", "other_determines", "ID_card_number", "day_of_signing_the_form", 
     "month", "the_reason_for_not_joining_the_project_is_stated", "other_things_to_mention", 
     "do_you_want_to_repackage_the_beneficiary_for_another_educator", 
-    "please_select_the_alternative_educator", "the_name_of_the_new_intellectual", "comments"
+    "please_select_the_alternative_educator", "the_name_of_the_new_intellectual", "comments",
+    "internalId"
 ];
 
 
 // Function to initialize the database and create tables if they don't exist
-function initializeDatabase() {
+function initializeDatabase(recreate: boolean = false) {
     const db = new Database(getDbPath());
     
-    // Drop the table if it exists to ensure it's empty
-    db.exec('DROP TABLE IF EXISTS assessed_data');
+    if (recreate) {
+        db.exec('DROP TABLE IF EXISTS assessed_data');
+    }
 
     const createTableStmt = `
-        CREATE TABLE assessed_data (
+        CREATE TABLE IF NOT EXISTS assessed_data (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     project_id TEXT,
     project_name TEXT,
@@ -532,28 +536,35 @@ function initializeDatabase() {
 
 
 export async function POST(req: Request) {
+    const { searchParams } = new URL(req.url);
+    const init = searchParams.get('init') === 'true';
+
     try {
         await fs.mkdir(getDataPath(), { recursive: true });
-        const db = initializeDatabase();
+        const db = initializeDatabase(init);
         
         const body = await req.json();
         const { projectName, processedAt, results } = body;
 
-        if (!projectName || !Array.isArray(results)) {
-            return NextResponse.json({ error: "Invalid payload: projectName and a 'results' array are required." }, { status: 400 });
+        if (!Array.isArray(results) || results.length === 0) {
+            return NextResponse.json({ message: "No records to insert." }, { status: 200 });
         }
         
-        const columnsWithData = [...DB_COLUMNS, 'data'];
-        const columnsToInsert = columnsWithData.join(', ');
-        const placeholders = columnsWithData.map(() => '?').join(', ');
-        const insert = db.prepare(`INSERT INTO assessed_data (${columnsToInsert}) VALUES (${placeholders})`);
+        const recordColumns = Object.keys(results[0]).map(key => key === '_id' ? 'internalId' : key);
+        const insertColumns = recordColumns.filter(col => DB_COLUMNS.includes(col));
+
+        if (insertColumns.length === 0) {
+            db.close();
+            return NextResponse.json({ message: "No valid columns to insert." }, { status: 400 });
+        }
+        
+        const columnsString = insertColumns.join(', ');
+        const placeholders = insertColumns.map(() => '?').join(', ');
+        const insert = db.prepare(`INSERT INTO assessed_data (${columnsString}) VALUES (${placeholders})`);
         
         const insertMany = db.transaction((records) => {
             for (const record of records) {
-                const values = columnsWithData.map(col => {
-                    if (col === 'data') return JSON.stringify(record); // Special case for the JSON column
-                    return record[col] ?? null;
-                });
+                const values = insertColumns.map(col => record[col === 'internalId' ? '_id' : col] ?? null);
                 insert.run(...values);
             }
         });
