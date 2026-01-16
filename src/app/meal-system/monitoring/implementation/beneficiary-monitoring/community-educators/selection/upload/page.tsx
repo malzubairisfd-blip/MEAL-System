@@ -486,6 +486,22 @@ export default function EducatorUploadPage() {
                 </CardContent>
             </Card>
 
+             {results && (
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Processing Results</CardTitle>
+                        <CardDescription>
+                            The selection process is complete. Review the summary below and proceed to the database page to see the saved records.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <SummaryCard icon={<Users />} title="Total Applicants Processed" value={results.totalApplicants} />
+                        <SummaryCard icon={<UserCheck className="text-green-500"/>} title="Accepted Applicants" value={results.totalAccepted} />
+                        <SummaryCard icon={<UserX className="text-red-500"/>} title="Unaccepted Applicants" value={results.totalUnaccepted} />
+                    </CardContent>
+                </Card>
+            )}
+
             {saveStats.total > 0 && (
                 <Card>
                     <CardHeader>
