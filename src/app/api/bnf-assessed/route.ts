@@ -51,7 +51,7 @@ const DB_COLUMNS = [
     "hsbnd_f_name3", "hsbnd_f_name3c", "bnf_name_list", "hsbnd_name_list", "dup_cluster_id2_2", 
     "c_max_weight", "c_min_weight", "c_id_max_weight", "c_id_min_weight", "c_max_pct", "c_min_pct", 
     "c_id_max_pct", "c_id_min_pct", "c_min_proj", "c_max_proj", "c_proj2_cnt", "c_mud2_cnt", 
-    "c_id_min_proj", "c_id_max_proj", "c_id_proj2_cnt", "c_id_mud2_cnt", 
+    "c_id_min_proj", "c_id_max_proj", "c_id_proj2_cnt", "c_id_mud2_cnt",
     'womanName',
     'husbandName',
     'nationalId',
@@ -70,8 +70,7 @@ const DB_COLUMNS = [
     'avgWomanNameScore',
     'avgHusbandNameScore',
     'avgFinalScore',
-    "pre_classified_result", 
-    "group_analysis", "womanName_normalized", "husbandName_normalized", "children_normalized", 
+    "pre_classified_result", "group_analysis", "womanName_normalized", "husbandName_normalized", "children_normalized", 
     "subdistrict_normalized", "village_normalized", "parts", "husbandParts", "ED_NO", "ED_ID", "EC_ID", 
     "PC_ID", "ED_NAME", "EC_NAME", "PC_NAME", "SRVY_HH_ID_2", "CANDID_SER_NO", "WOMAN_ID", 
     "source_ID_2", "BENEF_ID_2", "BENEF_NO", "HH_NAME_2", "BNF_RELATION_2", "BENEF_NAME_3", 
@@ -134,7 +133,8 @@ const DB_COLUMNS = [
     "month", "the_reason_for_not_joining_the_project_is_stated", "other_things_to_mention", 
     "do_you_want_to_repackage_the_beneficiary_for_another_educator", 
     "please_select_the_alternative_educator", "the_name_of_the_new_intellectual", "comments",
-    "internalId"
+    "internalId",
+    "data"
 ];
 
 
@@ -389,8 +389,8 @@ function initializeDatabase(recreate: boolean = false) {
     c_id_mud2_cnt INTEGER,
     womanName TEXT,
     husbandName TEXT,
-    nationalId TEXT,
-    phone TEXT,
+    nationalId INTEGER,
+    phone INTEGER,
     village TEXT,
     subdistrict TEXT,
     children TEXT,
@@ -640,5 +640,3 @@ export async function GET(req: Request) {
         return NextResponse.json({ error: "Failed to fetch assessed data.", details: error.message }, { status: 500 });
     }
 }
-
-    
