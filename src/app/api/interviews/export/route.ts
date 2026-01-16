@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
-import { PDFDocument, rgb } from "pdf-lib";
-import fontkit from '@pdf-lib/fontkit';
+import jsPDF from "jspdf";
+import fontkit from '@pdf-lib/fontkit'
+import QRCode from 'qrcode';
 import Database from 'better-sqlite3';
 import path from "path";
 import fs from "fs";
+import { fixArabicPDFText } from "@/lib/arabic-fixer";
 
 const getDbPath = () => path.join(process.cwd(), 'src', 'data', 'educators.db');
 
@@ -17,7 +19,7 @@ export async function GET(req: Request) {
 
   try {
       const db = new Database(getDbPath(), { fileMustExist: true });
-      const stmt = db.prepare('SELECT applicant_id, applicant_name, interview_hall_no, interview_hall_name FROM educators WHERE project_id = ? AND interview_hall_no IS NOT NULL ORDER BY interview_hall_no, applicant_id');
+      const stmt = db.prepare('SELECT applicant_id, applicant_name, interview_hall_no, interview_hall_name, total_score FROM educators WHERE project_id = ? AND interview_hall_no IS NOT NULL ORDER BY interview_hall_no, applicant_id');
       const applicants = stmt.all(projectId);
       db.close();
 
@@ -35,59 +37,62 @@ export async function GET(req: Request) {
           }
           halls[applicant.interview_hall_no].applicants.push(applicant);
       });
-
-      const pdfDoc = await PDFDocument.create();
       
-      // Register fontkit
-      pdfDoc.registerFontkit(fontkit);
-
-      const fontPath = path.join(process.cwd(), "public/fonts/NotoNaskhArabic-Regular.ttf");
+      // Using jsPDF as per the user's provided examples.
+      const pdf = new jsPDF();
+      
+      // IMPORTANT: The user's code relies on a custom font being available.
+      // We assume 'public/fonts/Amiri-Regular.ttf' exists.
+      const fontPath = path.join(process.cwd(), "public/fonts/Amiri-Regular.ttf");
       const fontBytes = fs.readFileSync(fontPath);
-      const arabicFont = await pdfDoc.embedFont(fontBytes, { subset: true });
-      
+      pdf.addFileToVFS("Amiri-Regular.ttf", fontBytes.toString('base64'));
+      pdf.addFont("Amiri-Regular.ttf", "Amiri", "normal");
+      pdf.setFont("Amiri");
+
+      let isFirstPage = true;
+
       for (const hallNumber in halls) {
         const hall = halls[hallNumber];
         
-        for (const title of [
-          "كشف درجات ممثل الصندوق", "كشف درجات ممثل الصحة",
-          "كشف درجات ممثل المجلس المحلي", "كشف الحضور والغياب",
-          "كشف التواصل", "كشف تعديلات البيانات", "كشف درجات المقابلة",
-        ]) {
-          const page = pdfDoc.addPage([595.28, 841.89]); // A4 size
-          const { width, height } = page.getSize();
-          
-          const rtlX = width - 50;
+        if (!isFirstPage) {
+            pdf.addPage();
+        }
+        isFirstPage = false;
+        
+        const { width, height } = pdf.internal.pageSize;
+        let y = 40;
 
-          page.drawText(title, { x: rtlX - arabicFont.widthOfTextAtSize(title, 18), y: height - 50, size: 18, font: arabicFont, color: rgb(0, 0, 0) });
-          const hallNameText = `القاعة: ${hall.hallName || `Hall ${hallNumber}`}`;
-          page.drawText(hallNameText, { x: rtlX - arabicFont.widthOfTextAtSize(hallNameText, 14), y: height - 70, size: 14, font: arabicFont, color: rgb(0, 0, 0) });
+        // Title
+        pdf.setFontSize(18);
+        const title = fixArabicPDFText(`كشف درجات مقابلة: ${hall.hallName || `Hall ${hallNumber}`}`);
+        pdf.text(title, width - 20, y, { align: "right" });
+        y += 30;
 
-          let y = height - 100;
-          
-          // Table Header
-          page.drawText("م", { x: rtlX - 30, y: y, font: arabicFont, size: 10 });
-          page.drawText("اسم المتقدم", { x: rtlX - 250, y: y, font: arabicFont, size: 10 });
-          page.drawText("رقم المتقدم", { x: rtlX - 450, y: y, font: arabicFont, size: 10 });
-          y -= 20;
-
-          for (const [index, applicant] of hall.applicants.entries()) {
-            if (y < 40) { // Add new page if content overflows
-                const newPage = pdfDoc.addPage([595.28, 841.89]);
-                newPage.drawText(title + " (تابع)", { x: rtlX - arabicFont.widthOfTextAtSize(title + " (تابع)", 18), y: height - 50, size: 18, font: arabicFont, color: rgb(0, 0, 0) });
-                y = height - 100;
+        for (const [index, applicant] of hall.applicants.entries()) {
+            if (y > height - 60) {
+                pdf.addPage();
+                y = 40;
             }
-            if(applicant) {
-              const nameText = applicant.applicant_name || '';
-              page.drawText(String(index + 1), { x: rtlX - 30, y, font: arabicFont, size: 10 });
-              page.drawText(nameText, { x: rtlX - 250, y, font: arabicFont, size: 10 });
-              page.drawText(String(applicant.applicant_id), { x: rtlX - 450, y, font: arabicFont, size: 10 });
-              y -= 20;
-            }
-          }
+
+            // QR Code
+            const qrDataUrl = await QRCode.toDataURL(String(applicant.applicant_id));
+            pdf.addImage(qrDataUrl, 'PNG', 20, y - 12, 25, 25);
+            
+            // Name
+            pdf.setFontSize(12);
+            const nameText = fixArabicPDFText(`${index + 1}. ${applicant.applicant_name}`);
+            pdf.text(nameText, width - 20, y, { align: 'right' });
+            y += 15;
+
+            // Score
+            pdf.setFontSize(11);
+            const scoreText = fixArabicPDFText(`الدرجة: ${applicant.total_score || 'N/A'}`);
+            pdf.text(scoreText, width - 20, y, { align: 'right' });
+            y += 25; // Extra space between entries
         }
       }
 
-      const pdfBytes = await pdfDoc.save();
+      const pdfBytes = pdf.output('arraybuffer');
       return new Response(pdfBytes, {
         headers: {
           "Content-Type": "application/pdf",
