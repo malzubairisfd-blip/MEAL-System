@@ -165,9 +165,32 @@ const DB_COLUMNS = [
     "month", "the_reason_for_not_joining_the_project_is_stated", "other_things_to_mention", 
     "do_you_want_to_repackage_the_beneficiary_for_another_educator", 
     "please_select_the_alternative_educator", "the_name_of_the_new_intellectual", "comments",
-    "internalId",
-    "data"
+    "internalId"
 ];
+
+const enrichRecordsWithClusterData = (data: any) => {
+    if (!data || !data.rows || !data.clusters) {
+        return [];
+    }
+    const { rows: allRecords, clusters } = data;
+    const enrichedRecordData = new Map<string, any>();
+
+    clusters.forEach((cluster: any) => {
+        (cluster.records || []).forEach((record: any) => {
+            if (record._internalId) {
+                enrichedRecordData.set(record._internalId, { ...cluster, ...record });
+            }
+        });
+    });
+
+    return allRecords.map((originalRecord: any) => {
+        const enrichedData = enrichedRecordData.get(originalRecord._internalId);
+        if (enrichedData) {
+            return { ...originalRecord, ...enrichedData };
+        }
+        return originalRecord;
+    });
+};
 
 
 export default function BeneficiaryDatabasePage() {
@@ -279,7 +302,9 @@ export default function BeneficiaryDatabasePage() {
   const executeSave = async (recordsToSave: any[], isOverwrite: boolean) => {
       setLoading(prev => ({ ...prev, saving: true }));
       setProgress(0);
-      setSaveStats({ saved: 0, skipped: 0, total: 0 });
+      
+      const totalRecordsToProcess = cacheData?.rows?.length || 0;
+      setSaveStats({ saved: 0, skipped: 0, total: totalRecordsToProcess });
 
       try {
         const project = projects.find(p => p.projectId === selectedProjectId);
@@ -289,7 +314,11 @@ export default function BeneficiaryDatabasePage() {
             const newRecord: any = {};
             for (const [uiCol, dbCol] of columnMapping.entries()) {
                 if(row[uiCol] !== undefined) {
-                    newRecord[dbCol] = row[uiCol];
+                    if (Array.isArray(row[uiCol])) {
+                        newRecord[dbCol] = row[uiCol].join(', ');
+                    } else {
+                        newRecord[dbCol] = row[uiCol];
+                    }
                 }
             }
             newRecord.internalId = row._internalId; 
@@ -303,7 +332,7 @@ export default function BeneficiaryDatabasePage() {
 
         if (totalRecordsToSave === 0) {
             toast({ title: "No Records to Save", description: "All records were skipped." });
-            setSaveStats({ saved: 0, skipped: cacheData.rows.length, total: cacheData.rows.length });
+            setSaveStats({ saved: 0, skipped: totalRecordsToProcess, total: totalRecordsToProcess });
             setLoading(prev => ({ ...prev, saving: false }));
             return;
         }
@@ -335,8 +364,8 @@ export default function BeneficiaryDatabasePage() {
         setProgress(100);
         setSaveStats({
             saved: totalRecordsToSave,
-            skipped: cacheData.rows.length - totalRecordsToSave,
-            total: cacheData.rows.length
+            skipped: totalRecordsToProcess - totalRecordsToSave,
+            total: totalRecordsToProcess
         });
         
       } catch (error: any) {
@@ -358,27 +387,28 @@ export default function BeneficiaryDatabasePage() {
       setSaveStats({ saved: 0, skipped: 0, total: 0 });
 
       try {
+        const enrichedAllRecords = enrichRecordsWithClusterData(cacheData);
+
         const existingRes = await fetch('/api/bnf-assessed');
         if (!existingRes.ok) throw new Error("Could not fetch existing records from database.");
         const existingRecords = await existingRes.json();
         
-        const uiBeneficiaryIdColumn = 'benef_id'; // This is now hardcoded as per DB schema
+        const uiBeneficiaryIdColumn = 'beneficiaryId';
         const mappedUiColumn = Array.from(columnMapping.entries()).find(([uiCol, dbCol]) => dbCol === uiBeneficiaryIdColumn)?.[0];
 
         if (!mappedUiColumn) {
-          // If benef_id is not mapped, we cannot check for duplicates. Save all as overwrite.
-          await executeSave(cacheData.rows, true);
+          await executeSave(enrichedAllRecords, true);
           return;
         }
 
-        const existingBeneficiaryIds = new Set(existingRecords.map((r: any) => r[uiBeneficiaryIdColumn]));
+        const existingBeneficiaryIds = new Set(existingRecords.map((r: any) => String(r[uiBeneficiaryIdColumn])));
         
         const duplicates: any[] = [];
         const nonDuplicates: any[] = [];
 
-        cacheData.rows.forEach((row: any) => {
+        enrichedAllRecords.forEach((row: any) => {
             const newBeneficiaryId = row[mappedUiColumn];
-            if (newBeneficiaryId && existingBeneficiaryIds.has(newBeneficiaryId)) {
+            if (newBeneficiaryId && existingBeneficiaryIds.has(String(newBeneficiaryId))) {
                 duplicates.push(row);
             } else {
                 nonDuplicates.push(row);
@@ -389,8 +419,7 @@ export default function BeneficiaryDatabasePage() {
             setDuplicateDialog({ isOpen: true, duplicates, nonDuplicates });
             setLoading(prev => ({...prev, saving: false}));
         } else {
-            // No duplicates, but this is the first save for this dataset, so overwrite.
-            await executeSave(cacheData.rows, true);
+            await executeSave(enrichedAllRecords, true);
         }
 
     } catch (error: any) {
@@ -572,7 +601,8 @@ export default function BeneficiaryDatabasePage() {
                 </Button>
                 <AlertDialogAction onClick={async () => {
                     setDuplicateDialog(prev => ({...prev, isOpen: false}));
-                    await executeSave(cacheData.rows, true);
+                    const enrichedRecords = enrichRecordsWithClusterData(cacheData);
+                    await executeSave(enrichedRecords, true);
                 }}>
                     Replace Existing
                 </AlertDialogAction>
@@ -583,4 +613,6 @@ export default function BeneficiaryDatabasePage() {
     </div>
   );
 }
+
+
 
