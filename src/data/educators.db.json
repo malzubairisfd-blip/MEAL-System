@@ -1,0 +1,11 @@
+{
+  "200-23596": {
+    "accepted": [
+      { "applicantId": 101, "name": "فاطمة محمد أحمد" },
+      { "applicantId": 102, "name": "زينب علي صالح" },
+      { "applicantId": 103, "name": "عائشة سالم ناصر" },
+      { "applicantId": 104, "name": "مريم عبدالله حسن" },
+      { "applicantId": 105, "name": "خديجة أحمد عمر" }
+    ]
+  }
+}
