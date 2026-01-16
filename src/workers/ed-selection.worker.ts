@@ -53,13 +53,42 @@ function excelSerialToDate(value: any): Date | null {
 }
 
 
-function processRecords(rows: any[], recipientsDateStr: string) {
+function processRecords(rows: any[], recipientsDateStr: string, projects: any[], locations: any[], selectedProjectId: string) {
   const selectedRecipientsDate = excelSerialToDate(recipientsDateStr);
+  
+  const selectedProject = projects.find(p => p.projectId === selectedProjectId);
 
-  const records = rows.map(r => ({
-    ...r,
-    _nameNorm: normalizeArabicWithCompounds(r.applicant_name),
-  }));
+  // For faster lookups
+  const locationMap = new Map<string, any>();
+  if (locations && Array.isArray(locations)) {
+    locations.forEach(loc => {
+      // Key format: gov_name|mud_name|ozla_name|vill_name
+      const key = `${baseArabicNormalize(loc.gov_name)}|${baseArabicNormalize(loc.mud_name)}|${baseArabicNormalize(loc.ozla_name)}|${baseArabicNormalize(loc.vill_name)}`;
+      locationMap.set(key, loc);
+    });
+  }
+
+  const records = rows.map(r => {
+    // Enrich with project and office data
+    if (selectedProject) {
+        r.project_id = selectedProject.projectId;
+        r.project_name = selectedProject.projectName;
+    }
+    r.office_no = 2;
+    
+    // Enrich with location data
+    const rowLocKey = `${baseArabicNormalize(r.gov_name)}|${baseArabicNormalize(r.mud_name)}|${baseArabicNormalize(r.ozla_name)}|${baseArabicNormalize(r.loc_name)}`;
+    const matchedLoc = locationMap.get(rowLocKey);
+    if(matchedLoc){
+        r.gov_loc_id = matchedLoc.gov_loc_id;
+        r.mud_loc_id = matchedLoc.mud_loc_id;
+        r.ozla_loc_id = matchedLoc.ozla_loc_id;
+        r.loc_id = matchedLoc.vill_loc_id;
+    }
+      
+    r._nameNorm = normalizeArabicWithCompounds(r.applicant_name);
+    return r;
+  });
 
   // --- AGE ---
   records.forEach(r => {
@@ -174,11 +203,11 @@ function processRecords(rows: any[], recipientsDateStr: string) {
 }
 
 self.onmessage = async (event) => {
-    const { rows, recipientsDate } = event.data;
+    const { rows, recipientsDate, projects, locations, selectedProjectId } = event.data;
     try {
         postMessage({ type: 'progress', status: 'processing', progress: 10 });
 
-        const finalResults = processRecords(rows, recipientsDate);
+        const finalResults = processRecords(rows, recipientsDate, projects, locations, selectedProjectId);
 
         postMessage({ type: 'progress', status: 'processing', progress: 90 });
 

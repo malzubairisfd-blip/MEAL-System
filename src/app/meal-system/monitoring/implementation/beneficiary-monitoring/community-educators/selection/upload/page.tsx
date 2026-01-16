@@ -1,7 +1,7 @@
 // src/app/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/selection/upload/page.tsx
 "use client";
 
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback, use } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import * as XLSX from 'xlsx';
@@ -87,6 +87,7 @@ export default function EducatorUploadPage() {
     const [columns, setColumns] = useState<string[]>([]);
     const [columnMapping, setColumnMapping] = useState<Map<string, string>>(new Map());
     const [manualMapping, setManualMapping] = useState({ ui: '', db: '' });
+    const [locations, setLocations] = useState<any[]>([]);
     
     const [recipientsDate, setRecipientsDate] = useState({ day: '', month: '', year: '' });
     
@@ -113,15 +114,24 @@ export default function EducatorUploadPage() {
 
 
     useEffect(() => {
-        const fetchProjects = async () => {
+        const fetchInitialData = async () => {
             try {
-                const res = await fetch('/api/projects');
-                if (res.ok) setProjects(await res.json());
+                const [projRes, locRes] = await Promise.all([
+                    fetch('/api/projects'),
+                    fetch('/api/locations')
+                ]);
+                if (projRes.ok) {
+                    const data = await projRes.json();
+                    setProjects(Array.isArray(data) ? data : []);
+                }
+                if (locRes.ok) {
+                    setLocations(await locRes.json());
+                }
             } catch (error) {
-                toast({ title: "Error", description: "Could not load projects.", variant: "destructive" });
+                toast({ title: "Error", description: "Could not load initial data.", variant: "destructive" });
             }
         };
-        fetchProjects();
+        fetchInitialData();
 
         const worker = new Worker(new URL('@/workers/ed-selection.worker.ts', import.meta.url), { type: 'module' });
         workerRef.current = worker;
@@ -238,6 +248,9 @@ export default function EducatorUploadPage() {
         workerRef.current.postMessage({
             rows: mappedData,
             recipientsDate: `${recipientsDate.year}-${recipientsDate.month}-${recipientsDate.day}`,
+            projects: projects,
+            locations: locations,
+            selectedProjectId: selectedProjectId,
         });
     };
 
