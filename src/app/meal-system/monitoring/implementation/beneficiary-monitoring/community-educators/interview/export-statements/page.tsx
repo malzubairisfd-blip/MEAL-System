@@ -46,7 +46,7 @@ export default function ExportStatementsPage() {
       .then(r => r.json())
       .then(data => {
         if(Array.isArray(data)){
-          const projectApplicants = data.filter(r => r.project_id === projectId && r.acceptance_results === 'مقبولة');
+          const projectApplicants = data.filter(r => r.project_id === projectId && r.acceptance_results === 'مقبولة' && r.interview_hall_no == null);
           setAccepted(projectApplicants);
         } else {
           setAccepted([]);
@@ -90,7 +90,11 @@ export default function ExportStatementsPage() {
       }
 
       toast({ title: "تم الربط بنجاح", description: `تم ربط ${selectedApplicants.length} متقدم بالقاعة ${hall?.hallName}`});
+      
+      // Refresh the local state to remove assigned applicants
+      setAccepted(prev => prev.filter(applicant => !selectedApplicants.includes(applicant.applicant_id)));
       setSelectedApplicants([]); // Clear selection after linking
+
     } catch(err: any) {
         toast({ title: "Linking failed", description: err.message, variant: "destructive" });
     } finally {
