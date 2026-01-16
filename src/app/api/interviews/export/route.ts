@@ -40,8 +40,8 @@ export async function GET(req: Request) {
       // Register fontkit
       pdfDoc.registerFontkit(fontkit);
 
-      // Fetch a font that supports Arabic characters
-      const fontUrl = 'https://fonts.gstatic.com/s/amiri/v26/J7aRnpd8CGxBHqUwcQ.ttf';
+      // Fetch a font that supports Arabic characters - Noto Naskh Arabic
+      const fontUrl = 'https://fonts.gstatic.com/s/notonaskharabic/v17/o-0NIpQlx3QUlC5SYVw-txUjZQ44iA.ttf';
       const fontBytes = await fetch(fontUrl).then(res => res.arrayBuffer());
       
       // Embed the custom font with subsetting
