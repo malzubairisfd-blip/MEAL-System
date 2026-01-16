@@ -1,4 +1,3 @@
-
 // src/app/api/ed-selection/route.ts
 import { NextResponse } from "next/server";
 import fs from "fs/promises";
@@ -39,9 +38,11 @@ const DB_COLUMNS = [
 ];
 
 
-function initializeDatabase() {
+function initializeDatabase(recreate: boolean = false) {
     const db = new Database(getDbPath());
-    db.exec('DROP TABLE IF EXISTS educators');
+    if (recreate) {
+        db.exec('DROP TABLE IF EXISTS educators');
+    }
 
     const createTableStmt = `
         CREATE TABLE IF NOT EXISTS educators (
@@ -232,12 +233,15 @@ function initializeDatabase() {
 
 
 export async function POST(req: Request) {
+    const { searchParams } = new URL(req.url);
+    const init = searchParams.get('init') === 'true';
+
     try {
         await fs.mkdir(getDataPath(), { recursive: true });
-        const db = initializeDatabase();
+        const db = initializeDatabase(init);
         
         const body = await req.json();
-        const { projectName, processedAt, results } = body;
+        const { projectName, results } = body;
 
         if (!projectName || !Array.isArray(results)) {
             return NextResponse.json({ error: "Invalid payload: projectName and results array are required." }, { status: 400 });
@@ -271,7 +275,7 @@ export async function POST(req: Request) {
 export async function GET(req: Request) {
     try {
         await fs.mkdir(getDataPath(), { recursive: true });
-        const db = initializeDatabase();
+        const db = new Database(getDbPath(), { fileMustExist: true });
         
         const stmt = db.prepare('SELECT * FROM educators');
         const rows = stmt.all();
@@ -281,7 +285,6 @@ export async function GET(req: Request) {
         return NextResponse.json(rows);
 
     } catch (error: any) {
-        console.error("[ED_SELECTION_API_GET_ERROR]", error);
         if (error.code === 'SQLITE_CANTOPEN') {
             return NextResponse.json([]);
         }

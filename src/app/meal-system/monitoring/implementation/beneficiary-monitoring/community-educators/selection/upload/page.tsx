@@ -1,4 +1,4 @@
-
+// src/app/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/selection/upload/page.tsx
 "use client";
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
@@ -11,28 +11,57 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Upload, CheckCircle, XCircle, ChevronsUpDown, Users, UserCheck, UserX, ArrowRight } from 'lucide-react';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Loader2, Upload, Users, UserCheck, UserX, Save, FileDown, GitCompareArrows } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface Project {
   projectId: string;
   projectName: string;
 }
 
-const MAPPING_FIELDS = [
-  "applicantName", "husbandName", "phoneNumber", "governorate", "district", "subdistrict", "village",
-  "idType", "idNumber", "idIssueDate", "birthDate", "idIssueLocation",
-  "qualification", "graduationYear", "diplomaStartDate", "diplomaEndDate", "previousExperience", "applicantId"
-] as const;
-type MappingField = typeof MAPPING_FIELDS[number];
+const DB_COLUMNS = [
+  's', 'office_no', 'project_id', 'project_name', 'applicant_id', 'ed_id',
+  'applicant_name', 'applicant_familyname', 'applicant_husbandname',
+  'phone_no1', 'phone_no2', 'phone_no',
+  'gov_loc_id', 'mud_loc_id', 'ozla_loc_id', 'loc_id',
+  'gov_name', 'mud_name', 'ozla_name', 'loc_name', 'mahla_name', 'zoon_no',
+  'social_status', 'birth_date', 'age_years', 'age_days', 'age_rank',
+  'id_type', 'id_no', 'id_issue_date', 'id_issue_location',
+  'applicant_qualification', 'qualification_major', 'graduation_date',
+  'diploma_starting_date', 'diploma_end_date', 'diploma_duration_years', 'diploma_duration_days', 'institution_name',
+  'duplicated_cluster_id', 'duplicated_applicants',
+  'age_per_village_ranking',
+  'qualification_score', 'id_score', 'previous_experience_score', 'total_score',
+  'applcants_relationship', 'interview_hall_no', 'interview_hall_name',
+  'acceptance_results', 'disqualification_reason',
+  'interview_qualification', 'interview_attendance',
+  'sfd_marks', 'health_marks', 'local_community_marks', 'interview_total_marks', 'grand_total_score',
+  'training_qualification', 'training_attendance',
+  'is_active', 'contract_type', 'working_village', 'contract_starting_date', 'contract_end_date', 'contract_duration_months', 'is_spare',
+  'disqualified_reasons', 'is_registered_in_assessment', 'if_no_reason',
+  'bnf_full_name', 'bnf_age', 'bnf_id_type', 'bnf_id_no', 'bnf_ozla_name', 'bnf_vill_name', 'qual_status', 'bnf_husband', 'male_cnt', 'female_cnt', 'child_names', 'bnf_id',
+  'notes',
+  'ec_id', 'ec_name', 'ec_name2', 'ec_loc_id', 'ec_loc_name',
+  'pc_id', 'pc_name',
+  'row_no',
+  'same_ozla', 'x', 'ed_bnf_cnt', 'pc_ed_cnt', 'ec_ed_cnt', 'pc_bnf_cnt', 'ec_bnf_cnt'
+];
 
-const REQUIRED_MAPPING_FIELDS: MappingField[] = ["applicantName", "birthDate", "qualification", "village", "applicantId"];
 
-const LOCAL_STORAGE_KEY_PREFIX = "educator-selection-mapping-";
+const REQUIRED_MAPPING_FIELDS = ["applicant_id"];
 
 const SummaryCard = ({ icon, title, value }: { icon: React.ReactNode, title: string, value: string | number }) => (
     <Card>
@@ -46,7 +75,6 @@ const SummaryCard = ({ icon, title, value }: { icon: React.ReactNode, title: str
     </Card>
 );
 
-
 export default function EducatorUploadPage() {
     const { toast } = useToast();
     const router = useRouter();
@@ -57,20 +85,32 @@ export default function EducatorUploadPage() {
     const [sheets, setSheets] = useState<string[]>([]);
     const [selectedSheet, setSelectedSheet] = useState('');
     const [columns, setColumns] = useState<string[]>([]);
-    const [mapping, setMapping] = useState<Record<MappingField, string>>(() => {
-        const initial: any = {};
-        MAPPING_FIELDS.forEach(f => initial[f] = '');
-        return initial;
-    });
-
+    const [columnMapping, setColumnMapping] = useState<Map<string, string>>(new Map());
+    const [manualMapping, setManualMapping] = useState({ ui: '', db: '' });
+    
     const [recipientsDate, setRecipientsDate] = useState({ day: '', month: '', year: '' });
     
     const [workerStatus, setWorkerStatus] = useState('idle');
     const [progressInfo, setProgressInfo] = useState({ status: "idle", progress: 0 });
     const [results, setResults] = useState<any | null>(null);
 
+    const [duplicateDialog, setDuplicateDialog] = useState({ isOpen: false, duplicates: [], nonDuplicates: [] });
+    const [saveStats, setSaveStats] = useState({ saved: 0, skipped: 0, total: 0 });
+
     const rawRowsRef = useRef<any[]>([]);
     const workerRef = useRef<Worker | null>(null);
+
+    const unmappedUiColumns = useMemo(() => columns.filter(col => !Array.from(columnMapping.keys()).includes(col)), [columns, columnMapping]);
+    const unmappedDbColumns = useMemo(() => {
+        const mappedDbCols = new Set(columnMapping.values());
+        return DB_COLUMNS.filter(col => !mappedDbCols.has(col));
+    }, [columnMapping]);
+
+    const isMappingComplete = useMemo(() => {
+        const mappedDbCols = new Set(columnMapping.values());
+        return REQUIRED_MAPPING_FIELDS.every(field => mappedDbCols.has(field));
+    }, [columnMapping]);
+
 
     useEffect(() => {
         const fetchProjects = async () => {
@@ -85,6 +125,7 @@ export default function EducatorUploadPage() {
 
         const worker = new Worker(new URL('@/workers/ed-selection.worker.ts', import.meta.url), { type: 'module' });
         workerRef.current = worker;
+        
         worker.onmessage = (event) => {
             const { type, status, progress, data, error } = event.data;
             if (type === 'progress') {
@@ -92,11 +133,13 @@ export default function EducatorUploadPage() {
                 setProgressInfo({ status, progress });
             } else if (type === 'done') {
                 setResults(data);
-                setWorkerStatus('done');
-                setProgressInfo({ status: 'done', progress: 100 });
-                toast({ title: "Selection Complete!", description: `Processed ${data.totalApplicants} applicants.` });
+                setWorkerStatus('processed');
+                setProgressInfo({ status: 'processed', progress: 100 });
+                toast({ title: "Processing Complete!", description: `Processed ${data.totalApplicants} applicants. Ready to save.` });
+                handleSaveToDatabase(data.results);
             } else if (type === 'error') {
                 setWorkerStatus('error');
+                setProgressInfo({ status: 'error', progress: 0 });
                 toast({ title: "Processing Error", description: error, variant: "destructive" });
             }
         };
@@ -104,9 +147,7 @@ export default function EducatorUploadPage() {
         return () => worker.terminate();
 
     }, [toast]);
-
-    const isMappingComplete = useMemo(() => REQUIRED_MAPPING_FIELDS.every(f => !!mapping[f]), [mapping]);
-
+    
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const selectedFile = e.target.files?.[0];
         if (!selectedFile) return;
@@ -118,16 +159,21 @@ export default function EducatorUploadPage() {
         rawRowsRef.current = [];
         setResults(null);
         setWorkerStatus('idle');
+    };
 
+    useEffect(() => {
+        if (!file) return;
         const reader = new FileReader();
         reader.onload = (e) => {
             const buffer = e.target?.result;
             const wb = XLSX.read(buffer, { type: 'array' });
             setSheets(wb.SheetNames);
-            setSelectedSheet(wb.SheetNames[0]);
+            if (wb.SheetNames.length > 0) {
+              setSelectedSheet(wb.SheetNames[0]);
+            }
         };
-        reader.readAsArrayBuffer(selectedFile);
-    };
+        reader.readAsArrayBuffer(file);
+    }, [file]);
 
     useEffect(() => {
         if (!file || !selectedSheet) return;
@@ -139,45 +185,136 @@ export default function EducatorUploadPage() {
             const json = XLSX.utils.sheet_to_json<any>(sheet, { defval: "" });
             
             rawRowsRef.current = json;
-            const detectedColumns = Object.keys(json[0] || {});
-            setColumns(detectedColumns);
-            
-            // Restore mapping
-            const storageKey = `${LOCAL_STORAGE_KEY_PREFIX}${detectedColumns.join(',')}`;
-            const saved = localStorage.getItem(storageKey);
-            if (saved) {
-                try { setMapping(JSON.parse(saved)); } catch {}
-            }
+            setColumns(Object.keys(json[0] || {}));
         };
         reader.readAsArrayBuffer(file);
     }, [file, selectedSheet]);
 
-     useEffect(()=>{
-        if(columns.length > 0){
-            const key = LOCAL_STORAGE_KEY_PREFIX + columns.join(',');
-            localStorage.setItem(key, JSON.stringify(mapping));
-        }
-    }, [mapping, columns]);
+    const handleAutoMatch = () => {
+      const newMapping = new Map<string, string>();
+      const usedDbCols = new Set<string>();
 
-    const startSelectionProcess = () => {
+      columns.forEach(uiCol => {
+          const matchedDbCol = DB_COLUMNS.find(dbCol => dbCol.toLowerCase() === uiCol.toLowerCase() && !usedDbCols.has(dbCol));
+          if(matchedDbCol) {
+              newMapping.set(uiCol, matchedDbCol);
+              usedDbCols.add(matchedDbCol);
+          }
+      });
+      setColumnMapping(newMapping);
+      toast({ title: "Auto-match Complete", description: `${newMapping.size} columns were matched automatically.`});
+    };
+
+    const handleAddManualMapping = () => {
+      if (!manualMapping.ui || !manualMapping.db) {
+          toast({ title: "Incomplete Selection", description: "Please select both a source and a destination column.", variant: "destructive" });
+          return;
+      }
+      const newMapping = new Map(columnMapping);
+      newMapping.set(manualMapping.ui, manualMapping.db);
+      setColumnMapping(newMapping);
+      setManualMapping({ ui: '', db: '' });
+    };
+
+    const startProcessing = () => {
         if (!workerRef.current || !isMappingComplete || !recipientsDate.year || !recipientsDate.month || !recipientsDate.day || !selectedProjectId) {
-            toast({ title: "Incomplete Information", description: "Please select a project, provide a full recipients date, and complete all required mappings.", variant: "destructive" });
+            toast({ title: "Incomplete Information", description: "Please select a project, provide a full recipients date, and complete all required mappings (especially Applicant ID).", variant: "destructive" });
             return;
         }
 
         setWorkerStatus('processing');
         setProgressInfo({ status: 'processing', progress: 1 });
         setResults(null);
+        setSaveStats({ saved: 0, skipped: 0, total: 0 });
+        
+        const mappedData = rawRowsRef.current.map(row => {
+          const newRow: any = {};
+          for (const [uiCol, dbCol] of columnMapping.entries()) {
+            newRow[dbCol] = row[uiCol];
+          }
+          return newRow;
+        });
 
         workerRef.current.postMessage({
-            rows: rawRowsRef.current,
-            mapping,
+            rows: mappedData,
             recipientsDate: `${recipientsDate.year}-${recipientsDate.month}-${recipientsDate.day}`,
-            projectName: projects.find(p => p.projectId === selectedProjectId)?.projectName || 'Unknown Project'
         });
     };
-    
-    const isProcessing = workerStatus !== 'idle' && workerStatus !== 'done' && workerStatus !== 'error';
+
+    const handleSaveToDatabase = async (processedRecords: any[]) => {
+        setProgressInfo({ status: "validating", progress: 0 });
+        try {
+            const existingRes = await fetch('/api/ed-selection');
+            if (!existingRes.ok) throw new Error("Could not fetch existing records from database.");
+            const existingRecords = await existingRes.json();
+            
+            const applicantIdColumn = 'applicant_id';
+            const existingApplicantIds = new Set(existingRecords.map((r: any) => String(r[applicantIdColumn])));
+            
+            const duplicates: any[] = [];
+            const nonDuplicates: any[] = [];
+
+            processedRecords.forEach((row: any) => {
+                const newId = row[applicantIdColumn];
+                if (newId && existingApplicantIds.has(String(newId))) {
+                    duplicates.push(row);
+                } else {
+                    nonDuplicates.push(row);
+                }
+            });
+
+            if (duplicates.length > 0) {
+                setDuplicateDialog({ isOpen: true, duplicates, nonDuplicates });
+            } else {
+                await executeSave(processedRecords, false);
+            }
+
+        } catch (error: any) {
+            toast({ title: "Validation Failed", description: error.message, variant: "destructive" });
+             setWorkerStatus('error');
+        }
+    };
+
+    const executeSave = async (recordsToSave: any[], isOverwrite: boolean) => {
+        setWorkerStatus('saving');
+        setProgressInfo({ status: 'saving', progress: 0 });
+        const CHUNK_SIZE = 100;
+        const totalToSave = recordsToSave.length;
+        const totalInFile = rawRowsRef.current.length;
+
+        try {
+            const project = projects.find(p => p.projectId === selectedProjectId);
+            if (!project) throw new Error("Selected project not found.");
+            
+            for (let i = 0; i < totalToSave; i += CHUNK_SIZE) {
+                const chunk = recordsToSave.slice(i, i + CHUNK_SIZE);
+                
+                const isFirstChunk = i === 0;
+                const url = isFirstChunk && isOverwrite ? '/api/ed-selection?init=true' : '/api/ed-selection';
+
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ projectName: project.projectName, results: chunk })
+                });
+
+                if (!res.ok) {
+                    const errorData = await res.json();
+                    throw new Error(errorData.error || "A server error occurred while saving.");
+                }
+                const progress = Math.round(((i + chunk.length) / totalToSave) * 100);
+                setProgressInfo({ status: 'saving', progress });
+            }
+
+            toast({ title: "Save Successful", description: `${totalToSave} educator records saved for ${project.projectName}.` });
+            setSaveStats({ saved: totalToSave, skipped: totalInFile - totalToSave, total: totalInFile });
+            setWorkerStatus('done');
+
+        } catch (error: any) {
+            toast({ title: "Save Failed", description: error.message, variant: "destructive" });
+            setWorkerStatus('error');
+        }
+    };
 
     return (
         <div className="space-y-6">
@@ -224,72 +361,120 @@ export default function EducatorUploadPage() {
             </Card>
 
             {columns.length > 0 && (
-                <Collapsible defaultOpen>
-                    <Card>
-                         <CollapsibleTrigger asChild>
-                            <CardHeader className="flex-row items-center justify-between cursor-pointer">
-                                <CardTitle>2. Map Columns</CardTitle>
-                                <Button variant="ghost" size="sm"><ChevronsUpDown className="h-4 w-4" /></Button>
-                            </CardHeader>
-                        </CollapsibleTrigger>
-                        <CollapsibleContent>
-                            <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                {MAPPING_FIELDS.map(field => (
-                                    <Card key={field}>
-                                        <CardHeader className="p-4">
-                                            <div className="flex items-center gap-2">
-                                                {mapping[field] ? <CheckCircle className="h-5 w-5 text-green-500" /> : (REQUIRED_MAPPING_FIELDS.includes(field) && <XCircle className="h-5 w-5 text-red-500" />)}
-                                                <Label htmlFor={field} className="capitalize font-semibold">{field.replace(/([A-Z])/g, ' $1')}{REQUIRED_MAPPING_FIELDS.includes(field) && <span className="text-destructive">*</span>}</Label>
-                                            </div>
-                                        </CardHeader>
-                                        <CardContent className="p-0">
-                                            <ScrollArea className="h-40 border-t">
-                                                <RadioGroup value={mapping[field]} onValueChange={(v) => setMapping(m => ({ ...m, [field]: v }))} className="p-4 grid grid-cols-1 gap-2">
-                                                    {columns.map(col => (
-                                                        <div key={col} className="flex items-center space-x-2">
-                                                            <RadioGroupItem value={col} id={`${field}-${col}`} />
-                                                            <Label htmlFor={`${field}-${col}`} className="truncate font-normal">{col}</Label>
-                                                        </div>
-                                                    ))}
-                                                </RadioGroup>
-                                            </ScrollArea>
-                                        </CardContent>
-                                    </Card>
-                                ))}
-                            </CardContent>
-                        </CollapsibleContent>
-                    </Card>
-                </Collapsible>
-            )}
-            
-            <Card>
-                <CardHeader><CardTitle>3. Run Selection Process</CardTitle></CardHeader>
-                <CardContent className="space-y-4">
-                    <Button onClick={startSelectionProcess} disabled={!isMappingComplete || isProcessing}>
-                        {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : null}
-                        {isProcessing ? 'Processing Applicants...' : 'Select Educators'}
-                    </Button>
-                    {isProcessing && <Progress value={progressInfo.progress} />}
-                </CardContent>
-            </Card>
-
-            {results && (
                 <Card>
                     <CardHeader>
-                        <CardTitle>4. Selection Results</CardTitle>
+                        <CardTitle>2. Map Columns</CardTitle>
+                        <CardDescription>Match source columns from your sheet to the destination columns in the database. `applicant_id` is required.</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <SummaryCard icon={<Users />} title="Total Applicants" value={results.totalApplicants} />
-                            <SummaryCard icon={<UserCheck className="text-green-500"/>} title="Accepted" value={results.totalAccepted} />
-                            <SummaryCard icon={<UserX className="text-red-500"/>} title="Unaccepted" value={results.totalUnaccepted} />
-                        </div>
-                        <Button onClick={() => router.push('/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/interview')}>
-                            Proceed to Interview Page <ArrowRight className="ml-2 h-4 w-4"/>
-                        </Button>
+                        <Button onClick={handleAutoMatch}><GitCompareArrows className="mr-2 h-4 w-4" />Auto-match Columns</Button>
+                        
+                        {unmappedUiColumns.length > 0 && (
+                            <Card className="p-4 bg-muted">
+                                <CardTitle className="text-md mb-2">Manual Mapping</CardTitle>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                                    <div className="space-y-2">
+                                        <Label>Remaining Source Column</Label>
+                                        <Select value={manualMapping.ui} onValueChange={v => setManualMapping(m => ({ ...m, ui: v}))}>
+                                            <SelectTrigger><SelectValue placeholder="Select Source..." /></SelectTrigger>
+                                            <SelectContent><ScrollArea className="h-60">{unmappedUiColumns.map(col => <SelectItem key={col} value={col}>{col}</SelectItem>)}</ScrollArea></SelectContent>
+                                        </Select>
+                                    </div>
+                                     <div className="space-y-2">
+                                        <Label>Destination DB Column</Label>
+                                        <Select value={manualMapping.db} onValueChange={v => setManualMapping(m => ({ ...m, db: v}))}>
+                                            <SelectTrigger><SelectValue placeholder="Select Destination..." /></SelectTrigger>
+                                            <SelectContent><ScrollArea className="h-60">{unmappedDbColumns.map(col => <SelectItem key={col} value={col}>{col}</SelectItem>)}</ScrollArea></SelectContent>
+                                        </Select>
+                                    </div>
+                                    <Button onClick={handleAddManualMapping}>Add Mapping</Button>
+                                </div>
+                            </Card>
+                        )}
+                        <Card>
+                            <CardHeader><CardTitle className="text-md">Current Mappings</CardTitle></CardHeader>
+                            <CardContent>
+                                <ScrollArea className="h-40 border rounded-md">
+                                    <Table>
+                                       <TableHeader>
+                                           <TableRow>
+                                               <TableHead>Source Column (from your file)</TableHead>
+                                               <TableHead>Destination Column (in database)</TableHead>
+                                           </TableRow>
+                                       </TableHeader>
+                                       <TableBody>
+                                           {Array.from(columnMapping.entries()).map(([uiCol, dbCol]) => (
+                                               <TableRow key={uiCol}>
+                                                   <TableCell>{uiCol}</TableCell>
+                                                   <TableCell className="font-medium">{dbCol}</TableCell>
+                                               </TableRow>
+                                           ))}
+                                       </TableBody>
+                                    </Table>
+                                </ScrollArea>
+                            </CardContent>
+                        </Card>
                     </CardContent>
                 </Card>
             )}
+            
+            <Card>
+                <CardHeader><CardTitle>3. Run Selection & Save</CardTitle></CardHeader>
+                <CardContent className="space-y-4">
+                    <div className='flex gap-2'>
+                        <Button onClick={startProcessing} disabled={!isMappingComplete || workerStatus === 'processing' || workerStatus === 'saving'}>
+                            {workerStatus === 'processing' || workerStatus === 'saving' ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : null}
+                            {workerStatus === 'processing' ? 'Processing...' : workerStatus === 'saving' ? 'Saving...' : 'Process & Save Educators'}
+                        </Button>
+                         <Button asChild variant="outline">
+                            <a href="/api/ed-selection/download">
+                                <FileDown className="mr-2 h-4 w-4" />
+                                Download educators.db
+                            </a>
+                        </Button>
+                    </div>
+                    {workerStatus === 'processing' || workerStatus === 'saving' && <Progress value={progressInfo.progress} />}
+                </CardContent>
+            </Card>
+
+            {saveStats.total > 0 && (
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Save Summary</CardTitle>
+                    </CardHeader>
+                    <CardContent className="grid grid-cols-3 gap-4">
+                        <SummaryCard icon={<Users />} title="Total Records in File" value={saveStats.total} />
+                        <SummaryCard icon={<UserCheck className="text-green-500"/>} title="Records Saved" value={saveStats.saved} />
+                        <SummaryCard icon={<UserX className="text-orange-500"/>} title="Records Skipped" value={saveStats.skipped} />
+                    </CardContent>
+                </Card>
+            )}
+
+            <AlertDialog open={duplicateDialog.isOpen} onOpenChange={(isOpen) => setDuplicateDialog(prev => ({...prev, isOpen}))}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Duplicate Records Found</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Found {duplicateDialog.duplicates.length} applicant(s) in your upload that already exist in the database based on Applicant ID. How would you like to proceed?
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel onClick={() => setWorkerStatus('processed')}>Cancel</AlertDialogCancel>
+                        <Button variant="outline" onClick={async () => {
+                            setDuplicateDialog({ isOpen: false, duplicates: [], nonDuplicates: [] });
+                            await executeSave(duplicateDialog.nonDuplicates, false);
+                        }}>
+                            Skip Duplicates
+                        </Button>
+                        <AlertDialogAction onClick={async () => {
+                            setDuplicateDialog({ isOpen: false, duplicates: [], nonDuplicates: [] });
+                            await executeSave([...duplicateDialog.nonDuplicates, ...duplicateDialog.duplicates], true);
+                        }}>
+                            Replace Existing
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }

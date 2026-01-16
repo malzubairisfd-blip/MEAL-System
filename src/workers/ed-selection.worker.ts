@@ -1,4 +1,3 @@
-
 // src/workers/ed-selection.worker.ts
 import dayjs from 'dayjs';
 
@@ -54,22 +53,12 @@ function excelSerialToDate(value: any): Date | null {
 }
 
 
-function processRecords(rows: any[], mapping: any, recipientsDateStr: string) {
+function processRecords(rows: any[], recipientsDateStr: string) {
   const selectedRecipientsDate = excelSerialToDate(recipientsDateStr);
 
   const records = rows.map(r => ({
     ...r,
-    applicant_name: r[mapping.applicantName],
-    applicant_id: r[mapping.applicantId],
-    birth_date: r[mapping.birthDate],
-    applicant_qualification: r[mapping.qualification] || "بدون",
-    id_type: (r[mapping.idType] || '').trim(),
-    previous_experience: (r[mapping.previousExperience] || '').trim(),
-    diploma_starting_date: r[mapping.diplomaStartDate],
-    diploma_end_date: r[mapping.diplomaEndDate],
-    village: r[mapping.village],
-    // Internal fields for processing
-    _nameNorm: normalizeArabicWithCompounds(r[mapping.applicantName]),
+    _nameNorm: normalizeArabicWithCompounds(r.applicant_name),
   }));
 
   // --- AGE ---
@@ -185,35 +174,23 @@ function processRecords(rows: any[], mapping: any, recipientsDateStr: string) {
 }
 
 self.onmessage = async (event) => {
-    const { rows, mapping, recipientsDate, projectName } = event.data;
+    const { rows, recipientsDate } = event.data;
     try {
         postMessage({ type: 'progress', status: 'processing', progress: 10 });
 
-        const finalResults = processRecords(rows, mapping, recipientsDate);
+        const finalResults = processRecords(rows, recipientsDate);
 
-        postMessage({ type: 'progress', status: 'processing', progress: 70 });
+        postMessage({ type: 'progress', status: 'processing', progress: 90 });
 
-        let totalAccepted = finalResults.filter(r => r.acceptance_results === 'مقبولة').length;
+        const totalAccepted = finalResults.filter(r => r.acceptance_results === 'مقبولة').length;
         
-        postMessage({ type: 'progress', status: 'saving', progress: 90 });
-
         const output = {
-            projectName,
-            processedAt: new Date().toISOString(),
             totalApplicants: finalResults.length,
             totalAccepted,
             totalUnaccepted: finalResults.length - totalAccepted,
             results: finalResults,
-            mapping: mapping,
         };
         
-        const url = new URL('/api/ed-selection', self.location.origin);
-        await fetch(url.href, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(output)
-        });
-
         postMessage({ type: 'done', data: output });
 
     } catch (e: any) {
