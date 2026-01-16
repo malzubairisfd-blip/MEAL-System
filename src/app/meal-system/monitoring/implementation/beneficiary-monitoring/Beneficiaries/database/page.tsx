@@ -1,3 +1,4 @@
+
 // src/app/meal-system/monitoring/implementation/beneficiary-monitoring/Beneficiaries/database/page.tsx
 "use client";
 
@@ -418,10 +419,11 @@ export default function BeneficiaryDatabasePage() {
             <CardHeader>
                 <CardTitle>2. Map Columns</CardTitle>
                 <CardDescription>Match source columns from your data to the destination columns in the database.</CardDescription>
-                <CardContent className="pt-4">
-                  <Button onClick={handleAutoMatch}><GitCompareArrows className="mr-2 h-4 w-4" />Auto-match Columns</Button>
-                </CardContent>
             </CardHeader>
+            <CardContent className="pt-4">
+              <Button onClick={handleAutoMatch}><GitCompareArrows className="mr-2 h-4 w-4" />Auto-match Columns</Button>
+            </CardContent>
+          </Card>
             
             {!isMappingComplete && unmappedUiColumns.length > 0 && (
                 <Card>
@@ -562,3 +564,5 @@ export default function BeneficiaryDatabasePage() {
     </div>
   );
 }
+
+  
