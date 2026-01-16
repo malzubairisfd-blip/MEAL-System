@@ -550,8 +550,8 @@ export async function POST(req: Request) {
             return NextResponse.json({ message: "No records to insert." }, { status: 200 });
         }
         
-        const recordColumns = Object.keys(results[0]).map(key => key === '_id' ? 'internalId' : key);
-        const insertColumns = recordColumns.filter(col => DB_COLUMNS.includes(col));
+        const columnsInPayload = Object.keys(results[0] || {});
+        const insertColumns = columnsInPayload.filter(col => DB_COLUMNS.includes(col));
 
         if (insertColumns.length === 0) {
             db.close();
@@ -564,7 +564,7 @@ export async function POST(req: Request) {
         
         const insertMany = db.transaction((records) => {
             for (const record of records) {
-                const values = insertColumns.map(col => record[col === 'internalId' ? '_id' : col] ?? null);
+                const values = insertColumns.map(col => record[col] ?? null);
                 insert.run(...values);
             }
         });
