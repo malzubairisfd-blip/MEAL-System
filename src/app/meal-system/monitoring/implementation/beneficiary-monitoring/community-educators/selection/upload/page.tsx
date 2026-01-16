@@ -122,6 +122,81 @@ export default function EducatorUploadPage() {
         }
     }, [columnMapping, columns]);
 
+    const executeSave = useCallback(async (recordsToSave: any[], isOverwrite: boolean, project: Project) => {
+        setWorkerStatus('saving');
+        setProgressInfo({ status: 'saving', progress: 0 });
+        const CHUNK_SIZE = 100;
+        const totalToSave = recordsToSave.length;
+        const totalInFile = rawRowsRef.current.length;
+
+        try {
+            for (let i = 0; i < totalToSave; i += CHUNK_SIZE) {
+                const chunk = recordsToSave.slice(i, i + CHUNK_SIZE);
+                
+                const isFirstChunk = i === 0;
+                const url = isFirstChunk && isOverwrite ? '/api/ed-selection?init=true' : '/api/ed-selection';
+
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ projectName: project.projectName, results: chunk })
+                });
+
+                if (!res.ok) {
+                    const errorData = await res.json();
+                    throw new Error(errorData.error || "A server error occurred while saving.");
+                }
+                const progress = Math.round(((i + chunk.length) / totalToSave) * 100);
+                setProgressInfo({ status: 'saving', progress });
+            }
+
+            toast({ title: "Save Successful", description: `${totalToSave} educator records saved for ${project.projectName}.` });
+            setSaveStats({ saved: totalToSave, skipped: totalInFile - totalToSave, total: totalInFile });
+            setWorkerStatus('done');
+
+        } catch (error: any) {
+            toast({ title: "Save Failed", description: error.message, variant: "destructive" });
+            setWorkerStatus('error');
+        }
+    }, [toast]);
+
+    const handleSaveToDatabase = useCallback(async (processedRecords: any[], projectIdForSave: string) => {
+        setProgressInfo({ status: "validating", progress: 0 });
+        try {
+            const existingRes = await fetch('/api/ed-selection');
+            if (!existingRes.ok) throw new Error("Could not fetch existing records from database.");
+            const existingRecords = await existingRes.json();
+            
+            const applicantIdColumn = 'applicant_id';
+            const existingApplicantIds = new Set(existingRecords.map((r: any) => String(r[applicantIdColumn])));
+            
+            const duplicates: any[] = [];
+            const nonDuplicates: any[] = [];
+
+            processedRecords.forEach((row: any) => {
+                const newId = row[applicantIdColumn];
+                if (newId && existingApplicantIds.has(String(newId))) {
+                    duplicates.push(row);
+                } else {
+                    nonDuplicates.push(row);
+                }
+            });
+
+            const project = projects.find(p => p.projectId === projectIdForSave);
+            if (!project) throw new Error("Selected project not found.");
+
+            if (duplicates.length > 0) {
+                setDuplicateDialog({ isOpen: true, duplicates, nonDuplicates });
+            } else {
+                await executeSave(processedRecords, false, project);
+            }
+
+        } catch (error: any) {
+            toast({ title: "Validation Failed", description: error.message, variant: "destructive" });
+             setWorkerStatus('error');
+        }
+    }, [projects, toast, executeSave]);
+
 
     useEffect(() => {
         const fetchInitialData = async () => {
@@ -142,11 +217,13 @@ export default function EducatorUploadPage() {
             }
         };
         fetchInitialData();
+    }, [toast]);
 
+    useEffect(() => {
         const worker = new Worker(new URL('@/workers/ed-selection.worker.ts', import.meta.url), { type: 'module' });
         workerRef.current = worker;
         
-        worker.onmessage = (event) => {
+        const handleMessage = (event: MessageEvent) => {
             const { type, status, progress, data, error } = event.data;
             if (type === 'progress') {
                 setWorkerStatus(status);
@@ -164,9 +241,15 @@ export default function EducatorUploadPage() {
             }
         };
 
-        return () => worker.terminate();
+        worker.onmessage = handleMessage;
 
-    }, [toast]);
+        return () => {
+          if (workerRef.current) {
+            workerRef.current.terminate();
+          }
+        };
+
+    }, [toast, handleSaveToDatabase]);
     
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const selectedFile = e.target.files?.[0];
@@ -280,81 +363,6 @@ export default function EducatorUploadPage() {
             locations: locations,
             selectedProjectId: selectedProjectId,
         });
-    };
-
-    const handleSaveToDatabase = async (processedRecords: any[], projectIdForSave: string) => {
-        setProgressInfo({ status: "validating", progress: 0 });
-        try {
-            const existingRes = await fetch('/api/ed-selection');
-            if (!existingRes.ok) throw new Error("Could not fetch existing records from database.");
-            const existingRecords = await existingRes.json();
-            
-            const applicantIdColumn = 'applicant_id';
-            const existingApplicantIds = new Set(existingRecords.map((r: any) => String(r[applicantIdColumn])));
-            
-            const duplicates: any[] = [];
-            const nonDuplicates: any[] = [];
-
-            processedRecords.forEach((row: any) => {
-                const newId = row[applicantIdColumn];
-                if (newId && existingApplicantIds.has(String(newId))) {
-                    duplicates.push(row);
-                } else {
-                    nonDuplicates.push(row);
-                }
-            });
-
-            const project = projects.find(p => p.projectId === projectIdForSave);
-            if (!project) throw new Error("Selected project not found during save operation.");
-
-            if (duplicates.length > 0) {
-                setDuplicateDialog({ isOpen: true, duplicates, nonDuplicates });
-            } else {
-                await executeSave(processedRecords, false, project);
-            }
-
-        } catch (error: any) {
-            toast({ title: "Validation Failed", description: error.message, variant: "destructive" });
-             setWorkerStatus('error');
-        }
-    };
-
-    const executeSave = async (recordsToSave: any[], isOverwrite: boolean, project: Project) => {
-        setWorkerStatus('saving');
-        setProgressInfo({ status: 'saving', progress: 0 });
-        const CHUNK_SIZE = 100;
-        const totalToSave = recordsToSave.length;
-        const totalInFile = rawRowsRef.current.length;
-
-        try {
-            for (let i = 0; i < totalToSave; i += CHUNK_SIZE) {
-                const chunk = recordsToSave.slice(i, i + CHUNK_SIZE);
-                
-                const isFirstChunk = i === 0;
-                const url = isFirstChunk && isOverwrite ? '/api/ed-selection?init=true' : '/api/ed-selection';
-
-                const res = await fetch(url, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ projectName: project.projectName, results: chunk })
-                });
-
-                if (!res.ok) {
-                    const errorData = await res.json();
-                    throw new Error(errorData.error || "A server error occurred while saving.");
-                }
-                const progress = Math.round(((i + chunk.length) / totalToSave) * 100);
-                setProgressInfo({ status: 'saving', progress });
-            }
-
-            toast({ title: "Save Successful", description: `${totalToSave} educator records saved for ${project.projectName}.` });
-            setSaveStats({ saved: totalToSave, skipped: totalInFile - totalToSave, total: totalInFile });
-            setWorkerStatus('done');
-
-        } catch (error: any) {
-            toast({ title: "Save Failed", description: error.message, variant: "destructive" });
-            setWorkerStatus('error');
-        }
     };
 
     return (
