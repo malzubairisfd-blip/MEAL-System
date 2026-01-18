@@ -4,169 +4,211 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import fs from "fs";
 import path from "path";
-import Database from 'better-sqlite3';
+import Database from "better-sqlite3";
 
-// Helper for Arabic Numbers
+// Arabic digits
 const toArabicDigits = (v: string | number) =>
-    String(v).replace(/\d/g, (d) => "٠١٢٣٤٥٦٧٨٩"[Number(d)]);
+  String(v).replace(/\d/g, d => "٠١٢٣٤٥٦٧٨٩"[Number(d)]);
 
-const getDbPath = () => path.join(process.cwd(), 'src', 'data', 'educators.db');
+const getDbPath = () =>
+  path.join(process.cwd(), "src", "data", "educators.db");
+
+// RTL table position calculator
+function calculateRTLTableLayout(
+  doc: jsPDF,
+  columns: any[],
+  marginRight = 15,
+  defaultWidth = 22
+) {
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const tableWidth = columns.reduce(
+    (sum, c) => sum + (c.width ?? defaultWidth),
+    0
+  );
+
+  const marginLeft = Math.max(
+    10,
+    pageWidth - tableWidth - marginRight
+  );
+
+  return { tableWidth, marginLeft };
+}
 
 export async function POST(req: Request) {
     try {
-        const body = await req.json();
-        const { projectId, settings } = body;
+        const { projectId, settings } = await req.json();
 
-        if (!projectId || !settings) {
-            return NextResponse.json({ error: "projectId and settings are required" }, { status: 400 });
-        }
-
-        const dbPath = getDbPath();
-        if (!fs.existsSync(dbPath)) {
-            return NextResponse.json({ error: `Database not found at ${dbPath}. Please upload educator data first.` }, { status: 404 });
-        }
-        
-        const db = new Database(dbPath, { fileMustExist: true });
-        const stmt = db.prepare(
-            'SELECT * FROM educators WHERE project_id = ? AND interview_hall_no IS NOT NULL ORDER BY interview_hall_no, total_score DESC'
-        );
-        const applicants = stmt.all(projectId);
-        db.close();
-
-        if (applicants.length === 0) {
-            return NextResponse.json({ error: "No applicants with assigned interview halls found for this project." }, { status: 404 });
-        }
-
-        const doc = new jsPDF({ orientation: settings.pageOrientation, unit: 'mm', format: settings.pageSize });
-        
-        // Correct Font Embedding
-        const fontPath = path.join(process.cwd(), "public/fonts/Amiri-Regular.ttf");
-        if (!fs.existsSync(fontPath)) {
-            throw new Error("Amiri font not found at public/fonts/Amiri-Regular.ttf");
-        }
-        const fontBytes = fs.readFileSync(fontPath);
-        doc.addFileToVFS("Amiri-Regular.ttf", fontBytes.toString('base64'));
-        doc.addFont("Amiri-Regular.ttf", "Amiri", "normal");
-        doc.setFont("Amiri");
-
-        // Fetch project details for the header
-        const projectsRes = await fetch(new URL('/api/projects', req.url));
+        // Fetch project details
+        const projectsRes = await fetch('http://localhost:9002/api/projects');
+        if (!projectsRes.ok) throw new Error('Failed to fetch projects');
         const projects = await projectsRes.json();
         const project = projects.find((p: any) => p.projectId === projectId);
 
 
-        // Dynamic & Organized Content
-        const groupedByHall: Record<string, { hallName: string; hallNo: string; applicants: any[] }> = applicants.reduce((acc: any, app: any) => {
-            const hallNumKey = app[settings.headerHallNoDynamic || 'interview_hall_no'] || 'unassigned';
-            if (!acc[hallNumKey]) {
-                acc[hallNumKey] = {
-                    hallName: settings.headerHallNameType === 'manual' 
-                        ? settings.headerHallNameManual 
-                        : (app[settings.headerHallNameDynamic || 'interview_hall_name'] || 'N/A'),
-                    hallNo: settings.headerHallNoType === 'manual' 
-                        ? settings.headerHallNoManual 
-                        : hallNumKey,
-                    applicants: []
-                };
-            }
-            acc[hallNumKey].applicants.push(app);
+        const db = new Database(getDbPath(), { fileMustExist: true });
+        const applicants = db.prepare(
+            `SELECT * FROM educators
+             WHERE project_id = ?
+             AND interview_hall_no IS NOT NULL
+             ORDER BY interview_hall_no, total_score DESC`
+        ).all(projectId);
+        db.close();
+
+        const doc = new jsPDF({
+            orientation: settings.pageOrientation,
+            unit: "mm",
+            format: settings.pageSize,
+        });
+
+        const fontPath = path.join(process.cwd(), "public/fonts/Amiri-Regular.ttf");
+        const fontBytes = fs.readFileSync(fontPath);
+        doc.addFileToVFS("Amiri-Regular.ttf", fontBytes.toString("base64"));
+        doc.addFont("Amiri-Regular.ttf", "Amiri", "normal");
+        doc.setFont("Amiri");
+
+        const grouped = applicants.reduce((acc: any, r: any) => {
+            const hallNo = r.interview_hall_no || 'unassigned';
+            acc[hallNo] ??= {
+                hallName: r.interview_hall_name,
+                hallNo: hallNo,
+                rows: [],
+            };
+            acc[hallNo].rows.push(r);
             return acc;
         }, {});
         
-        let isFirstPage = true;
-        for (const hallKey in groupedByHall) {
-            const hallData = groupedByHall[hallKey];
-            if (!isFirstPage) {
-                doc.addPage();
-            }
-            isFirstPage = false;
+        let isFirstGroup = true;
 
-            const reversedTableColumns = [...settings.tableColumns].reverse();
+        for (const key in grouped) {
+            if (!isFirstGroup) doc.addPage();
+            isFirstGroup = false;
 
-            const head = [reversedTableColumns.map((c: any) => c.header)];
-            const body = hallData.applicants.map((row: any, rowIndex: number) => 
-                reversedTableColumns.map((col: any) => {
-                    if (col.dataKey === '_index') return toArabicDigits(rowIndex + 1);
-                    // Arabic Text Shaping will be handled by jsPDF with the right font
-                    return toArabicDigits(row[col.dataKey] ?? '');
-                })
+            const hall = grouped[key];
+            const cols = [...settings.tableColumns].reverse();
+            const head = [cols.map((c: any) => c.header)];
+            const body = hall.rows.map((r: any, i: number) =>
+                cols.map((c: any) =>
+                    c.dataKey === "_index"
+                        ? toArabicDigits(i + 1)
+                        : toArabicDigits(r[c.dataKey] ?? "")
+                )
             );
-            
+
+            const { tableWidth, marginLeft } = calculateRTLTableLayout(doc, cols, 15, 22);
+
             autoTable(doc, {
-                head, 
+                head,
                 body,
                 startY: 55,
-                theme: 'grid',
+                tableWidth,
+                margin: {
+                    top: 50,
+                    bottom: 45, // Increased bottom margin for signature
+                    left: marginLeft,
+                },
+                theme: "grid",
                 styles: {
-                    font: 'Amiri',
-                    fontStyle: 'normal',
+                    font: "Amiri",
                     fontSize: 10,
-                    valign: 'middle',
-                    lineWidth: settings.tableInnerBorder ? settings.tableBorderThickness : 0,
-                    lineColor: settings.tableBorderColor,
-                    halign: 'right', // Default alignment to right for all cells
+                    halign: "right",
+                    valign: "middle",
                 },
                 headStyles: {
-                    fillColor: settings.tableColumns[0]?.headerBgColor || '#F2F2F2',
-                    textColor: settings.tableColumns[0]?.headerColor || '#000000',
-                    fontStyle: settings.tableColumns[0]?.headerBold ? 'bold' : 'normal',
-                    halign: 'right',
+                    fontStyle: "bold",
+                    halign: "right",
                 },
                 columnStyles: Object.fromEntries(
-                    reversedTableColumns.map((c: any, i: number) => [i, {
-                        cellWidth: c.width,
-                        fontStyle: c.textBold ? 'bold' : 'normal',
-                        textColor: c.textColor || '#000000',
-                        fontSize: c.textSize || 10,
-                        halign: c.dataKey === '_index' ? 'center' : 'right',
-                    }])
+                    cols.map((c: any, i: number) => [
+                        i,
+                        {
+                            cellWidth: c.width,
+                            halign: c.dataKey === "_index" ? "center" : "right",
+                        },
+                    ])
                 ),
                 didDrawPage: (data) => {
-                    // Header
-                    doc.setFont('Amiri', settings.titleBold ? 'bold' : 'normal');
-                    doc.setFillColor(settings.titleBgColor);
-                    doc.rect(10, 10, doc.internal.pageSize.getWidth() - 20, 15, 'F');
-                    doc.setTextColor(settings.titleColor);
-                    doc.setFontSize(16);
-                    doc.text(settings.title, doc.internal.pageSize.getWidth() / 2, 19, { align: 'center' });
-
-                    doc.setFont("Amiri", "normal");
-                    doc.setTextColor('#000000');
-                    doc.setFontSize(11);
                     const pageWidth = doc.internal.pageSize.getWidth();
 
-                    const projectText = `${project?.projectName || ''} (Project: ${projectId})`;
-                    const hallText = `${hallData.hallName} (Hall No: ${hallData.hallNo})`;
+                    // --- 1. HEADER ---
+                    doc.setFillColor(settings.titleBgColor);
+                    doc.rect(10, 10, pageWidth - 20, 15, "F");
+                    doc.setFontSize(16);
+                    doc.setTextColor(settings.titleColor);
+                    doc.text(settings.title, pageWidth / 2, 20, { align: "center" });
+
+                    // --- 2. DRAW SFD LOGO (Top Left) ---
+                    const logoX = 15;
+                    const logoY = 10;
                     
-                    doc.text(projectText, pageWidth - 15, 35, { align: 'right' });
-                    doc.text(hallText, pageWidth - 15, 42, { align: 'right' });
+                    doc.setFillColor(40, 60, 80); // Dark Blue/Grey
+                    doc.rect(logoX, logoY, 8, 24, 'F'); 
+                    
+                    doc.setTextColor(255, 255, 255);
+                    doc.setFontSize(14);
+                    doc.setFont("helvetica", "bold");
+                    doc.text("S", logoX + 4, logoY + 6, { align: 'center', baseline: 'middle' });
+                    doc.text("F", logoX + 4, logoY + 14, { align: 'center', baseline: 'middle' });
+                    doc.text("D", logoX + 4, logoY + 22, { align: 'center', baseline: 'middle' });
 
-                    if (settings.pageBorder) {
-                        doc.setDrawColor(settings.pageBorderColor);
-                        doc.setLineWidth(settings.pageBorderThickness);
-                        doc.rect(5, 5, doc.internal.pageSize.getWidth() - 10, doc.internal.pageSize.getHeight() - 10);
-                    }
+                    doc.setFont("Amiri", "normal");
+                    doc.setTextColor(40, 60, 80);
+                    doc.setFontSize(14);
+                    doc.text("الصندوق", logoX + 10, logoY + 6);
+                    doc.text("الاجتماعي", logoX + 10, logoY + 13);
+                    doc.text("للتنمية", logoX + 10, logoY + 20);
 
-                    // Footer
-                     const finalY = doc.internal.pageSize.getHeight() - 20;
-                     doc.setFontSize(10);
-                     doc.text(`Page ${data.pageNumber}`, doc.internal.pageSize.getWidth() / 2, finalY, { align: 'center' });
+                    doc.setFontSize(7);
+                    doc.text("Social Fund for Development", logoX, logoY + 28);
+
+                    // --- PROJECT & HALL INFO ---
+                    doc.setFontSize(11);
+                    doc.setTextColor("#000");
+
+                    doc.text(
+                        `${project?.projectName || ""} (رقم المشروع: ${toArabicDigits(projectId)})`,
+                        pageWidth - 15,
+                        35,
+                        { align: "right" }
+                    );
+
+                    doc.text(
+                        `${hall.hallName} (رقم القاعة: ${toArabicDigits(hall.hallNo)})`,
+                        pageWidth - 15,
+                        42,
+                        { align: "right" }
+                    );
+
+                    // --- PAGE FOOTER ---
+                    const pageHeight = doc.internal.pageSize.getHeight();
+                    doc.setFontSize(10);
+                    doc.text(
+                        `صفحة ${toArabicDigits(data.pageNumber)}`,
+                        pageWidth / 2,
+                        pageHeight - 15,
+                        { align: "center" }
+                    );
+
+                    // --- SIGNATURE FOOTER ---
+                    const finalY = pageHeight - 40;
+                    doc.setFontSize(10);
+                    doc.text("الاسم: ____________________________", pageWidth - 15, finalY, { align: "right" });
+                    doc.text("الصفة: ___________________________", pageWidth - 15, finalY + 10, { align: "right" });
+                    doc.text("التوقيع: _______________________", pageWidth / 2, finalY, { align: "right" });
+                    doc.text("التاريخ: ____ / ____ / ______", pageWidth / 2, finalY + 10, { align: "right" });
+                    doc.rect(15, finalY - 5, 40, 20);
+                    doc.text("ختم المديرية", 35, finalY + 5, { align: 'center' });
                 },
-                margin: { top: 50, bottom: 30, right: 50 },
-                tableWidth: settings.fitColumns ? 'auto' : 'wrap',
             });
         }
 
-        const pdfBytes = doc.output('arraybuffer');
-        return new Response(pdfBytes, {
+        return new Response(doc.output("arraybuffer"), {
             headers: {
                 "Content-Type": "application/pdf",
-                "Content-Disposition": `attachment; filename="${settings.templateName}.pdf"`,
+                "Content-Disposition": "attachment; filename=export.pdf",
             },
         });
-
-    } catch (error: any) {
-        console.error("PDF Export Error:", error);
-        return NextResponse.json({ error: `Failed to export PDF: ${error.message}` }, { status: 500 });
+    } catch (e: any) {
+        console.error("PDF Export Error:", e);
+        return NextResponse.json({ error: e.message }, { status: 500 });
     }
 }
