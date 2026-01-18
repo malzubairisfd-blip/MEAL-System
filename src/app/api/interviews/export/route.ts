@@ -152,7 +152,7 @@ export async function POST(req: Request) {
                      doc.setFontSize(10);
                      doc.text(`Page ${data.pageNumber}`, doc.internal.pageSize.getWidth() / 2, finalY, { align: 'center' });
                 },
-                margin: { top: 50, bottom: 30, right: 10 },
+                margin: { top: 50, bottom: 30, right: 50 },
                 tableWidth: settings.fitColumns ? 'auto' : 'wrap',
             });
         }
