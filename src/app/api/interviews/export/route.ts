@@ -100,12 +100,6 @@ export async function POST(req: Request) {
                 head,
                 body,
                 startY: 55,
-                tableWidth,
-                margin: {
-                    top: 50,
-                    bottom: 45, // Increased bottom margin for signature
-                    left: marginLeft,
-                },
                 theme: "grid",
                 styles: {
                     font: "Amiri",
@@ -126,15 +120,20 @@ export async function POST(req: Request) {
                         },
                     ])
                 ),
+                 margin: {
+                    top: 50,
+                    bottom: 45,
+                    right: 15,
+                },
                 didDrawPage: (data) => {
                     const pageWidth = doc.internal.pageSize.getWidth();
 
                     // --- 1. HEADER ---
                     doc.setFillColor(settings.titleBgColor);
                     doc.rect(10, 10, pageWidth - 20, 15, "F");
-                    doc.setFontSize(16);
+                    doc.setFontSize(14);
                     doc.setTextColor(settings.titleColor);
-                    doc.text(settings.title, pageWidth / 2, 20, { align: "center" });
+                    doc.text(settings.title, pageWidth / 2, 19, { align: "center" });
 
                     // --- 2. DRAW SFD LOGO (Top Left) ---
                     const logoX = 15;
@@ -144,7 +143,6 @@ export async function POST(req: Request) {
                     doc.rect(logoX, logoY, 8, 24, 'F'); 
                     
                     doc.setTextColor(255, 255, 255);
-                    doc.setFontSize(14);
                     doc.setFont("helvetica", "bold");
                     doc.text("S", logoX + 4, logoY + 6, { align: 'center', baseline: 'middle' });
                     doc.text("F", logoX + 4, logoY + 14, { align: 'center', baseline: 'middle' });
@@ -193,8 +191,8 @@ export async function POST(req: Request) {
                     doc.setFontSize(10);
                     doc.text("الاسم: ____________________________", pageWidth - 15, finalY, { align: "right" });
                     doc.text("الصفة: ___________________________", pageWidth - 15, finalY + 10, { align: "right" });
-                    doc.text("التوقيع: _______________________", pageWidth / 2, finalY, { align: "right" });
-                    doc.text("التاريخ: ____ / ____ / ______", pageWidth / 2, finalY + 10, { align: "right" });
+                    doc.text("التوقيع: _______________________", pageWidth / 2 + 30, finalY, { align: "right" });
+                    doc.text("التاريخ: ____ / ____ / ______", pageWidth / 2 + 30, finalY + 10, { align: "right" });
                     doc.rect(15, finalY - 5, 40, 20);
                     doc.text("ختم المديرية", 35, finalY + 5, { align: 'center' });
                 },
