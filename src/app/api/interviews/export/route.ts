@@ -1,4 +1,3 @@
-
 // src/app/api/interviews/export/route.ts
 import { NextResponse } from "next/server";
 import jsPDF from "jspdf";
@@ -100,7 +99,6 @@ export async function POST(req: Request) {
                     font: 'Amiri',
                     fontStyle: 'normal',
                     fontSize: 10,
-                    halign: 'center',
                     valign: 'middle',
                     lineWidth: settings.tableInnerBorder ? settings.tableBorderThickness : 0,
                     lineColor: settings.tableBorderColor,
@@ -117,7 +115,7 @@ export async function POST(req: Request) {
                         fontStyle: c.textBold ? 'bold' : 'normal',
                         textColor: c.textColor || '#000000',
                         fontSize: c.textSize || 10,
-                        halign: 'center',
+                        halign: c.dataKey === '_index' ? 'center' : 'right',
                     }])
                 ),
                 didDrawPage: (data) => {
@@ -132,8 +130,13 @@ export async function POST(req: Request) {
                     doc.setFont("Amiri", "normal");
                     doc.setTextColor('#000000');
                     doc.setFontSize(11);
-                    doc.text(`Project: ${project?.projectName || ''} (${projectId})`, 15, 35);
-                    doc.text(`Hall: ${hallData.hallName} (No. ${hallData.hallNo})`, 15, 42);
+                    const pageWidth = doc.internal.pageSize.getWidth();
+
+                    const projectText = `${project?.projectName || ''} (Project: ${projectId})`;
+                    const hallText = `${hallData.hallName} (Hall No: ${hallData.hallNo})`;
+                    
+                    doc.text(projectText, pageWidth - 15, 35, { align: 'right' });
+                    doc.text(hallText, pageWidth - 15, 42, { align: 'right' });
 
                     if (settings.pageBorder) {
                         doc.setDrawColor(settings.pageBorderColor);
