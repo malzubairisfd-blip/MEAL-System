@@ -1,213 +1,295 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useForm, useFieldArray } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { FileDown, Loader2 } from 'lucide-react';
-import jsPDF from "jspdf";
-import "jspdf-autotable";
-import { useToast } from "@/hooks/use-toast";
+import { Input } from '@/components/ui/input';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { useToast } from '@/hooks/use-toast';
+import { ArrowLeft, Save, Loader2, Plus, Trash2, FileDown, Eye } from 'lucide-react';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 
-interface Project {
-  projectId: string;
-  projectName: string;
-}
+// --- Types & Schemas ---
+const TableColumnSchema = z.object({
+  header: z.string().min(1),
+  dataKey: z.string().min(1),
+  width: z.coerce.number(),
+  textSize: z.coerce.number(),
+  headerColor: z.string(),
+  headerBgColor: z.string(),
+  headerBold: z.boolean(),
+  textColor: z.string(),
+  textBold: z.boolean(),
+});
 
-interface Applicant {
-  applicant_id: number;
-  applicant_name: string;
-  id_type: string;
-  id_no: string;
-  interview_hall_no: number;
-  interview_hall_name: string;
-}
+const PdfSettingsSchema = z.object({
+  templateName: z.string().min(1),
+  title: z.string().min(1),
+  titleColor: z.string(),
+  titleBgColor: z.string(),
+  titleBold: z.boolean(),
+  pageSize: z.enum(['a4', 'letter', 'legal']),
+  pageOrientation: z.enum(['portrait', 'landscape']),
+  fitColumns: z.boolean(),
+  pageBorder: z.boolean(),
+  pageBorderColor: z.string(),
+  pageBorderThickness: z.coerce.number(),
+  headerHallNameType: z.enum(['manual', 'dynamic']),
+  headerHallNameManual: z.string().optional(),
+  headerHallNameDynamic: z.string().optional(),
+  headerHallNoType: z.enum(['manual', 'dynamic']),
+  headerHallNoManual: z.string().optional(),
+  headerHallNoDynamic: z.string().optional(),
+  tableColumns: z.array(TableColumnSchema),
+  tableOuterBorder: z.boolean(),
+  tableInnerBorder: z.boolean(),
+  tableBorderColor: z.string(),
+  tableBorderThickness: z.coerce.number(),
+  rowHeight: z.coerce.number(),
+});
 
-// Helper function to convert ArrayBuffer to Base64
-function arrayBufferToBase64(buffer: ArrayBuffer): string {
-    let binary = '';
-    const bytes = new Uint8Array(buffer);
-    const len = bytes.byteLength;
-    for (let i = 0; i < len; i++) {
-        binary += String.fromCharCode(bytes[i]);
-    }
-    return window.btoa(binary);
-}
+type PdfSettings = z.infer<typeof PdfSettingsSchema>;
 
-
-export default function ExportExactPDFPage() {
+function ExportExactPDFPageContent() {
+  const router = useRouter();
   const { toast } = useToast();
-  const [loading, setLoading] = useState(false);
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [selectedProjectId, setSelectedProjectId] = useState<string>('');
-  const [applicants, setApplicants] = useState<Applicant[]>([]);
-  const [isFetchingData, setIsFetchingData] = useState(false);
+  const searchParams = useSearchParams();
+
+  const [projects, setProjects] = useState<any[]>([]);
+  const [selectedProjectId, setSelectedProjectId] = useState<string>(searchParams.get('projectId') || '');
+  const [applicantColumns, setApplicantColumns] = useState<string[]>([]);
+  const [loading, setLoading] = useState({ projects: true, generating: false });
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
+  const [templates, setTemplates] = useState<PdfSettings[]>([]);
+
+  const form = useForm<PdfSettings>({
+    resolver: zodResolver(PdfSettingsSchema),
+    defaultValues: {
+      templateName: "New Template",
+      title: "كشف درجات ممثل الصحة",
+      titleColor: "#FFFFFF", titleBgColor: "#0070C0", titleBold: true,
+      pageSize: 'a4', pageOrientation: 'portrait', fitColumns: true,
+      pageBorder: true, pageBorderColor: '#000000', pageBorderThickness: 0.5,
+      headerHallNameType: 'dynamic', headerHallNameDynamic: 'interview_hall_name',
+      headerHallNoType: 'dynamic', headerHallNoDynamic: 'interview_hall_no',
+      tableColumns: [
+        { header: 'الرقم', dataKey: '_index', width: 15, textSize: 10, headerColor: "#000000", headerBgColor: "#F2F2F2", headerBold: true, textBold: false, textColor: "#000000" },
+        { header: 'اسم المتقدمة', dataKey: 'applicant_name', width: 60, textSize: 10, headerColor: "#000000", headerBgColor: "#F2F2F2", headerBold: true, textBold: false, textColor: "#000000" },
+      ],
+      tableOuterBorder: true, tableInnerBorder: true, tableBorderColor: "#444444", tableBorderThickness: 0.2, rowHeight: 10,
+    },
+  });
+
+  const { fields, append, remove } = useFieldArray({ control: form.control, name: "tableColumns" });
 
   useEffect(() => {
     const fetchProjects = async () => {
-      try {
-        const res = await fetch('/api/projects');
-        if (!res.ok) throw new Error('Failed to fetch projects');
-        setProjects(await res.json());
-      } catch (error: any) {
-        toast({ title: "Error", description: error.message, variant: "destructive" });
-      }
-    };
-    fetchProjects();
-  }, [toast]);
-
-  useEffect(() => {
-    if (!selectedProjectId) {
-        setApplicants([]);
-        return;
+        try {
+            const res = await fetch('/api/projects');
+            if (res.ok) {
+                const data = await res.json();
+                if (Array.isArray(data)) setProjects(data);
+            }
+        } catch (error) {
+             console.error("Failed to fetch projects", error);
+        } finally {
+             setLoading(p => ({...p, projects: false}));
+        }
     };
     
-    const fetchApplicants = async () => {
-        setIsFetchingData(true);
+    const fetchTemplates = async () => {
         try {
-            const res = await fetch(`/api/ed-selection`);
-             if (!res.ok) throw new Error('Failed to fetch applicants');
-             const allApplicants = await res.json();
-             const projectApplicants = allApplicants.filter((app: any) => app.project_id === selectedProjectId && app.interview_hall_no != null);
-             setApplicants(projectApplicants);
-        } catch (error: any) {
-             toast({ title: "Error", description: error.message, variant: "destructive" });
-        } finally {
-            setIsFetchingData(false);
+            const res = await fetch('/api/pdf-templates');
+            if (res.ok) {
+                const data = await res.json();
+                 if (Array.isArray(data)) setTemplates(data);
+            }
+        } catch (error) {
+             console.error("Failed to fetch templates", error);
         }
     };
-    fetchApplicants();
-  }, [selectedProjectId, toast]);
-
-  const generateExactPDF = async () => {
-    if (applicants.length === 0) {
-        toast({ title: "No Data", description: "No applicants with assigned halls for the selected project.", variant: "destructive"});
-        return;
-    }
-    setLoading(true);
-    try {
-      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-
-      // --- FETCH AND LOAD FONT ---
-      const fontResponse = await fetch('/fonts/Amiri-Regular.ttf');
-      if (!fontResponse.ok) throw new Error('Failed to fetch font file.');
-      const fontArrayBuffer = await fontResponse.arrayBuffer();
-      const fontBase64 = arrayBufferToBase64(fontArrayBuffer);
-      
-      doc.addFileToVFS("Amiri-Regular.ttf", fontBase64);
-      doc.addFont("Amiri-Regular.ttf", "Amiri", "normal");
-      doc.setFont("Amiri");
-
-      const pageWidth = doc.internal.pageSize.getWidth();
-      
-      const groupedByHall = applicants.reduce((acc, app) => {
-        const hallNum = app.interview_hall_no || 0;
-        if (!acc[hallNum]) {
-            acc[hallNum] = { hallName: app.interview_hall_name, applicants: [] };
+    
+    const fetchApplicantColumns = async () => {
+        try {
+            const res = await fetch('/api/ed-selection');
+             if (res.ok) {
+                const data = await res.json();
+                 if(data && data[0]) setApplicantColumns(['_index', ...Object.keys(data[0])]);
+            }
+        } catch (error) {
+            console.error("Failed to fetch applicant columns", error);
         }
-        acc[hallNum].applicants.push(app);
-        return acc;
-      }, {} as Record<number, { hallName: string, applicants: Applicant[] }>);
+    };
 
-      Object.entries(groupedByHall).forEach(([hallNumber, hallData], hallIndex) => {
-          if (hallIndex > 0) {
-              doc.addPage();
-          }
+    fetchProjects();
+    fetchTemplates();
+    fetchApplicantColumns();
+  }, []);
 
-          // --- HEADER TEXT ---
-          doc.setFontSize(10);
-          doc.setTextColor(0, 0, 0);
-          const headerTextX = pageWidth - 15;
-          doc.text("الصندوق الاجتماعي للتنمية", headerTextX, 10, { align: 'right' });
-          doc.text("برنامج التحويلات النقدية المشروطة في التغذية", headerTextX, 15, { align: 'right' });
+  // --- TRIGGER SERVER SIDE GENERATION ---
+  const handleGenerate = async (outputType: 'preview' | 'download') => {
+    if (!selectedProjectId) return toast({ title: "Error", description: "Select a project first" });
+    setLoading(p => ({...p, generating: true}));
+    try {
+        const response = await fetch('/api/interviews/export', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                projectId: selectedProjectId,
+                settings: form.getValues() 
+            })
+        });
 
-          // --- LOGO ---
-          const logoX = 15, logoY = 10;
-          doc.setFillColor(40, 60, 80);
-          doc.rect(logoX, logoY, 8, 24, 'F');
-          doc.setTextColor(255, 255, 255);
-          doc.setFontSize(14);
-          doc.setFont("helvetica", "bold");
-          doc.text("S", logoX + 4, logoY + 6, { align: 'center', baseline: 'middle' });
-          doc.text("F", logoX + 4, logoY + 14, { align: 'center', baseline: 'middle' });
-          doc.text("D", logoX + 4, logoY + 22, { align: 'center', baseline: 'middle' });
-          doc.setFont("Amiri", "normal");
-          doc.setTextColor(40, 60, 80);
-          doc.setFontSize(14);
-          doc.text("الصندوق", logoX + 10, logoY + 6);
-          doc.text("الاجتماعي", logoX + 10, logoY + 13);
-          doc.text("للتنمية", logoX + 10, logoY + 20);
-          doc.setFontSize(7);
-          doc.text("Social Fund for Development", logoX, logoY + 28);
+        if (!response.ok) throw new Error("Failed to generate PDF");
 
-          // --- INFO TABLE ---
-          (doc as any).autoTable({
-            startY: 20, margin: { left: pageWidth - 100 }, head: [],
-            body: [[hallData.hallName || 'N/A', "مركز التدريب"], [hallNumber, "رقم القاعة"]],
-            theme: 'grid', styles: { font: 'Amiri', fontSize: 10, cellPadding: 1, halign: 'center', valign: 'middle' },
-            columnStyles: { 0: { cellWidth: 50, fontStyle: 'bold' }, 1: { cellWidth: 30, fillColor: [240, 240, 240], fontStyle: 'bold' } }
-          });
-          
-          // --- TITLE ---
-          doc.setFont("Amiri");
-          const title = "كشف درجات ممثل الصحة";
-          const titleWidth = 80, titleHeight = 10, titleX = (pageWidth - titleWidth) / 2, titleY = 20;
-          doc.setFillColor(0, 176, 240);
-          doc.roundedRect(titleX, titleY, titleWidth, titleHeight, 2, 2, 'F');
-          doc.setTextColor(255, 255, 255); doc.setFontSize(12); doc.setFont("Amiri", "bold");
-          doc.text(title, titleX + (titleWidth / 2), titleY + 7, { align: 'center' });
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
 
-          // --- MAIN TABLE ---
-          const tableHeaders = ["درجة المقابلة", "رقمها", "نوع الهوية", "اسم المثقفة", "كود\nالمثقفة", "الرقم"];
-          const tableBody = hallData.applicants.map((row, i) => ["", row.id_no || '', row.id_type || '', row.applicant_name, row.applicant_id, i + 1]);
-          
-          (doc as any).autoTable({
-            startY: 45, head: [tableHeaders], body: tableBody,
-            theme: 'grid', styles: { font: 'Amiri', fontSize: 10, halign: 'center', valign: 'middle' },
-            headStyles: { fillColor: [230, 230, 230], textColor: [0,0,0], fontStyle: 'bold', lineWidth: 0.2 },
-            columnStyles: { 0: { cellWidth: 50 }, 1: { cellWidth: 40 }, 2: { cellWidth: 30 }, 3: { cellWidth: 80, halign: 'right' }, 4: { cellWidth: 20 }, 5: { cellWidth: 15 } },
-            margin: { left: (pageWidth - 235) / 2 }
-          });
-          
-          // --- FOOTER ---
-          const finalY = (doc as any).lastAutoTable.finalY + 15;
-          doc.setFontSize(10); doc.setTextColor(0, 0, 0); doc.setFont("Amiri", "normal");
-          doc.text("الاسم:", pageWidth - 20, finalY, { align: 'right' });
-          doc.text("التوقيع:", pageWidth - 20, finalY + 10, { align: 'right' });
-      });
-      
-      doc.save("Interview_Scores_Exact_Replica.pdf");
-
-    } catch (error) {
-      console.error(error);
-      toast({title: "Error Generating PDF", description: "See console for details.", variant: 'destructive'});
+        if (outputType === 'preview') {
+            if (pdfPreviewUrl) URL.revokeObjectURL(pdfPreviewUrl);
+            setPdfPreviewUrl(url);
+        } else {
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `${form.getValues().templateName}.pdf`;
+            link.click();
+            URL.revokeObjectURL(url); // Clean up
+        }
+    } catch (e: any) {
+        toast({ title: "Export Error", description: e.message, variant: "destructive" });
     } finally {
-      setLoading(false);
+        setLoading(p => ({...p, generating: false}));
     }
   };
 
   return (
-     <div className="space-y-6">
+    <div className="container mx-auto py-6 space-y-6">
+      <div className="flex justify-between items-center">
+        <h1 className="text-3xl font-bold">PDF Designer (Server-Side)</h1>
+        <Button variant="outline" onClick={() => router.back()}><ArrowLeft className="mr-2 h-4 w-4" /> Back</Button>
+      </div>
+
       <Card>
-        <CardHeader>
-          <CardTitle>Export Interview Sheets</CardTitle>
-          <CardDescription>Select a project to generate a PDF of the interview scoresheet, formatted exactly as required.</CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-            <Select onValueChange={setSelectedProjectId} value={selectedProjectId}>
-                <SelectTrigger className="w-full md:w-1/2">
-                    <SelectValue placeholder="Select a Project" />
-                </SelectTrigger>
-                <SelectContent>
-                    {projects.map(p => <SelectItem key={p.projectId} value={p.projectId}>{p.projectName}</SelectItem>)}
-                </SelectContent>
-            </Select>
-            <Button onClick={generateExactPDF} disabled={loading || isFetchingData || !selectedProjectId} className="bg-blue-600 hover:bg-blue-700">
-              {(loading || isFetchingData) ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
-              {isFetchingData ? 'Loading Applicants...' : loading ? 'Generating PDF...' : `Export PDF for ${applicants.length} Applicants`}
-            </Button>
+        <CardHeader><CardTitle>Project Data Source</CardTitle></CardHeader>
+        <CardContent>
+          <Select onValueChange={setSelectedProjectId} value={selectedProjectId}>
+            <SelectTrigger className="w-full md:w-1/2">
+              <SelectValue placeholder="Select a project..." />
+            </SelectTrigger>
+            <SelectContent>
+              {projects.map(p => <SelectItem key={p.projectId} value={p.projectId}>{p.projectName}</SelectItem>)}
+            </SelectContent>
+          </Select>
         </CardContent>
       </Card>
+
+      <Form {...form}>
+        <form className="space-y-6">
+            <Accordion type="multiple" defaultValue={['item-1', 'item-2', 'item-3']} className="w-full">
+                <AccordionItem value="item-1">
+                    <AccordionTrigger>Document & Page Settings</AccordionTrigger>
+                    <AccordionContent className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4">
+                        <FormField control={form.control} name="templateName" render={({field}) => (
+                            <FormItem><FormLabel>Template Name</FormLabel><Input {...field} /></FormItem>
+                        )}/>
+                        <FormField control={form.control} name="pageSize" render={({field}) => (
+                            <FormItem><FormLabel>Size</FormLabel>
+                                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                    <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                                    <SelectContent><SelectItem value="a4">A4</SelectItem><SelectItem value="letter">Letter</SelectItem></SelectContent>
+                                </Select>
+                            </FormItem>
+                        )}/>
+                        <FormField control={form.control} name="pageOrientation" render={({field}) => (
+                            <FormItem><FormLabel>Orientation</FormLabel>
+                                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                    <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                                    <SelectContent><SelectItem value="portrait">Portrait</SelectItem><SelectItem value="landscape">Landscape</SelectItem></SelectContent>
+                                </Select>
+                            </FormItem>
+                        )}/>
+                    </AccordionContent>
+                </AccordionItem>
+                <AccordionItem value="item-2">
+                    <AccordionTrigger>Header & Title Design</AccordionTrigger>
+                    <AccordionContent className="space-y-4 p-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <FormField control={form.control} name="title" render={({field}) => (
+                                <FormItem><FormLabel>Main Title (Arabic)</FormLabel><Input {...field} className="text-right" dir="rtl" /></FormItem>
+                            )}/>
+                            <div className="flex gap-4">
+                                <FormField control={form.control} name="titleBgColor" render={({field}) => (
+                                    <FormItem><FormLabel>Bg Color</FormLabel><Input type="color" {...field} /></FormItem>
+                                )}/>
+                                <FormField control={form.control} name="titleColor" render={({field}) => (
+                                    <FormItem><FormLabel>Text Color</FormLabel><Input type="color" {...field} /></FormItem>
+                                )}/>
+                            </div>
+                        </div>
+                    </AccordionContent>
+                </AccordionItem>
+                <AccordionItem value="item-3">
+                    <AccordionTrigger>Table Columns (Order: First item = Rightmost column)</AccordionTrigger>
+                    <AccordionContent className="p-4 space-y-4">
+                        {fields.map((field, index) => (
+                            <Card key={field.id} className="p-4 relative">
+                                <Button type="button" variant="ghost" size="icon" className="absolute top-2 right-2" onClick={()=>remove(index)}><Trash2 className="h-4 w-4 text-destructive"/></Button>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
+                                    <FormField control={form.control} name={`tableColumns.${index}.header`} render={({field})=>(<FormItem><FormLabel>Header Text</FormLabel><Input {...field} /></FormItem>)}/>
+                                    <FormField control={form.control} name={`tableColumns.${index}.dataKey`} render={({field})=>(<FormItem><FormLabel>Data Field</FormLabel>
+                                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                            <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                                            <SelectContent>{applicantColumns.map(c=><SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                                        </Select>
+                                    </FormItem>)}/>
+                                    <FormField control={form.control} name={`tableColumns.${index}.width`} render={({field})=>(<FormItem><FormLabel>Width (mm)</FormLabel><Input type="number" {...field} /></FormItem>)}/>
+                                    <FormField control={form.control} name={`tableColumns.${index}.textSize`} render={({field})=>(<FormItem><FormLabel>Text Size</FormLabel><Input type="number" {...field} /></FormItem>)}/>
+                                </div>
+                            </Card>
+                        ))}
+                        <Button type="button" variant="outline" onClick={() => append({ header: 'جديد', dataKey: 'applicant_name', width: 30, textSize: 10, headerColor: "#000000", headerBgColor: "#F2F2F2", headerBold: true, textBold: false, textColor: "#000000" })}>
+                            <Plus className="mr-2 h-4 w-4" /> Add Column
+                        </Button>
+                    </AccordionContent>
+                </AccordionItem>
+            </Accordion>
+
+            <div className="flex justify-end gap-2 sticky bottom-4 bg-background p-4 border rounded-lg shadow-lg">
+                <Button type="button" variant="secondary" onClick={() => handleGenerate('preview')} disabled={loading.generating || !selectedProjectId}>
+                    {loading.generating ? <Loader2 className="animate-spin mr-2"/> : <Eye className="mr-2 h-4 w-4"/>} 
+                    Generate Preview
+                </Button>
+                <Button type="button" onClick={() => handleGenerate('download')} disabled={loading.generating || !selectedProjectId}>
+                    <FileDown className="mr-2 h-4 w-4"/> Download Final PDF
+                </Button>
+            </div>
+        </form>
+      </Form>
+
+      {pdfPreviewUrl && (
+        <Card className="mt-8">
+            <CardHeader className="flex flex-row justify-between items-center">
+                <CardTitle>Preview</CardTitle>
+                <Button variant="ghost" onClick={() => { if(pdfPreviewUrl) URL.revokeObjectURL(pdfPreviewUrl); setPdfPreviewUrl(null); }}>Close</Button>
+            </CardHeader>
+            <CardContent>
+                <iframe src={pdfPreviewUrl} className="w-full h-[800px] border rounded-md" />
+            </CardContent>
+        </Card>
+      )}
     </div>
   );
+}
+
+export default function ExportExactPDFPage() {
+    return <Suspense fallback={<Loader2 className="h-8 w-8 animate-spin" />}><ExportExactPDFPageContent /></Suspense>
 }
