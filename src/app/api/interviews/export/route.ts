@@ -107,7 +107,7 @@ export async function POST(req: Request) {
                     fillColor: settings.tableColumns[0]?.headerBgColor || '#F2F2F2',
                     textColor: settings.tableColumns[0]?.headerColor || '#000000',
                     fontStyle: settings.tableColumns[0]?.headerBold ? 'bold' : 'normal',
-                    halign: 'center'
+                    halign: 'right',
                 },
                 columnStyles: Object.fromEntries(
                     settings.tableColumns.map((c: any, i: number) => [i, {
