@@ -1,148 +1,166 @@
+
 // src/app/api/interviews/export/route.ts
 import { NextResponse } from "next/server";
-import { jsPDF } from "jspdf";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import fs from "fs";
 import path from "path";
-import QRCode from 'qrcode';
 import Database from 'better-sqlite3';
-import { fixArabic, arabicNumber } from "@/lib/arabic-fixer";
+
+// Helper for Arabic Numbers
+const toArabicDigits = (v: string | number) =>
+    String(v).replace(/\d/g, (d) => "٠١٢٣٤٥٦٧٨٩"[Number(d)]);
 
 const getDbPath = () => path.join(process.cwd(), 'src', 'data', 'educators.db');
 
-// Main function to generate the final PDF
-export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
-  const projectId = searchParams.get("projectId")!;
+export async function POST(req: Request) {
+    try {
+        const body = await req.json();
+        const { projectId, settings } = body;
 
-  if (!projectId) {
-    return NextResponse.json({ error: "projectId is required" }, { status: 400 });
-  }
-
-  try {
-    const dbPath = getDbPath();
-    if (!fs.existsSync(dbPath)) {
-        return NextResponse.json({ error: `Database not found at ${dbPath}. Please upload educator data first.` }, { status: 404 });
-    }
-    
-    const db = new Database(dbPath, { fileMustExist: true });
-    const stmt = db.prepare(
-        'SELECT applicant_id, applicant_name, interview_hall_no, interview_hall_name, total_score FROM educators WHERE project_id = ? AND interview_hall_no IS NOT NULL ORDER BY interview_hall_no, total_score DESC'
-    );
-    const applicants = stmt.all(projectId);
-    db.close();
-
-    if (applicants.length === 0) {
-      return NextResponse.json({ error: "No applicants with assigned interview halls found for this project." }, { status: 404 });
-    }
-
-    const doc = new jsPDF({ orientation: "p", unit: "mm", format: "a4" });
-    
-    const fontPath = path.join(process.cwd(), "public/fonts/Amiri-Regular.ttf");
-    const fontBytes = fs.readFileSync(fontPath);
-    doc.addFileToVFS("Amiri-Regular.ttf", fontBytes.toString('base64'));
-    doc.addFont("Amiri-Regular.ttf", "Amiri", "normal");
-    doc.setFont("Amiri");
-
-    const halls: Record<string, { hallName: string; applicants: any[] }> = {};
-    applicants.forEach((applicant: any) => {
-        const hallNumber = applicant.interview_hall_no;
-        if (!halls[hallNumber]) {
-            halls[hallNumber] = { hallName: applicant.interview_hall_name, applicants: [] };
+        if (!projectId || !settings) {
+            return NextResponse.json({ error: "projectId and settings are required" }, { status: 400 });
         }
-        halls[hallNumber].applicants.push(applicant);
-    });
 
-    let isFirstPageOfDoc = true;
-    for (const hallNumber in halls) {
-        if (!isFirstPageOfDoc) {
-            doc.addPage();
+        const dbPath = getDbPath();
+        if (!fs.existsSync(dbPath)) {
+            return NextResponse.json({ error: `Database not found at ${dbPath}. Please upload educator data first.` }, { status: 404 });
         }
-        isFirstPageOfDoc = false;
+        
+        const db = new Database(dbPath, { fileMustExist: true });
+        const stmt = db.prepare(
+            'SELECT * FROM educators WHERE project_id = ? AND interview_hall_no IS NOT NULL ORDER BY interview_hall_no, total_score DESC'
+        );
+        const applicants = stmt.all(projectId);
+        db.close();
 
-        const hallData = halls[hallNumber];
-        await generateHallPages(doc, hallData.applicants, { school: hallData.hallName, room: hallNumber });
+        if (applicants.length === 0) {
+            return NextResponse.json({ error: "No applicants with assigned interview halls found for this project." }, { status: 404 });
+        }
+
+        const doc = new jsPDF({ orientation: settings.pageOrientation, unit: 'mm', format: settings.pageSize });
+        
+        // Correct Font Embedding
+        const fontPath = path.join(process.cwd(), "public/fonts/Amiri-Regular.ttf");
+        if (!fs.existsSync(fontPath)) {
+            throw new Error("Amiri font not found at public/fonts/Amiri-Regular.ttf");
+        }
+        const fontBytes = fs.readFileSync(fontPath);
+        doc.addFileToVFS("Amiri-Regular.ttf", fontBytes.toString('base64'));
+        doc.addFont("Amiri-Regular.ttf", "Amiri", "normal");
+        doc.setFont("Amiri");
+
+        // Fetch project details for the header
+        const projectsRes = await fetch(new URL('/api/projects', req.url));
+        const projects = await projectsRes.json();
+        const project = projects.find((p: any) => p.projectId === projectId);
+
+
+        // Dynamic & Organized Content
+        const groupedByHall: Record<string, { hallName: string; hallNo: string; applicants: any[] }> = applicants.reduce((acc: any, app: any) => {
+            const hallNumKey = app[settings.headerHallNoDynamic || 'interview_hall_no'] || 'unassigned';
+            if (!acc[hallNumKey]) {
+                acc[hallNumKey] = {
+                    hallName: settings.headerHallNameType === 'manual' 
+                        ? settings.headerHallNameManual 
+                        : (app[settings.headerHallNameDynamic || 'interview_hall_name'] || 'N/A'),
+                    hallNo: settings.headerHallNoType === 'manual' 
+                        ? settings.headerHallNoManual 
+                        : hallNumKey,
+                    applicants: []
+                };
+            }
+            acc[hallNumKey].applicants.push(app);
+            return acc;
+        }, {});
+        
+        let isFirstPage = true;
+        for (const hallKey in groupedByHall) {
+            const hallData = groupedByHall[hallKey];
+            if (!isFirstPage) {
+                doc.addPage();
+            }
+            isFirstPage = false;
+
+            const head = [settings.tableColumns.map((c: any) => c.header)];
+            const body = hallData.applicants.map((row: any, rowIndex: number) => 
+                settings.tableColumns.map((col: any) => {
+                    if (col.dataKey === '_index') return toArabicDigits(rowIndex + 1);
+                    // Arabic Text Shaping will be handled by jsPDF with the right font
+                    return toArabicDigits(row[col.dataKey] ?? '');
+                })
+            );
+            
+            autoTable(doc, {
+                head, 
+                body,
+                startY: 55,
+                theme: 'grid',
+                styles: {
+                    font: 'Amiri',
+                    fontStyle: 'normal',
+                    fontSize: 10,
+                    halign: 'center',
+                    valign: 'middle',
+                    lineWidth: settings.tableInnerBorder ? settings.tableBorderThickness : 0,
+                    lineColor: settings.tableBorderColor,
+                },
+                headStyles: {
+                    fillColor: settings.tableColumns[0]?.headerBgColor || '#F2F2F2',
+                    textColor: settings.tableColumns[0]?.headerColor || '#000000',
+                    fontStyle: settings.tableColumns[0]?.headerBold ? 'bold' : 'normal',
+                    halign: 'center'
+                },
+                columnStyles: Object.fromEntries(
+                    settings.tableColumns.map((c: any, i: number) => [i, {
+                        cellWidth: c.width,
+                        fontStyle: c.textBold ? 'bold' : 'normal',
+                        textColor: c.textColor || '#000000',
+                        fontSize: c.textSize || 10,
+                        halign: 'center',
+                    }])
+                ),
+                didDrawPage: (data) => {
+                    // Header
+                    doc.setFont('Amiri', settings.titleBold ? 'bold' : 'normal');
+                    doc.setFillColor(settings.titleBgColor);
+                    doc.rect(10, 10, doc.internal.pageSize.getWidth() - 20, 15, 'F');
+                    doc.setTextColor(settings.titleColor);
+                    doc.setFontSize(16);
+                    doc.text(settings.title, doc.internal.pageSize.getWidth() / 2, 19, { align: 'center' });
+
+                    doc.setFont("Amiri", "normal");
+                    doc.setTextColor('#000000');
+                    doc.setFontSize(11);
+                    doc.text(`Project: ${project?.projectName || ''} (${projectId})`, 15, 35);
+                    doc.text(`Hall: ${hallData.hallName} (No. ${hallData.hallNo})`, 15, 42);
+
+                    if (settings.pageBorder) {
+                        doc.setDrawColor(settings.pageBorderColor);
+                        doc.setLineWidth(settings.pageBorderThickness);
+                        doc.rect(5, 5, doc.internal.pageSize.getWidth() - 10, doc.internal.pageSize.getHeight() - 10);
+                    }
+
+                    // Footer
+                     const finalY = doc.internal.pageSize.getHeight() - 20;
+                     doc.setFontSize(10);
+                     doc.text(`Page ${data.pageNumber}`, doc.internal.pageSize.getWidth() / 2, finalY, { align: 'center' });
+                },
+                margin: { top: 50, bottom: 30, left: 10, right: 10 },
+                tableWidth: settings.fitColumns ? 'auto' : 'wrap',
+            });
+        }
+
+        const pdfBytes = doc.output('arraybuffer');
+        return new Response(pdfBytes, {
+            headers: {
+                "Content-Type": "application/pdf",
+                "Content-Disposition": `attachment; filename="${settings.templateName}.pdf"`,
+            },
+        });
+
+    } catch (error: any) {
+        console.error("PDF Export Error:", error);
+        return NextResponse.json({ error: `Failed to export PDF: ${error.message}` }, { status: 500 });
     }
-
-    const pdfBytes = doc.output('arraybuffer');
-    return new Response(pdfBytes, {
-        headers: {
-            "Content-Type": "application/pdf",
-            "Content-Disposition": `attachment; filename="interview_statements_${projectId}.pdf"`,
-        },
-    });
-
-  } catch (error: any) {
-    console.error("PDF Export Error:", error);
-    return NextResponse.json({ error: `Failed to export PDF: ${error.message}` }, { status: 500 });
-  }
-}
-
-async function generateHallPages(doc: jsPDF, data: any[], meta: { school: string, room: string }) {
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const pageHeight = doc.internal.pageSize.getHeight();
-  const margin = 15;
-  const ROW_HEIGHT = 10;
-  let pageNo = 1;
-  let y = 0;
-
-  const drawHeaderFooter = (pageNumber: number) => {
-    // Signature Headers
-    const sigHeaders = ["رئيس المجموعة", "ممثل الصحة", "ممثل الصندوق", "ممثل المجلس المحلي"];
-    const sigColWidth = (pageWidth - 30) / 4;
-    doc.setFontSize(9);
-    sigHeaders.forEach((header, i) => {
-        const x = pageWidth - margin - (i * sigColWidth);
-        doc.text(fixArabic(header), x, 15, { align: "right" });
-        doc.text(fixArabic("الاسم:"), x, 22, { align: "right" });
-        doc.text(fixArabic("التوقيع:"), x, 29, { align: "right" });
-    });
-
-    // Page Number
-    doc.text(fixArabic(`صفحة ${arabicNumber(pageNumber)}`), pageWidth / 2, 40, { align: "center" });
-
-    // Sub-headers
-    doc.setFontSize(11);
-    doc.text(fixArabic("برنامج التحويلات النقدية"), pageWidth - margin, 55, { align: "right" });
-    doc.text(fixArabic(meta.school), pageWidth - margin, 62, { align: "right" });
-    doc.text(fixArabic(`رقم القاعة: ${meta.room}`), pageWidth - margin, 69, { align: "right" });
-
-    // Main Title
-    doc.setFontSize(14);
-    doc.text(fixArabic("كشف درجات ممثلي المجلس المحلي"), pageWidth / 2, 85, { align: "center" });
-
-    // Table Header
-    doc.setFontSize(10);
-    doc.text(fixArabic("م"), pageWidth - 20, 100, { align: "right" });
-    doc.text(fixArabic("اسم المتقدمة"), pageWidth - 40, 100, { align: "right" });
-    doc.text(fixArabic("التوقيع"), 50, 100, { align: "left" });
-    
-    y = 110;
-  };
-
-  drawHeaderFooter(pageNo);
-
-  for (let i = 0; i < data.length; i++) {
-    if (y > pageHeight - 30) {
-        doc.addPage();
-        pageNo++;
-        drawHeaderFooter(pageNo);
-    }
-    
-    const row = data[i];
-
-    // QR Code
-    const qrDataUrl = await QRCode.toDataURL(String(row.applicant_id));
-    doc.addImage(qrDataUrl, 'PNG', 10, y - 8, 10, 10);
-    
-    // Number
-    doc.text(String(i + 1), pageWidth - 20, y, { align: "right" });
-
-    // Name
-    doc.text(fixArabic(row.applicant_name), pageWidth - 40, y, { align: "right" });
-
-    // Signature line placeholder
-    doc.line(50, y, 100, y);
-
-    y += ROW_HEIGHT;
-  }
 }
