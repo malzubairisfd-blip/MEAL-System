@@ -81,9 +81,11 @@ export async function POST(req: Request) {
             }
             isFirstPage = false;
 
-            const head = [settings.tableColumns.map((c: any) => c.header)];
+            const reversedTableColumns = [...settings.tableColumns].reverse();
+
+            const head = [reversedTableColumns.map((c: any) => c.header)];
             const body = hallData.applicants.map((row: any, rowIndex: number) => 
-                settings.tableColumns.map((col: any) => {
+                reversedTableColumns.map((col: any) => {
                     if (col.dataKey === '_index') return toArabicDigits(rowIndex + 1);
                     // Arabic Text Shaping will be handled by jsPDF with the right font
                     return toArabicDigits(row[col.dataKey] ?? '');
@@ -102,6 +104,7 @@ export async function POST(req: Request) {
                     valign: 'middle',
                     lineWidth: settings.tableInnerBorder ? settings.tableBorderThickness : 0,
                     lineColor: settings.tableBorderColor,
+                    halign: 'right', // Default alignment to right for all cells
                 },
                 headStyles: {
                     fillColor: settings.tableColumns[0]?.headerBgColor || '#F2F2F2',
@@ -110,7 +113,7 @@ export async function POST(req: Request) {
                     halign: 'right',
                 },
                 columnStyles: Object.fromEntries(
-                    settings.tableColumns.map((c: any, i: number) => [i, {
+                    reversedTableColumns.map((c: any, i: number) => [i, {
                         cellWidth: c.width,
                         fontStyle: c.textBold ? 'bold' : 'normal',
                         textColor: c.textColor || '#000000',
