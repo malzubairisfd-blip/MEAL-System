@@ -12,6 +12,18 @@ const toArabicDigits = (v: string | number) =>
 
 const getDbPath = () => path.join(process.cwd(), "src", "data", "educators.db");
 
+// Helper to convert hex to RGB array for jsPDF
+function hexToRgb(hex: string): [number, number, number] {
+    if (!hex || typeof hex !== 'string') return [0, 0, 0];
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result ? [
+        parseInt(result[1], 16),
+        parseInt(result[2], 16),
+        parseInt(result[3], 16)
+    ] : [0, 0, 0];
+}
+
+
 /* RTL Info Box (label beside value) */
 function drawInfoBox(doc: jsPDF, label: string, value: string, xRight: number, y: number) {
   doc.setFontSize(10);
@@ -40,7 +52,8 @@ function drawPageFrame(doc: jsPDF, settings: any, project: any, hall: any, pageN
   doc.rect(5, 5, pageW - 10, pageH - 10);
 
   /* ================= TITLE ================= */
-  doc.setFillColor(settings.titleBgColor);
+  const titleBgRgb = hexToRgb(settings.titleBgColor);
+  doc.setFillColor(...titleBgRgb);
   doc.rect(45, 10, pageW - 90, 10, "F");
 
   let titleFontStyle = 'normal';
@@ -50,7 +63,8 @@ function drawPageFrame(doc: jsPDF, settings: any, project: any, hall: any, pageN
   doc.setFont("Amiri", titleFontStyle);
   
   doc.setFontSize(settings.titleSize || 14);
-  doc.setTextColor(settings.titleColor);
+  const titleTextRgb = hexToRgb(settings.titleColor);
+  doc.setTextColor(...titleTextRgb);
   doc.text(settings.title, pageW / 2, 16.5, { align: "center" });
 
   /* ================= LOGO (COMPACT FIX) ================= */
@@ -86,7 +100,7 @@ function drawPageFrame(doc: jsPDF, settings: any, project: any, hall: any, pageN
   /* ================= FOOTER ================= */
   const y = pageH - 25;
   doc.setFontSize(10);
-  doc.setTextColor("#000");
+  doc.setTextColor(0, 0, 0);
 
   doc.text("الاسم:", pageW - 15, y, { align: "right" });
   doc.line(pageW - 50, y + 1, pageW - 110, y + 1);
@@ -204,7 +218,7 @@ export async function POST(req: Request) {
         body: body,
         theme: "grid",
         styles: { font: "Amiri", valign: "middle", lineWidth: 0.4 },
-        headStyles: { lineWidth: 0.6 },
+        headStyles: { lineWidth: 0.6, halign: "right" },
         tableLineWidth: 1.2,
         columnStyles: columnStyles,
         didDrawPage: (data: any) => {
@@ -224,4 +238,3 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: e.message }, { status: 500 });
   }
 }
-
