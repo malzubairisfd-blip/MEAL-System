@@ -26,6 +26,7 @@ function hexToRgb(hex: string): [number, number, number] {
 
 /* RTL Info Box (label beside value) */
 function drawInfoBox(doc: jsPDF, label: string, value: string, xRight: number, y: number) {
+  doc.setFont("Amiri", "normal");
   doc.setFontSize(10);
   doc.setLineWidth(0.3);
   const padding = 2;
@@ -66,6 +67,9 @@ function drawPageFrame(doc: jsPDF, settings: any, project: any, hall: any, pageN
   const titleTextRgb = hexToRgb(settings.titleColor);
   doc.setTextColor(...titleTextRgb);
   doc.text(settings.title, pageW / 2, 16.5, { align: "center" });
+  
+  // Reset font for other elements
+  doc.setFont("Amiri", "normal");
 
   /* ================= LOGO (COMPACT FIX) ================= */
   const logoX = 15;
@@ -98,6 +102,7 @@ function drawPageFrame(doc: jsPDF, settings: any, project: any, hall: any, pageN
   drawInfoBox(doc, "اسم القاعة", hall.hallName || "", 90, 36);
 
   /* ================= FOOTER ================= */
+  doc.setFont("Amiri", "normal");
   const y = pageH - 25;
   doc.setFontSize(10);
   doc.setTextColor(0, 0, 0);
@@ -138,13 +143,28 @@ export async function POST(req: Request) {
       format: settings.pageSize,
     });
 
-    const fontPath = path.join(process.cwd(), "public/fonts/Amiri-Regular.ttf");
-    const fontB64 = fs.readFileSync(fontPath).toString("base64");
-    doc.addFileToVFS("Amiri.ttf", fontB64);
-    doc.addFont("Amiri.ttf", "Amiri", "normal");
-    doc.addFont("Amiri.ttf", "Amiri", "bold");
-    doc.addFont("Amiri.ttf", "Amiri", "italic");
-    doc.addFont("Amiri.ttf", "Amiri", "bolditalic");
+    const fontRegularPath = path.join(process.cwd(), "public/fonts/Amiri-Regular.ttf");
+    doc.addFileToVFS("Amiri-Regular.ttf", fs.readFileSync(fontRegularPath).toString("base64"));
+    doc.addFont("Amiri-Regular.ttf", "Amiri", "normal");
+
+    try {
+        const fontBoldPath = path.join(process.cwd(), "public/fonts/Amiri-Bold.ttf");
+        doc.addFileToVFS("Amiri-Bold.ttf", fs.readFileSync(fontBoldPath).toString("base64"));
+        doc.addFont("Amiri-Bold.ttf", "Amiri", "bold");
+    } catch (e) { console.error("Could not load bold font, using regular as fallback."); }
+    
+    try {
+        const fontItalicPath = path.join(process.cwd(), "public/fonts/Amiri-Italic.ttf");
+        doc.addFileToVFS("Amiri-Italic.ttf", fs.readFileSync(fontItalicPath).toString("base64"));
+        doc.addFont("Amiri-Italic.ttf", "Amiri", "italic");
+    } catch (e) { console.error("Could not load italic font, using regular as fallback."); }
+
+    try {
+        const fontBoldItalicPath = path.join(process.cwd(), "public/fonts/Amiri-BoldItalic.ttf");
+        doc.addFileToVFS("Amiri-BoldItalic.ttf", fs.readFileSync(fontBoldItalicPath).toString("base64"));
+        doc.addFont("Amiri-BoldItalic.ttf", "Amiri", "bolditalic");
+    } catch (e) { console.error("Could not load bold-italic font, using regular as fallback."); }
+
     doc.setFont("Amiri");
 
     const grouped = rows.reduce((acc: any, r: any) => {
@@ -224,6 +244,7 @@ export async function POST(req: Request) {
         didDrawPage: (data: any) => {
           drawPageFrame(doc, settings, project, hall, data.pageNumber);
         },
+        margin: { top: 50, bottom: 30, right: 50 },
       });
     }
 
