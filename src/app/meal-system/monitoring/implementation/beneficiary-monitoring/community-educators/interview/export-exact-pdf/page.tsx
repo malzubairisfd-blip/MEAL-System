@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useEffect, useState, Suspense } from 'react';
@@ -13,12 +14,10 @@ import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Save, Loader2, Plus, Trash2, FileDown, Eye } from 'lucide-react';
+import { ArrowLeft, Loader2, Plus, Trash2, FileDown, Eye, Save } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 
-// --- Types & Schemas ---
 const TableColumnSchema = z.object({
   header: z.string().min(1),
   dataKey: z.string().min(1),
@@ -32,7 +31,7 @@ const TableColumnSchema = z.object({
 });
 
 const PdfSettingsSchema = z.object({
-  templateName: z.string().min(1),
+  templateName: z.string().min(1, "Template name is required"),
   title: z.string().min(1),
   titleColor: z.string(),
   titleBgColor: z.string(),
@@ -67,9 +66,11 @@ function ExportExactPDFPageContent() {
   const [projects, setProjects] = useState<any[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string>(searchParams.get('projectId') || '');
   const [applicantColumns, setApplicantColumns] = useState<string[]>([]);
-  const [loading, setLoading] = useState({ projects: true, generating: false });
+  const [loading, setLoading] = useState({ projects: true, generating: false, templates: true });
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
+
   const [templates, setTemplates] = useState<PdfSettings[]>([]);
+  const [selectedTemplateName, setSelectedTemplateName] = useState<string>('');
 
   const form = useForm<PdfSettings>({
     resolver: zodResolver(PdfSettingsSchema),
@@ -92,50 +93,73 @@ function ExportExactPDFPageContent() {
   const { fields, append, remove } = useFieldArray({ control: form.control, name: "tableColumns" });
 
   useEffect(() => {
-    const fetchProjects = async () => {
-        try {
-            const res = await fetch('/api/projects');
-            if (res.ok) {
-                const data = await res.json();
-                if (Array.isArray(data)) setProjects(data);
-            }
-        } catch (error) {
-             console.error("Failed to fetch projects", error);
-        } finally {
-             setLoading(p => ({...p, projects: false}));
-        }
-    };
-    
-    const fetchTemplates = async () => {
-        try {
-            const res = await fetch('/api/pdf-templates');
-            if (res.ok) {
-                const data = await res.json();
-                 if (Array.isArray(data)) setTemplates(data);
-            }
-        } catch (error) {
-             console.error("Failed to fetch templates", error);
-        }
-    };
-    
-    const fetchApplicantColumns = async () => {
-        try {
-            const res = await fetch('/api/ed-selection');
-             if (res.ok) {
-                const data = await res.json();
-                 if(data && data[0]) setApplicantColumns(['_index', ...Object.keys(data[0])]);
-            }
-        } catch (error) {
-            console.error("Failed to fetch applicant columns", error);
-        }
-    };
-
-    fetchProjects();
-    fetchTemplates();
-    fetchApplicantColumns();
+    fetch('/api/projects').then(res => res.json()).then(data => {
+        if (Array.isArray(data)) setProjects(data);
+        setLoading(p => ({...p, projects: false}));
+    });
+    fetch('/api/ed-selection').then(res => res.json()).then(data => {
+        if(data && data[0]) setApplicantColumns(['_index', ...Object.keys(data[0])]);
+    });
   }, []);
 
-  // --- TRIGGER SERVER SIDE GENERATION ---
+  useEffect(() => {
+    setLoading(p => ({ ...p, templates: true }));
+    fetch('/api/pdf-templates')
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) setTemplates(data);
+      })
+      .catch(() => toast({ title: 'Error', description: 'Could not load templates.', variant: 'destructive' }))
+      .finally(() => setLoading(p => ({ ...p, templates: false })));
+  }, [toast]);
+
+  const handleTemplateSelect = (templateName: string) => {
+    const template = templates.find(t => t.templateName === templateName);
+    if (template) {
+      form.reset(template);
+      setSelectedTemplateName(template.templateName);
+      toast({ title: 'Template Loaded', description: `Loaded settings from "${templateName}".` });
+    }
+  };
+
+  const handleSaveTemplate = async () => {
+    const currentValues = form.getValues();
+    if (!currentValues.templateName) {
+      toast({ title: "Template Name Required", description: "Please enter a name for your template before saving.", variant: 'destructive' });
+      return;
+    }
+
+    let newTemplates = [...templates];
+    const existingIndex = newTemplates.findIndex(t => t.templateName === currentValues.templateName);
+
+    if (existingIndex > -1) {
+      if (confirm(`A template named "${currentValues.templateName}" already exists. Overwrite it?`)) {
+        newTemplates[existingIndex] = currentValues;
+      } else {
+        return; // User cancelled overwrite
+      }
+    } else {
+      newTemplates.push(currentValues);
+    }
+    
+    setLoading(p => ({ ...p, templates: true }));
+    try {
+      const res = await fetch('/api/pdf-templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newTemplates)
+      });
+      if (!res.ok) throw new Error("Failed to save templates on server.");
+      setTemplates(newTemplates);
+      setSelectedTemplateName(currentValues.templateName);
+      toast({ title: 'Template Saved!', description: `Settings for "${currentValues.templateName}" have been saved.` });
+    } catch(e: any) {
+      toast({ title: 'Save Error', description: e.message, variant: 'destructive' });
+    } finally {
+      setLoading(p => ({ ...p, templates: false }));
+    }
+  };
+
   const handleGenerate = async (outputType: 'preview' | 'download') => {
     if (!selectedProjectId) return toast({ title: "Error", description: "Select a project first" });
     setLoading(p => ({...p, generating: true}));
@@ -143,26 +167,21 @@ function ExportExactPDFPageContent() {
         const response = await fetch('/api/interviews/export', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                projectId: selectedProjectId,
-                settings: form.getValues() 
-            })
+            body: JSON.stringify({ projectId: selectedProjectId, settings: form.getValues() })
         });
-
         if (!response.ok) throw new Error("Failed to generate PDF");
-
         const blob = await response.blob();
         const url = URL.createObjectURL(blob);
-
+        if (pdfPreviewUrl) URL.revokeObjectURL(pdfPreviewUrl);
+        
         if (outputType === 'preview') {
-            if (pdfPreviewUrl) URL.revokeObjectURL(pdfPreviewUrl);
-            setPdfPreviewUrl(url);
+          setPdfPreviewUrl(url);
         } else {
             const link = document.createElement('a');
             link.href = url;
             link.download = `${form.getValues().templateName}.pdf`;
             link.click();
-            URL.revokeObjectURL(url); // Clean up
+            URL.revokeObjectURL(url); // Clean up immediately for download
         }
     } catch (e: any) {
         toast({ title: "Export Error", description: e.message, variant: "destructive" });
@@ -174,7 +193,7 @@ function ExportExactPDFPageContent() {
   return (
     <div className="container mx-auto py-6 space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">PDF Designer (Server-Side)</h1>
+        <h1 className="text-3xl font-bold">PDF Designer (RTL Server-Side)</h1>
         <Button variant="outline" onClick={() => router.back()}><ArrowLeft className="mr-2 h-4 w-4" /> Back</Button>
       </div>
 
@@ -189,6 +208,27 @@ function ExportExactPDFPageContent() {
               {projects.map(p => <SelectItem key={p.projectId} value={p.projectId}>{p.projectName}</SelectItem>)}
             </SelectContent>
           </Select>
+        </CardContent>
+      </Card>
+      
+      <Card>
+        <CardHeader>
+          <CardTitle>Template Management</CardTitle>
+          <CardDescription>Load, save, or manage your PDF export templates.</CardDescription>
+        </CardHeader>
+        <CardContent className="flex gap-4">
+          <Select onValueChange={handleTemplateSelect} value={selectedTemplateName}>
+            <SelectTrigger>
+              <SelectValue placeholder="Load a template..." />
+            </SelectTrigger>
+            <SelectContent>
+              {templates.map(t => <SelectItem key={t.templateName} value={t.templateName}>{t.templateName}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Button onClick={handleSaveTemplate} disabled={loading.templates}>
+            {loading.templates && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+            Save Settings as Template
+          </Button>
         </CardContent>
       </Card>
 
@@ -219,6 +259,7 @@ function ExportExactPDFPageContent() {
                         )}/>
                     </AccordionContent>
                 </AccordionItem>
+
                 <AccordionItem value="item-2">
                     <AccordionTrigger>Header & Title Design</AccordionTrigger>
                     <AccordionContent className="space-y-4 p-4">
@@ -237,24 +278,30 @@ function ExportExactPDFPageContent() {
                         </div>
                     </AccordionContent>
                 </AccordionItem>
+
                 <AccordionItem value="item-3">
                     <AccordionTrigger>Table Columns (Order: First item = Rightmost column)</AccordionTrigger>
                     <AccordionContent className="p-4 space-y-4">
                         {fields.map((field, index) => (
-                            <Card key={field.id} className="p-4 relative">
-                                <Button type="button" variant="ghost" size="icon" className="absolute top-2 right-2" onClick={()=>remove(index)}><Trash2 className="h-4 w-4 text-destructive"/></Button>
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
-                                    <FormField control={form.control} name={`tableColumns.${index}.header`} render={({field})=>(<FormItem><FormLabel>Header Text</FormLabel><Input {...field} /></FormItem>)}/>
-                                    <FormField control={form.control} name={`tableColumns.${index}.dataKey`} render={({field})=>(<FormItem><FormLabel>Data Field</FormLabel>
+                            <div key={field.id} className="border p-4 rounded-lg grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+                                <FormField control={form.control} name={`tableColumns.${index}.header`} render={({field}) => (
+                                    <FormItem><FormLabel>Header Text</FormLabel><Input {...field} /></FormItem>
+                                )}/>
+                                <FormField control={form.control} name={`tableColumns.${index}.dataKey`} render={({field}) => (
+                                    <FormItem><FormLabel>Data Field</FormLabel>
                                         <Select onValueChange={field.onChange} defaultValue={field.value}>
                                             <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
-                                            <SelectContent>{applicantColumns.map(c=><SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                                            <SelectContent>
+                                                {applicantColumns.map(col => <SelectItem key={col} value={col}>{col}</SelectItem>)}
+                                            </SelectContent>
                                         </Select>
-                                    </FormItem>)}/>
-                                    <FormField control={form.control} name={`tableColumns.${index}.width`} render={({field})=>(<FormItem><FormLabel>Width (mm)</FormLabel><Input type="number" {...field} /></FormItem>)}/>
-                                    <FormField control={form.control} name={`tableColumns.${index}.textSize`} render={({field})=>(<FormItem><FormLabel>Text Size</FormLabel><Input type="number" {...field} /></FormItem>)}/>
-                                </div>
-                            </Card>
+                                    </FormItem>
+                                )}/>
+                                <FormField control={form.control} name={`tableColumns.${index}.width`} render={({field}) => (
+                                    <FormItem><FormLabel>Width (mm)</FormLabel><Input type="number" {...field} /></FormItem>
+                                )}/>
+                                <Button type="button" variant="destructive" onClick={() => remove(index)}><Trash2 className="h-4 w-4"/></Button>
+                            </div>
                         ))}
                         <Button type="button" variant="outline" onClick={() => append({ header: 'جديد', dataKey: 'applicant_name', width: 30, textSize: 10, headerColor: "#000000", headerBgColor: "#F2F2F2", headerBold: true, textBold: false, textColor: "#000000" })}>
                             <Plus className="mr-2 h-4 w-4" /> Add Column
@@ -264,26 +311,22 @@ function ExportExactPDFPageContent() {
             </Accordion>
 
             <div className="flex justify-end gap-2 sticky bottom-4 bg-background p-4 border rounded-lg shadow-lg">
-                <Button type="button" variant="secondary" onClick={() => handleGenerate('preview')} disabled={loading.generating || !selectedProjectId}>
-                    {loading.generating ? <Loader2 className="animate-spin mr-2"/> : <Eye className="mr-2 h-4 w-4"/>} 
-                    Generate Preview
+                <Button type="button" onClick={handleSaveTemplate} disabled={loading.templates}>
+                    <Save className="mr-2 h-4 w-4" /> Save Template
                 </Button>
-                <Button type="button" onClick={() => handleGenerate('download')} disabled={loading.generating || !selectedProjectId}>
-                    <FileDown className="mr-2 h-4 w-4"/> Download Final PDF
+                <Button type="button" variant="secondary" onClick={() => handleGenerate('preview')} disabled={loading.generating}>
+                    {loading.generating ? <Loader2 className="animate-spin mr-2"/> : <Eye className="mr-2 h-4 w-4"/>} Preview
+                </Button>
+                <Button type="button" onClick={() => handleGenerate('download')} disabled={loading.generating}>
+                    <FileDown className="mr-2 h-4 w-4"/> Download PDF
                 </Button>
             </div>
         </form>
       </Form>
 
       {pdfPreviewUrl && (
-        <Card className="mt-8">
-            <CardHeader className="flex flex-row justify-between items-center">
-                <CardTitle>Preview</CardTitle>
-                <Button variant="ghost" onClick={() => { if(pdfPreviewUrl) URL.revokeObjectURL(pdfPreviewUrl); setPdfPreviewUrl(null); }}>Close</Button>
-            </CardHeader>
-            <CardContent>
-                <iframe src={pdfPreviewUrl} className="w-full h-[800px] border rounded-md" />
-            </CardContent>
+        <Card className="mt-8"><CardHeader><CardTitle>Preview</CardTitle></CardHeader>
+          <CardContent><iframe src={pdfPreviewUrl} className="w-full h-[800px] border rounded-md" /></CardContent>
         </Card>
       )}
     </div>
