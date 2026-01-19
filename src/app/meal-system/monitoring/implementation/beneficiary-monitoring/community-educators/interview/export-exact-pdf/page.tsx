@@ -22,20 +22,26 @@ const TableColumnSchema = z.object({
   header: z.string().min(1),
   dataKey: z.string().min(1),
   width: z.coerce.number(),
-  textSize: z.coerce.number(),
-  headerColor: z.string(),
+  headerTextSize: z.coerce.number(),
+  headerTextColor: z.string(),
   headerBgColor: z.string(),
   headerBold: z.boolean(),
-  textColor: z.string(),
-  textBold: z.boolean(),
+  headerItalic: z.boolean(),
+  cellTextSize: z.coerce.number(),
+  cellTextColor: z.string(),
+  cellBgColor: z.string(),
+  cellBold: z.boolean(),
+  cellItalic: z.boolean(),
 });
 
 const PdfSettingsSchema = z.object({
-  templateName: z.string().min(1, "Template name is required"),
+  templateName: z.string().min(1),
   title: z.string().min(1),
+  titleSize: z.coerce.number(),
   titleColor: z.string(),
   titleBgColor: z.string(),
   titleBold: z.boolean(),
+  titleItalic: z.boolean(),
   pageSize: z.enum(['a4', 'letter', 'legal']),
   pageOrientation: z.enum(['portrait', 'landscape']),
   fitColumns: z.boolean(),
@@ -77,16 +83,38 @@ function ExportExactPDFPageContent() {
     defaultValues: {
       templateName: "New Template",
       title: "كشف درجات ممثل الصحة",
-      titleColor: "#FFFFFF", titleBgColor: "#0070C0", titleBold: true,
-      pageSize: 'a4', pageOrientation: 'portrait', fitColumns: true,
-      pageBorder: true, pageBorderColor: '#000000', pageBorderThickness: 0.5,
-      headerHallNameType: 'dynamic', headerHallNameDynamic: 'interview_hall_name',
-      headerHallNoType: 'dynamic', headerHallNoDynamic: 'interview_hall_no',
+      titleSize: 16,
+      titleColor: "#FFFFFF",
+      titleBgColor: "#0070C0",
+      titleBold: true,
+      titleItalic: false,
+      pageSize: 'a4',
+      pageOrientation: 'portrait',
+      fitColumns: true,
+      pageBorder: true,
+      pageBorderColor: '#000000',
+      pageBorderThickness: 0.5,
+      headerHallNameType: 'dynamic',
+      headerHallNameDynamic: 'interview_hall_name',
+      headerHallNoType: 'dynamic',
+      headerHallNoDynamic: 'interview_hall_no',
       tableColumns: [
-        { header: 'الرقم', dataKey: '_index', width: 15, textSize: 10, headerColor: "#000000", headerBgColor: "#F2F2F2", headerBold: true, textBold: false, textColor: "#000000" },
-        { header: 'اسم المتقدمة', dataKey: 'applicant_name', width: 60, textSize: 10, headerColor: "#000000", headerBgColor: "#F2F2F2", headerBold: true, textBold: false, textColor: "#000000" },
+        {
+          header: 'الرقم', dataKey: '_index', width: 15,
+          headerTextSize: 10, headerTextColor: "#000000", headerBgColor: "#F2F2F2", headerBold: true, headerItalic: false,
+          cellTextSize: 10, cellTextColor: "#000000", cellBgColor: "#FFFFFF", cellBold: false, cellItalic: false,
+        },
+        {
+          header: 'اسم المتقدمة', dataKey: 'applicant_name', width: 60,
+          headerTextSize: 10, headerTextColor: "#000000", headerBgColor: "#F2F2F2", headerBold: true, headerItalic: false,
+          cellTextSize: 10, cellTextColor: "#000000", cellBgColor: "#FFFFFF", cellBold: false, cellItalic: false,
+        },
       ],
-      tableOuterBorder: true, tableInnerBorder: true, tableBorderColor: "#444444", tableBorderThickness: 0.2, rowHeight: 10,
+      tableOuterBorder: true,
+      tableInnerBorder: true,
+      tableBorderColor: "#444444",
+      tableBorderThickness: 0.2,
+      rowHeight: 10,
     },
   });
 
@@ -101,7 +129,7 @@ function ExportExactPDFPageContent() {
         if(data && data[0]) setApplicantColumns(['_index', ...Object.keys(data[0])]);
     });
   }, []);
-
+  
   useEffect(() => {
     setLoading(p => ({ ...p, templates: true }));
     fetch('/api/pdf-templates')
@@ -263,17 +291,16 @@ function ExportExactPDFPageContent() {
                 <AccordionItem value="item-2">
                     <AccordionTrigger>Header & Title Design</AccordionTrigger>
                     <AccordionContent className="space-y-4 p-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
                             <FormField control={form.control} name="title" render={({field}) => (
                                 <FormItem><FormLabel>Main Title (Arabic)</FormLabel><Input {...field} className="text-right" dir="rtl" /></FormItem>
                             )}/>
-                            <div className="flex gap-4">
-                                <FormField control={form.control} name="titleBgColor" render={({field}) => (
-                                    <FormItem><FormLabel>Bg Color</FormLabel><Input type="color" {...field} /></FormItem>
-                                )}/>
-                                <FormField control={form.control} name="titleColor" render={({field}) => (
-                                    <FormItem><FormLabel>Text Color</FormLabel><Input type="color" {...field} /></FormItem>
-                                )}/>
+                            <div className="flex gap-2">
+                                <FormField control={form.control} name="titleSize" render={({field}) => (<FormItem><FormLabel>Size</FormLabel><Input type="number" className="w-20" {...field} /></FormItem>)} />
+                                <FormField control={form.control} name="titleBgColor" render={({field}) => (<FormItem><FormLabel>BG</FormLabel><Input type="color" {...field} /></FormItem>)}/>
+                                <FormField control={form.control} name="titleColor" render={({field}) => (<FormItem><FormLabel>Text</FormLabel><Input type="color" {...field} /></FormItem>)}/>
+                                <FormField control={form.control} name="titleBold" render={({field}) => (<FormItem className="flex flex-col gap-2"><FormLabel>Bold</FormLabel><Switch checked={field.value} onCheckedChange={field.onChange}/></FormItem>)}/>
+                                <FormField control={form.control} name="titleItalic" render={({field}) => (<FormItem className="flex flex-col gap-2"><FormLabel>Italic</FormLabel><Switch checked={field.value} onCheckedChange={field.onChange}/></FormItem>)}/>
                             </div>
                         </div>
                     </AccordionContent>
@@ -283,27 +310,55 @@ function ExportExactPDFPageContent() {
                     <AccordionTrigger>Table Columns (Order: First item = Rightmost column)</AccordionTrigger>
                     <AccordionContent className="p-4 space-y-4">
                         {fields.map((field, index) => (
-                            <div key={field.id} className="border p-4 rounded-lg grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
-                                <FormField control={form.control} name={`tableColumns.${index}.header`} render={({field}) => (
-                                    <FormItem><FormLabel>Header Text</FormLabel><Input {...field} /></FormItem>
-                                )}/>
-                                <FormField control={form.control} name={`tableColumns.${index}.dataKey`} render={({field}) => (
-                                    <FormItem><FormLabel>Data Field</FormLabel>
-                                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                            <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
-                                            <SelectContent>
-                                                {applicantColumns.map(col => <SelectItem key={col} value={col}>{col}</SelectItem>)}
-                                            </SelectContent>
-                                        </Select>
-                                    </FormItem>
-                                )}/>
-                                <FormField control={form.control} name={`tableColumns.${index}.width`} render={({field}) => (
-                                    <FormItem><FormLabel>Width (mm)</FormLabel><Input type="number" {...field} /></FormItem>
-                                )}/>
-                                <Button type="button" variant="destructive" onClick={() => remove(index)}><Trash2 className="h-4 w-4"/></Button>
+                            <div key={field.id} className="border p-4 rounded-lg space-y-4">
+                                <div className="flex justify-between items-start">
+                                    <h4 className="font-semibold pt-2">Column {index + 1}: {form.watch(`tableColumns.${index}.header`)}</h4>
+                                    <Button type="button" variant="destructive" size="icon" onClick={() => remove(index)}><Trash2 className="h-4 w-4"/></Button>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <FormField control={form.control} name={`tableColumns.${index}.header`} render={({field}) => (<FormItem><FormLabel>Header Text</FormLabel><Input {...field} /></FormItem>)}/>
+                                    <FormField control={form.control} name={`tableColumns.${index}.dataKey`} render={({field}) => (
+                                        <FormItem><FormLabel>Data Field</FormLabel>
+                                            <Select onValueChange={field.onChange} value={field.value}>
+                                                <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                                                <SelectContent>{applicantColumns.map(col => <SelectItem key={col} value={col}>{col}</SelectItem>)}</SelectContent>
+                                            </Select>
+                                        </FormItem>
+                                    )}/>
+                                    <FormField control={form.control} name={`tableColumns.${index}.width`} render={({field}) => (<FormItem><FormLabel>Width (mm)</FormLabel><Input type="number" {...field} /></FormItem>)}/>
+                                </div>
+                                <Accordion type="single" collapsible className="w-full">
+                                    <AccordionItem value="styles">
+                                        <AccordionTrigger className="text-sm">Styling Options</AccordionTrigger>
+                                        <AccordionContent className="space-y-4 pt-4">
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div className="p-2 border rounded-md">
+                                                    <Label className="font-semibold block mb-2">Header Style</Label>
+                                                    <div className="flex gap-2 items-end">
+                                                        <FormField control={form.control} name={`tableColumns.${index}.headerTextSize`} render={({field}) => (<FormItem><FormLabel>Size</FormLabel><Input type="number" className="w-16 h-8" {...field} /></FormItem>)} />
+                                                        <FormField control={form.control} name={`tableColumns.${index}.headerBgColor`} render={({field}) => (<FormItem><FormLabel>BG</FormLabel><Input type="color" className="h-8" {...field} /></FormItem>)} />
+                                                        <FormField control={form.control} name={`tableColumns.${index}.headerTextColor`} render={({field}) => (<FormItem><FormLabel>Text</FormLabel><Input type="color" className="h-8" {...field} /></FormItem>)} />
+                                                        <FormField control={form.control} name={`tableColumns.${index}.headerBold`} render={({field}) => (<FormItem className="flex flex-col items-center gap-1"><FormLabel>Bold</FormLabel><Switch checked={field.value} onCheckedChange={field.onChange} /></FormItem>)} />
+                                                        <FormField control={form.control} name={`tableColumns.${index}.headerItalic`} render={({field}) => (<FormItem className="flex flex-col items-center gap-1"><FormLabel>Italic</FormLabel><Switch checked={field.value} onCheckedChange={field.onChange} /></FormItem>)} />
+                                                    </div>
+                                                </div>
+                                                <div className="p-2 border rounded-md">
+                                                    <Label className="font-semibold block mb-2">Cell Style</Label>
+                                                    <div className="flex gap-2 items-end">
+                                                        <FormField control={form.control} name={`tableColumns.${index}.cellTextSize`} render={({field}) => (<FormItem><FormLabel>Size</FormLabel><Input type="number" className="w-16 h-8" {...field} /></FormItem>)} />
+                                                        <FormField control={form.control} name={`tableColumns.${index}.cellBgColor`} render={({field}) => (<FormItem><FormLabel>BG</FormLabel><Input type="color" className="h-8" {...field} /></FormItem>)} />
+                                                        <FormField control={form.control} name={`tableColumns.${index}.cellTextColor`} render={({field}) => (<FormItem><FormLabel>Text</FormLabel><Input type="color" className="h-8" {...field} /></FormItem>)} />
+                                                        <FormField control={form.control} name={`tableColumns.${index}.cellBold`} render={({field}) => (<FormItem className="flex flex-col items-center gap-1"><FormLabel>Bold</FormLabel><Switch checked={field.value} onCheckedChange={field.onChange} /></FormItem>)} />
+                                                        <FormField control={form.control} name={`tableColumns.${index}.cellItalic`} render={({field}) => (<FormItem className="flex flex-col items-center gap-1"><FormLabel>Italic</FormLabel><Switch checked={field.value} onCheckedChange={field.onChange} /></FormItem>)} />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </AccordionContent>
+                                    </AccordionItem>
+                                </Accordion>
                             </div>
                         ))}
-                        <Button type="button" variant="outline" onClick={() => append({ header: 'جديد', dataKey: 'applicant_name', width: 30, textSize: 10, headerColor: "#000000", headerBgColor: "#F2F2F2", headerBold: true, textBold: false, textColor: "#000000" })}>
+                        <Button type="button" variant="outline" onClick={() => append({ header: 'جديد', dataKey: 'applicant_name', width: 30, headerTextSize: 10, headerTextColor: "#000000", headerBgColor: "#F2F2F2", headerBold: true, headerItalic: false, cellTextSize: 10, cellTextColor: "#000000", cellBgColor: "#FFFFFF", cellBold: false, cellItalic: false })}>
                             <Plus className="mr-2 h-4 w-4" /> Add Column
                         </Button>
                     </AccordionContent>
@@ -311,9 +366,6 @@ function ExportExactPDFPageContent() {
             </Accordion>
 
             <div className="flex justify-end gap-2 sticky bottom-4 bg-background p-4 border rounded-lg shadow-lg">
-                <Button type="button" onClick={handleSaveTemplate} disabled={loading.templates}>
-                    <Save className="mr-2 h-4 w-4" /> Save Template
-                </Button>
                 <Button type="button" variant="secondary" onClick={() => handleGenerate('preview')} disabled={loading.generating}>
                     {loading.generating ? <Loader2 className="animate-spin mr-2"/> : <Eye className="mr-2 h-4 w-4"/>} Preview
                 </Button>
