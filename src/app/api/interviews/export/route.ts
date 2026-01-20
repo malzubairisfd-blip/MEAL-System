@@ -44,15 +44,21 @@ function drawInfoBox(
   y: number,
   style: any 
 ) {
+  // Apply style BEFORE measuring text to get correct metrics
+  applyTextStyle(doc, style);
+
   const padding = 2;
-  const labelW = doc.getTextWidth(label) + padding * 2;
   const valueW = style.width || 60;
-  
-  // Calculate wrap for value text
-  const valueLines = doc.splitTextToSize(value || "", valueW - 4);
-  
-  // Dynamic height based on content or setting
-  const h = Math.max(style.height || 8, valueLines.length * 6);
+  const labelW = doc.getTextWidth(label) + padding * 2;
+
+  // Calculate wrap for value text, now with correct font settings
+  const valueLines = doc.splitTextToSize(value || "", valueW - padding * 2);
+
+  // Calculate dynamic height based on lines and font size for better fitting
+  const lineHeight = style.fontSize * 1.2; // A common multiplier for line height
+  const dynamicHeight = valueLines.length * lineHeight + padding * 2;
+  const h = Math.max(style.height || 8, dynamicHeight);
+
 
   // 1. Label Background
   if (style.labelBgColor) {
@@ -72,16 +78,13 @@ function drawInfoBox(
   doc.rect(xRight - labelW, y, labelW, h); // Label Border
   doc.rect(xRight - labelW - valueW, y, valueW, h); // Value Border
 
-  // 4. Text
-  applyTextStyle(doc, style);
+  // 4. Text (font is already set)
   
-  // Draw Label (Right aligned inside its box)
-  doc.text(label, xRight - padding, y + (h/2) + 1, { align: "right", baseline: "middle" });
+  // Draw Label (centered vertically)
+  doc.text(label, xRight - padding, y + h / 2, { align: "right", baseline: "middle" });
   
-  // Draw Value (Right aligned inside its box, handling multiline)
-  // Adjust Y for multiline text to look centered vertically if possible, or top aligned
-  const textY = valueLines.length > 1 ? y + 4 : y + (h/2) + 1;
-  doc.text(valueLines, xRight - labelW - 2, textY, { align: "right", baseline: valueLines.length > 1 ? "top" : "middle" });
+  // Draw Value (centered vertically)
+  doc.text(valueLines, xRight - labelW - padding, y + h / 2, { align: "right", baseline: "middle" });
 }
 
 /**
@@ -142,18 +145,14 @@ function drawPageFrame(
   doc.text("للتنمية", logoX + 8, logoY + 14);
 
   // --- HEADER INFO BOXES ---
-  const defaultInfoBoxStyle = settings.infoBoxStyle || {};
-  const projectNumberStyle = settings.projectNumberInfoBoxStyle || defaultInfoBoxStyle;
-  const hallNumberStyle = settings.hallNumberInfoBoxStyle || defaultInfoBoxStyle;
-  const projectNameStyle = settings.projectNameInfoBoxStyle || defaultInfoBoxStyle;
-  const hallNameStyle = settings.hallNameInfoBoxStyle || defaultInfoBoxStyle;
-
+  const ibs = settings.infoBoxStyle || {};
   // Row 1
-  drawInfoBox(doc, "اسم المشروع", project.projectName || "غير محدد", pageW - 10, 26, projectNameStyle);
-  drawInfoBox(doc, "رقم المشروع", toArabicDigits(project.projectId), 90, 26, projectNumberStyle);
+  drawInfoBox(doc, "اسم المشروع", project.projectName || "غير محدد", pageW - 10, 26, ibs);
+  drawInfoBox(doc, "رقم المشروع", toArabicDigits(project.projectId), 90, 26, ibs);
   // Row 2
-  drawInfoBox(doc, "اسم القاعة", hall.hallName || "غير محدد", pageW - 10, 36, hallNameStyle);
-  drawInfoBox(doc, "رقم القاعة", toArabicDigits(hall.hallNo), 90, 36, hallNumberStyle);
+  drawInfoBox(doc, "اسم القاعة", hall.hallName || "غير محدد", pageW - 10, 36, ibs);
+  drawInfoBox(doc, "رقم القاعة", toArabicDigits(hall.hallNo), 90, 36, ibs);
+
 
   // --- FOOTER SECTION ---
   const fts = settings.footerStyle || {};
@@ -333,7 +332,7 @@ export async function POST(req: Request) {
             // Positioning
             startY: Number(settings.headerHeight) || 60,
             tableWidth: tableWidth,
-            margin: { left: startX, right: 10 },
+            margin: { top: Number(settings.headerHeight) || 60, left: startX, right: 10, bottom: 40 },
             
             // Global Styles (Fallbacks)
             theme: 'grid',
