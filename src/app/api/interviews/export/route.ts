@@ -190,18 +190,21 @@ function drawPageFrame(
   doc.text("الصفة:", pageW - 15, footerY + 8, { align: "right" });
   doc.line(pageW - 45, footerY + 9, pageW - 100, footerY + 9);
 
-  // Signature Boxes
-  doc.setDrawColor(0);
-  doc.setLineWidth(0.1);
-  
-  // Committee Signature Box
-  doc.rect(60, footerY - 5, 35, 20);
-  doc.setFontSize(9);
-  doc.text("توقيع اللجنة", 77.5, footerY + 12, { align: "center" });
+  // Conditional Signature Boxes
+  if (fts.showStampBoxes !== false) {
+      doc.setDrawColor(0);
+      doc.setLineWidth(0.1);
+      
+      // Committee Signature Box
+      doc.rect(60, footerY - 5, 35, 20);
+      doc.setFontSize(9);
+      doc.text("توقيع اللجنة", 77.5, footerY + 12, { align: "center" });
 
-  // Directorate Stamp Box
-  doc.rect(15, footerY - 5, 35, 20);
-  doc.text("ختم المديرية", 32.5, footerY + 12, { align: "center" });
+      // Directorate Stamp Box
+      doc.rect(15, footerY - 5, 35, 20);
+      doc.text("ختم المديرية", 32.5, footerY + 12, { align: "center" });
+  }
+
 
   // Page Number
   doc.setFontSize(8);

@@ -118,7 +118,9 @@ const PdfSettingsSchema = z.object({
     infoBoxStyle: InfoBoxStyleSchema,
     tableColumns: z.array(TableColumnSchema),
     rowHeight: z.coerce.number().default(8),
-    footerStyle: CellStyleSchema,
+    footerStyle: CellStyleSchema.extend({
+      showStampBoxes: z.boolean().default(true),
+    }),
 });
 
 type PdfSettings = z.infer<typeof PdfSettingsSchema>;
@@ -204,7 +206,8 @@ function ExportExactPDFPageContent() {
                 },
             ],
             footerStyle: {
-                fontSize: 10, textColor: "#000000", bold: true, italic: false, halign: 'right', valign: 'middle'
+                fontSize: 10, textColor: "#000000", bold: true, italic: false, halign: 'right', valign: 'middle',
+                showStampBoxes: true,
             }
         },
     });
@@ -334,24 +337,26 @@ function ExportExactPDFPageContent() {
 
                     <Card>
                         <CardHeader className="pb-3"><CardTitle>2. Template Manager</CardTitle></CardHeader>
-                        <CardContent className="flex gap-4 items-end">
+                         <CardContent className="space-y-4">
                             <FormField control={form.control} name="templateName" render={({ field }) => (
-                                <FormItem className="flex-1">
+                                <FormItem>
                                     <FormLabel>Template Name</FormLabel>
-                                    <Input {...field} placeholder="Enter name and save..." />
+                                    <Input {...field} placeholder="Enter a name for your template..." />
                                 </FormItem>
                             )} />
-                            <Button type="button" variant="outline" onClick={saveTemplate}><Save className="mr-2 h-4 w-4"/> Save Current</Button>
-                             <div className="grid w-full max-w-sm items-center gap-1.5">
-                                <Label>Load Saved Template</Label>
-                                <Select onValueChange={loadTemplate}>
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Select a template..." />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {savedTemplates.map(name => <SelectItem key={name} value={name}>{name}</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
+                            <div className="flex gap-4 items-end">
+                                <FormItem className="flex-1">
+                                    <FormLabel>Load Saved Template</FormLabel>
+                                    <Select onValueChange={loadTemplate}>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Select a template to load..." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {savedTemplates.map(name => <SelectItem key={name} value={name}>{name}</SelectItem>)}
+                                        </SelectContent>
+                                    </Select>
+                                </FormItem>
+                                <Button type="button" variant="outline" onClick={saveTemplate}><Save className="mr-2 h-4 w-4"/> Save Current</Button>
                             </div>
                         </CardContent>
                     </Card>
@@ -405,10 +410,16 @@ function ExportExactPDFPageContent() {
                          <AccordionItem value="footer">
                             <AccordionTrigger>5. Footer Settings</AccordionTrigger>
                             <AccordionContent className="p-4 space-y-4 bg-slate-900/50">
-                                <div className="flex gap-4">
+                                <div className="flex gap-4 items-center">
                                     <FormField control={form.control} name="footerStyle.textColor" render={({ field }) => (<FormItem><ColorPicker label="Text" value={field.value} onChange={field.onChange} /></FormItem>)} />
                                     <FormField control={form.control} name="footerStyle.fontSize" render={({ field }) => (<FormItem><FormLabel>Size</FormLabel><Input type="number" {...field} className="w-20" /></FormItem>)} />
                                     <FormField control={form.control} name="footerStyle.bold" render={({ field }) => (<FormItem className="flex items-center gap-2 pt-6"><Switch checked={field.value} onCheckedChange={field.onChange} /><Label>Bold</Label></FormItem>)} />
+                                     <FormField control={form.control} name="footerStyle.showStampBoxes" render={({ field }) => (
+                                        <FormItem className="flex items-center gap-2 pt-6">
+                                            <Switch id="showStampBoxes" checked={field.value} onCheckedChange={field.onChange} />
+                                            <Label htmlFor="showStampBoxes">Show Stamp Boxes</Label>
+                                        </FormItem>
+                                     )} />
                                 </div>
                             </AccordionContent>
                         </AccordionItem>
