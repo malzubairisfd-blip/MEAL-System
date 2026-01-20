@@ -105,15 +105,6 @@ function drawPageFrame(
       doc.rect(5, 5, pageW - 10, pageH - 10);
   }
 
-  // --- CUSTOM HEADER TEXT ---
-  doc.setFont("Amiri", "bold");
-  doc.setFontSize(10);
-  doc.setTextColor("#000000");
-  doc.text("رئاسة الوزراء", pageW - 10, 10, { align: "right" });
-  doc.setFont("Amiri", "normal");
-  doc.text("الصندوق الاجتماعي للتنمية فرع (صنعاء، الامانة، المحويت، الجوف، مارب)", pageW - 10, 15, { align: "right" });
-
-
   // --- TITLE SECTION ---
   const tts = settings.titleStyle || {};
   const titleY = 22; // Adjusted Y position
@@ -153,11 +144,12 @@ function drawPageFrame(
   // --- HEADER INFO BOXES ---
   const ibs = settings.infoBoxStyle || {};
   // Row 1
-  drawInfoBox(doc, "رقم المشروع", toArabicDigits(project.projectId), pageW - 10, 36, ibs);
-  drawInfoBox(doc, "رقم القاعة", toArabicDigits(hall.hallNo), 90, 36, ibs);
+  const projectNumWidth = drawInfoBox(doc, "رقم المشروع", toArabicDigits(project.projectId), pageW - 10, 36, ibs);
+  drawInfoBox(doc, "رقم القاعة", toArabicDigits(hall.hallNo), pageW - 10 - projectNumWidth - 5, 36, ibs);
+
   // Row 2
-  drawInfoBox(doc, "اسم المشروع", project.projectName || "غير محدد", pageW - 10, 46, ibs);
-  drawInfoBox(doc, "اسم القاعة", hall.hallName || "غير محدد", 90, 46, ibs);
+  const projectNameWidth = drawInfoBox(doc, "اسم المشروع", project.projectName || "غير محدد", pageW - 10, 46, ibs);
+  drawInfoBox(doc, "اسم القاعة", hall.hallName || "غير محدد", pageW - 10 - projectNameWidth - 5, 46, ibs);
 
 
   // --- FOOTER SECTION ---
