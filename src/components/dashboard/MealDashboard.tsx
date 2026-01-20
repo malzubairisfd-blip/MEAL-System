@@ -21,7 +21,10 @@ export function MealDashboard() {
     const fetchProjectData = async () => {
       try {
         const res = await fetch('/api/projects');
-        if (!res.ok) throw new Error('Failed to fetch project data');
+        if (!res.ok) {
+          console.error('Failed to fetch project data');
+          return;
+        }
         const projects: Project[] = await res.json();
         
         const budgetByMonth: { [key: string]: number } = {};

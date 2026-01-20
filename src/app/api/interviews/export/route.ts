@@ -348,6 +348,8 @@ export async function POST(req: Request) {
         const startX = pageW - tableWidth - 10; 
 
         autoTable(doc, {
+            rowPageBreak: "avoid", // ⭐⭐⭐ THIS FIXES THE ISSUE ⭐⭐⭐
+            
             // Header configuration
             head: [headRow],
             
