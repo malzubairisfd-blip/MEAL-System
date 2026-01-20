@@ -13,19 +13,19 @@ export default function MonitoringPage() {
     {
       title: "Initiation and Planning",
       description: "Creating the roadmap for your M&E system.",
-      href: "/monitoring/initiation-and-planning",
+      href: "/meal-system/monitoring/initiation-and-planning",
       icon: <ClipboardList className="h-8 w-8 text-blue-500" />
     },
     {
       title: "Implementation",
       description: "Doing the work and monitoring progress.",
-      href: "/monitoring/implementation",
+      href: "/meal-system/monitoring/implementation",
       icon: <PlayCircle className="h-8 w-8 text-green-500" />
     },
     {
       title: "Closure",
       description: "Finalizing deliverables and lessons learned.",
-      href: "/monitoring/closure",
+      href: "/meal-system/monitoring/closure",
       icon: <Flag className="h-8 w-8 text-red-500" />
     }
   ];
