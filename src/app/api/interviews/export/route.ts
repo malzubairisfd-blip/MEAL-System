@@ -1,4 +1,3 @@
-
 import { NextResponse } from "next/server";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -330,7 +329,7 @@ export async function POST(req: Request) {
             // Positioning
             startY: Number(settings.headerHeight) || 60,
             tableWidth: tableWidth,
-            margin: { left: startX, right: 10, bottom: 40 },
+            margin: { top: Number(settings.headerHeight) || 60, left: startX, right: 10, bottom: 40 },
             
             // Global Styles (Fallbacks)
             theme: 'grid',
@@ -366,5 +365,3 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
-
-    
