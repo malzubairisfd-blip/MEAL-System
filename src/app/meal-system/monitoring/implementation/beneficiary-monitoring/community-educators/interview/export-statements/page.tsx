@@ -9,7 +9,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Plus, Download } from "lucide-react";
+import { Loader2, Plus, FileText } from "lucide-react";
+import Link from "next/link";
 
 type Project = { projectId: string; projectName: string };
 type Hall = { hallName: string; hallNumber: number };
@@ -216,11 +217,11 @@ export default function ExportStatementsPage() {
             <CardTitle>3. تصدير الكشوفات</CardTitle>
           </CardHeader>
           <CardContent>
-            <Button asChild>
-                <a href={`/api/interviews/export?projectId=${projectId}`}>
-                  <Download className="mr-2 h-4 w-4"/>
-                  تصدير ملف PDF لجميع القاعات
-                </a>
+             <Button asChild>
+                <Link href={`/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/interview/export-exact-pdf?projectId=${projectId}`}>
+                    <FileText className="mr-2 h-4 w-4"/>
+                    Go to PDF Designer
+                </Link>
             </Button>
           </CardContent>
         </Card>

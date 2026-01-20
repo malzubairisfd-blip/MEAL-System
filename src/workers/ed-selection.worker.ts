@@ -134,32 +134,25 @@ function processRecords(rows: any[], recipientsDateStr: string, projects: any[],
     }
   });
 
-  // --- AGE RANK PER VILLAGE ---
-  const villageGroups: any = {};
+  // --- AGE RANK PER loc_id ---
+  const villageGroups: Record<string, any[]> = {};
   records.forEach(r => {
-    const villageKey = r.loc_id || 'UNKNOWN'; // Handle null/undefined village
+    const villageKey = r.loc_id || 'UNKNOWN';
     if(!villageGroups[villageKey]) villageGroups[villageKey] = [];
     villageGroups[villageKey].push(r);
   });
 
   Object.values(villageGroups).forEach((list: any[]) => {
-    // Separate qualified and disqualified applicants
     const qualified = list.filter(r => 
         !(r.age_years < 18 || r.age_years > 35 || r.applicant_qualification === "بدون" || r.duplicated_applicants)
     );
     const disqualified = list.filter(r => 
         (r.age_years < 18 || r.age_years > 35 || r.applicant_qualification === "بدون" || r.duplicated_applicants)
     );
-
-    // Sort only the qualified applicants
     qualified.sort((a: any, b: any) => (b.age_days || 0) - (a.age_days || 0));
-    
-    // Assign rank to qualified applicants
     qualified.forEach((r: any, i: number) => {
         r.age_per_village_ranking = i + 1;
     });
-
-    // Assign rank 0 to disqualified applicants
     disqualified.forEach((r: any) => {
         r.age_per_village_ranking = 0;
     });

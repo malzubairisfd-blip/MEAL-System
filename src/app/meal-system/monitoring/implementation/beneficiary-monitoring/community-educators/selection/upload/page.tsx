@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Upload, Users, UserCheck, UserX, Save, FileDown, GitCompareArrows } from 'lucide-react';
+import { Loader2, Upload, Users, UserCheck, UserX, Save, FileDown, GitCompareArrows, Database } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -48,7 +48,7 @@ const DB_COLUMNS = [
   'applcants_relationship', 'interview_hall_no', 'interview_hall_name',
   'acceptance_results', 'disqualification_reason',
   'interview_qualification', 'interview_attendance',
-  'sfd_marks', 'health_marks', 'local_community_marks', 'interview_total_marks', 'grand_total_score',
+  'sfd_marks', 'health_marks', 'local_community_marks', 'interview_total_marks', 'grand_total_score', 'grand_score_rank',
   'training_qualification', 'training_hall_no', 'training_hall_name', 'training_attendance',
   'is_active', 'contract_type', 'working_village', 'contract_starting_date', 'contract_end_date', 'contract_duration_months', 'is_spare',
   'disqualified_reasons', 'is_registered_in_assessment', 'if_no_reason',
@@ -491,13 +491,28 @@ export default function EducatorUploadPage() {
                     <CardHeader>
                         <CardTitle>Processing Results</CardTitle>
                         <CardDescription>
-                            The selection process is complete. Review the summary below and proceed to the database page to see the saved records.
+                            The selection process is complete. Review the summary below and proceed to the next steps.
                         </CardDescription>
                     </CardHeader>
-                    <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <SummaryCard icon={<Users />} title="Total Applicants Processed" value={results.totalApplicants} />
-                        <SummaryCard icon={<UserCheck className="text-green-500"/>} title="Accepted Applicants" value={results.totalAccepted} />
-                        <SummaryCard icon={<UserX className="text-red-500"/>} title="Unaccepted Applicants" value={results.totalUnaccepted} />
+                    <CardContent>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                            <SummaryCard icon={<Users />} title="Total Applicants Processed" value={results.totalApplicants} />
+                            <SummaryCard icon={<UserCheck className="text-green-500"/>} title="Accepted Applicants" value={results.totalAccepted} />
+                            <SummaryCard icon={<UserX className="text-red-500"/>} title="Unaccepted Applicants" value={results.totalUnaccepted} />
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            <Button asChild>
+                                <Link href="/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/selection/database">
+                                    <Database className="mr-2 h-4 w-4" />
+                                    Go to Educator Database
+                                </Link>
+                            </Button>
+                            <Button asChild variant="outline">
+                                <Link href="/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/interview/export-statements">
+                                    Go to Exporting Interview Statements
+                                </Link>
+                            </Button>
+                        </div>
                     </CardContent>
                 </Card>
             )}
