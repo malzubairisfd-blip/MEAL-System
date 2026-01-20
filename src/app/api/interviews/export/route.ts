@@ -319,8 +319,8 @@ export async function POST(req: Request) {
                 return toArabicDigits(value);
             });
             bodyRows.push(rowData);
-            if (addEmptyRows && index < group.items.length - 1) {
-                // Add an empty row, but don't add one after the very last item.
+            if (addEmptyRows) {
+                // Add an empty row after every item, including the last.
                 bodyRows.push(Array(rtlColumns.length).fill(""));
             }
         });
