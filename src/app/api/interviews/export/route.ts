@@ -42,15 +42,23 @@ function drawInfoBox(
   value: string,
   xRight: number,
   y: number,
-  style: any 
+  style: any
 ) {
   const padding = 2;
+
+  // Apply style *before* text measurement
+  applyTextStyle(doc, style);
+
   const labelW = doc.getTextWidth(label) + padding * 2;
   const valueW = style.width || 60;
-  const h = style.height || 8;
   
   // Calculate wrap for value text
-  const valueLines = doc.splitTextToSize(value || "", valueW - 4);
+  const valueLines = doc.splitTextToSize(value || "", valueW - (padding * 2));
+  
+  // Calculate dynamic height based on content
+  const textDimensions = doc.getTextDimensions(valueLines);
+  const h = Math.max(style.height || 8, textDimensions.h + padding * 1.5);
+
 
   // 1. Label Background
   if (style.labelBgColor) {
@@ -71,14 +79,12 @@ function drawInfoBox(
   doc.rect(xRight - labelW - valueW, y, valueW, h); // Value Border
 
   // 4. Text
-  applyTextStyle(doc, style);
-  
-  doc.text(label, xRight - padding, y + (h/2) + 1, { align: "right", baseline: "middle" });
-  
-  // Adjust Y for multiline text
-  const textY = valueLines.length > 1 ? y + 4 : y + (h/2) + 1;
-  doc.text(valueLines, xRight - labelW - 2, textY, { align: "right", baseline: valueLines.length > 1 ? "top" : "middle" });
+  // Vertical centering for both label and value
+  const textY = y + h / 2;
+  doc.text(label, xRight - padding, textY, { align: "right", baseline: "middle" });
+  doc.text(valueLines, xRight - labelW - padding, textY, { align: "right", baseline: "middle" });
 }
+
 
 /**
  * Draws the surrounding frame, title, page numbers, and footer signatures
@@ -138,13 +144,12 @@ function drawPageFrame(
   doc.text("للتنمية", logoX + 8, logoY + 14);
 
   // --- HEADER INFO BOXES ---
-  const ibs = settings.infoBoxStyle || {};
   // Row 1
-  drawInfoBox(doc, "اسم المشروع", project.projectName || "غير محدد", pageW - 10, 26, ibs);
-  drawInfoBox(doc, "رقم المشروع", toArabicDigits(project.projectId), 90, 26, ibs);
+  drawInfoBox(doc, "اسم المشروع", project.projectName || "غير محدد", pageW - 10, 26, settings.projectNameInfoBoxStyle);
+  drawInfoBox(doc, "رقم المشروع", toArabicDigits(project.projectId), 90, 26, settings.projectNumberInfoBoxStyle);
   // Row 2
-  drawInfoBox(doc, "اسم القاعة", hall.hallName || "غير محدد", pageW - 10, 36, ibs);
-  drawInfoBox(doc, "رقم القاعة", toArabicDigits(hall.hallNo), 90, 36, ibs);
+  drawInfoBox(doc, "اسم القاعة", hall.hallName || "غير محدد", pageW - 10, 36, settings.hallNameInfoBoxStyle);
+  drawInfoBox(doc, "رقم القاعة", toArabicDigits(hall.hallNo), 90, 36, settings.hallNumberInfoBoxStyle);
 
 
   // --- FOOTER SECTION ---
@@ -361,3 +366,5 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
+
+    
