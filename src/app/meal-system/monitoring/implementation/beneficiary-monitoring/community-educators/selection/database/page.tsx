@@ -21,10 +21,13 @@ import {
   UserCheck,
   UserX,
   Users,
+  FileDown,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import Link from 'next/link';
+import { useToast } from "@/hooks/use-toast";
+import { exportEducatorsToExcel } from "@/lib/exportEducatorsToExcel";
 
 interface ApplicantRecord {
   [key: string]: any;
@@ -49,6 +52,7 @@ export default function EducatorDatabasePage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
+  const { toast } = useToast();
 
   useEffect(() => {
     const fetchRecords = async () => {
@@ -107,16 +111,37 @@ export default function EducatorDatabasePage() {
     });
   }, [records]);
 
+  const handleDownload = () => {
+    if (records.length === 0) {
+      toast({
+        title: "No Data",
+        description: "There is no data to download.",
+        variant: "destructive",
+      });
+      return;
+    }
+    exportEducatorsToExcel(records, allColumns);
+    toast({
+        title: "Download Started",
+        description: "Your Excel file is being generated.",
+    });
+  };
+
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">Community Educators Database</h1>
-         <Button variant="outline" asChild>
-            <Link href="/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/selection">
-                <ArrowLeft className="mr-2 h-4 w-4" /> Back
-            </Link>
-        </Button>
+         <div className="flex gap-2">
+            <Button variant="outline" asChild>
+                <Link href="/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/selection">
+                    <ArrowLeft className="mr-2 h-4 w-4" /> Back
+                </Link>
+            </Button>
+            <Button onClick={handleDownload} disabled={loading}>
+                <FileDown className="mr-2 h-4 w-4" /> Download as Excel
+            </Button>
+        </div>
       </div>
       
       <Card>
