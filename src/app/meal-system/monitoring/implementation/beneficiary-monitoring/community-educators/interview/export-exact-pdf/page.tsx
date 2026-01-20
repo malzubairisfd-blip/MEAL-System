@@ -22,7 +22,6 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 // --- REUSABLE COLOR PICKER COMPONENT ---
-// Keeps track of history globally within the session
 const globalColorHistory = new Set<string>(["#000000", "#FFFFFF", "#2F80B5", "#F3F4F6"]);
 
 const ColorPicker = ({ value, onChange, label }: { value: string, onChange: (c: string) => void, label?: string }) => {
@@ -32,7 +31,6 @@ const ColorPicker = ({ value, onChange, label }: { value: string, onChange: (c: 
         const newColor = e.target.value;
         onChange(newColor);
         globalColorHistory.add(newColor);
-        // Keep only last 8 colors
         if (globalColorHistory.size > 8) {
             const iterator = globalColorHistory.values();
             globalColorHistory.delete(iterator.next().value);
@@ -54,10 +52,10 @@ const ColorPicker = ({ value, onChange, label }: { value: string, onChange: (c: 
                     <PopoverContent className="w-48 p-2">
                         <div className="grid grid-cols-4 gap-2">
                             {history.map((c) => (
-                                <div 
-                                    key={c} 
-                                    className="w-8 h-8 rounded-full border cursor-pointer shadow-sm hover:scale-110 transition-transform" 
-                                    style={{ backgroundColor: c }} 
+                                <div
+                                    key={c}
+                                    className="w-8 h-8 rounded-full border cursor-pointer shadow-sm hover:scale-110 transition-transform"
+                                    style={{ backgroundColor: c }}
                                     onClick={() => onChange(c)}
                                     title={c}
                                 />
@@ -78,7 +76,7 @@ const VerticalAlignmentSchema = z.enum(['top', 'middle', 'bottom']);
 const CellStyleSchema = z.object({
     fontSize: z.coerce.number().default(10),
     textColor: z.string().default("#000000"),
-    bgColor: z.string().optional(), // Optional for body, standard for header
+    bgColor: z.string().optional(),
     bold: z.boolean().default(false),
     italic: z.boolean().default(false),
     halign: AlignmentSchema.default('center'),
@@ -89,17 +87,22 @@ const TableColumnSchema = z.object({
     header: z.string().min(1),
     dataKey: z.string().min(1),
     width: z.coerce.number().default(30),
-    // Detailed Header Styling
     headerStyle: CellStyleSchema.extend({
         bgColor: z.string().default("#2F80B5"),
         textColor: z.string().default("#FFFFFF"),
         bold: z.boolean().default(true)
     }),
-    // Detailed Body Styling
     bodyStyle: CellStyleSchema.extend({
-        bgColor: z.string().optional(), // Often transparent/white
+        bgColor: z.string().optional(),
         textColor: z.string().default("#000000")
     }),
+});
+
+const InfoBoxStyleSchema = CellStyleSchema.extend({
+    labelBgColor: z.string(),
+    valueBgColor: z.string(),
+    width: z.coerce.number(),
+    height: z.coerce.number()
 });
 
 const PdfSettingsSchema = z.object({
@@ -108,24 +111,34 @@ const PdfSettingsSchema = z.object({
     pageOrientation: z.enum(['portrait', 'landscape']),
     headerHeight: z.coerce.number(),
     borderColor: z.string(),
-    // Title
     title: z.string().min(1),
     titleStyle: CellStyleSchema.extend({ height: z.coerce.number().optional() }),
-    // Info Boxes
-    infoBoxStyle: CellStyleSchema.extend({ 
-        labelBgColor: z.string(), 
-        valueBgColor: z.string(),
-        width: z.coerce.number(),
-        height: z.coerce.number() 
-    }),
-    // Table
+    projectNumberInfoBoxStyle: InfoBoxStyleSchema,
+    hallNumberInfoBoxStyle: InfoBoxStyleSchema,
+    projectNameInfoBoxStyle: InfoBoxStyleSchema,
+    hallNameInfoBoxStyle: InfoBoxStyleSchema,
     tableColumns: z.array(TableColumnSchema),
-    rowHeight: z.coerce.number().default(8), // Global row height adjustment
-    // Footer
+    rowHeight: z.coerce.number().default(8),
     footerStyle: CellStyleSchema,
 });
 
 type PdfSettings = z.infer<typeof PdfSettingsSchema>;
+
+const InfoBoxStyleControls = ({ namePrefix, control }: { namePrefix: 'projectNumberInfoBoxStyle' | 'hallNumberInfoBoxStyle' | 'projectNameInfoBoxStyle' | 'hallNameInfoBoxStyle', control: any }) => (
+    <div className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <FormField control={control} name={`${namePrefix}.width`} render={({ field }) => (<FormItem><FormLabel>Box Width (mm)</FormLabel><Input type="number" {...field} /></FormItem>)} />
+            <FormField control={control} name={`${namePrefix}.height`} render={({ field }) => (<FormItem><FormLabel>Box Height (mm)</FormLabel><Input type="number" {...field} /></FormItem>)} />
+            <FormField control={control} name={`${namePrefix}.fontSize`} render={({ field }) => (<FormItem><FormLabel>Font Size</FormLabel><Input type="number" {...field} /></FormItem>)} />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <FormField control={control} name={`${namePrefix}.textColor`} render={({ field }) => (<FormItem><ColorPicker label="Text Color" value={field.value} onChange={field.onChange} /></FormItem>)} />
+            <FormField control={control} name={`${namePrefix}.labelBgColor`} render={({ field }) => (<FormItem><ColorPicker label="Label BG" value={field.value} onChange={field.onChange} /></FormItem>)} />
+            <FormField control={control} name={`${namePrefix}.valueBgColor`} render={({ field }) => (<FormItem><ColorPicker label="Value BG" value={field.value} onChange={field.onChange} /></FormItem>)} />
+        </div>
+    </div>
+);
+
 
 function ExportExactPDFPageContent() {
     const router = useRouter();
@@ -137,6 +150,11 @@ function ExportExactPDFPageContent() {
     const [applicantColumns, setApplicantColumns] = useState<string[]>([]);
     const [loading, setLoading] = useState({ projects: true, generating: false });
     const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
+
+    const defaultInfoBoxStyle = {
+        fontSize: 10, textColor: "#000000", labelBgColor: "#F3F4F6", valueBgColor: "#FFFFFF",
+        bold: false, italic: false, width: 60, height: 8, halign: 'right' as const, valign: 'middle' as const
+    };
 
     const form = useForm<PdfSettings>({
         resolver: zodResolver(PdfSettingsSchema),
@@ -151,23 +169,23 @@ function ExportExactPDFPageContent() {
                 fontSize: 14, textColor: "#FFFFFF", bgColor: "#2F3C50",
                 bold: true, italic: false, height: 10, halign: 'center', valign: 'middle'
             },
-            infoBoxStyle: {
-                fontSize: 10, textColor: "#000000", labelBgColor: "#F3F4F6", valueBgColor: "#FFFFFF",
-                bold: false, italic: false, width: 60, height: 8, halign: 'right', valign: 'middle'
-            },
+            projectNumberInfoBoxStyle: { ...defaultInfoBoxStyle },
+            hallNumberInfoBoxStyle: { ...defaultInfoBoxStyle, width: 30 },
+            projectNameInfoBoxStyle: { ...defaultInfoBoxStyle },
+            hallNameInfoBoxStyle: { ...defaultInfoBoxStyle, width: 30 },
             rowHeight: 10,
             tableColumns: [
-                { 
-                    header: 'م', dataKey: '_index', width: 15, 
+                {
+                    header: 'م', dataKey: '_index', width: 15,
                     headerStyle: { fontSize: 10, textColor: "#FFFFFF", bgColor: "#2F80B5", bold: true, halign: 'center', valign: 'middle', italic: false },
                     bodyStyle: { fontSize: 10, textColor: "#000000", bold: false, halign: 'center', valign: 'middle', italic: false }
                 },
-                { 
+                {
                     header: 'اسم المتقدمة', dataKey: 'applicant_name', width: 70,
                     headerStyle: { fontSize: 10, textColor: "#FFFFFF", bgColor: "#2F80B5", bold: true, halign: 'center', valign: 'middle', italic: false },
                     bodyStyle: { fontSize: 10, textColor: "#000000", bold: false, halign: 'right', valign: 'middle', italic: false }
                 },
-                { 
+                {
                     header: 'الدرجة', dataKey: 'total_score', width: 25,
                     headerStyle: { fontSize: 10, textColor: "#FFFFFF", bgColor: "#2F80B5", bold: true, halign: 'center', valign: 'middle', italic: false },
                     bodyStyle: { fontSize: 10, textColor: "#000000", bold: true, halign: 'center', valign: 'middle', italic: false }
@@ -190,19 +208,19 @@ function ExportExactPDFPageContent() {
         const A4_HEIGHT_L = 297;
         const LETTER_WIDTH_P = 215.9;
         const LETTER_HEIGHT_L = 279.4;
-        const MARGIN = 20; // 10mm each side
+        const MARGIN = 20;
 
         let pageWidth;
         if (pageSize === 'a4') {
             pageWidth = pageOrientation === 'portrait' ? A4_WIDTH_P : A4_HEIGHT_L;
-        } else { // letter
+        } else {
             pageWidth = pageOrientation === 'portrait' ? LETTER_WIDTH_P : LETTER_HEIGHT_L;
         }
-        
+
         const totalWidth = pageWidth - MARGIN;
         const usedWidth = tableColumns.reduce((sum, col) => sum + (Number(col.width) || 0), 0);
         const remainingWidth = totalWidth - usedWidth;
-        
+
         return { totalWidth, usedWidth, remainingWidth };
     }, [tableColumns, pageSize, pageOrientation]);
 
@@ -272,7 +290,7 @@ function ExportExactPDFPageContent() {
                 <Button variant="outline" onClick={() => router.back()}><ArrowLeft className="mr-2 h-4 w-4" /> Back</Button>
             </div>
 
-            <Card className="border-primary/30">
+            <Card>
                 <CardHeader className="pb-3"><CardTitle>1. Data Source</CardTitle></CardHeader>
                 <CardContent>
                     <div className="flex gap-4 items-end">
@@ -293,7 +311,7 @@ function ExportExactPDFPageContent() {
 
             <Form {...form}>
                 <form className="space-y-6">
-                    
+
                     <Card>
                         <CardHeader className="pb-3"><CardTitle>2. Template Manager</CardTitle></CardHeader>
                         <CardContent className="flex gap-4 items-end">
@@ -308,9 +326,9 @@ function ExportExactPDFPageContent() {
                         </CardContent>
                     </Card>
 
-                    <Accordion type="multiple" defaultValue={['page', 'table']} className="w-full">
+                    <Accordion type="multiple" defaultValue={['page', 'info-box', 'footer', 'table']} className="w-full">
                         <AccordionItem value="page">
-                            <AccordionTrigger>3. Page, Title &amp; Border Settings</AccordionTrigger>
+                            <AccordionTrigger>3. Page, Title & Border Settings</AccordionTrigger>
                             <AccordionContent className="p-4 space-y-4 bg-slate-900/50">
                                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                                     <FormField control={form.control} name="pageSize" render={({ field }) => (
@@ -343,35 +361,40 @@ function ExportExactPDFPageContent() {
                                 </div>
                             </AccordionContent>
                         </AccordionItem>
-
+                        
                          <AccordionItem value="info-box">
-                            <AccordionTrigger>4. Header Info Boxes &amp; Footer</AccordionTrigger>
+                            <AccordionTrigger>4. Header Info Boxes</AccordionTrigger>
                             <AccordionContent className="p-4 space-y-4 bg-slate-900/50">
-                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                    <FormField control={form.control} name="infoBoxStyle.width" render={({ field }) => (<FormItem><FormLabel>Box Width (mm)</FormLabel><Input type="number" {...field} /></FormItem>)} />
-                                    <FormField control={form.control} name="infoBoxStyle.height" render={({ field }) => (<FormItem><FormLabel>Box Height (mm)</FormLabel><Input type="number" {...field} /></FormItem>)} />
-                                    <FormField control={form.control} name="infoBoxStyle.fontSize" render={({ field }) => (<FormItem><FormLabel>Font Size</FormLabel><Input type="number" {...field} /></FormItem>)} />
-                                 </div>
-                                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                    <FormField control={form.control} name="infoBoxStyle.textColor" render={({ field }) => (<FormItem><ColorPicker label="Text Color" value={field.value} onChange={field.onChange} /></FormItem>)} />
-                                    <FormField control={form.control} name="infoBoxStyle.labelBgColor" render={({ field }) => (<FormItem><ColorPicker label="Label BG" value={field.value} onChange={field.onChange} /></FormItem>)} />
-                                    <FormField control={form.control} name="infoBoxStyle.valueBgColor" render={({ field }) => (<FormItem><ColorPicker label="Value BG" value={field.value} onChange={field.onChange} /></FormItem>)} />
-                                </div>
-                                <div className="border-t pt-4 mt-4 border-slate-700">
-                                    <Label className="mb-2 block font-bold">Footer Style</Label>
-                                    <div className="flex gap-4">
-                                        <FormField control={form.control} name="footerStyle.textColor" render={({ field }) => (<FormItem><ColorPicker label="Text" value={field.value} onChange={field.onChange} /></FormItem>)} />
-                                        <FormField control={form.control} name="footerStyle.fontSize" render={({ field }) => (<FormItem><FormLabel>Size</FormLabel><Input type="number" {...field} className="w-20" /></FormItem>)} />
-                                        <FormField control={form.control} name="footerStyle.bold" render={({ field }) => (<FormItem className="flex items-center gap-2 pt-6"><Switch checked={field.value} onCheckedChange={field.onChange} /><Label>Bold</Label></FormItem>)} />
-                                    </div>
+                                <Tabs defaultValue="projectNumber">
+                                    <TabsList>
+                                        <TabsTrigger value="projectNumber">Project #</TabsTrigger>
+                                        <TabsTrigger value="hallNumber">Hall #</TabsTrigger>
+                                        <TabsTrigger value="projectName">Project Name</TabsTrigger>
+                                        <TabsTrigger value="hallName">Hall Name</TabsTrigger>
+                                    </TabsList>
+                                    <TabsContent value="projectNumber" className="p-2 border rounded-md mt-2"><InfoBoxStyleControls namePrefix="projectNumberInfoBoxStyle" control={form.control} /></TabsContent>
+                                    <TabsContent value="hallNumber" className="p-2 border rounded-md mt-2"><InfoBoxStyleControls namePrefix="hallNumberInfoBoxStyle" control={form.control} /></TabsContent>
+                                    <TabsContent value="projectName" className="p-2 border rounded-md mt-2"><InfoBoxStyleControls namePrefix="projectNameInfoBoxStyle" control={form.control} /></TabsContent>
+                                    <TabsContent value="hallName" className="p-2 border rounded-md mt-2"><InfoBoxStyleControls namePrefix="hallNameInfoBoxStyle" control={form.control} /></TabsContent>
+                                </Tabs>
+                            </AccordionContent>
+                        </AccordionItem>
+
+                         <AccordionItem value="footer">
+                            <AccordionTrigger>5. Footer Settings</AccordionTrigger>
+                            <AccordionContent className="p-4 space-y-4 bg-slate-900/50">
+                                <div className="flex gap-4">
+                                    <FormField control={form.control} name="footerStyle.textColor" render={({ field }) => (<FormItem><ColorPicker label="Text" value={field.value} onChange={field.onChange} /></FormItem>)} />
+                                    <FormField control={form.control} name="footerStyle.fontSize" render={({ field }) => (<FormItem><FormLabel>Size</FormLabel><Input type="number" {...field} className="w-20" /></FormItem>)} />
+                                    <FormField control={form.control} name="footerStyle.bold" render={({ field }) => (<FormItem className="flex items-center gap-2 pt-6"><Switch checked={field.value} onCheckedChange={field.onChange} /><Label>Bold</Label></FormItem>)} />
                                 </div>
                             </AccordionContent>
                         </AccordionItem>
 
                         <AccordionItem value="table">
-                            <AccordionTrigger>5. Table Columns &amp; Styling</AccordionTrigger>
+                            <AccordionTrigger>6. Table Columns & Styling</AccordionTrigger>
                              <AccordionContent className="p-4 space-y-4 bg-slate-900/50">
-                                
+
                                 <Card className="mb-4 bg-slate-800 border-slate-700">
                                     <CardHeader>
                                         <CardTitle className="text-base text-white">Table Width Allocation (mm)</CardTitle>
@@ -428,7 +451,7 @@ function ExportExactPDFPageContent() {
                                                             <TabsTrigger value="header">Header Style</TabsTrigger>
                                                             <TabsTrigger value="body">Body Style</TabsTrigger>
                                                         </TabsList>
-                                                        
+
                                                         <TabsContent value="header" className="space-y-3 p-2 bg-slate-900/50 rounded border border-slate-700 mt-2">
                                                             <div className="flex flex-wrap gap-4 items-end">
                                                                 <FormField control={form.control} name={`tableColumns.${index}.headerStyle.bgColor`} render={({ field }) => (<ColorPicker label="Background" value={field.value || '#ffffff'} onChange={field.onChange} />)} />
@@ -473,7 +496,7 @@ function ExportExactPDFPageContent() {
                                         </CardContent>
                                     </Card>
                                 ))}
-                                <Button type="button" variant="outline" className="w-full border-dashed" onClick={() => append({ 
+                                <Button type="button" variant="outline" className="w-full border-dashed" onClick={() => append({
                                     header: 'جديد', dataKey: 'applicant_name', width: 30,
                                     headerStyle: { fontSize: 10, textColor: "#FFFFFF", bgColor: "#2F80B5", bold: true, halign: 'center', valign: 'middle', italic: false },
                                     bodyStyle: { fontSize: 10, textColor: "#000000", bold: false, halign: 'right', valign: 'middle', italic: false }
@@ -508,5 +531,3 @@ function ExportExactPDFPageContent() {
 export default function ExportExactPDFPage() {
     return <Suspense fallback={<Loader2 className="h-8 w-8 animate-spin" />}><ExportExactPDFPageContent /></Suspense>
 }
-
-    
