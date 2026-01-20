@@ -150,6 +150,20 @@ function ExportExactPDFPageContent() {
     const [applicantColumns, setApplicantColumns] = useState<string[]>([]);
     const [loading, setLoading] = useState({ projects: true, generating: false });
     const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
+    const [savedTemplates, setSavedTemplates] = useState<string[]>([]);
+
+    useEffect(() => {
+        const templates: string[] = [];
+        if (typeof window !== 'undefined') {
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key && key.startsWith('pdf_template_')) {
+                    templates.push(key.replace('pdf_template_', ''));
+                }
+            }
+        }
+        setSavedTemplates(templates.sort());
+    }, []);
 
     const defaultInfoBoxStyle = {
         fontSize: 10, textColor: "#000000", labelTextColor: "#000000", labelBgColor: "#F3F4F6", valueBgColor: "#FFFFFF",
@@ -234,11 +248,19 @@ function ExportExactPDFPageContent() {
 
     const saveTemplate = () => {
         const values = form.getValues();
+         if (!values.templateName) {
+            toast({ title: "Cannot Save", description: "Please enter a name for the template first.", variant: "destructive" });
+            return;
+        }
         localStorage.setItem(`pdf_template_${values.templateName}`, JSON.stringify(values));
         toast({ title: "Saved", description: `Template "${values.templateName}" saved to local storage.` });
+         if (!savedTemplates.includes(values.templateName)) {
+            setSavedTemplates(prev => [...prev, values.templateName].sort());
+        }
     };
 
     const loadTemplate = (name: string) => {
+        if (!name) return;
         const saved = localStorage.getItem(`pdf_template_${name}`);
         if (saved) {
             form.reset(JSON.parse(saved));
@@ -316,11 +338,21 @@ function ExportExactPDFPageContent() {
                             <FormField control={form.control} name="templateName" render={({ field }) => (
                                 <FormItem className="flex-1">
                                     <FormLabel>Template Name</FormLabel>
-                                    <Input {...field} placeholder="e.g. Monthly Report A4" />
+                                    <Input {...field} placeholder="Enter name and save..." />
                                 </FormItem>
                             )} />
-                            <Button type="button" variant="outline" onClick={saveTemplate}><Save className="mr-2 h-4 w-4"/> Save Settings</Button>
-                            <Button type="button" variant="ghost" onClick={() => loadTemplate(form.getValues().templateName)}><RotateCcw className="mr-2 h-4 w-4"/> Load</Button>
+                            <Button type="button" variant="outline" onClick={saveTemplate}><Save className="mr-2 h-4 w-4"/> Save Current</Button>
+                             <div className="grid w-full max-w-sm items-center gap-1.5">
+                                <Label>Load Saved Template</Label>
+                                <Select onValueChange={loadTemplate}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select a template..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {savedTemplates.map(name => <SelectItem key={name} value={name}>{name}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
                         </CardContent>
                     </Card>
 

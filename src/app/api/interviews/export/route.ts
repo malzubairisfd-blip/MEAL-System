@@ -116,7 +116,8 @@ function drawPageFrame(
   applyTextStyle(doc, { textColor: '#000000', fontSize: 7, bold: true });
   const textLines = [
       "رئاسة الوزراء",
-      "الصندوق الاجتماعي للتنمية فرع (صنعاء، الامانة، المحويت، الجوف، مارب)"
+      "الصندوق الاجتماعي للتنممية فرع",
+      "(صنعاء، الامانة، المحويت، الجوف، مارب)"
   ];
   const padding = 2;
   const headerY = 8;
