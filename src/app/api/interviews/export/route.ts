@@ -169,10 +169,8 @@ function drawPageFrame(
 
   // --- HEADER INFO BOXES ---
   const ibs = settings.infoBoxStyle || {};
-  // Row 1
   drawInfoBox(doc, "رقم المشروع", toArabicDigits(project.projectId), pageW - 10, 28, ibs);
   drawInfoBox(doc, "رقم القاعة", toArabicDigits(hall.hallNo), 90, 28, ibs);
-  // Row 2
   drawInfoBox(doc, "اسم المشروع", project.projectName || "غير محدد", pageW - 10, 38, ibs);
   drawInfoBox(doc, "اسم القاعة", hall.hallName || "غير محدد", 90, 38, ibs);
 
@@ -311,20 +309,21 @@ export async function POST(req: Request) {
         }));
 
         // 2. Prepare Body Rows
-        const bodyRows = group.items.map((row: any, index: number) => 
-            rtlColumns.map((col: any) => {
+        const addEmptyRows = settings.addEmptyRows === true;
+        const bodyRows: any[][] = [];
+        group.items.forEach((row: any, index: number) => {
+            const rowData = rtlColumns.map((col: any) => {
                 let value = row[col.dataKey];
-                
-                // Special handling for index
                 if (col.dataKey === '_index') value = index + 1;
-                
-                // Null safety
                 if (value === null || value === undefined) value = "";
-
-                // Convert numbers to Arabic digits
                 return toArabicDigits(value);
-            })
-        );
+            });
+            bodyRows.push(rowData);
+            if (addEmptyRows && index < group.items.length - 1) {
+                // Add an empty row, but don't add one after the very last item.
+                bodyRows.push(Array(rtlColumns.length).fill(""));
+            }
+        });
 
         // 3. Prepare Column Specific Styles (Width + Body Style)
         // autoTable uses column index (0, 1, 2) as keys

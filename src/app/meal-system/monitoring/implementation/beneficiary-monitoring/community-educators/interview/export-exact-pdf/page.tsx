@@ -118,6 +118,7 @@ const PdfSettingsSchema = z.object({
     infoBoxStyle: InfoBoxStyleSchema,
     tableColumns: z.array(TableColumnSchema),
     rowHeight: z.coerce.number().default(8),
+    addEmptyRows: z.boolean().default(false),
     footerStyle: CellStyleSchema.extend({
       showStampBoxes: z.boolean().default(true),
     }),
@@ -188,6 +189,7 @@ function ExportExactPDFPageContent() {
             },
             infoBoxStyle: { ...defaultInfoBoxStyle },
             rowHeight: 10,
+            addEmptyRows: false,
             tableColumns: [
                 {
                     header: 'م', dataKey: '_index', width: 15,
@@ -448,9 +450,19 @@ function ExportExactPDFPageContent() {
                                     </CardContent>
                                 </Card>
 
-                                <div className="flex items-center gap-4 mb-4">
-                                    <Label>Global Row Height:</Label>
-                                    <FormField control={form.control} name="rowHeight" render={({field}) => <Input type="number" {...field} className="w-24" />} />
+                                <div className="flex items-center gap-8 mb-4">
+                                    <FormField control={form.control} name="rowHeight" render={({field}) => (
+                                        <FormItem className="flex items-center gap-2">
+                                            <Label>Global Row Height:</Label>
+                                            <Input type="number" {...field} className="w-24" />
+                                        </FormItem>
+                                    )} />
+                                    <FormField control={form.control} name="addEmptyRows" render={({ field }) => (
+                                        <FormItem className="flex items-center gap-2">
+                                            <Switch id="addEmptyRows" checked={field.value} onCheckedChange={field.onChange} />
+                                            <Label htmlFor="addEmptyRows">Add Empty Row Between Applicants</Label>
+                                        </FormItem>
+                                    )} />
                                 </div>
 
                                 {fields.map((field, index) => (
