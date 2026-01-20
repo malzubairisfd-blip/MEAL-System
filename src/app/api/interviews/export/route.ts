@@ -145,7 +145,7 @@ function drawPageFrame(
   // --- HEADER INFO BOXES ---
   const ibs = settings.infoBoxStyle || {};
   // Row 1
-  drawInfoBox(doc, "رقم المشروع", toArabicDigits(project.projectId), pageW - 10, 36, ibs);
+  drawInfoBox(doc, "رقم المشروع", toArabicDigits(project.projectId), pageW - 10, 26, ibs);
   drawInfoBox(doc, "رقم القاعة", toArabicDigits(hall.hallNo), 90, 26, ibs);
   // Row 2
   drawInfoBox(doc, "اسم المشروع", project.projectName || "غير محدد", pageW - 10, 36, ibs);

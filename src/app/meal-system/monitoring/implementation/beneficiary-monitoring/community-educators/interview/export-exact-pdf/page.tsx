@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useEffect, useState, Suspense } from 'react';
+import React, { useEffect, useState, Suspense, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -178,7 +178,32 @@ function ExportExactPDFPageContent() {
         },
     });
 
-    const { fields, append, remove, update } = useFieldArray({ control: form.control, name: "tableColumns" });
+    const { fields, append, remove } = useFieldArray({ control: form.control, name: "tableColumns" });
+    const { watch } = form;
+    const tableColumns = watch("tableColumns");
+    const pageSize = watch("pageSize");
+    const pageOrientation = watch("pageOrientation");
+
+     const { totalWidth, usedWidth, remainingWidth } = useMemo(() => {
+        const A4_WIDTH_P = 210;
+        const A4_HEIGHT_L = 297;
+        const LETTER_WIDTH_P = 215.9;
+        const LETTER_HEIGHT_L = 279.4;
+        const MARGIN = 20; // 10mm each side
+
+        let pageWidth;
+        if (pageSize === 'a4') {
+            pageWidth = pageOrientation === 'portrait' ? A4_WIDTH_P : A4_HEIGHT_L;
+        } else { // letter
+            pageWidth = pageOrientation === 'portrait' ? LETTER_WIDTH_P : LETTER_HEIGHT_L;
+        }
+        
+        const totalWidth = pageWidth - MARGIN;
+        const usedWidth = tableColumns.reduce((sum, col) => sum + (Number(col.width) || 0), 0);
+        const remainingWidth = totalWidth - usedWidth;
+        
+        return { totalWidth, usedWidth, remainingWidth };
+    }, [tableColumns, pageSize, pageOrientation]);
 
     useEffect(() => {
         fetch('/api/projects').then(res => res.json()).then(data => {
@@ -190,7 +215,6 @@ function ExportExactPDFPageContent() {
         });
     }, []);
 
-    // --- TEMPLATE ACTIONS ---
     const saveTemplate = () => {
         const values = form.getValues();
         localStorage.setItem(`pdf_template_${values.templateName}`, JSON.stringify(values));
@@ -207,7 +231,6 @@ function ExportExactPDFPageContent() {
         }
     };
 
-    // --- GENERATE ---
     const handleGenerate = async (outputType: 'preview' | 'download') => {
         if (!selectedProjectId) return toast({ title: "Error", description: "Select a project first" });
         setLoading(p => ({ ...p, generating: true }));
@@ -218,13 +241,17 @@ function ExportExactPDFPageContent() {
                 body: JSON.stringify({ projectId: selectedProjectId, settings: form.getValues() })
             });
 
-            if (!response.ok) throw new Error("Failed to generate PDF");
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.error || "Failed to generate PDF");
+            }
             const blob = await response.blob();
             const url = URL.createObjectURL(blob);
             if (pdfPreviewUrl) URL.revokeObjectURL(pdfPreviewUrl);
 
-            if (outputType === 'preview') setPdfPreviewUrl(url);
-            else {
+            if (outputType === 'preview') {
+                 setPdfPreviewUrl(url);
+            } else {
                 const link = document.createElement('a');
                 link.href = url;
                 link.download = `${form.getValues().templateName}.pdf`;
@@ -244,7 +271,6 @@ function ExportExactPDFPageContent() {
                 <Button variant="outline" onClick={() => router.back()}><ArrowLeft className="mr-2 h-4 w-4" /> Back</Button>
             </div>
 
-            {/* 1. PROJECT SELECTION (RESTORED) */}
             <Card className="border-primary/30">
                 <CardHeader className="pb-3"><CardTitle>1. Data Source</CardTitle></CardHeader>
                 <CardContent>
@@ -267,7 +293,6 @@ function ExportExactPDFPageContent() {
             <Form {...form}>
                 <form className="space-y-6">
                     
-                    {/* 2. TEMPLATE MANAGER (RESTORED) */}
                     <Card>
                         <CardHeader className="pb-3"><CardTitle>2. Template Manager</CardTitle></CardHeader>
                         <CardContent className="flex gap-4 items-end">
@@ -278,16 +303,14 @@ function ExportExactPDFPageContent() {
                                 </FormItem>
                             )} />
                             <Button type="button" variant="outline" onClick={saveTemplate}><Save className="mr-2 h-4 w-4"/> Save Settings</Button>
-                            {/* In a real app, this would be a select dropdown of saved templates */}
                             <Button type="button" variant="ghost" onClick={() => loadTemplate(form.getValues().templateName)}><RotateCcw className="mr-2 h-4 w-4"/> Load</Button>
                         </CardContent>
                     </Card>
 
                     <Accordion type="multiple" defaultValue={['page', 'table']} className="w-full">
-                        {/* 3. PAGE SETTINGS */}
                         <AccordionItem value="page">
-                            <AccordionTrigger>3. Page, Title & Border Settings</AccordionTrigger>
-                            <AccordionContent className="p-4 space-y-4">
+                            <AccordionTrigger>3. Page, Title &amp; Border Settings</AccordionTrigger>
+                            <AccordionContent className="p-4 space-y-4 bg-slate-900/50">
                                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                                     <FormField control={form.control} name="pageSize" render={({ field }) => (
                                         <FormItem><FormLabel>Size</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent><SelectItem value="a4">A4</SelectItem><SelectItem value="letter">Letter</SelectItem></SelectContent></Select></FormItem>
@@ -304,7 +327,7 @@ function ExportExactPDFPageContent() {
                                         </FormItem>
                                     )} />
                                 </div>
-                                <div className="border-t pt-4 mt-4">
+                                <div className="border-t pt-4 mt-4 border-slate-700">
                                     <Label className="mb-2 block font-bold">Main Document Title</Label>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <FormField control={form.control} name="title" render={({ field }) => (<FormItem><Input {...field} className="text-right font-serif text-lg" dir="rtl" /></FormItem>)} />
@@ -312,32 +335,76 @@ function ExportExactPDFPageContent() {
                                             <FormField control={form.control} name="titleStyle.bgColor" render={({ field }) => (<FormItem><ColorPicker label="Background" value={field.value || '#ffffff'} onChange={field.onChange} /></FormItem>)} />
                                             <FormField control={form.control} name="titleStyle.textColor" render={({ field }) => (<FormItem><ColorPicker label="Text" value={field.value} onChange={field.onChange} /></FormItem>)} />
                                             <FormField control={form.control} name="titleStyle.fontSize" render={({ field }) => (<FormItem><FormLabel>Size</FormLabel><Input type="number" {...field} className="w-20" /></FormItem>)} />
+                                            <FormField control={form.control} name="titleStyle.bold" render={({ field }) => (<FormItem className="flex items-center gap-2 pt-6"><Switch checked={field.value} onCheckedChange={field.onChange} /><Label>Bold</Label></FormItem>)} />
+                                            <FormField control={form.control} name="titleStyle.italic" render={({ field }) => (<FormItem className="flex items-center gap-2 pt-6"><Switch checked={field.value} onCheckedChange={field.onChange} /><Label>Italic</Label></FormItem>)} />
                                         </div>
                                     </div>
                                 </div>
                             </AccordionContent>
                         </AccordionItem>
 
-                        {/* 4. TABLE COLUMNS (DETAILED) */}
+                         <AccordionItem value="info-box">
+                            <AccordionTrigger>4. Header Info Boxes &amp; Footer</AccordionTrigger>
+                            <AccordionContent className="p-4 space-y-4 bg-slate-900/50">
+                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <FormField control={form.control} name="infoBoxStyle.width" render={({ field }) => (<FormItem><FormLabel>Box Width (mm)</FormLabel><Input type="number" {...field} /></FormItem>)} />
+                                    <FormField control={form.control} name="infoBoxStyle.height" render={({ field }) => (<FormItem><FormLabel>Box Height (mm)</FormLabel><Input type="number" {...field} /></FormItem>)} />
+                                    <FormField control={form.control} name="infoBoxStyle.fontSize" render={({ field }) => (<FormItem><FormLabel>Font Size</FormLabel><Input type="number" {...field} /></FormItem>)} />
+                                 </div>
+                                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <FormField control={form.control} name="infoBoxStyle.textColor" render={({ field }) => (<FormItem><ColorPicker label="Text Color" value={field.value} onChange={field.onChange} /></FormItem>)} />
+                                    <FormField control={form.control} name="infoBoxStyle.labelBgColor" render={({ field }) => (<FormItem><ColorPicker label="Label BG" value={field.value} onChange={field.onChange} /></FormItem>)} />
+                                    <FormField control={form.control} name="infoBoxStyle.valueBgColor" render={({ field }) => (<FormItem><ColorPicker label="Value BG" value={field.value} onChange={field.onChange} /></FormItem>)} />
+                                </div>
+                                <div className="border-t pt-4 mt-4 border-slate-700">
+                                    <Label className="mb-2 block font-bold">Footer Style</Label>
+                                    <div className="flex gap-4">
+                                        <FormField control={form.control} name="footerStyle.textColor" render={({ field }) => (<FormItem><ColorPicker label="Text" value={field.value} onChange={field.onChange} /></FormItem>)} />
+                                        <FormField control={form.control} name="footerStyle.fontSize" render={({ field }) => (<FormItem><FormLabel>Size</FormLabel><Input type="number" {...field} className="w-20" /></FormItem>)} />
+                                        <FormField control={form.control} name="footerStyle.bold" render={({ field }) => (<FormItem className="flex items-center gap-2 pt-6"><Switch checked={field.value} onCheckedChange={field.onChange} /><Label>Bold</Label></FormItem>)} />
+                                    </div>
+                                </div>
+                            </AccordionContent>
+                        </AccordionItem>
+
                         <AccordionItem value="table">
-                            <AccordionTrigger>4. Table Columns & Styling</AccordionTrigger>
-                            <AccordionContent className="p-4 space-y-4">
+                            <AccordionTrigger>5. Table Columns &amp; Styling</AccordionTrigger>
+                             <AccordionContent className="p-4 space-y-4 bg-slate-900/50">
                                 
+                                <Card className="mb-4 bg-slate-800 border-slate-700">
+                                    <CardHeader>
+                                        <CardTitle className="text-base text-white">Table Width Allocation (mm)</CardTitle>
+                                    </CardHeader>
+                                    <CardContent className="flex justify-around items-center">
+                                        <div className="text-center">
+                                            <p className="text-sm text-slate-400">Total Printable</p>
+                                            <p className="text-2xl font-bold text-slate-100">{totalWidth.toFixed(1)}</p>
+                                        </div>
+                                        <div className="text-center">
+                                            <p className="text-sm text-slate-400">Used</p>
+                                            <p className="text-2xl font-bold text-slate-100">{usedWidth.toFixed(1)}</p>
+                                        </div>
+                                        <div className={`text-center p-2 rounded-lg ${remainingWidth &lt; 0 ? 'bg-red-500/20' : 'bg-green-500/20'}`}>
+                                            <p className="text-sm text-slate-400">Remaining</p>
+                                            <p className={`text-2xl font-bold ${remainingWidth &lt; 0 ? 'text-red-400' : 'text-green-400'}`}>{remainingWidth.toFixed(1)}</p>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+
                                 <div className="flex items-center gap-4 mb-4">
                                     <Label>Global Row Height:</Label>
                                     <FormField control={form.control} name="rowHeight" render={({field}) => <Input type="number" {...field} className="w-24" />} />
                                 </div>
 
                                 {fields.map((field, index) => (
-                                    <Card key={field.id} className="relative overflow-hidden border-l-4 border-l-primary">
+                                    <Card key={field.id} className="relative overflow-hidden border-l-4 border-l-primary bg-slate-800/50">
                                         <div className="absolute top-2 right-2">
                                             <Button type="button" variant="ghost" size="sm" className="text-destructive hover:text-red-700 hover:bg-red-50" onClick={() => remove(index)}><Trash2 className="h-4 w-4" /></Button>
                                         </div>
                                         <CardContent className="p-4 pt-4">
                                             <div className="grid grid-cols-12 gap-4">
-                                                {/* Main Column Info */}
-                                                <div className="col-span-12 md:col-span-4 space-y-3 border-r pr-4">
-                                                    <h4 className="font-bold text-sm text-muted-foreground mb-2">Column Data</h4>
+                                                <div className="col-span-12 md:col-span-4 space-y-3 border-r pr-4 border-slate-700">
+                                                    <h4 className="font-bold text-sm text-slate-400 mb-2">Column Data</h4>
                                                     <FormField control={form.control} name={`tableColumns.${index}.header`} render={({ field }) => (
                                                         <FormItem><FormLabel>Header Text</FormLabel><Input {...field} /></FormItem>
                                                     )} />
@@ -354,16 +421,14 @@ function ExportExactPDFPageContent() {
                                                     )} />
                                                 </div>
 
-                                                {/* Detailed Styling Tabs */}
                                                 <div className="col-span-12 md:col-span-8">
                                                     <Tabs defaultValue="header" className="w-full">
-                                                        <TabsList className="w-full justify-start">
+                                                        <TabsList className="w-full justify-start bg-slate-700/50">
                                                             <TabsTrigger value="header">Header Style</TabsTrigger>
                                                             <TabsTrigger value="body">Body Style</TabsTrigger>
                                                         </TabsList>
                                                         
-                                                        {/* HEADER STYLING PANEL */}
-                                                        <TabsContent value="header" className="space-y-3 p-2 bg-background/50 rounded border mt-2">
+                                                        <TabsContent value="header" className="space-y-3 p-2 bg-slate-900/50 rounded border border-slate-700 mt-2">
                                                             <div className="flex flex-wrap gap-4 items-end">
                                                                 <FormField control={form.control} name={`tableColumns.${index}.headerStyle.bgColor`} render={({ field }) => (<ColorPicker label="Background" value={field.value || '#ffffff'} onChange={field.onChange} />)} />
                                                                 <FormField control={form.control} name={`tableColumns.${index}.headerStyle.textColor`} render={({ field }) => (<ColorPicker label="Text" value={field.value} onChange={field.onChange} />)} />
@@ -383,8 +448,7 @@ function ExportExactPDFPageContent() {
                                                             </div>
                                                         </TabsContent>
 
-                                                        {/* BODY STYLING PANEL */}
-                                                        <TabsContent value="body" className="space-y-3 p-2 bg-background/50 rounded border mt-2">
+                                                        <TabsContent value="body" className="space-y-3 p-2 bg-slate-900/50 rounded border border-slate-700 mt-2">
                                                             <div className="flex flex-wrap gap-4 items-end">
                                                                 <FormField control={form.control} name={`tableColumns.${index}.bodyStyle.bgColor`} render={({ field }) => (<ColorPicker label="Background" value={field.value || '#ffffff'} onChange={field.onChange} />)} />
                                                                 <FormField control={form.control} name={`tableColumns.${index}.bodyStyle.textColor`} render={({ field }) => (<ColorPicker label="Text" value={field.value} onChange={field.onChange} />)} />
@@ -433,7 +497,7 @@ function ExportExactPDFPageContent() {
             {pdfPreviewUrl && (
                 <div className="mt-8">
                     <Label className="text-xl font-bold mb-2 block">Document Preview</Label>
-                    <iframe src={pdfPreviewUrl} className="w-full h-[900px] border-4 border-border rounded-xl" />
+                    <iframe src={pdfPreviewUrl} className="w-full h-[900px] border-4 border-slate-700 rounded-xl" />
                 </div>
             )}
         </div>
@@ -443,3 +507,5 @@ function ExportExactPDFPageContent() {
 export default function ExportExactPDFPage() {
     return <Suspense fallback={<Loader2 className="h-8 w-8 animate-spin" />}><ExportExactPDFPageContent /></Suspense>
 }
+
+    
