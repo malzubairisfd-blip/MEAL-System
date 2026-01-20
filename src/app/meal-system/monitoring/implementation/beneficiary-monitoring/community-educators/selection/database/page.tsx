@@ -1,17 +1,23 @@
+
 // src/app/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/selection/database/page.tsx
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
+import Link from 'next/link';
+import { useToast } from "@/hooks/use-toast";
+import { exportEducatorsToExcel } from "@/lib/exportEducatorsToExcel";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
   TableCell,
-  TableHeader,
   TableHead,
+  TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   Loader2,
   Search,
@@ -23,11 +29,7 @@ import {
   Users,
   FileDown,
 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import Link from 'next/link';
-import { useToast } from "@/hooks/use-toast";
-import { exportEducatorsToExcel } from "@/lib/exportEducatorsToExcel";
+
 
 interface ApplicantRecord {
   [key: string]: any;
@@ -91,24 +93,12 @@ export default function EducatorDatabasePage() {
 
   const totalPages = Math.ceil(filteredRecords.length / itemsPerPage);
 
-  const totalAccepted = useMemo(() => records.filter(r => r["Acceptance Statement"] === "مقبولة").length, [records]);
-  const totalUnaccepted = useMemo(() => records.filter(r => r["Acceptance Statement"] === "غير مقبولة").length, [records]);
+  const totalAccepted = useMemo(() => records.filter(r => r.acceptance_results === "مقبولة").length, [records]);
+  const totalUnaccepted = useMemo(() => records.filter(r => r.acceptance_results === "غير مقبولة").length, [records]);
 
   const allColumns = useMemo(() => {
     if (records.length === 0) return [];
-    // Get all keys from all records to handle schema variations
-    const allKeys = new Set<string>();
-    records.forEach(r => Object.keys(r).forEach(k => allKeys.add(k)));
-    // Sort columns, putting important ones first
-    const preferredOrder = ["_id", "applicantName", "Acceptance Statement", "Applicants Total Score", "Age in Years", "Qualification Score", "Identity Score", "Previous Experience Score", "Disqualification Reason", "Duplicated Applicant"];
-    return Array.from(allKeys).sort((a,b) => {
-        const aIndex = preferredOrder.indexOf(a);
-        const bIndex = preferredOrder.indexOf(b);
-        if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex;
-        if (aIndex !== -1) return -1;
-        if (bIndex !== -1) return 1;
-        return a.localeCompare(b);
-    });
+    return Object.keys(records[0]);
   }, [records]);
 
   const handleDownload = () => {
