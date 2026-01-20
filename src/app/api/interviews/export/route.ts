@@ -107,7 +107,7 @@ function drawPageFrame(
 
   // --- TITLE SECTION ---
   const tts = settings.titleStyle || {};
-  const titleY = 22; // Adjusted Y position
+  const titleY = 15;
   const titleH = Number(tts.height) || 10;
   
   if (tts.bgColor) {
@@ -123,7 +123,7 @@ function drawPageFrame(
 
   // --- SFD LOGO (Manual Vector Drawing) ---
   const logoX = 15;
-  const logoY = 12; // Adjusted Y position
+  const logoY = 10;
   doc.setFillColor(40, 60, 80); 
   doc.rect(logoX, logoY, 6, 15, "F");
   
