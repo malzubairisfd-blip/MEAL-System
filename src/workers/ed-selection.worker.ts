@@ -192,6 +192,8 @@ function processRecords(rows: any[], recipientsDateStr: string, projects: any[],
 
     r.acceptance_results =
       r.total_score > 0 ? "مقبولة" : "غير مقبولة";
+
+    r.interview_qualification = r.acceptance_results === "مقبولة" ? "مؤهلة للمقابلة" : "غير مؤهلة للمقابلة";
   });
 
   // --- DISQUALIFICATION REASON ---

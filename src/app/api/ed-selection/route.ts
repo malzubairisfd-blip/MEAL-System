@@ -4,7 +4,7 @@ import fs from "fs/promises";
 import path from "path";
 import Database from 'better-sqlite3';
 
-const getDataPath = () => path.join(process.cwd(), 'src/data');
+const getDataPath = () => path.join(process.cwd(), 'src', 'data');
 const getDbPath = () => path.join(getDataPath(), 'educators.db');
 
 
