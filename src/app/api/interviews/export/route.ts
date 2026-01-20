@@ -46,7 +46,8 @@ function drawInfoBox(
   const padding = 2;
   const trimmedValue = (value || "").trim();
 
-  applyTextStyle(doc, style);
+  // Apply general style first (bold, italic, font size)
+  applyTextStyle(doc, { ...style, textColor: style.textColor || '#000000' });
   
   const labelW = doc.getTextWidth(label) + padding * 2;
   const valueW = style.width || 60;
@@ -75,7 +76,13 @@ function drawInfoBox(
   
   // 4. Text
   const labelY = y + h / 2;
+  
+  // Set label text color before drawing
+  doc.setTextColor(style.labelTextColor || style.textColor || '#000000');
   doc.text(label, xRight - padding, labelY, { align: "right", baseline: "middle" });
+  
+  // Set value text color before drawing
+  doc.setTextColor(style.textColor || '#000000');
   
   // Draw value text line by line for vertical centering
   const valueYStart = y + (h - textDimensions.h) / 2;
@@ -109,7 +116,7 @@ function drawPageFrame(
   applyTextStyle(doc, { textColor: '#000000', fontSize: 7, bold: true });
   const textLines = [
       "رئاسة الوزراء",
-      "الصندوق الاجتماعي للتنمية فرع صنعاء"
+      "الصندوق الاجتماعي للتنمية فرع (صنعاء، الامانة، المحويت، الجوف، مارب)"
   ];
   const padding = 2;
   const headerY = 8;
@@ -161,10 +168,12 @@ function drawPageFrame(
 
   // --- HEADER INFO BOXES ---
   const ibs = settings.infoBoxStyle || {};
-  const box1Width = drawInfoBox(doc, "اسم المشروع", project.projectName || "غير محدد", pageW - 10, 36, ibs);
-  drawInfoBox(doc, "اسم القاعة", hall.hallName || "غير محدد", pageW - 10 - box1Width - 5, 36, ibs);
-  const box3Width = drawInfoBox(doc, "رقم المشروع", toArabicDigits(project.projectId), pageW - 10, 26, ibs);
-  drawInfoBox(doc, "رقم القاعة", toArabicDigits(hall.hallNo), pageW - 10 - box3Width - 5, 26, ibs);
+  // Row 1
+  drawInfoBox(doc, "رقم المشروع", toArabicDigits(project.projectId), pageW - 10, 28, ibs);
+  drawInfoBox(doc, "رقم القاعة", toArabicDigits(hall.hallNo), 90, 28, ibs);
+  // Row 2
+  drawInfoBox(doc, "اسم المشروع", project.projectName || "غير محدد", pageW - 10, 38, ibs);
+  drawInfoBox(doc, "اسم القاعة", hall.hallName || "غير محدد", 90, 38, ibs);
 
 
   // --- FOOTER SECTION ---

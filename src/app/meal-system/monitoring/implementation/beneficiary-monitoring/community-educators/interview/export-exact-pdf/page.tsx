@@ -99,6 +99,7 @@ const TableColumnSchema = z.object({
 });
 
 const InfoBoxStyleSchema = CellStyleSchema.extend({
+    labelTextColor: z.string().optional(),
     labelBgColor: z.string(),
     valueBgColor: z.string(),
     width: z.coerce.number(),
@@ -129,8 +130,9 @@ const InfoBoxStyleControls = ({ namePrefix, control }: { namePrefix: 'infoBoxSty
             <FormField control={control} name={`${namePrefix}.height`} render={({ field }) => (<FormItem><FormLabel>Box Height (mm)</FormLabel><Input type="number" {...field} /></FormItem>)} />
             <FormField control={control} name={`${namePrefix}.fontSize`} render={({ field }) => (<FormItem><FormLabel>Font Size</FormLabel><Input type="number" {...field} /></FormItem>)} />
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <FormField control={control} name={`${namePrefix}.textColor`} render={({ field }) => (<FormItem><ColorPicker label="Text Color" value={field.value} onChange={field.onChange} /></FormItem>)} />
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <FormField control={control} name={`${namePrefix}.labelTextColor`} render={({ field }) => (<FormItem><ColorPicker label="Label Text" value={field.value || '#000000'} onChange={field.onChange} /></FormItem>)} />
+            <FormField control={control} name={`${namePrefix}.textColor`} render={({ field }) => (<FormItem><ColorPicker label="Value Text" value={field.value} onChange={field.onChange} /></FormItem>)} />
             <FormField control={control} name={`${namePrefix}.labelBgColor`} render={({ field }) => (<FormItem><ColorPicker label="Label BG" value={field.value} onChange={field.onChange} /></FormItem>)} />
             <FormField control={control} name={`${namePrefix}.valueBgColor`} render={({ field }) => (<FormItem><ColorPicker label="Value BG" value={field.value} onChange={field.onChange} /></FormItem>)} />
         </div>
@@ -150,7 +152,7 @@ function ExportExactPDFPageContent() {
     const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
 
     const defaultInfoBoxStyle = {
-        fontSize: 10, textColor: "#000000", labelBgColor: "#F3F4F6", valueBgColor: "#FFFFFF",
+        fontSize: 10, textColor: "#000000", labelTextColor: "#000000", labelBgColor: "#F3F4F6", valueBgColor: "#FFFFFF",
         bold: false, italic: false, width: 60, height: 8, halign: 'right' as const, valign: 'middle' as const
     };
 
