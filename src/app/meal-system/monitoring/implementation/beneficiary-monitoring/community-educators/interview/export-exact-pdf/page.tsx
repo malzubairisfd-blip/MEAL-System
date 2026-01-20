@@ -15,7 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Loader2, Plus, Trash2, FileDown, Eye, Info, Save, RotateCcw, Palette, AlignLeft, AlignCenter, AlignRight, AlignJustify, ArrowUpToLine, ArrowDownToLine, Divide } from 'lucide-react';
+import { ArrowLeft, Loader2, Plus, Trash2, FileDown, Eye, Info, Save, RotateCcw, Palette, AlignLeft, AlignCenter, AlignRight, AlignJustify, ArrowUpToLine, ArrowDownToLine, Divide, Edit } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -154,6 +154,7 @@ function ExportExactPDFPageContent() {
     const [loading, setLoading] = useState({ projects: true, generating: false });
     const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
     const [savedTemplates, setSavedTemplates] = useState<string[]>([]);
+    const [selectedTemplate, setSelectedTemplate] = useState<string>('');
 
     useEffect(() => {
         const templates: string[] = [];
@@ -268,12 +269,54 @@ function ExportExactPDFPageContent() {
         if (!name) return;
         const saved = localStorage.getItem(`pdf_template_${name}`);
         if (saved) {
-            form.reset(JSON.parse(saved));
+            const parsedSettings = JSON.parse(saved);
+            form.reset(parsedSettings);
+            form.setValue('templateName', parsedSettings.templateName || name);
             toast({ title: "Loaded", description: `Template "${name}" loaded.` });
         } else {
             toast({ variant: "destructive", title: "Error", description: "Template not found" });
         }
     };
+    
+    const renameTemplate = () => {
+        const newName = form.getValues().templateName;
+        if (!newName.trim()) {
+            toast({ title: "Cannot Rename", description: "Please enter a new name for the template in the 'Template Name' field.", variant: "destructive" });
+            return;
+        }
+        if (!selectedTemplate) {
+            toast({ title: "Cannot Rename", description: "Please select a template to rename from the dropdown.", variant: "destructive" });
+            return;
+        }
+        if (newName === selectedTemplate) {
+            toast({ title: "No Change", description: "The new name is the same as the selected template's name.", variant: "default" });
+            return;
+        }
+        if (savedTemplates.includes(newName)) {
+            toast({ title: "Cannot Rename", description: `A template with the name "${newName}" already exists.`, variant: "destructive" });
+            return;
+        }
+
+        const oldKey = `pdf_template_${selectedTemplate}`;
+        const newKey = `pdf_template_${newName}`;
+        const savedSettings = localStorage.getItem(oldKey);
+
+        if (savedSettings) {
+            const settingsObject = JSON.parse(savedSettings);
+            settingsObject.templateName = newName;
+            
+            localStorage.setItem(newKey, JSON.stringify(settingsObject));
+            localStorage.removeItem(oldKey);
+            
+            toast({ title: "Renamed", description: `Template "${selectedTemplate}" has been renamed to "${newName}".` });
+
+            setSavedTemplates(prev => prev.map(t => t === selectedTemplate ? newName : t).sort());
+            setSelectedTemplate(newName);
+        } else {
+            toast({ title: "Error", description: "Could not find the original template data to rename.", variant: "destructive" });
+        }
+    };
+
 
     const handleGenerate = async (outputType: 'preview' | 'download') => {
         if (!selectedProjectId) return toast({ title: "Error", description: "Select a project first" });
@@ -349,7 +392,10 @@ function ExportExactPDFPageContent() {
                             <div className="flex gap-4 items-end">
                                 <FormItem className="flex-1">
                                     <FormLabel>Load Saved Template</FormLabel>
-                                    <Select onValueChange={loadTemplate}>
+                                    <Select onValueChange={(name) => {
+                                        loadTemplate(name);
+                                        setSelectedTemplate(name);
+                                      }} value={selectedTemplate}>
                                         <SelectTrigger>
                                             <SelectValue placeholder="Select a template to load..." />
                                         </SelectTrigger>
@@ -359,6 +405,9 @@ function ExportExactPDFPageContent() {
                                     </Select>
                                 </FormItem>
                                 <Button type="button" variant="outline" onClick={saveTemplate}><Save className="mr-2 h-4 w-4"/> Save Current</Button>
+                                <Button type="button" variant="outline" onClick={renameTemplate} disabled={!selectedTemplate}>
+                                    <Edit className="mr-2 h-4 w-4" /> Rename Selected
+                                </Button>
                             </div>
                         </CardContent>
                     </Card>
@@ -576,4 +625,3 @@ function ExportExactPDFPageContent() {
 export default function ExportExactPDFPage() {
     return <Suspense fallback={<Loader2 className="h-8 w-8 animate-spin" />}><ExportExactPDFPageContent /></Suspense>
 }
-
