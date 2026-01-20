@@ -17,6 +17,14 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -243,7 +251,7 @@ export default function InterviewAnalysisPage() {
         } else {
             await executeSave(processedResults.results);
         }
-    }, [educators, executeSave]);
+    }, [educators, executeSave, toast]);
 
     useEffect(() => {
         const worker = new Worker(new URL('@/workers/interview-analysis.worker.ts', import.meta.url), { type: 'module' });
@@ -321,7 +329,10 @@ export default function InterviewAnalysisPage() {
                                 <CardDescription>Select all applicants who were absent from the interview.</CardDescription>
                             </CardHeader>
                             <CardContent>
-                                <Input placeholder="Search absentees by ID or name..." value={absenteeSearch} onChange={e => setAbsenteeSearch(e.target.value)} className="mb-2" />
+                                <div className="relative">
+                                    <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                                    <Input placeholder="Search absentees by ID or name..." value={absenteeSearch} onChange={e => setAbsenteeSearch(e.target.value)} className="mb-2 pl-10" />
+                                </div>
                                <ScrollArea className="h-64 border rounded-md">
                                     <Table>
                                         <TableHeader>
@@ -331,7 +342,7 @@ export default function InterviewAnalysisPage() {
                                             {filteredAbsentees.map(app => (
                                                 <TableRow key={app.applicant_id}>
                                                     <TableCell>
-                                                        <Checkbox id={`absentee-${app.applicant_id}`} onCheckedChange={(checked) => handleAbsenteeToggle(app.applicant_id, checked)} checked={selectedAbsentees.has(app.applicant_id)} />
+                                                        <Checkbox id={`absentee-${app.applicant_id}`} onCheckedChange={(checked) => handleAbsenteeToggle(app.applicant_id)} checked={selectedAbsentees.has(app.applicant_id)} />
                                                     </TableCell>
                                                     <TableCell>{app.applicant_id}</TableCell>
                                                     <TableCell>{app.applicant_name}</TableCell>
@@ -377,8 +388,8 @@ export default function InterviewAnalysisPage() {
                         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
                             <SummaryCard icon={<Users />} title="Total Attended" value={results.totalAttended} />
                             <SummaryCard icon={<UserX className="text-red-500" />} title="Total Absent" value={results.totalAbsent} />
-                            <SummaryCard icon={<CheckCircle className="text-green-500" />} title="Passed Interview" value={results.totalPassed} />
-                            <SummaryCard icon={<XCircle className="text-red-500" />} title="Failed Interview" value={results.totalFailed} />
+                            <SummaryCard icon={<UserCheck className="text-green-500" />} title="Passed Interview" value={results.totalPassed} />
+                            <SummaryCard icon={<UserX className="text-red-500" />} title="Failed Interview" value={results.totalFailed} />
                         </div>
                         <div className="flex gap-2 mt-4">
                            <Button asChild><Link href="/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/selection/database"><Database className="mr-2 h-4 w-4"/>Go to Database</Link></Button>
@@ -464,8 +475,8 @@ const ColumnMappingUI = ({ columns, mapping, setMapping }: { columns: string[], 
             <Card>
                 <CardHeader><CardTitle className="text-md">Current Mappings</CardTitle></CardHeader>
                 <CardContent>
-                    <ScrollArea className="h-40 border rounded-md">
-                         <Table>
+                     <ScrollArea className="h-40 border rounded-md">
+                          <Table>
                            <TableHeader>
                                <TableRow>
                                    <TableHead>Source Column</TableHead>
