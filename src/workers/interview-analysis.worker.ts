@@ -1,7 +1,5 @@
 // src/workers/interview-analysis.worker.ts
-
-// Since this is a worker, we cannot import from other modules directly.
-// We need to copy/paste necessary utility functions.
+import dayjs from 'dayjs';
 
 // --- START: Copied Normalization Logic ---
 function baseArabicNormalize(value: any): string {
@@ -43,7 +41,22 @@ self.onmessage = async (event) => {
 
     try {
         const absenteeSet = new Set(absentees);
-        const mappedUploadedData = new Map(uploadedData.map((row: any) => [String(row[mapping.get('applicant_id')]), row]));
+
+        // Find which column name corresponds to 'applicant_id'
+        let applicantIdColumn: string | undefined;
+        for (const [key, value] of mapping.entries()) {
+            if (value === 'applicant_id') {
+                applicantIdColumn = key;
+                break;
+            }
+        }
+        
+        if (!applicantIdColumn) {
+            throw new Error("Mapping for 'applicant_id' is missing.");
+        }
+        
+        // Create a map from applicant_id -> row data from the uploaded file
+        const mappedUploadedData = new Map(uploadedData.map((row: any) => [String(row[applicantIdColumn!]), row]));
 
         let processedEducators = educators.map((edu: any) => {
             if (edu.interview_qualification !== 'مؤهلة للمقابلة') {
@@ -77,6 +90,16 @@ self.onmessage = async (event) => {
                     edu.grand_total_score = edu.interview_total_marks + (Number(edu.total_score) || 0);
                     edu.training_qualification = 'مؤهلة للتدريب';
                 }
+            } else {
+                // If absent, reset scores
+                edu.sfd_marks = 0;
+                edu.health_marks = 0;
+                edu.local_community_marks = 0;
+                edu.interview_total_marks = 0;
+                edu.grand_total_score = 0;
+                edu.grand_score_rank = 0;
+                edu.training_qualification = 'غير مؤهلة للتدريب';
+                edu.disqualified_reasons = 'غائبة من المقابلة';
             }
             return edu;
         });
@@ -152,9 +175,20 @@ self.onmessage = async (event) => {
                 }
             });
         });
+        
+        const totalAttended = attendedApplicants.length;
+        const totalAbsent = absenteeSet.size;
+        const totalPassed = processedEducators.filter(e => e.training_qualification === 'مؤهلة للتدريب').length;
+        const totalFailed = processedEducators.filter(e => e.training_qualification === 'غير مؤهلة للتدريب').length;
 
 
-        postMessage({ type: 'done', data: processedEducators });
+        postMessage({ type: 'done', data: {
+            results: processedEducators,
+            totalAttended,
+            totalAbsent,
+            totalPassed,
+            totalFailed,
+        }});
     } catch (e: any) {
         postMessage({ type: 'error', error: e.message || 'An unknown error occurred in the worker.' });
     }

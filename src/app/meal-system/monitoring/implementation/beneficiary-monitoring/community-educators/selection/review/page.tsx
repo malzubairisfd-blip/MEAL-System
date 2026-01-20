@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Upload, Users, UserCheck, UserX, Save, FileDown, GitCompareArrows, Search, Plus, Trash2, CheckCircle, XCircle, ClipboardList } from 'lucide-react';
+import { Loader2, Upload, Users, UserCheck, UserX, Save, FileDown, GitCompareArrows, Search, Plus, Trash2, CheckCircle, XCircle, ClipboardList, Database } from 'lucide-react';
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -236,7 +236,7 @@ export default function InterviewAnalysisPage() {
         workerRef.current.postMessage({
             educators,
             uploadedData: rawFileData,
-            mapping: Object.fromEntries(columnMapping),
+            mapping: columnMapping,
             absentees: Array.from(selectedAbsentees),
         });
     }, [selectedProjectId, file, rawFileData, isMappingComplete, educators, columnMapping, selectedAbsentees, toast]);
