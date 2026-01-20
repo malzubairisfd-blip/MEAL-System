@@ -1,4 +1,3 @@
-
 import { NextResponse } from "next/server";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -6,256 +5,156 @@ import fs from "fs";
 import path from "path";
 import Database from "better-sqlite3";
 
-/* ------------------ Helpers ------------------ */
 const toArabicDigits = (v: string | number) =>
   String(v).replace(/\d/g, d => "٠١٢٣٤٥٦٧٨٩"[Number(d)]);
 
-const getDbPath = () => path.join(process.cwd(), "src", "data", "educators.db");
+  const getDbPath = () => path.join(process.cwd(), "src", "data", "educators.db");
 
-// Helper to convert hex to RGB array for jsPDF
-function hexToRgb(hex: string): [number, number, number] {
-    if (!hex || typeof hex !== 'string') return [0, 0, 0];
-    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-    return result ? [
-        parseInt(result[1], 16),
-        parseInt(result[2], 16),
-        parseInt(result[3], 16)
-    ] : [0, 0, 0];
-}
+  function applyTextStyle(doc: jsPDF, styleObj: any) {
+    const fontName = "Amiri";
+      let style = "normal";
+        if (styleObj.bold && styleObj.italic) style = "bolditalic";
+          else if (styleObj.bold) style = "bold";
+            else if (styleObj.italic) style = "italic";
+              doc.setFont(fontName, style);
+                doc.setFontSize(styleObj.fontSize || 10);
+                  doc.setTextColor(styleObj.textColor || "#000000");
+                  }
 
+                  function drawInfoBox(doc: jsPDF, label: string, value: string, xRight: number, y: number, style: any) {
+                    const padding = 2;
+                      const labelW = (style.labelWidth || 25);
+                        const valueW = style.width || 60;
+                          const h = style.height || 8;
+                            if (style.labelBgColor) {
+                                doc.setFillColor(style.labelBgColor);
+                                    doc.rect(xRight - labelW, y, labelW, h, "F");
+                                      }
+                                        if (style.valueBgColor) {
+                                            doc.setFillColor(style.valueBgColor);
+                                                doc.rect(xRight - labelW - valueW - 2, y, valueW, h, "F");
+                                                  }
+                                                    doc.setLineWidth(0.3);
+                                                      doc.setDrawColor(0);
+                                                        applyTextStyle(doc, style);
+                                                          doc.rect(xRight - labelW, y, labelW, h);
+                                                            doc.text(label, xRight - padding, y + 5, { align: "right" });
+                                                              doc.rect(xRight - labelW - valueW - 2, y, valueW, h);
+                                                                const lines = doc.splitTextToSize(value || "", valueW - 2);
+                                                                  doc.text(lines, xRight - labelW - 4, y + 5, { align: "right" });
+                                                                  }
 
-/* RTL Info Box (label beside value) */
-function drawInfoBox(doc: jsPDF, label: string, value: string, xRight: number, y: number) {
-  doc.setFont("Amiri", "normal");
-  doc.setFontSize(10);
-  doc.setLineWidth(0.3);
-  const padding = 2;
+                                                                  function drawPageFrame(doc: jsPDF, settings: any, project: any, hall: any, pageNumber: number) {
+                                                                    const pageW = doc.internal.pageSize.getWidth();
+                                                                      const pageH = doc.internal.pageSize.getHeight();
+                                                                        doc.setLineWidth(1.5);
+                                                                          doc.setDrawColor(settings.borderColor || "#000000");
+                                                                            doc.rect(5, 5, pageW - 10, pageH - 10);
+                                                                              const tts = settings.titleStyle;
+                                                                                doc.setFillColor(tts.bgColor);
+                                                                                  doc.rect(45, 10, pageW - 90, tts.height || 7, "F");
+                                                                                    applyTextStyle(doc, tts);
+                                                                                      doc.text(settings.title, pageW / 2, 10 + (tts.height || 7) / 2 + 1, { align: "center", baseline: "middle" });
+                                                                                        // Logo
+                                                                                          const lX = 15; const lY = 8;
+                                                                                            doc.setFillColor(40, 60, 80);
+                                                                                              doc.rect(lX, lY, 6, 15, "F");
+                                                                                                doc.setTextColor(255); doc.setFontSize(10); doc.setFont("helvetica", "bold");
+                                                                                                  doc.text("S", lX + 3, lY + 4, { align: "center", baseline: "middle" });
+                                                                                                    doc.text("F", lX + 3, lY + 8, { align: "center", baseline: "middle" });
+                                                                                                      doc.text("D", lX + 3, lY + 12, { align: "center", baseline: "middle" });
+                                                                                                        doc.setFont("Amiri", "normal"); doc.setTextColor(40, 60, 80); doc.setFontSize(11);
+                                                                                                          doc.text("الصندوق", lX + 8, lY + 4);
+                                                                                                            doc.text("الاجتماعي", lX + 8, lY + 9);
+                                                                                                              doc.text("للتنمية", lX + 8, lY + 14);
+                                                                                                                doc.setFontSize(6); doc.text("Social Fund for Development", lX, lY + 18);
+                                                                                                                  const ibs = settings.infoBoxStyle;
+                                                                                                                    drawInfoBox(doc, "رقم المشروع", toArabicDigits(project.projectId), pageW - 10, 26, ibs);
+                                                                                                                      drawInfoBox(doc, "اسم المشروع", project.projectName, pageW - 10, 36, ibs);
+                                                                                                                        drawInfoBox(doc, "رقم القاعة", toArabicDigits(hall.hallNo), 90, 26, ibs);
+                                                                                                                          drawInfoBox(doc, "اسم القاعة", hall.hallName, 90, 36, ibs);
+                                                                                                                            const fts = settings.footerStyle;
+                                                                                                                              const fY = pageH - 25;
+                                                                                                                                applyTextStyle(doc, fts);
+                                                                                                                                  doc.text("الاسم:", pageW - 15, fY, { align: "right" });
+                                                                                                                                    doc.line(pageW - 50, fY + 1, pageW - 100, fY + 1);
+                                                                                                                                      doc.text("الصفة:", pageW - 15, fY + 8, { align: "right" });
+                                                                                                                                        doc.line(pageW - 50, fY + 9, pageW - 100, fY + 9);
+                                                                                                                                          doc.rect(55, fY - 5, 40, 20);
+                                                                                                                                            doc.text("توقيع اللجنة", 75, fY + 5, { align: "center" });
+                                                                                                                                              doc.rect(10, fY - 5, 40, 20);
+                                                                                                                                                doc.text("ختم المديرية", 30, fY + 5, { align: "center" });
+                                                                                                                                                  doc.text(`صفحة ${toArabicDigits(pageNumber)}`, pageW / 2, pageH - 10, { align: "center" });
+                                                                                                                                                  }
 
-  const labelW = doc.getTextWidth(label) + padding * 2;
-  const valueLines = doc.splitTextToSize(value || "", 55);
-  const valueW = 60;
-  const h = Math.max(8, valueLines.length * 5);
-
-  doc.rect(xRight - labelW, y, labelW, h);
-  doc.text(label, xRight - padding, y + 5, { align: "right" });
-
-  doc.rect(xRight - labelW - valueW - 2, y, valueW, h);
-  doc.text(valueLines, xRight - labelW - 4, y + 5, { align: "right" });
-}
-
-/* Draw header + footer + border (reusable) */
-function drawPageFrame(doc: jsPDF, settings: any, project: any, hall: any, pageNumber: number) {
-  const pageW = doc.internal.pageSize.getWidth();
-  const pageH = doc.internal.pageSize.getHeight();
-
-  /* ================= PAGE BORDER ================= */
-  doc.setLineWidth(1.5);
-  doc.rect(5, 5, pageW - 10, pageH - 10);
-
-  /* ================= TITLE ================= */
-  const titleBgRgb = hexToRgb(settings.titleBgColor);
-  doc.setFillColor(...titleBgRgb);
-  doc.rect(45, 10, pageW - 90, 10, "F");
-
-  let titleFontStyle = 'normal';
-  if (settings.titleBold && settings.titleItalic) titleFontStyle = 'bolditalic';
-  else if (settings.titleBold) titleFontStyle = 'bold';
-  else if (settings.titleItalic) titleFontStyle = 'italic';
-  doc.setFont("Amiri", titleFontStyle);
-  
-  doc.setFontSize(settings.titleSize || 14);
-  const titleTextRgb = hexToRgb(settings.titleColor);
-  doc.setTextColor(...titleTextRgb);
-  doc.text(settings.title, pageW / 2, 16.5, { align: "center" });
-  
-  // Reset font for other elements
-  doc.setFont("Amiri", "normal");
-
-  /* ================= LOGO (COMPACT FIX) ================= */
-  const logoX = 15;
-  const logoY = 8; // Moved up slightly
-
-  doc.setFillColor(40, 60, 80);
-  doc.rect(logoX, logoY, 6, 15, "F"); // Smaller rectangle
-
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(10); // Smaller font
-  doc.setFont("helvetica", "bold");
-  doc.text("S", logoX + 3, logoY + 4, { align: "center", baseline: "middle" });
-  doc.text("F", logoX + 3, logoY + 8, { align: "center", baseline: "middle" });
-  doc.text("D", logoX + 3, logoY + 12, { align: "center", baseline: "middle" });
-
-  doc.setFont("Amiri", "normal");
-  doc.setTextColor(40, 60, 80);
-  doc.setFontSize(11); // Scaled down
-  doc.text("الصندوق", logoX + 8, logoY + 4);
-  doc.text("الاجتماعي", logoX + 8, logoY + 9);
-  doc.text("للتنمية", logoX + 8, logoY + 14);
-
-  doc.setFontSize(6);
-  doc.text("Social Fund for Development", logoX, logoY + 17);
-
-  /* ================= INFO BOXES ================= */
-  drawInfoBox(doc, "رقم المشروع", toArabicDigits(project.projectId), pageW - 10, 26);
-  drawInfoBox(doc, "اسم المشروع", project.projectName || "", pageW - 10, 36);
-  drawInfoBox(doc, "رقم القاعة", toArabicDigits(hall.hallNo), 90, 26);
-  drawInfoBox(doc, "اسم القاعة", hall.hallName || "", 90, 36);
-
-  /* ================= FOOTER ================= */
-  doc.setFont("Amiri", "normal");
-  const y = pageH - 25;
-  doc.setFontSize(10);
-  doc.setTextColor(0, 0, 0);
-
-  doc.text("الاسم:", pageW - 15, y, { align: "right" });
-  doc.line(pageW - 50, y + 1, pageW - 110, y + 1);
-
-  doc.text("الصفة:", pageW - 15, y + 8, { align: "right" });
-  doc.line(pageW - 50, y + 9, pageW - 110, y + 9);
-
-  doc.rect(55, y - 5, 40, 20);
-  doc.text("توقيع اللجنة", 75, y + 5, { align: "center" });
-
-  doc.rect(10, y - 5, 40, 20);
-  doc.text("ختم المديرية", 30, y + 5, { align: "center" });
-
-  doc.text(`صفحة ${toArabicDigits(pageNumber)}`, pageW / 2, pageH - 10, { align: "center" });
-}
-
-/* ------------------ API ------------------ */
-export async function POST(req: Request) {
-  try {
-    const { projectId, settings } = await req.json();
-
-    const projectsRes = await fetch("http://localhost:9002/api/projects");
-    const projects = await projectsRes.json();
-    const project = projects.find((p: any) => p.projectId === projectId);
-
-    const db = new Database(getDbPath(), { fileMustExist: true });
-    const rows = db.prepare(
-      `SELECT * FROM educators WHERE project_id = ? AND interview_hall_no IS NOT NULL ORDER BY interview_hall_no, total_score DESC`
-    ).all(projectId);
-    db.close();
-
-    const doc = new jsPDF({
-      orientation: settings.pageOrientation,
-      unit: "mm",
-      format: settings.pageSize,
-    });
-
-    const fontRegularPath = path.join(process.cwd(), "public/fonts/Amiri-Regular.ttf");
-    doc.addFileToVFS("Amiri-Regular.ttf", fs.readFileSync(fontRegularPath).toString("base64"));
-    doc.addFont("Amiri-Regular.ttf", "Amiri", "normal");
-
-    try {
-        const fontBoldPath = path.join(process.cwd(), "public/fonts/Amiri-Bold.ttf");
-        doc.addFileToVFS("Amiri-Bold.ttf", fs.readFileSync(fontBoldPath).toString("base64"));
-        doc.addFont("Amiri-Bold.ttf", "Amiri", "bold");
-    } catch (e) { console.error("Could not load bold font, using regular as fallback."); }
-    
-    try {
-        const fontItalicPath = path.join(process.cwd(), "public/fonts/Amiri-Italic.ttf");
-        doc.addFileToVFS("Amiri-Italic.ttf", fs.readFileSync(fontItalicPath).toString("base64"));
-        doc.addFont("Amiri-Italic.ttf", "Amiri", "italic");
-    } catch (e) { console.error("Could not load italic font, using regular as fallback."); }
-
-    try {
-        const fontBoldItalicPath = path.join(process.cwd(), "public/fonts/Amiri-BoldItalic.ttf");
-        doc.addFileToVFS("Amiri-BoldItalic.ttf", fs.readFileSync(fontBoldItalicPath).toString("base64"));
-        doc.addFont("Amiri-BoldItalic.ttf", "Amiri", "bolditalic");
-    } catch (e) { console.error("Could not load bold-italic font, using regular as fallback."); }
-
-    doc.setFont("Amiri");
-
-    const grouped = rows.reduce((acc: any, r: any) => {
-      acc[r.interview_hall_no] ??= {
-        hallNo: r.interview_hall_no,
-        hallName: r.interview_hall_name,
-        rows: [],
-      };
-      acc[r.interview_hall_no].rows.push(r);
-      return acc;
-    }, {});
-
-    let first = true;
-
-    for (const key in grouped) {
-      if (!first) doc.addPage();
-      first = false;
-
-      const hall = grouped[key];
-      const cols = [...settings.tableColumns].reverse();
-
-      const head = [
-        cols.map(c => {
-            let fontStyle = 'normal';
-            if (c.headerBold && c.headerItalic) fontStyle = 'bolditalic';
-            else if (c.headerBold) fontStyle = 'bold';
-            else if (c.headerItalic) fontStyle = 'italic';
-
-            return {
-                content: c.header,
-                styles: {
-                    fillColor: c.headerBgColor,
-                    textColor: c.headerTextColor,
-                    fontStyle: fontStyle,
-                    fontSize: c.headerTextSize,
-                    halign: 'right',
-                },
-            };
-        }),
-      ];
-
-      const body = hall.rows.map((r: any, i: number) =>
-        cols.map(c => {
-          let fontStyle = 'normal';
-          if (c.cellBold && c.cellItalic) fontStyle = 'bolditalic';
-          else if (c.cellBold) fontStyle = 'bold';
-          else if (c.cellItalic) fontStyle = 'italic';
-          
-          return {
-            content: c.dataKey === "_index" ? toArabicDigits(i + 1) : toArabicDigits(r[c.dataKey] ?? ""),
-            styles: {
-              fillColor: c.cellBgColor,
-              textColor: c.cellTextColor,
-              fontStyle: fontStyle,
-              fontSize: c.cellTextSize,
-              halign: 'right',
-            }
-          };
-        })
-      );
-      
-      const columnStyles: { [key: number]: any } = {};
-      cols.forEach((c, i) => {
-          columnStyles[i] = { cellWidth: c.width };
-      });
-
-
-      (doc as any).autoTable({
-        startY: 60,
-        head: head,
-        body: body,
-        theme: "grid",
-        styles: { font: "Amiri", valign: "middle", lineWidth: 0.4 },
-        headStyles: { lineWidth: 0.6, halign: "right" },
-        tableLineWidth: 1.2,
-        columnStyles: columnStyles,
-        didDrawPage: (data: any) => {
-          drawPageFrame(doc, settings, project, hall, data.pageNumber);
-        },
-        margin: { top: 50, bottom: 30, right: 50 },
-      });
-    }
-
-    return new Response(doc.output("arraybuffer"), {
-      headers: {
-        "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename=${settings.templateName}.pdf`,
-      },
-    });
-  } catch (e: any) {
-    console.error("PDF ERROR:", e);
-    return NextResponse.json({ error: e.message }, { status: 500 });
-  }
-}
+                                                                                                                                                  export async function POST(req: Request) {
+                                                                                                                                                    try {
+                                                                                                                                                        const { projectId, settings } = await req.json();
+                                                                                                                                                            const db = new Database(getDbPath());
+                                                                                                                                                                const project = db.prepare("SELECT * FROM projects WHERE projectId = ?").get(projectId) as any;
+                                                                                                                                                                    const rows = db.prepare("SELECT * FROM educators WHERE project_id = ? AND interview_hall_no IS NOT NULL ORDER BY interview_hall_no, total_score DESC").all(projectId);
+                                                                                                                                                                        db.close();
+                                                                                                                                                                            const doc = new jsPDF({ orientation: settings.pageOrientation, unit: "mm", format: settings.pageSize });
+                                                                                                                                                                                // Load Fonts
+                                                                                                                                                                                    ["Regular", "Bold", "Italic", "BoldItalic"].forEach(s => {
+                                                                                                                                                                                          const p = path.join(process.cwd(), `public/fonts/Amiri-${s}.ttf`);
+                                                                                                                                                                                                if (fs.existsSync(p)) doc.addFileToVFS(`Amiri-${s}.ttf`, b64);
+                                                                                                                                                                                                      doc.addFont(`Amiri-${s}.ttf`, "Amiri", s.toLowerCase() === "regular" ? "normal" : s.toLowerCase());
+                                                                                                                                                                                                          });
+                                                                                                                                                                                                              doc.setFont("Amiri", "normal");
+                                                                                                                                                                                                                  const grouped = rows.reduce((acc: any, r: any) => {
+                                                                                                                                                                                                                        acc[r.interview_hall_no] ??= { hallNo: r.interview_hall_no, hallName: r.interview_hall_name, rows: [] };
+                                                                                                                                                                                                                              acc[r.interview_hall_no].rows.push(r);
+                                                                                                                                                                                                                                    return acc;
+                                                                                                                                                                                                                                        }, {});
+                                                                                                                                                                                                                                            let isFirst = true;
+                                                                                                                                                                                                                                                for (const key in grouped) {
+                                                                                                                                                                                                                                                      if (!isFirst) doc.addPage();
+                                                                                                                                                                                                                                                            isFirst = false;
+                                                                                                                                                                                                                                                                  const hall = grouped[key];
+                                                                                                                                                                                                                                                                        const cols = [...settings.tableColumns].reverse();
+                                                                                                                                                                                                                                                                              const columnStyles: any = {};
+                                                                                                                                                                                                                                                                                    cols.forEach((c, idx) => {
+                                                                                                                                                                                                                                                                                            columnStyles[idx] = {
+                                                                                                                                                                                                                                                                                                      cellWidth: c.width,
+                                                                                                                                                                                                                                                                                                                fillColor: c.cellBgColor,
+                                                                                                                                                                                                                                                                                                                          textColor: c.cellTextColor,
+                                                                                                                                                                                                                                                                                                                                    fontSize: c.cellFontSize,
+                                                                                                                                                                                                                                                                                                                                              fontStyle: c.cellBold ? (c.cellItalic ? 'bolditalic' : 'bold') : (c.cellItalic ? 'italic' : 'normal'),
+                                                                                                                                                                                                                                                                                                                                                        halign: c.cellHAlign,
+                                                                                                                                                                                                                                                                                                                                                                  valign: c.cellVAlign,
+                                                                                                                                                                                                                                                                                                                                                                            cellPadding: 2, // Adjust for wrap
+                                                                                                                                                                                                                                                                                                                                                                                      overflow: c.cellWrap ? 'linebreak' : 'ellipsize',
+                                                                                                                                                                                                                                                                                                                                                                                              };
+                                                                                                                                                                                                                                                                                                                                                                                                    });
+                                                                                                                                                                                                                                                                                                                                                                                                          autoTable(doc, {
+                                                                                                                                                                                                                                                                                                                                                                                                                  startY: settings.headerHeight || 60,
+                                                                                                                                                                                                                                                                                                                                                                                                                          margin: { top: settings.headerHeight || 60, bottom: 45 },
+                                                                                                                                                                                                                                                                                                                                                                                                                                  head: [cols.map(c => c.header)],
+                                                                                                                                                                                                                                                                                                                                                                                                                                          body: hall.rows.map((r: any, i: number) => cols.map(c => c.dataKey === '_index' ? toArabicDigits(i + 1) : toArabicDigits(r[c.dataKey] ?? ""))),
+                                                                                                                                                                                                                                                                                                                                                                                                                                                  styles: { font: "Amiri", lineWidth: 0.2 },
+                                                                                                                                                                                                                                                                                                                                                                                                                                                          headStyles: { halign: 'center', valign: 'middle' },
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                  didParseCell: (data) => {
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                            if (data.section === 'head') {
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        const colSetting = cols[data.column.index];
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    data.cell.styles.fillColor = colSetting.headerBgColor;
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                data.cell.styles.textColor = colSetting.headerTextColor;
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            data.cell.styles.fontSize = colSetting.headerFontSize;
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        data.cell.styles.fontStyle = colSetting.headerBold ? 'bold' : 'normal';
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    data.cell.styles.halign = colSetting.headerHAlign;
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                data.cell.styles.valign = colSetting.headerVAlign;
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            data.cell.styles.overflow = colSetting.headerWrap ? 'linebreak' : 'ellipsize';
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      } else {
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  // Apply row height
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              data.row.height = cols[data.column.index].rowHeight || 10;
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        }
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                },
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        columnStyles,
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                didDrawPage: (data) => drawPageFrame(doc, settings, project, hall, data.pageNumber),
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      });
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          }
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              return new Response(doc.output("arraybuffer"), { headers: { "Content-Type": "application/pdf" } });
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                } catch (e: any) {
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    return NextResponse.json({ error: e.message }, { status: 500 });
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      }
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      }

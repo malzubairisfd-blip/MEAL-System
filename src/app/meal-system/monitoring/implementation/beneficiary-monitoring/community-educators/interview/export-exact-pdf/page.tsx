@@ -3,7 +3,7 @@
 
 import React, { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useForm, useFieldArray } from 'react-hook-form';
+import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 
@@ -14,377 +14,433 @@ import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Loader2, Plus, Trash2, FileDown, Eye, Save } from 'lucide-react';
+import { ArrowLeft, Loader2, Plus, Trash2, FileDown, Eye, Info, Save, RotateCcw, Palette, AlignLeft, AlignCenter, AlignRight, AlignJustify, ArrowUpToLine, ArrowDownToLine, Divide } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
+// --- REUSABLE COLOR PICKER COMPONENT ---
+// Keeps track of history globally within the session
+const globalColorHistory = new Set<string>(["#000000", "#FFFFFF", "#2F80B5", "#F3F4F6"]);
+
+const ColorPicker = ({ value, onChange, label }: { value: string, onChange: (c: string) => void, label?: string }) => {
+    const [history, setHistory] = useState<string[]>(Array.from(globalColorHistory));
+
+    const handleColorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const newColor = e.target.value;
+        onChange(newColor);
+        globalColorHistory.add(newColor);
+        // Keep only last 8 colors
+        if (globalColorHistory.size > 8) {
+            const iterator = globalColorHistory.values();
+            globalColorHistory.delete(iterator.next().value);
+        }
+        setHistory(Array.from(globalColorHistory));
+    };
+
+    return (
+        <div className="flex flex-col gap-1">
+            {label && <span className="text-xs font-medium">{label}</span>}
+            <div className="flex gap-2 items-center">
+                <div className="relative w-full">
+                    <Input type="color" value={value} onChange={handleColorChange} className="h-9 w-full cursor-pointer p-1" />
+                </div>
+                <Popover>
+                    <PopoverTrigger asChild>
+                        <Button variant="outline" size="icon" className="h-9 w-9"><Palette className="h-4 w-4" /></Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-48 p-2">
+                        <div className="grid grid-cols-4 gap-2">
+                            {history.map((c) => (
+                                <div 
+                                    key={c} 
+                                    className="w-8 h-8 rounded-full border cursor-pointer shadow-sm hover:scale-110 transition-transform" 
+                                    style={{ backgroundColor: c }} 
+                                    onClick={() => onChange(c)}
+                                    title={c}
+                                />
+                            ))}
+                        </div>
+                    </PopoverContent>
+                </Popover>
+            </div>
+        </div>
+    );
+};
+
+// --- SCHEMAS ---
+
+const AlignmentSchema = z.enum(['left', 'center', 'right']);
+const VerticalAlignmentSchema = z.enum(['top', 'middle', 'bottom']);
+
+const CellStyleSchema = z.object({
+    fontSize: z.coerce.number().default(10),
+    textColor: z.string().default("#000000"),
+    bgColor: z.string().optional(), // Optional for body, standard for header
+    bold: z.boolean().default(false),
+    italic: z.boolean().default(false),
+    halign: AlignmentSchema.default('center'),
+    valign: VerticalAlignmentSchema.default('middle'),
+});
 
 const TableColumnSchema = z.object({
-  header: z.string().min(1),
-  dataKey: z.string().min(1),
-  width: z.coerce.number(),
-  headerTextSize: z.coerce.number(),
-  headerTextColor: z.string(),
-  headerBgColor: z.string(),
-  headerBold: z.boolean(),
-  headerItalic: z.boolean(),
-  cellTextSize: z.coerce.number(),
-  cellTextColor: z.string(),
-  cellBgColor: z.string(),
-  cellBold: z.boolean(),
-  cellItalic: z.boolean(),
+    header: z.string().min(1),
+    dataKey: z.string().min(1),
+    width: z.coerce.number().default(30),
+    // Detailed Header Styling
+    headerStyle: CellStyleSchema.extend({
+        bgColor: z.string().default("#2F80B5"),
+        textColor: z.string().default("#FFFFFF"),
+        bold: z.boolean().default(true)
+    }),
+    // Detailed Body Styling
+    bodyStyle: CellStyleSchema.extend({
+        bgColor: z.string().optional(), // Often transparent/white
+        textColor: z.string().default("#000000")
+    }),
 });
 
 const PdfSettingsSchema = z.object({
-  templateName: z.string().min(1),
-  title: z.string().min(1),
-  titleSize: z.coerce.number(),
-  titleColor: z.string(),
-  titleBgColor: z.string(),
-  titleBold: z.boolean(),
-  titleItalic: z.boolean(),
-  pageSize: z.enum(['a4', 'letter', 'legal']),
-  pageOrientation: z.enum(['portrait', 'landscape']),
-  fitColumns: z.boolean(),
-  pageBorder: z.boolean(),
-  pageBorderColor: z.string(),
-  pageBorderThickness: z.coerce.number(),
-  headerHallNameType: z.enum(['manual', 'dynamic']),
-  headerHallNameManual: z.string().optional(),
-  headerHallNameDynamic: z.string().optional(),
-  headerHallNoType: z.enum(['manual', 'dynamic']),
-  headerHallNoManual: z.string().optional(),
-  headerHallNoDynamic: z.string().optional(),
-  tableColumns: z.array(TableColumnSchema),
-  tableOuterBorder: z.boolean(),
-  tableInnerBorder: z.boolean(),
-  tableBorderColor: z.string(),
-  tableBorderThickness: z.coerce.number(),
-  rowHeight: z.coerce.number(),
+    templateName: z.string().min(1),
+    pageSize: z.enum(['a4', 'letter', 'legal']),
+    pageOrientation: z.enum(['portrait', 'landscape']),
+    headerHeight: z.coerce.number(),
+    borderColor: z.string(),
+    // Title
+    title: z.string().min(1),
+    titleStyle: CellStyleSchema.extend({ height: z.coerce.number().optional() }),
+    // Info Boxes
+    infoBoxStyle: CellStyleSchema.extend({ 
+        labelBgColor: z.string(), 
+        valueBgColor: z.string(),
+        width: z.coerce.number(),
+        height: z.coerce.number() 
+    }),
+    // Table
+    tableColumns: z.array(TableColumnSchema),
+    rowHeight: z.coerce.number().default(8), // Global row height adjustment
+    // Footer
+    footerStyle: CellStyleSchema,
 });
 
 type PdfSettings = z.infer<typeof PdfSettingsSchema>;
 
 function ExportExactPDFPageContent() {
-  const router = useRouter();
-  const { toast } = useToast();
-  const searchParams = useSearchParams();
+    const router = useRouter();
+    const { toast } = useToast();
+    const searchParams = useSearchParams();
 
-  const [projects, setProjects] = useState<any[]>([]);
-  const [selectedProjectId, setSelectedProjectId] = useState<string>(searchParams.get('projectId') || '');
-  const [applicantColumns, setApplicantColumns] = useState<string[]>([]);
-  const [loading, setLoading] = useState({ projects: true, generating: false, templates: true });
-  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
+    const [projects, setProjects] = useState<any[]>([]);
+    const [selectedProjectId, setSelectedProjectId] = useState<string>(searchParams.get('projectId') || '');
+    const [applicantColumns, setApplicantColumns] = useState<string[]>([]);
+    const [loading, setLoading] = useState({ projects: true, generating: false });
+    const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
 
-  const [templates, setTemplates] = useState<PdfSettings[]>([]);
-  const [selectedTemplateName, setSelectedTemplateName] = useState<string>('');
-
-  const form = useForm<PdfSettings>({
-    resolver: zodResolver(PdfSettingsSchema),
-    defaultValues: {
-      templateName: "New Template",
-      title: "كشف درجات ممثل الصحة",
-      titleSize: 16,
-      titleColor: "#FFFFFF",
-      titleBgColor: "#0070C0",
-      titleBold: true,
-      titleItalic: false,
-      pageSize: 'a4',
-      pageOrientation: 'portrait',
-      fitColumns: true,
-      pageBorder: true,
-      pageBorderColor: '#000000',
-      pageBorderThickness: 0.5,
-      headerHallNameType: 'dynamic',
-      headerHallNameDynamic: 'interview_hall_name',
-      headerHallNoType: 'dynamic',
-      headerHallNoDynamic: 'interview_hall_no',
-      tableColumns: [
-        {
-          header: 'الرقم', dataKey: '_index', width: 15,
-          headerTextSize: 10, headerTextColor: "#000000", headerBgColor: "#F2F2F2", headerBold: true, headerItalic: false,
-          cellTextSize: 10, cellTextColor: "#000000", cellBgColor: "#FFFFFF", cellBold: false, cellItalic: false,
+    const form = useForm<PdfSettings>({
+        resolver: zodResolver(PdfSettingsSchema),
+        defaultValues: {
+            templateName: "My Custom Template",
+            pageSize: 'a4',
+            pageOrientation: 'portrait',
+            headerHeight: 60,
+            borderColor: "#000000",
+            title: "كشف درجات المتقدمات للمقابلة",
+            titleStyle: {
+                fontSize: 14, textColor: "#FFFFFF", bgColor: "#2F3C50",
+                bold: true, italic: false, height: 10, halign: 'center', valign: 'middle'
+            },
+            infoBoxStyle: {
+                fontSize: 10, textColor: "#000000", labelBgColor: "#F3F4F6", valueBgColor: "#FFFFFF",
+                bold: false, italic: false, width: 60, height: 8, halign: 'right', valign: 'middle'
+            },
+            rowHeight: 10,
+            tableColumns: [
+                { 
+                    header: 'م', dataKey: '_index', width: 15, 
+                    headerStyle: { fontSize: 10, textColor: "#FFFFFF", bgColor: "#2F80B5", bold: true, halign: 'center', valign: 'middle', italic: false },
+                    bodyStyle: { fontSize: 10, textColor: "#000000", bold: false, halign: 'center', valign: 'middle', italic: false }
+                },
+                { 
+                    header: 'اسم المتقدمة', dataKey: 'applicant_name', width: 70,
+                    headerStyle: { fontSize: 10, textColor: "#FFFFFF", bgColor: "#2F80B5", bold: true, halign: 'center', valign: 'middle', italic: false },
+                    bodyStyle: { fontSize: 10, textColor: "#000000", bold: false, halign: 'right', valign: 'middle', italic: false }
+                },
+                { 
+                    header: 'الدرجة', dataKey: 'total_score', width: 25,
+                    headerStyle: { fontSize: 10, textColor: "#FFFFFF", bgColor: "#2F80B5", bold: true, halign: 'center', valign: 'middle', italic: false },
+                    bodyStyle: { fontSize: 10, textColor: "#000000", bold: true, halign: 'center', valign: 'middle', italic: false }
+                },
+            ],
+            footerStyle: {
+                fontSize: 10, textColor: "#000000", bold: true, italic: false, halign: 'right', valign: 'middle'
+            }
         },
-        {
-          header: 'اسم المتقدمة', dataKey: 'applicant_name', width: 60,
-          headerTextSize: 10, headerTextColor: "#000000", headerBgColor: "#F2F2F2", headerBold: true, headerItalic: false,
-          cellTextSize: 10, cellTextColor: "#000000", cellBgColor: "#FFFFFF", cellBold: false, cellItalic: false,
-        },
-      ],
-      tableOuterBorder: true,
-      tableInnerBorder: true,
-      tableBorderColor: "#444444",
-      tableBorderThickness: 0.2,
-      rowHeight: 10,
-    },
-  });
-
-  const { fields, append, remove } = useFieldArray({ control: form.control, name: "tableColumns" });
-
-  useEffect(() => {
-    fetch('/api/projects').then(res => res.json()).then(data => {
-        if (Array.isArray(data)) setProjects(data);
-        setLoading(p => ({...p, projects: false}));
     });
-    fetch('/api/ed-selection').then(res => res.json()).then(data => {
-        if(data && data[0]) setApplicantColumns(['_index', ...Object.keys(data[0])]);
-    });
-  }, []);
-  
-  useEffect(() => {
-    setLoading(p => ({ ...p, templates: true }));
-    fetch('/api/pdf-templates')
-      .then(res => res.json())
-      .then(data => {
-        if (Array.isArray(data)) setTemplates(data);
-      })
-      .catch(() => toast({ title: 'Error', description: 'Could not load templates.', variant: 'destructive' }))
-      .finally(() => setLoading(p => ({ ...p, templates: false })));
-  }, [toast]);
 
-  const handleTemplateSelect = (templateName: string) => {
-    const template = templates.find(t => t.templateName === templateName);
-    if (template) {
-      form.reset(template);
-      setSelectedTemplateName(template.templateName);
-      toast({ title: 'Template Loaded', description: `Loaded settings from "${templateName}".` });
-    }
-  };
+    const { fields, append, remove, update } = useFieldArray({ control: form.control, name: "tableColumns" });
 
-  const handleSaveTemplate = async () => {
-    const currentValues = form.getValues();
-    if (!currentValues.templateName) {
-      toast({ title: "Template Name Required", description: "Please enter a name for your template before saving.", variant: 'destructive' });
-      return;
-    }
-
-    let newTemplates = [...templates];
-    const existingIndex = newTemplates.findIndex(t => t.templateName === currentValues.templateName);
-
-    if (existingIndex > -1) {
-      if (confirm(`A template named "${currentValues.templateName}" already exists. Overwrite it?`)) {
-        newTemplates[existingIndex] = currentValues;
-      } else {
-        return; // User cancelled overwrite
-      }
-    } else {
-      newTemplates.push(currentValues);
-    }
-    
-    setLoading(p => ({ ...p, templates: true }));
-    try {
-      const res = await fetch('/api/pdf-templates', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newTemplates)
-      });
-      if (!res.ok) throw new Error("Failed to save templates on server.");
-      setTemplates(newTemplates);
-      setSelectedTemplateName(currentValues.templateName);
-      toast({ title: 'Template Saved!', description: `Settings for "${currentValues.templateName}" have been saved.` });
-    } catch(e: any) {
-      toast({ title: 'Save Error', description: e.message, variant: 'destructive' });
-    } finally {
-      setLoading(p => ({ ...p, templates: false }));
-    }
-  };
-
-  const handleGenerate = async (outputType: 'preview' | 'download') => {
-    if (!selectedProjectId) return toast({ title: "Error", description: "Select a project first" });
-    setLoading(p => ({...p, generating: true}));
-    try {
-        const response = await fetch('/api/interviews/export', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ projectId: selectedProjectId, settings: form.getValues() })
+    useEffect(() => {
+        fetch('/api/projects').then(res => res.json()).then(data => {
+            if (Array.isArray(data)) setProjects(data);
+            setLoading(p => ({ ...p, projects: false }));
         });
-        if (!response.ok) throw new Error("Failed to generate PDF");
-        const blob = await response.blob();
-        const url = URL.createObjectURL(blob);
-        if (pdfPreviewUrl) URL.revokeObjectURL(pdfPreviewUrl);
-        
-        if (outputType === 'preview') {
-          setPdfPreviewUrl(url);
+        fetch('/api/ed-selection').then(res => res.json()).then(data => {
+            if (data && data[0]) setApplicantColumns(['_index', ...Object.keys(data[0])]);
+        });
+    }, []);
+
+    // --- TEMPLATE ACTIONS ---
+    const saveTemplate = () => {
+        const values = form.getValues();
+        localStorage.setItem(`pdf_template_${values.templateName}`, JSON.stringify(values));
+        toast({ title: "Saved", description: `Template "${values.templateName}" saved to local storage.` });
+    };
+
+    const loadTemplate = (name: string) => {
+        const saved = localStorage.getItem(`pdf_template_${name}`);
+        if (saved) {
+            form.reset(JSON.parse(saved));
+            toast({ title: "Loaded", description: `Template "${name}" loaded.` });
         } else {
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = `${form.getValues().templateName}.pdf`;
-            link.click();
-            URL.revokeObjectURL(url); // Clean up immediately for download
+            toast({ variant: "destructive", title: "Error", description: "Template not found" });
         }
-    } catch (e: any) {
-        toast({ title: "Export Error", description: e.message, variant: "destructive" });
-    } finally {
-        setLoading(p => ({...p, generating: false}));
-    }
-  };
+    };
 
-  return (
-    <div className="container mx-auto py-6 space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">PDF Designer (RTL Server-Side)</h1>
-        <Button variant="outline" onClick={() => router.back()}><ArrowLeft className="mr-2 h-4 w-4" /> Back</Button>
-      </div>
+    // --- GENERATE ---
+    const handleGenerate = async (outputType: 'preview' | 'download') => {
+        if (!selectedProjectId) return toast({ title: "Error", description: "Select a project first" });
+        setLoading(p => ({ ...p, generating: true }));
+        try {
+            const response = await fetch('/api/interviews/export', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ projectId: selectedProjectId, settings: form.getValues() })
+            });
 
-      <Card>
-        <CardHeader><CardTitle>Project Data Source</CardTitle></CardHeader>
-        <CardContent>
-          <Select onValueChange={setSelectedProjectId} value={selectedProjectId}>
-            <SelectTrigger className="w-full md:w-1/2">
-              <SelectValue placeholder="Select a project..." />
-            </SelectTrigger>
-            <SelectContent>
-              {projects.map(p => <SelectItem key={p.projectId} value={p.projectId}>{p.projectName}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </CardContent>
-      </Card>
-      
-      <Card>
-        <CardHeader>
-          <CardTitle>Template Management</CardTitle>
-          <CardDescription>Load, save, or manage your PDF export templates.</CardDescription>
-        </CardHeader>
-        <CardContent className="flex gap-4">
-          <Select onValueChange={handleTemplateSelect} value={selectedTemplateName}>
-            <SelectTrigger>
-              <SelectValue placeholder="Load a template..." />
-            </SelectTrigger>
-            <SelectContent>
-              {templates.map(t => <SelectItem key={t.templateName} value={t.templateName}>{t.templateName}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Button onClick={handleSaveTemplate} disabled={loading.templates}>
-            {loading.templates && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-            Save Settings as Template
-          </Button>
-        </CardContent>
-      </Card>
+            if (!response.ok) throw new Error("Failed to generate PDF");
+            const blob = await response.blob();
+            const url = URL.createObjectURL(blob);
+            if (pdfPreviewUrl) URL.revokeObjectURL(pdfPreviewUrl);
 
-      <Form {...form}>
-        <form className="space-y-6">
-            <Accordion type="multiple" defaultValue={['item-1', 'item-2', 'item-3']} className="w-full">
-                <AccordionItem value="item-1">
-                    <AccordionTrigger>Document & Page Settings</AccordionTrigger>
-                    <AccordionContent className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4">
-                        <FormField control={form.control} name="templateName" render={({field}) => (
-                            <FormItem><FormLabel>Template Name</FormLabel><Input {...field} /></FormItem>
-                        )}/>
-                        <FormField control={form.control} name="pageSize" render={({field}) => (
-                            <FormItem><FormLabel>Size</FormLabel>
-                                <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                    <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
-                                    <SelectContent><SelectItem value="a4">A4</SelectItem><SelectItem value="letter">Letter</SelectItem></SelectContent>
-                                </Select>
-                            </FormItem>
-                        )}/>
-                        <FormField control={form.control} name="pageOrientation" render={({field}) => (
-                            <FormItem><FormLabel>Orientation</FormLabel>
-                                <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                    <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
-                                    <SelectContent><SelectItem value="portrait">Portrait</SelectItem><SelectItem value="landscape">Landscape</SelectItem></SelectContent>
-                                </Select>
-                            </FormItem>
-                        )}/>
-                    </AccordionContent>
-                </AccordionItem>
+            if (outputType === 'preview') setPdfPreviewUrl(url);
+            else {
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `${form.getValues().templateName}.pdf`;
+                link.click();
+            }
+        } catch (e: any) {
+            toast({ title: "Export Error", description: e.message, variant: "destructive" });
+        } finally {
+            setLoading(p => ({ ...p, generating: false }));
+        }
+    };
 
-                <AccordionItem value="item-2">
-                    <AccordionTrigger>Header & Title Design</AccordionTrigger>
-                    <AccordionContent className="space-y-4 p-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
-                            <FormField control={form.control} name="title" render={({field}) => (
-                                <FormItem><FormLabel>Main Title (Arabic)</FormLabel><Input {...field} className="text-right" dir="rtl" /></FormItem>
-                            )}/>
-                            <div className="flex gap-2">
-                                <FormField control={form.control} name="titleSize" render={({field}) => (<FormItem><FormLabel>Size</FormLabel><Input type="number" className="w-20" {...field} /></FormItem>)} />
-                                <FormField control={form.control} name="titleBgColor" render={({field}) => (<FormItem><FormLabel>BG</FormLabel><Input type="color" {...field} /></FormItem>)}/>
-                                <FormField control={form.control} name="titleColor" render={({field}) => (<FormItem><FormLabel>Text</FormLabel><Input type="color" {...field} /></FormItem>)}/>
-                                <FormField control={form.control} name="titleBold" render={({field}) => (<FormItem className="flex flex-col gap-2"><FormLabel>Bold</FormLabel><Switch checked={field.value} onCheckedChange={field.onChange}/></FormItem>)}/>
-                                <FormField control={form.control} name="titleItalic" render={({field}) => (<FormItem className="flex flex-col gap-2"><FormLabel>Italic</FormLabel><Switch checked={field.value} onCheckedChange={field.onChange}/></FormItem>)}/>
-                            </div>
+    return (
+        <div className="container mx-auto py-6 space-y-6">
+            <div className="flex justify-between items-center">
+                <h1 className="text-3xl font-bold">Advanced PDF Designer</h1>
+                <Button variant="outline" onClick={() => router.back()}><ArrowLeft className="mr-2 h-4 w-4" /> Back</Button>
+            </div>
+
+            {/* 1. PROJECT SELECTION (RESTORED) */}
+            <Card className="border-blue-200 bg-blue-50/50">
+                <CardHeader className="pb-3"><CardTitle>1. Data Source</CardTitle></CardHeader>
+                <CardContent>
+                    <div className="flex gap-4 items-end">
+                        <div className="grid w-full max-w-sm items-center gap-1.5">
+                            <Label>Select Project</Label>
+                            <Select onValueChange={setSelectedProjectId} value={selectedProjectId}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select a project..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {projects.map(p => <SelectItem key={p.projectId} value={p.projectId}>{p.projectName}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
                         </div>
-                    </AccordionContent>
-                </AccordionItem>
+                    </div>
+                </CardContent>
+            </Card>
 
-                <AccordionItem value="item-3">
-                    <AccordionTrigger>Table Columns (Order: First item = Rightmost column)</AccordionTrigger>
-                    <AccordionContent className="p-4 space-y-4">
-                        {fields.map((field, index) => (
-                            <div key={field.id} className="border p-4 rounded-lg space-y-4">
-                                <div className="flex justify-between items-start">
-                                    <h4 className="font-semibold pt-2">Column {index + 1}: {form.watch(`tableColumns.${index}.header`)}</h4>
-                                    <Button type="button" variant="destructive" size="icon" onClick={() => remove(index)}><Trash2 className="h-4 w-4"/></Button>
-                                </div>
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                    <FormField control={form.control} name={`tableColumns.${index}.header`} render={({field}) => (<FormItem><FormLabel>Header Text</FormLabel><Input {...field} /></FormItem>)}/>
-                                    <FormField control={form.control} name={`tableColumns.${index}.dataKey`} render={({field}) => (
-                                        <FormItem><FormLabel>Data Field</FormLabel>
-                                            <Select onValueChange={field.onChange} value={field.value}>
-                                                <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
-                                                <SelectContent>{applicantColumns.map(col => <SelectItem key={col} value={col}>{col}</SelectItem>)}</SelectContent>
-                                            </Select>
+            <Form {...form}>
+                <form className="space-y-6">
+                    
+                    {/* 2. TEMPLATE MANAGER (RESTORED) */}
+                    <Card>
+                        <CardHeader className="pb-3"><CardTitle>2. Template Manager</CardTitle></CardHeader>
+                        <CardContent className="flex gap-4 items-end">
+                            <FormField control={form.control} name="templateName" render={({ field }) => (
+                                <FormItem className="flex-1">
+                                    <FormLabel>Template Name</FormLabel>
+                                    <Input {...field} placeholder="e.g. Monthly Report A4" />
+                                </FormItem>
+                            )} />
+                            <Button type="button" variant="outline" onClick={saveTemplate}><Save className="mr-2 h-4 w-4"/> Save Settings</Button>
+                            {/* In a real app, this would be a select dropdown of saved templates */}
+                            <Button type="button" variant="ghost" onClick={() => loadTemplate(form.getValues().templateName)}><RotateCcw className="mr-2 h-4 w-4"/> Load</Button>
+                        </CardContent>
+                    </Card>
+
+                    <Accordion type="multiple" defaultValue={['page', 'table']} className="w-full">
+                        {/* 3. PAGE SETTINGS */}
+                        <AccordionItem value="page">
+                            <AccordionTrigger>3. Page, Title & Border Settings</AccordionTrigger>
+                            <AccordionContent className="p-4 space-y-4">
+                                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                    <FormField control={form.control} name="pageSize" render={({ field }) => (
+                                        <FormItem><FormLabel>Size</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent><SelectItem value="a4">A4</SelectItem><SelectItem value="letter">Letter</SelectItem></SelectContent></Select></FormItem>
+                                    )} />
+                                    <FormField control={form.control} name="pageOrientation" render={({ field }) => (
+                                        <FormItem><FormLabel>Orientation</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent><SelectItem value="portrait">Portrait</SelectItem><SelectItem value="landscape">Landscape</SelectItem></SelectContent></Select></FormItem>
+                                    )} />
+                                    <FormField control={form.control} name="headerHeight" render={({ field }) => (
+                                        <FormItem><FormLabel>Top Margin (mm)</FormLabel><Input type="number" {...field} /></FormItem>
+                                    )} />
+                                     <FormField control={form.control} name="borderColor" render={({ field }) => (
+                                        <FormItem><FormLabel>Page Border Color</FormLabel>
+                                        <ColorPicker value={field.value} onChange={field.onChange} />
                                         </FormItem>
-                                    )}/>
-                                    <FormField control={form.control} name={`tableColumns.${index}.width`} render={({field}) => (<FormItem><FormLabel>Width (mm)</FormLabel><Input type="number" {...field} /></FormItem>)}/>
+                                    )} />
                                 </div>
-                                <Accordion type="single" collapsible className="w-full">
-                                    <AccordionItem value="styles">
-                                        <AccordionTrigger className="text-sm">Styling Options</AccordionTrigger>
-                                        <AccordionContent className="space-y-4 pt-4">
-                                            <div className="grid grid-cols-2 gap-4">
-                                                <div className="p-2 border rounded-md">
-                                                    <Label className="font-semibold block mb-2">Header Style</Label>
-                                                    <div className="flex gap-2 items-end">
-                                                        <FormField control={form.control} name={`tableColumns.${index}.headerTextSize`} render={({field}) => (<FormItem><FormLabel>Size</FormLabel><Input type="number" className="w-16 h-8" {...field} /></FormItem>)} />
-                                                        <FormField control={form.control} name={`tableColumns.${index}.headerBgColor`} render={({field}) => (<FormItem><FormLabel>BG</FormLabel><Input type="color" className="h-8" {...field} /></FormItem>)} />
-                                                        <FormField control={form.control} name={`tableColumns.${index}.headerTextColor`} render={({field}) => (<FormItem><FormLabel>Text</FormLabel><Input type="color" className="h-8" {...field} /></FormItem>)} />
-                                                        <FormField control={form.control} name={`tableColumns.${index}.headerBold`} render={({field}) => (<FormItem className="flex flex-col items-center gap-1"><FormLabel>Bold</FormLabel><Switch checked={field.value} onCheckedChange={field.onChange} /></FormItem>)} />
-                                                        <FormField control={form.control} name={`tableColumns.${index}.headerItalic`} render={({field}) => (<FormItem className="flex flex-col items-center gap-1"><FormLabel>Italic</FormLabel><Switch checked={field.value} onCheckedChange={field.onChange} /></FormItem>)} />
-                                                    </div>
+                                <div className="border-t pt-4 mt-4">
+                                    <Label className="mb-2 block font-bold">Main Document Title</Label>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <FormField control={form.control} name="title" render={({ field }) => (<FormItem><Input {...field} className="text-right font-serif text-lg" dir="rtl" /></FormItem>)} />
+                                        <div className="flex gap-4">
+                                            <FormField control={form.control} name="titleStyle.bgColor" render={({ field }) => (<FormItem><ColorPicker label="Background" value={field.value || '#ffffff'} onChange={field.onChange} /></FormItem>)} />
+                                            <FormField control={form.control} name="titleStyle.textColor" render={({ field }) => (<FormItem><ColorPicker label="Text" value={field.value} onChange={field.onChange} /></FormItem>)} />
+                                            <FormField control={form.control} name="titleStyle.fontSize" render={({ field }) => (<FormItem><FormLabel>Size</FormLabel><Input type="number" {...field} className="w-20" /></FormItem>)} />
+                                        </div>
+                                    </div>
+                                </div>
+                            </AccordionContent>
+                        </AccordionItem>
+
+                        {/* 4. TABLE COLUMNS (DETAILED) */}
+                        <AccordionItem value="table">
+                            <AccordionTrigger>4. Table Columns & Styling</AccordionTrigger>
+                            <AccordionContent className="p-4 space-y-4 bg-slate-50">
+                                
+                                <div className="flex items-center gap-4 mb-4">
+                                    <Label>Global Row Height:</Label>
+                                    <FormField control={form.control} name="rowHeight" render={({field}) => <Input type="number" {...field} className="w-24" />} />
+                                </div>
+
+                                {fields.map((field, index) => (
+                                    <Card key={field.id} className="relative overflow-hidden border-l-4 border-l-blue-500">
+                                        <div className="absolute top-2 right-2">
+                                            <Button type="button" variant="ghost" size="sm" className="text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => remove(index)}><Trash2 className="h-4 w-4" /></Button>
+                                        </div>
+                                        <CardContent className="p-4 pt-4">
+                                            <div className="grid grid-cols-12 gap-4">
+                                                {/* Main Column Info */}
+                                                <div className="col-span-12 md:col-span-4 space-y-3 border-r pr-4">
+                                                    <h4 className="font-bold text-sm text-slate-500 mb-2">Column Data</h4>
+                                                    <FormField control={form.control} name={`tableColumns.${index}.header`} render={({ field }) => (
+                                                        <FormItem><FormLabel>Header Text</FormLabel><Input {...field} /></FormItem>
+                                                    )} />
+                                                    <FormField control={form.control} name={`tableColumns.${index}.dataKey`} render={({ field }) => (
+                                                        <FormItem><FormLabel>Data Field</FormLabel>
+                                                            <Select onValueChange={field.onChange} value={field.value}>
+                                                                <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                                                                <SelectContent>{applicantColumns.map(col => <SelectItem key={col} value={col}>{col}</SelectItem>)}</SelectContent>
+                                                            </Select>
+                                                        </FormItem>
+                                                    )} />
+                                                    <FormField control={form.control} name={`tableColumns.${index}.width`} render={({ field }) => (
+                                                        <FormItem><FormLabel>Width (mm)</FormLabel><Input type="number" {...field} /></FormItem>
+                                                    )} />
                                                 </div>
-                                                <div className="p-2 border rounded-md">
-                                                    <Label className="font-semibold block mb-2">Cell Style</Label>
-                                                    <div className="flex gap-2 items-end">
-                                                        <FormField control={form.control} name={`tableColumns.${index}.cellTextSize`} render={({field}) => (<FormItem><FormLabel>Size</FormLabel><Input type="number" className="w-16 h-8" {...field} /></FormItem>)} />
-                                                        <FormField control={form.control} name={`tableColumns.${index}.cellBgColor`} render={({field}) => (<FormItem><FormLabel>BG</FormLabel><Input type="color" className="h-8" {...field} /></FormItem>)} />
-                                                        <FormField control={form.control} name={`tableColumns.${index}.cellTextColor`} render={({field}) => (<FormItem><FormLabel>Text</FormLabel><Input type="color" className="h-8" {...field} /></FormItem>)} />
-                                                        <FormField control={form.control} name={`tableColumns.${index}.cellBold`} render={({field}) => (<FormItem className="flex flex-col items-center gap-1"><FormLabel>Bold</FormLabel><Switch checked={field.value} onCheckedChange={field.onChange} /></FormItem>)} />
-                                                        <FormField control={form.control} name={`tableColumns.${index}.cellItalic`} render={({field}) => (<FormItem className="flex flex-col items-center gap-1"><FormLabel>Italic</FormLabel><Switch checked={field.value} onCheckedChange={field.onChange} /></FormItem>)} />
-                                                    </div>
+
+                                                {/* Detailed Styling Tabs */}
+                                                <div className="col-span-12 md:col-span-8">
+                                                    <Tabs defaultValue="header" className="w-full">
+                                                        <TabsList className="w-full justify-start">
+                                                            <TabsTrigger value="header">Header Style</TabsTrigger>
+                                                            <TabsTrigger value="body">Body Style</TabsTrigger>
+                                                        </TabsList>
+                                                        
+                                                        {/* HEADER STYLING PANEL */}
+                                                        <TabsContent value="header" className="space-y-3 p-2 bg-white rounded border mt-2">
+                                                            <div className="flex flex-wrap gap-4 items-end">
+                                                                <FormField control={form.control} name={`tableColumns.${index}.headerStyle.bgColor`} render={({ field }) => (<ColorPicker label="Background" value={field.value || '#ffffff'} onChange={field.onChange} />)} />
+                                                                <FormField control={form.control} name={`tableColumns.${index}.headerStyle.textColor`} render={({ field }) => (<ColorPicker label="Text" value={field.value} onChange={field.onChange} />)} />
+                                                                <FormField control={form.control} name={`tableColumns.${index}.headerStyle.fontSize`} render={({ field }) => (<FormItem><FormLabel>Size</FormLabel><Input type="number" {...field} className="w-16 h-9" /></FormItem>)} />
+                                                            </div>
+                                                            <div className="flex gap-4 items-center">
+                                                                <FormField control={form.control} name={`tableColumns.${index}.headerStyle.bold`} render={({ field }) => (<FormItem className="flex items-center gap-2 space-y-0"><Switch checked={field.value} onCheckedChange={field.onChange} /><Label>Bold</Label></FormItem>)} />
+                                                                <FormField control={form.control} name={`tableColumns.${index}.headerStyle.italic`} render={({ field }) => (<FormItem className="flex items-center gap-2 space-y-0"><Switch checked={field.value} onCheckedChange={field.onChange} /><Label>Italic</Label></FormItem>)} />
+                                                            </div>
+                                                            <div className="flex gap-4">
+                                                                <FormField control={form.control} name={`tableColumns.${index}.headerStyle.halign`} render={({ field }) => (
+                                                                     <FormItem><FormLabel>H-Align</FormLabel><Select onValueChange={field.onChange} value={field.value}><SelectTrigger className="w-24 h-8"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="left">Left</SelectItem><SelectItem value="center">Center</SelectItem><SelectItem value="right">Right</SelectItem></SelectContent></Select></FormItem>
+                                                                )} />
+                                                                <FormField control={form.control} name={`tableColumns.${index}.headerStyle.valign`} render={({ field }) => (
+                                                                     <FormItem><FormLabel>V-Align</FormLabel><Select onValueChange={field.onChange} value={field.value}><SelectTrigger className="w-24 h-8"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="top">Top</SelectItem><SelectItem value="middle">Middle</SelectItem><SelectItem value="bottom">Bottom</SelectItem></SelectContent></Select></FormItem>
+                                                                )} />
+                                                            </div>
+                                                        </TabsContent>
+
+                                                        {/* BODY STYLING PANEL */}
+                                                        <TabsContent value="body" className="space-y-3 p-2 bg-white rounded border mt-2">
+                                                            <div className="flex flex-wrap gap-4 items-end">
+                                                                <FormField control={form.control} name={`tableColumns.${index}.bodyStyle.bgColor`} render={({ field }) => (<ColorPicker label="Background" value={field.value || '#ffffff'} onChange={field.onChange} />)} />
+                                                                <FormField control={form.control} name={`tableColumns.${index}.bodyStyle.textColor`} render={({ field }) => (<ColorPicker label="Text" value={field.value} onChange={field.onChange} />)} />
+                                                                <FormField control={form.control} name={`tableColumns.${index}.bodyStyle.fontSize`} render={({ field }) => (<FormItem><FormLabel>Size</FormLabel><Input type="number" {...field} className="w-16 h-9" /></FormItem>)} />
+                                                            </div>
+                                                            <div className="flex gap-4 items-center">
+                                                                <FormField control={form.control} name={`tableColumns.${index}.bodyStyle.bold`} render={({ field }) => (<FormItem className="flex items-center gap-2 space-y-0"><Switch checked={field.value} onCheckedChange={field.onChange} /><Label>Bold</Label></FormItem>)} />
+                                                            </div>
+                                                            <div className="flex gap-4">
+                                                                <FormField control={form.control} name={`tableColumns.${index}.bodyStyle.halign`} render={({ field }) => (
+                                                                     <FormItem><FormLabel>H-Align</FormLabel><Select onValueChange={field.onChange} value={field.value}><SelectTrigger className="w-24 h-8"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="left">Left</SelectItem><SelectItem value="center">Center</SelectItem><SelectItem value="right">Right</SelectItem></SelectContent></Select></FormItem>
+                                                                )} />
+                                                                <FormField control={form.control} name={`tableColumns.${index}.bodyStyle.valign`} render={({ field }) => (
+                                                                     <FormItem><FormLabel>V-Align</FormLabel><Select onValueChange={field.onChange} value={field.value}><SelectTrigger className="w-24 h-8"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="top">Top</SelectItem><SelectItem value="middle">Middle</SelectItem><SelectItem value="bottom">Bottom</SelectItem></SelectContent></Select></FormItem>
+                                                                )} />
+                                                            </div>
+                                                        </TabsContent>
+                                                    </Tabs>
                                                 </div>
                                             </div>
-                                        </AccordionContent>
-                                    </AccordionItem>
-                                </Accordion>
-                            </div>
-                        ))}
-                        <Button type="button" variant="outline" onClick={() => append({ header: 'جديد', dataKey: 'applicant_name', width: 30, headerTextSize: 10, headerTextColor: "#000000", headerBgColor: "#F2F2F2", headerBold: true, headerItalic: false, cellTextSize: 10, cellTextColor: "#000000", cellBgColor: "#FFFFFF", cellBold: false, cellItalic: false })}>
-                            <Plus className="mr-2 h-4 w-4" /> Add Column
+                                        </CardContent>
+                                    </Card>
+                                ))}
+                                <Button type="button" variant="outline" className="w-full border-dashed" onClick={() => append({ 
+                                    header: 'جديد', dataKey: 'applicant_name', width: 30,
+                                    headerStyle: { fontSize: 10, textColor: "#FFFFFF", bgColor: "#2F80B5", bold: true, halign: 'center', valign: 'middle', italic: false },
+                                    bodyStyle: { fontSize: 10, textColor: "#000000", bold: false, halign: 'right', valign: 'middle', italic: false }
+                                })}>
+                                    <Plus className="mr-2 h-4 w-4" /> Add Column
+                                </Button>
+                            </AccordionContent>
+                        </AccordionItem>
+                    </Accordion>
+
+                    <div className="flex justify-end gap-2 sticky bottom-4 bg-background/80 backdrop-blur p-4 border rounded-lg shadow-lg">
+                        <Button type="button" variant="secondary" onClick={() => handleGenerate('preview')} disabled={loading.generating}>
+                            {loading.generating ? <Loader2 className="animate-spin mr-2" /> : <Eye className="mr-2 h-4 w-4" />} Live Preview
                         </Button>
-                    </AccordionContent>
-                </AccordionItem>
-            </Accordion>
+                        <Button type="button" onClick={() => handleGenerate('download')} disabled={loading.generating}>
+                            <FileDown className="mr-2 h-4 w-4" /> Download PDF
+                        </Button>
+                    </div>
+                </form>
+            </Form>
 
-            <div className="flex justify-end gap-2 sticky bottom-4 bg-background p-4 border rounded-lg shadow-lg">
-                <Button type="button" variant="secondary" onClick={() => handleGenerate('preview')} disabled={loading.generating}>
-                    {loading.generating ? <Loader2 className="animate-spin mr-2"/> : <Eye className="mr-2 h-4 w-4"/>} Preview
-                </Button>
-                <Button type="button" onClick={() => handleGenerate('download')} disabled={loading.generating}>
-                    <FileDown className="mr-2 h-4 w-4"/> Download PDF
-                </Button>
-            </div>
-        </form>
-      </Form>
-
-      {pdfPreviewUrl && (
-        <Card className="mt-8"><CardHeader><CardTitle>Preview</CardTitle></CardHeader>
-          <CardContent><iframe src={pdfPreviewUrl} className="w-full h-[800px] border rounded-md" /></CardContent>
-        </Card>
-      )}
-    </div>
-  );
+            {pdfPreviewUrl && (
+                <div className="mt-8">
+                    <Label className="text-xl font-bold mb-2 block">Document Preview</Label>
+                    <iframe src={pdfPreviewUrl} className="w-full h-[900px] border-4 border-slate-200 rounded-xl" />
+                </div>
+            )}
+        </div>
+    );
 }
 
 export default function ExportExactPDFPage() {
     return <Suspense fallback={<Loader2 className="h-8 w-8 animate-spin" />}><ExportExactPDFPageContent /></Suspense>
 }
+
