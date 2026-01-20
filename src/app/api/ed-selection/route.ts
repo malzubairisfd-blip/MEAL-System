@@ -26,7 +26,7 @@ const DB_COLUMNS = [
   'acceptance_results', 'disqualification_reason',
   'interview_qualification', 'interview_attendance',
   'sfd_marks', 'health_marks', 'local_community_marks', 'interview_total_marks', 'grand_total_score',
-  'training_qualification', 'training_attendance',
+  'training_qualification', 'training_hall_no', 'training_hall_name', 'training_attendance',
   'is_active', 'contract_type', 'working_village', 'contract_starting_date', 'contract_end_date', 'contract_duration_months', 'is_spare',
   'disqualified_reasons', 'is_registered_in_assessment', 'if_no_reason',
   'bnf_full_name', 'bnf_age', 'bnf_id_type', 'bnf_id_no', 'bnf_ozla_name', 'bnf_vill_name', 'qual_status', 'bnf_husband', 'male_cnt', 'female_cnt', 'child_names', 'bnf_id',
@@ -162,6 +162,8 @@ function initializeDatabase(recreate: boolean = false) {
           -- TRAINING
           -- =====================
           training_qualification TEXT,
+          training_hall_no TEXT,
+          training_hall_name TEXT,
           training_attendance TEXT,
 
           -- =====================
