@@ -43,8 +43,9 @@ self.onmessage = async (event) => {
         const absenteeSet = new Set(absentees);
 
         // Find which column name corresponds to 'applicant_id'
+        const mappingMap = new Map(Object.entries(mapping));
         let applicantIdColumn: string | undefined;
-        for (const [key, value] of mapping.entries()) {
+        for (const [key, value] of mappingMap.entries()) {
             if (value === 'applicant_id') {
                 applicantIdColumn = key;
                 break;
@@ -64,12 +65,12 @@ self.onmessage = async (event) => {
             }
             
             const attended = !absenteeSet.has(edu.applicant_id);
-            edu.interview_attendance = attended ? 'حضرت المقابلة' : 'غائبة من المقابلة';
+            edu.interview_attendance = attended ? 'حظرت المقابلة' : 'غائبة من المقابلة';
             
             if (attended) {
                 const interviewData = mappedUploadedData.get(String(edu.applicant_id));
                 if (interviewData) {
-                     mapping.forEach((dbCol: string, fileCol: string) => {
+                     mappingMap.forEach((dbCol: string, fileCol: string) => {
                         if(dbCol !== 'applicant_id') {
                             edu[dbCol] = interviewData[fileCol];
                         }
@@ -105,7 +106,7 @@ self.onmessage = async (event) => {
         });
         
         // Relationship clustering and Ranking
-        const attendedApplicants = processedEducators.filter((edu: any) => edu.interview_attendance === 'حضرت المقابلة');
+        const attendedApplicants = processedEducators.filter((edu: any) => edu.interview_attendance === 'حظرت المقابلة');
         
         // Relationship Clustering
         const applicantNameParts = new Map(attendedApplicants.map(app => [app.applicant_id, normalizeArabicWithCompounds(app.applicant_name).split(' ')]));

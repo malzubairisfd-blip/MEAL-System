@@ -16,18 +16,6 @@ import { Loader2, Upload, Users, UserCheck, UserX, Save, FileDown, GitCompareArr
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { cn } from '@/lib/utils';
-import { Badge } from '@/components/ui/badge';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -79,6 +67,7 @@ export default function InterviewAnalysisPage() {
     const [columnMapping, setColumnMapping] = useState<Map<string, string>>(new Map());
     
     const [loading, setLoading] = useState({ projects: true, educators: false, processing: false, saving: false });
+    const [workerStatus, setWorkerStatus] = useState('idle');
     
     const [results, setResults] = useState<any | null>(null);
     const [duplicateDialog, setDuplicateDialog] = useState({ isOpen: false, duplicates: [], nonDuplicates: [] });
@@ -134,6 +123,7 @@ export default function InterviewAnalysisPage() {
             setColumns([]);
             setRawFileData([]);
             setResults(null);
+            setWorkerStatus('idle');
         }
     };
 
@@ -210,39 +200,12 @@ export default function InterviewAnalysisPage() {
         return mappedDbCols.has("applicant_id");
     }, [columnMapping]);
 
-    const handleProcess = useCallback(() => {
-        if (!selectedProjectId || !file || rawFileData.length === 0 || !isMappingComplete) {
-            toast({ title: "Incomplete Setup", description: "Please select a project, upload a file, and ensure applicant_id is mapped.", variant: "destructive" });
+    const executeSave = useCallback(async (recordsToSave: any[]) => {
+        if (!selectedProjectId) {
+            toast({ title: "Save Aborted", description: "Project ID was lost. Please re-select the project.", variant: "destructive" });
             return;
         }
-
-        if (!workerRef.current) {
-            const worker = new Worker(new URL('@/workers/interview-analysis.worker.ts', import.meta.url), { type: 'module' });
-            workerRef.current = worker;
-        }
-        
-        workerRef.current.onmessage = (event) => {
-             const { type, data, error } = event.data;
-            if (type === 'done') {
-                setResults(data);
-                toast({ title: "Processing Complete!", description: `Ready to save results.` });
-            } else if (type === 'error') {
-                 toast({ title: "Processing Error", description: error, variant: "destructive" });
-            }
-            setLoading(p => ({...p, processing: false}));
-        };
-
-        setLoading(p => ({...p, processing: true}));
-        workerRef.current.postMessage({
-            educators,
-            uploadedData: rawFileData,
-            mapping: columnMapping,
-            absentees: Array.from(selectedAbsentees),
-        });
-    }, [selectedProjectId, file, rawFileData, isMappingComplete, educators, columnMapping, selectedAbsentees, toast]);
-
-    const executeSave = useCallback(async (recordsToSave: any[]) => {
-        setLoading(p => ({...p, saving: true}));
+        setLoading(p => ({ ...p, saving: true }));
         try {
             const res = await fetch('/api/ed-selection', {
                 method: 'PUT',
@@ -254,28 +217,79 @@ export default function InterviewAnalysisPage() {
                 const errorData = await res.json();
                 throw new Error(errorData.error || "A server error occurred while saving.");
             }
-            toast({ title: "Save Successful", description: `${recordsToSave.length} educator records updated.`});
+            toast({ title: "Save Successful", description: `${recordsToSave.length} educator records updated.` });
+            setWorkerStatus('done');
         } catch (error: any) {
              toast({ title: "Save Failed", description: error.message, variant: "destructive" });
+             setWorkerStatus('error');
         } finally {
-            setLoading(p => ({...p, saving: false}));
+            setLoading(p => ({ ...p, saving: false }));
         }
-    }, [toast]);
+    }, [selectedProjectId, toast]);
 
-    const handleSave = useCallback(async () => {
-        if (!results) return;
+    const handleSaveValidation = useCallback(async (processedResults: any) => {
+        if (!processedResults || !processedResults.results) {
+            toast({ title: "Processing Error", description: "Worker did not return valid results.", variant: "destructive" });
+            setWorkerStatus('error');
+            return;
+        }
 
         const existingApplicantIds = new Set(educators.map(e => String(e.applicant_id)));
-        
-        const duplicates = results.results.filter((res: any) => existingApplicantIds.has(String(res.applicant_id)));
-        const nonDuplicates = results.results.filter((res: any) => !existingApplicantIds.has(String(res.applicant_id)));
+        const duplicates = processedResults.results.filter((res: any) => existingApplicantIds.has(String(res.applicant_id)));
+        const nonDuplicates = processedResults.results.filter((res: any) => !existingApplicantIds.has(String(res.applicant_id)));
 
         if (duplicates.length > 0) {
-             setDuplicateDialog({ isOpen: true, duplicates, nonDuplicates });
+            setDuplicateDialog({ isOpen: true, duplicates, nonDuplicates });
         } else {
-            await executeSave(results.results);
+            await executeSave(processedResults.results);
         }
-    }, [results, educators, executeSave]);
+    }, [educators, executeSave]);
+
+    useEffect(() => {
+        const worker = new Worker(new URL('@/workers/interview-analysis.worker.ts', import.meta.url), { type: 'module' });
+        workerRef.current = worker;
+        
+        const handleMessage = (event: MessageEvent) => {
+            const { type, data, error } = event.data;
+            setLoading(p => ({ ...p, processing: false }));
+
+            if (type === 'done') {
+                setResults(data);
+                toast({ title: "Processing Complete!", description: `Analysis complete. Now validating and saving results...` });
+                handleSaveValidation(data);
+            } else if (type === 'error') {
+                 toast({ title: "Processing Error", description: error, variant: "destructive" });
+                 setWorkerStatus('error');
+            }
+        };
+
+        worker.onmessage = handleMessage;
+
+        return () => {
+          if (workerRef.current) {
+            workerRef.current.terminate();
+          }
+        };
+    }, [handleSaveValidation, toast]);
+    
+    const handleProcess = useCallback(() => {
+        if (!selectedProjectId || !file || rawFileData.length === 0 || !isMappingComplete) {
+            toast({ title: "Incomplete Setup", description: "Please select a project, upload a file, and ensure applicant_id is mapped.", variant: "destructive" });
+            return;
+        }
+
+        if (!workerRef.current) return;
+        
+        setLoading(p => ({...p, processing: true}));
+        setWorkerStatus('processing');
+        workerRef.current.postMessage({
+            educators,
+            uploadedData: rawFileData,
+            mapping: Object.fromEntries(columnMapping),
+            absentees: Array.from(selectedAbsentees),
+        });
+    }, [selectedProjectId, file, rawFileData, isMappingComplete, educators, columnMapping, selectedAbsentees, toast]);
+
 
     return (
         <div className="space-y-6">
@@ -317,7 +331,7 @@ export default function InterviewAnalysisPage() {
                                             {filteredAbsentees.map(app => (
                                                 <TableRow key={app.applicant_id}>
                                                     <TableCell>
-                                                        <Checkbox id={`absentee-${app.applicant_id}`} onCheckedChange={() => handleAbsenteeToggle(app.applicant_id)} checked={selectedAbsentees.has(app.applicant_id)} />
+                                                        <Checkbox id={`absentee-${app.applicant_id}`} onCheckedChange={(checked) => handleAbsenteeToggle(app.applicant_id, checked)} checked={selectedAbsentees.has(app.applicant_id)} />
                                                     </TableCell>
                                                     <TableCell>{app.applicant_id}</TableCell>
                                                     <TableCell>{app.applicant_name}</TableCell>
@@ -348,13 +362,9 @@ export default function InterviewAnalysisPage() {
                 <CardContent className="flex justify-between items-center">
                     <p className="text-sm text-muted-foreground">Process the data to see results, then save to the database.</p>
                      <div className='flex gap-2'>
-                        <Button onClick={handleProcess} disabled={!isMappingComplete || loading.processing}>
-                            {loading.processing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                            Process Results
-                        </Button>
-                        <Button onClick={handleSave} disabled={!results || loading.saving}>
-                            {loading.saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                            Save to Database
+                        <Button onClick={handleProcess} disabled={!isMappingComplete || loading.processing || workerStatus === 'saving'}>
+                            {(loading.processing || workerStatus === 'saving') ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                            {workerStatus === 'processing' ? 'Processing...' : workerStatus === 'saving' ? 'Saving...' : 'Process & Save Results'}
                         </Button>
                     </div>
                 </CardContent>
@@ -383,15 +393,21 @@ export default function InterviewAnalysisPage() {
                     <AlertDialogHeader>
                         <AlertDialogTitle>Duplicate Applicants Found</AlertDialogTitle>
                         <AlertDialogDescription>
-                            Found {duplicateDialog.duplicates.length} applicant(s) in your uploaded file that already exist in the database.
+                            Found {duplicateDialog.duplicates.length} applicant(s) in your uploaded file that already exist in the database. How would you like to proceed?
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <Button variant="outline" onClick={() => { setDuplicateDialog({ isOpen: false, duplicates: [], nonDuplicates: [] }); executeSave(duplicateDialog.nonDuplicates); }}>
+                        <AlertDialogCancel onClick={() => setLoading(p => ({...p, saving: false}))}>Cancel</AlertDialogCancel>
+                        <Button variant="outline" onClick={async () => {
+                            setDuplicateDialog({ isOpen: false, duplicates: [], nonDuplicates: [] });
+                            await executeSave(duplicateDialog.nonDuplicates);
+                        }}>
                             Skip Duplicates
                         </Button>
-                        <AlertDialogAction onClick={() => { setDuplicateDialog({ isOpen: false, duplicates: [], nonDuplicates: [] }); executeSave([...duplicateDialog.nonDuplicates, ...duplicateDialog.duplicates]); }}>
+                        <AlertDialogAction onClick={async () => {
+                            setDuplicateDialog({ isOpen: false, duplicates: [], nonDuplicates: [] });
+                            await executeSave([...duplicateDialog.nonDuplicates, ...duplicateDialog.duplicates]);
+                        }}>
                             Replace Existing
                         </AlertDialogAction>
                     </AlertDialogFooter>
