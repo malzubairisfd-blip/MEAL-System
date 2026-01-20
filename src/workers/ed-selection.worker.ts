@@ -137,7 +137,7 @@ function processRecords(rows: any[], recipientsDateStr: string, projects: any[],
   // --- AGE RANK PER VILLAGE ---
   const villageGroups: any = {};
   records.forEach(r => {
-    const villageKey = r.village || 'UNKNOWN'; // Handle null/undefined village
+    const villageKey = r.loc_id || 'UNKNOWN'; // Handle null/undefined village
     if(!villageGroups[villageKey]) villageGroups[villageKey] = [];
     villageGroups[villageKey].push(r);
   });
