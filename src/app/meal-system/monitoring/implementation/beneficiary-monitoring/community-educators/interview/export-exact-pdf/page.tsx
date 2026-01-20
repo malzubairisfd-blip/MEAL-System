@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { cn } from "@/lib/utils";
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -384,9 +385,9 @@ function ExportExactPDFPageContent() {
                                             <p className="text-sm text-slate-400">Used</p>
                                             <p className="text-2xl font-bold text-slate-100">{usedWidth.toFixed(1)}</p>
                                         </div>
-                                        <div className={`text-center p-2 rounded-lg ${remainingWidth &lt; 0 ? 'bg-red-500/20' : 'bg-green-500/20'}`}>
+                                        <div className={cn("text-center p-2 rounded-lg", remainingWidth < 0 ? 'bg-red-500/20' : 'bg-green-500/20')}>
                                             <p className="text-sm text-slate-400">Remaining</p>
-                                            <p className={`text-2xl font-bold ${remainingWidth &lt; 0 ? 'text-red-400' : 'text-green-400'}`}>{remainingWidth.toFixed(1)}</p>
+                                            <p className={cn("text-2xl font-bold", remainingWidth < 0 ? 'text-red-400' : 'text-green-400')}>{remainingWidth.toFixed(1)}</p>
                                         </div>
                                     </CardContent>
                                 </Card>
