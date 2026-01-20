@@ -143,13 +143,10 @@ function drawPageFrame(
 
   // --- HEADER INFO BOXES ---
   const ibs = settings.infoBoxStyle || {};
-  // Row 1
-  const projectNumWidth = drawInfoBox(doc, "رقم المشروع", toArabicDigits(project.projectId), pageW - 10, 36, ibs);
-  drawInfoBox(doc, "رقم القاعة", toArabicDigits(hall.hallNo), pageW - 10 - projectNumWidth - 5, 36, ibs);
-
-  // Row 2
-  const projectNameWidth = drawInfoBox(doc, "اسم المشروع", project.projectName || "غير محدد", pageW - 10, 46, ibs);
-  drawInfoBox(doc, "اسم القاعة", hall.hallName || "غير محدد", pageW - 10 - projectNameWidth - 5, 46, ibs);
+  drawInfoBox(doc, "اسم المشروع", project.projectName || "غير محدد", pageW - 10, 46, ibs);
+  drawInfoBox(doc, "اسم القاعة", hall.hallName || "غير محدد", 90, 46, ibs);
+  drawInfoBox(doc, "رقم المشروع", toArabicDigits(project.projectId), pageW - 10, 36, ibs);
+  drawInfoBox(doc, "رقم القاعة", toArabicDigits(hall.hallNo), 90, 36, ibs);
 
 
   // --- FOOTER SECTION ---
