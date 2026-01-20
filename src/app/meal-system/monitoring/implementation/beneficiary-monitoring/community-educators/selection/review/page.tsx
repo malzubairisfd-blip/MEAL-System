@@ -1,4 +1,3 @@
-
 // src/app/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/selection/review/page.tsx
 "use client";
 
@@ -13,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Upload, Users, UserCheck, UserX, Save, FileDown, GitCompareArrows, Search, Plus, Trash2, Check, ChevronsUpDown } from 'lucide-react';
+import { Loader2, Upload, Users, UserCheck, UserX, Save, FileDown, GitCompareArrows, Search, Plus, Trash2, CheckCircle, XCircle, ClipboardList } from 'lucide-react';
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -47,6 +46,18 @@ interface Project {
 
 const LOCAL_STORAGE_MAPPING_PREFIX = "interview-mapping-";
 
+const SummaryCard = ({ icon, title, value }: { icon: React.ReactNode, title: string, value: string | number }) => (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-sm font-medium">{title}</CardTitle>
+        {icon}
+      </CardHeader>
+      <CardContent>
+        <div className="text-2xl font-bold">{value}</div>
+      </CardContent>
+    </Card>
+);
+
 export default function InterviewAnalysisPage() {
     const { toast } = useToast();
     const router = useRouter();
@@ -63,12 +74,15 @@ export default function InterviewAnalysisPage() {
     const [educators, setEducators] = useState<any[]>([]);
     const [eligibleApplicants, setEligibleApplicants] = useState<any[]>([]);
     const [selectedAbsentees, setSelectedAbsentees] = useState<Set<number>>(new Set());
+    const [absenteeSearch, setAbsenteeSearch] = useState('');
 
     const [columnMapping, setColumnMapping] = useState<Map<string, string>>(new Map());
     
-    const [loading, setLoading] = useState({ projects: true, educators: false });
-    const [isProcessing, setIsProcessing] = useState(false);
+    const [loading, setLoading] = useState({ projects: true, educators: false, processing: false, saving: false });
     
+    const [results, setResults] = useState<any | null>(null);
+    const [duplicateDialog, setDuplicateDialog] = useState({ isOpen: false, duplicates: [], nonDuplicates: [] });
+
     const workerRef = useRef<Worker | null>(null);
 
     // Fetch Projects
@@ -119,6 +133,7 @@ export default function InterviewAnalysisPage() {
             setSelectedSheet('');
             setColumns([]);
             setRawFileData([]);
+            setResults(null);
         }
     };
 
@@ -148,14 +163,13 @@ export default function InterviewAnalysisPage() {
             const fileColumns = Object.keys(jsonData[0] || {});
             setColumns(fileColumns);
 
-            // Restore mapping from local storage
             const storageKey = `${LOCAL_STORAGE_MAPPING_PREFIX}${fileColumns.join(',')}`;
             const savedMapping = localStorage.getItem(storageKey);
             if (savedMapping) {
                 try {
                     setColumnMapping(new Map(Object.entries(JSON.parse(savedMapping))));
                     toast({ title: "Mapping Restored", description: "Loaded saved column mapping." });
-                } catch { /* ignore parsing errors */ }
+                } catch { setColumnMapping(new Map()); }
             } else {
                  setColumnMapping(new Map());
             }
@@ -163,7 +177,6 @@ export default function InterviewAnalysisPage() {
         reader.readAsArrayBuffer(file);
     }, [file, selectedSheet, toast]);
     
-    // Save mapping to localStorage
     useEffect(() => {
         if (columns.length > 0 && columnMapping.size > 0) {
             const storageKey = `${LOCAL_STORAGE_MAPPING_PREFIX}${columns.join(',')}`;
@@ -183,24 +196,86 @@ export default function InterviewAnalysisPage() {
         });
     };
 
+    const filteredAbsentees = useMemo(() => {
+        if (!absenteeSearch) return eligibleApplicants;
+        const lowerCaseSearch = absenteeSearch.toLowerCase();
+        return eligibleApplicants.filter(app => 
+            String(app.applicant_id).includes(lowerCaseSearch) || 
+            app.applicant_name?.toLowerCase().includes(lowerCaseSearch)
+        );
+    }, [absenteeSearch, eligibleApplicants]);
+
     const isMappingComplete = useMemo(() => {
         const mappedDbCols = new Set(columnMapping.values());
         return mappedDbCols.has("applicant_id");
     }, [columnMapping]);
 
-    const handleProcess = () => {
+    const handleProcess = useCallback(() => {
         if (!selectedProjectId || !file || rawFileData.length === 0 || !isMappingComplete) {
             toast({ title: "Incomplete Setup", description: "Please select a project, upload a file, and ensure applicant_id is mapped.", variant: "destructive" });
             return;
         }
 
-        setIsProcessing(true);
-        // This is where you would call the worker
-        toast({ title: "Processing Started", description: "This feature is being implemented." });
+        if (!workerRef.current) {
+            const worker = new Worker(new URL('@/workers/interview-analysis.worker.ts', import.meta.url), { type: 'module' });
+            workerRef.current = worker;
+        }
         
-        // Placeholder to end processing
-        setTimeout(() => setIsProcessing(false), 2000);
-    };
+        workerRef.current.onmessage = (event) => {
+             const { type, data, error } = event.data;
+            if (type === 'done') {
+                setResults(data);
+                toast({ title: "Processing Complete!", description: `Ready to save results.` });
+            } else if (type === 'error') {
+                 toast({ title: "Processing Error", description: error, variant: "destructive" });
+            }
+            setLoading(p => ({...p, processing: false}));
+        };
+
+        setLoading(p => ({...p, processing: true}));
+        workerRef.current.postMessage({
+            educators,
+            uploadedData: rawFileData,
+            mapping: Object.fromEntries(columnMapping),
+            absentees: Array.from(selectedAbsentees),
+        });
+    }, [selectedProjectId, file, rawFileData, isMappingComplete, educators, columnMapping, selectedAbsentees, toast]);
+
+    const executeSave = useCallback(async (recordsToSave: any[]) => {
+        setLoading(p => ({...p, saving: true}));
+        try {
+            const res = await fetch('/api/ed-selection', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(recordsToSave)
+            });
+
+            if (!res.ok) {
+                const errorData = await res.json();
+                throw new Error(errorData.error || "A server error occurred while saving.");
+            }
+            toast({ title: "Save Successful", description: `${recordsToSave.length} educator records updated.`});
+        } catch (error: any) {
+             toast({ title: "Save Failed", description: error.message, variant: "destructive" });
+        } finally {
+            setLoading(p => ({...p, saving: false}));
+        }
+    }, [toast]);
+
+    const handleSave = useCallback(async () => {
+        if (!results) return;
+
+        const existingApplicantIds = new Set(educators.map(e => String(e.applicant_id)));
+        
+        const duplicates = results.results.filter((res: any) => existingApplicantIds.has(String(res.applicant_id)));
+        const nonDuplicates = results.results.filter((res: any) => !existingApplicantIds.has(String(res.applicant_id)));
+
+        if (duplicates.length > 0) {
+             setDuplicateDialog({ isOpen: true, duplicates, nonDuplicates });
+        } else {
+            await executeSave(results.results);
+        }
+    }, [results, educators, executeSave]);
 
     return (
         <div className="space-y-6">
@@ -214,20 +289,14 @@ export default function InterviewAnalysisPage() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="space-y-6">
                     <Card>
-                        <CardHeader>
-                            <CardTitle>1. Project & Interview Data</CardTitle>
-                        </CardHeader>
+                        <CardHeader><CardTitle>1. Project & Interview Data</CardTitle></CardHeader>
                         <CardContent className="space-y-4">
                             <Select onValueChange={setSelectedProjectId} value={selectedProjectId} disabled={loading.projects}>
                                 <SelectTrigger><SelectValue placeholder={loading.projects ? "Loading projects..." : "Select Project"} /></SelectTrigger>
                                 <SelectContent>{projects.map(p => <SelectItem key={p.projectId} value={p.projectId}>{p.projectName}</SelectItem>)}</SelectContent>
                             </Select>
-
                              <Input id="file-upload" type="file" onChange={handleFileChange} accept=".xlsx,.xls,.csv,.xlsm,.xlsb,.txt" />
-
-                             {sheets.length > 0 && (
-                                <Select value={selectedSheet} onValueChange={setSelectedSheet}><SelectTrigger><SelectValue placeholder="Select Sheet" /></SelectTrigger><SelectContent>{sheets.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select>
-                            )}
+                             {sheets.length > 0 && (<Select value={selectedSheet} onValueChange={setSelectedSheet}><SelectTrigger><SelectValue placeholder="Select Sheet" /></SelectTrigger><SelectContent>{sheets.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select>)}
                         </CardContent>
                     </Card>
 
@@ -238,22 +307,30 @@ export default function InterviewAnalysisPage() {
                                 <CardDescription>Select all applicants who were absent from the interview.</CardDescription>
                             </CardHeader>
                             <CardContent>
+                                <Input placeholder="Search absentees by ID or name..." value={absenteeSearch} onChange={e => setAbsenteeSearch(e.target.value)} className="mb-2" />
                                <ScrollArea className="h-64 border rounded-md">
-                                    <div className="p-4 grid grid-cols-2 gap-x-4 gap-y-2">
-                                        {eligibleApplicants.map(app => (
-                                            <div key={app.applicant_id} className="flex items-center space-x-2">
-                                                <Checkbox id={`absentee-${app.applicant_id}`} onCheckedChange={() => handleAbsenteeToggle(app.applicant_id)} checked={selectedAbsentees.has(app.applicant_id)} />
-                                                <Label htmlFor={`absentee-${app.applicant_id}`} className="truncate">{app.applicant_name} ({app.applicant_id})</Label>
-                                            </div>
-                                        ))}
-                                    </div>
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow><TableHead className="w-[50px]"></TableHead><TableHead>Applicant ID</TableHead><TableHead>Applicant Name</TableHead></TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {filteredAbsentees.map(app => (
+                                                <TableRow key={app.applicant_id}>
+                                                    <TableCell>
+                                                        <Checkbox id={`absentee-${app.applicant_id}`} onCheckedChange={() => handleAbsenteeToggle(app.applicant_id)} checked={selectedAbsentees.has(app.applicant_id)} />
+                                                    </TableCell>
+                                                    <TableCell>{app.applicant_id}</TableCell>
+                                                    <TableCell>{app.applicant_name}</TableCell>
+                                                </TableRow>
+                                            ))}
+                                        </TableBody>
+                                    </Table>
                                 </ScrollArea>
                             </CardContent>
                         </Card>
                     )}
                 </div>
-
-                 <div className="space-y-6">
+                <div className="space-y-6">
                     <Card>
                         <CardHeader>
                             <CardTitle>3. Map Columns</CardTitle>
@@ -265,13 +342,62 @@ export default function InterviewAnalysisPage() {
                     </Card>
                 </div>
             </div>
+
+             <Card>
+                <CardHeader><CardTitle>4. Process & Save</CardTitle></CardHeader>
+                <CardContent className="flex justify-between items-center">
+                    <p className="text-sm text-muted-foreground">Process the data to see results, then save to the database.</p>
+                     <div className='flex gap-2'>
+                        <Button onClick={handleProcess} disabled={!isMappingComplete || loading.processing}>
+                            {loading.processing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                            Process Results
+                        </Button>
+                        <Button onClick={handleSave} disabled={!results || loading.saving}>
+                            {loading.saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                            Save to Database
+                        </Button>
+                    </div>
+                </CardContent>
+            </Card>
+
+            {results && (
+                 <Card>
+                    <CardHeader><CardTitle>Results Summary</CardTitle></CardHeader>
+                    <CardContent>
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                            <SummaryCard icon={<Users />} title="Total Attended" value={results.totalAttended} />
+                            <SummaryCard icon={<UserX className="text-red-500" />} title="Total Absent" value={results.totalAbsent} />
+                            <SummaryCard icon={<CheckCircle className="text-green-500" />} title="Passed Interview" value={results.totalPassed} />
+                            <SummaryCard icon={<XCircle className="text-red-500" />} title="Failed Interview" value={results.totalFailed} />
+                        </div>
+                        <div className="flex gap-2 mt-4">
+                           <Button asChild><Link href="/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/selection/database"><Database className="mr-2 h-4 w-4"/>Go to Database</Link></Button>
+                           <Button asChild variant="outline"><Link href="/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/training"><ClipboardList className="mr-2 h-4 w-4"/>Go to Training Page</Link></Button>
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
+
+            <AlertDialog open={duplicateDialog.isOpen} onOpenChange={(isOpen) => setDuplicateDialog(prev => ({...prev, isOpen}))}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Duplicate Applicants Found</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Found {duplicateDialog.duplicates.length} applicant(s) in your uploaded file that already exist in the database.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <Button variant="outline" onClick={() => { setDuplicateDialog({ isOpen: false, duplicates: [], nonDuplicates: [] }); executeSave(duplicateDialog.nonDuplicates); }}>
+                            Skip Duplicates
+                        </Button>
+                        <AlertDialogAction onClick={() => { setDuplicateDialog({ isOpen: false, duplicates: [], nonDuplicates: [] }); executeSave([...duplicateDialog.nonDuplicates, ...duplicateDialog.duplicates]); }}>
+                            Replace Existing
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
             
-            <div className="flex justify-end">
-                <Button onClick={handleProcess} disabled={!isMappingComplete || isProcessing}>
-                    {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                    Process and Save Results
-                </Button>
-            </div>
         </div>
     );
 }

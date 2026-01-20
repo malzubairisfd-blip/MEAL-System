@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Upload, Users, UserCheck, UserX, Save, FileDown, GitCompareArrows, Database } from 'lucide-react';
+import { Loader2, Upload, Users, UserCheck, UserX, Save, FileDown, GitCompareArrows, Database, ClipboardList } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -509,6 +509,7 @@ export default function EducatorUploadPage() {
                             </Button>
                             <Button asChild variant="outline">
                                 <Link href="/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/interview/export-statements">
+                                    <ClipboardList className="mr-2 h-4 w-4" />
                                     Go to Exporting Interview Statements
                                 </Link>
                             </Button>

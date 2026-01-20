@@ -294,3 +294,43 @@ export async function GET(req: Request) {
         return NextResponse.json({ error: "Failed to fetch educator selection data.", details: error.message }, { status: 500 });
     }
 }
+
+export async function PUT(req: Request) {
+    try {
+        const recordsToUpdate = await req.json();
+        if (!Array.isArray(recordsToUpdate) || recordsToUpdate.length === 0) {
+            return NextResponse.json({ error: "Invalid payload. Expected an array of records to update." }, { status: 400 });
+        }
+        
+        const db = new Database(getDbPath());
+
+        const updateRecord = (record: any) => {
+            if (!record.applicant_id) return;
+            
+            const columnsToUpdate = Object.keys(record).filter(col => DB_COLUMNS.includes(col) && col !== 'applicant_id');
+            if (columnsToUpdate.length === 0) return;
+
+            const setClause = columnsToUpdate.map(col => `${col} = ?`).join(', ');
+            const values = columnsToUpdate.map(col => record[col]);
+            values.push(record.applicant_id);
+
+            const stmt = db.prepare(`UPDATE educators SET ${setClause} WHERE applicant_id = ?`);
+            stmt.run(...values);
+        };
+        
+        const updateMany = db.transaction((records) => {
+            for (const record of records) {
+                updateRecord(record);
+            }
+        });
+
+        updateMany(recordsToUpdate);
+        db.close();
+
+        return NextResponse.json({ message: `${recordsToUpdate.length} educator records updated successfully.` });
+
+    } catch (error: any) {
+        console.error("[ED_SELECTION_PUT_API_ERROR]", error);
+        return NextResponse.json({ error: "Failed to update educator data.", details: error.message }, { status: 500 });
+    }
+}

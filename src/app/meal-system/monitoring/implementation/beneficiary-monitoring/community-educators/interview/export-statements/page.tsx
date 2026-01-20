@@ -47,7 +47,7 @@ export default function ExportStatementsPage() {
       .then(r => r.json())
       .then(data => {
         if(Array.isArray(data)){
-          const projectApplicants = data.filter(r => r.project_id === projectId && r.acceptance_results === 'مقبولة' && r.interview_hall_no == null);
+          const projectApplicants = data.filter((r: any) => r.project_id === projectId && r.acceptance_results === 'مقبولة' && r.interview_hall_no == null);
           setAccepted(projectApplicants);
         } else {
           setAccepted([]);
