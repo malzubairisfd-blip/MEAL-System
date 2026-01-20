@@ -42,7 +42,7 @@ function drawInfoBox(
   xRight: number,
   y: number,
   style: any
-) {
+): number {
   const padding = 2;
 
   // Apply style *before* text measurement
@@ -82,6 +82,8 @@ function drawInfoBox(
   const textY = y + h / 2;
   doc.text(label, xRight - padding, textY, { align: "right", baseline: "middle" });
   doc.text(valueLines, xRight - labelW - padding, textY, { align: "right", baseline: "middle" });
+
+  return labelW + valueW;
 }
 
 
@@ -97,6 +99,7 @@ function drawPageFrame(
 ) {
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
+  const boxMargin = 5;
 
   // --- PAGE BORDER ---
   if (settings.borderColor) {
@@ -144,11 +147,11 @@ function drawPageFrame(
 
   // --- HEADER INFO BOXES ---
   // Row 1
-  drawInfoBox(doc, "اسم المشروع", project.projectName || "غير محدد", pageW - 10, 26, settings.projectNameInfoBoxStyle);
-  drawInfoBox(doc, "رقم المشروع", toArabicDigits(project.projectId), 90, 26, settings.projectNumberInfoBoxStyle);
+  const projectNameBoxWidth = drawInfoBox(doc, "اسم المشروع", project.projectName || "غير محدد", pageW - 10, 26, settings.projectNameInfoBoxStyle);
+  drawInfoBox(doc, "رقم المشروع", toArabicDigits(project.projectId), pageW - 10 - projectNameBoxWidth - boxMargin, 26, settings.projectNumberInfoBoxStyle);
   // Row 2
-  drawInfoBox(doc, "اسم القاعة", hall.hallName || "غير محدد", pageW - 10, 36, settings.hallNameInfoBoxStyle);
-  drawInfoBox(doc, "رقم القاعة", toArabicDigits(hall.hallNo), 90, 36, settings.hallNumberInfoBoxStyle);
+  const hallNameBoxWidth = drawInfoBox(doc, "اسم القاعة", hall.hallName || "غير محدد", pageW - 10, 36, settings.hallNameInfoBoxStyle);
+  drawInfoBox(doc, "رقم القاعة", toArabicDigits(hall.hallNo), pageW - 10 - hallNameBoxWidth - boxMargin, 36, settings.hallNumberInfoBoxStyle);
 
 
   // --- FOOTER SECTION ---
