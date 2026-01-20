@@ -105,25 +105,17 @@ function drawPageFrame(
       doc.rect(5, 5, pageW - 10, pageH - 10);
   }
 
-    // --- CUSTOM HEADER TEXT BOX (TOP RIGHT) ---
-  const headerBoxX = pageW - 70;
-  const headerBoxY = 8;
-  const headerBoxW = 65;
-  const headerBoxH = 15;
-
-  doc.setFillColor(10, 10, 10);
-  doc.setDrawColor(0);
-  doc.setLineWidth(0.2);
-  doc.rect(headerBoxX, headerBoxY, headerBoxW, headerBoxH, "F");
-  
-  applyTextStyle(doc, { textColor: '#FFFFFF', fontSize: 7, bold: true });
+  // --- CUSTOM HEADER TEXT (TOP RIGHT) ---
+  applyTextStyle(doc, { textColor: '#000000', fontSize: 7, bold: true });
   const textLines = [
       "رئاسة الوزراء",
       "الصندوق الاجتماعي للتنمية فرع صنعاء"
   ];
-  doc.text(textLines, headerBoxX + headerBoxW / 2, headerBoxY + 7.5, {
-      align: "center",
-      baseline: "middle"
+  const padding = 2;
+  const headerY = 8;
+  doc.text(textLines, pageW - 10, headerY + padding, {
+      align: "right",
+      baseline: "top"
   });
 
 
