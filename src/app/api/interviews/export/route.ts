@@ -45,19 +45,14 @@ function drawInfoBox(
 ): number {
   const padding = 2;
 
-  // Apply style *before* text measurement
   applyTextStyle(doc, style);
-
+  
   const labelW = doc.getTextWidth(label) + padding * 2;
   const valueW = style.width || 60;
   
-  // Calculate wrap for value text
-  const valueLines = doc.splitTextToSize(value || "", valueW - (padding * 2));
-  
-  // Calculate dynamic height based on content
+  const valueLines = doc.splitTextToSize((value || "").trim(), valueW - (padding * 2));
   const textDimensions = doc.getTextDimensions(valueLines);
-  const h = Math.max(style.height || 8, textDimensions.h + padding * 1.5);
-
+  const h = Math.max(style.height || 8, textDimensions.h + padding * 2); // Use padding * 2 for top/bottom
 
   // 1. Label Background
   if (style.labelBgColor) {
@@ -76,12 +71,14 @@ function drawInfoBox(
   doc.setDrawColor(0);
   doc.rect(xRight - labelW, y, labelW, h); // Label Border
   doc.rect(xRight - labelW - valueW, y, valueW, h); // Value Border
-
+  
   // 4. Text
-  // Vertical centering for both label and value
-  const textY = y + h / 2;
-  doc.text(label, xRight - padding, textY, { align: "right", baseline: "middle" });
-  doc.text(valueLines, xRight - labelW - padding, textY, { align: "right", baseline: "middle" });
+  const labelY = y + h / 2; // Center label
+  doc.text(label, xRight - padding, labelY, { align: "right", baseline: "middle" });
+  
+  // Draw value text line by line for vertical centering
+  const valueYStart = y + (h - textDimensions.h) / 2;
+  doc.text(valueLines, xRight - labelW - padding, valueYStart, { align: "right", baseline: "top" });
 
   return labelW + valueW;
 }
