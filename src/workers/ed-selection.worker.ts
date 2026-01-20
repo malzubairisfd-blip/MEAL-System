@@ -136,19 +136,32 @@ function processRecords(rows: any[], recipientsDateStr: string, projects: any[],
 
   // --- AGE RANK PER VILLAGE ---
   const villageGroups: any = {};
-  records.forEach(r=>{
-    if(!villageGroups[r.village]) villageGroups[r.village]=[];
-    villageGroups[r.village].push(r);
+  records.forEach(r => {
+    const villageKey = r.village || 'UNKNOWN'; // Handle null/undefined village
+    if(!villageGroups[villageKey]) villageGroups[villageKey] = [];
+    villageGroups[villageKey].push(r);
   });
 
-  Object.values(villageGroups).forEach((list:any)=>{
-    list.sort((a:any,b:any)=>b.age_days-a.age_days);
-    list.forEach((r:any,i:number)=>{
-       if (r.age_years < 18 || r.age_years > 35 || r.applicant_qualification === "بدون" || r.duplicated_applicants) {
-        r.age_per_village_ranking = 0;
-       } else {
+  Object.values(villageGroups).forEach((list: any[]) => {
+    // Separate qualified and disqualified applicants
+    const qualified = list.filter(r => 
+        !(r.age_years < 18 || r.age_years > 35 || r.applicant_qualification === "بدون" || r.duplicated_applicants)
+    );
+    const disqualified = list.filter(r => 
+        (r.age_years < 18 || r.age_years > 35 || r.applicant_qualification === "بدون" || r.duplicated_applicants)
+    );
+
+    // Sort only the qualified applicants
+    qualified.sort((a: any, b: any) => (b.age_days || 0) - (a.age_days || 0));
+    
+    // Assign rank to qualified applicants
+    qualified.forEach((r: any, i: number) => {
         r.age_per_village_ranking = i + 1;
-       }
+    });
+
+    // Assign rank 0 to disqualified applicants
+    disqualified.forEach((r: any) => {
+        r.age_per_village_ranking = 0;
     });
   });
 
