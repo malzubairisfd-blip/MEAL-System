@@ -238,14 +238,14 @@ function ExportExactPDFPageContent() {
     };
 
     return (
-        <div className="container mx-auto py-6 space-y-6 bg-black">
+        <div className="space-y-6">
             <div className="flex justify-between items-center">
                 <h1 className="text-3xl font-bold">Advanced PDF Designer</h1>
                 <Button variant="outline" onClick={() => router.back()}><ArrowLeft className="mr-2 h-4 w-4" /> Back</Button>
             </div>
 
             {/* 1. PROJECT SELECTION (RESTORED) */}
-            <Card className="border-blue-200 bg-blue-50/50">
+            <Card className="border-primary/30">
                 <CardHeader className="pb-3"><CardTitle>1. Data Source</CardTitle></CardHeader>
                 <CardContent>
                     <div className="flex gap-4 items-end">
@@ -329,15 +329,15 @@ function ExportExactPDFPageContent() {
                                 </div>
 
                                 {fields.map((field, index) => (
-                                    <Card key={field.id} className="relative overflow-hidden border-l-4 border-l-blue-500">
+                                    <Card key={field.id} className="relative overflow-hidden border-l-4 border-l-primary">
                                         <div className="absolute top-2 right-2">
-                                            <Button type="button" variant="ghost" size="sm" className="text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => remove(index)}><Trash2 className="h-4 w-4" /></Button>
+                                            <Button type="button" variant="ghost" size="sm" className="text-destructive hover:text-red-700 hover:bg-red-50" onClick={() => remove(index)}><Trash2 className="h-4 w-4" /></Button>
                                         </div>
                                         <CardContent className="p-4 pt-4">
                                             <div className="grid grid-cols-12 gap-4">
                                                 {/* Main Column Info */}
                                                 <div className="col-span-12 md:col-span-4 space-y-3 border-r pr-4">
-                                                    <h4 className="font-bold text-sm text-slate-500 mb-2">Column Data</h4>
+                                                    <h4 className="font-bold text-sm text-muted-foreground mb-2">Column Data</h4>
                                                     <FormField control={form.control} name={`tableColumns.${index}.header`} render={({ field }) => (
                                                         <FormItem><FormLabel>Header Text</FormLabel><Input {...field} /></FormItem>
                                                     )} />
@@ -363,7 +363,7 @@ function ExportExactPDFPageContent() {
                                                         </TabsList>
                                                         
                                                         {/* HEADER STYLING PANEL */}
-                                                        <TabsContent value="header" className="space-y-3 p-2 bg-white rounded border mt-2">
+                                                        <TabsContent value="header" className="space-y-3 p-2 bg-background/50 rounded border mt-2">
                                                             <div className="flex flex-wrap gap-4 items-end">
                                                                 <FormField control={form.control} name={`tableColumns.${index}.headerStyle.bgColor`} render={({ field }) => (<ColorPicker label="Background" value={field.value || '#ffffff'} onChange={field.onChange} />)} />
                                                                 <FormField control={form.control} name={`tableColumns.${index}.headerStyle.textColor`} render={({ field }) => (<ColorPicker label="Text" value={field.value} onChange={field.onChange} />)} />
@@ -384,7 +384,7 @@ function ExportExactPDFPageContent() {
                                                         </TabsContent>
 
                                                         {/* BODY STYLING PANEL */}
-                                                        <TabsContent value="body" className="space-y-3 p-2 bg-white rounded border mt-2">
+                                                        <TabsContent value="body" className="space-y-3 p-2 bg-background/50 rounded border mt-2">
                                                             <div className="flex flex-wrap gap-4 items-end">
                                                                 <FormField control={form.control} name={`tableColumns.${index}.bodyStyle.bgColor`} render={({ field }) => (<ColorPicker label="Background" value={field.value || '#ffffff'} onChange={field.onChange} />)} />
                                                                 <FormField control={form.control} name={`tableColumns.${index}.bodyStyle.textColor`} render={({ field }) => (<ColorPicker label="Text" value={field.value} onChange={field.onChange} />)} />
@@ -433,7 +433,7 @@ function ExportExactPDFPageContent() {
             {pdfPreviewUrl && (
                 <div className="mt-8">
                     <Label className="text-xl font-bold mb-2 block">Document Preview</Label>
-                    <iframe src={pdfPreviewUrl} className="w-full h-[900px] border-4 border-slate-200 rounded-xl" />
+                    <iframe src={pdfPreviewUrl} className="w-full h-[900px] border-4 border-border rounded-xl" />
                 </div>
             )}
         </div>
