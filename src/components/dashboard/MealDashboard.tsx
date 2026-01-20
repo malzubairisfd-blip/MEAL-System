@@ -22,7 +22,8 @@ export function MealDashboard() {
       try {
         const res = await fetch('/api/projects');
         if (!res.ok) {
-          console.error('Failed to fetch project data');
+          // Silently fail, dashboard will show empty state.
+          // The developer can see the failed network request in the browser dev tools.
           return;
         }
         const projects: Project[] = await res.json();
@@ -51,7 +52,7 @@ export function MealDashboard() {
         setChartData(processedData);
 
       } catch (error) {
-        console.error(error);
+        console.warn("Failed to process project data for chart:", error);
       } finally {
         setLoading(false);
       }
