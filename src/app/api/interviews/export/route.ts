@@ -107,7 +107,7 @@ function drawPageFrame(
 
   // --- TITLE SECTION ---
   const tts = settings.titleStyle || {};
-  const titleY = 15;
+  const titleY = 10;
   const titleH = Number(tts.height) || 10;
   
   if (tts.bgColor) {
@@ -123,7 +123,7 @@ function drawPageFrame(
 
   // --- SFD LOGO (Manual Vector Drawing) ---
   const logoX = 15;
-  const logoY = 10;
+  const logoY = 8;
   doc.setFillColor(40, 60, 80); 
   doc.rect(logoX, logoY, 6, 15, "F");
   
@@ -140,13 +140,17 @@ function drawPageFrame(
   doc.text("الصندوق", logoX + 8, logoY + 4);
   doc.text("الاجتماعي", logoX + 8, logoY + 9);
   doc.text("للتنمية", logoX + 8, logoY + 14);
+  
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7);
+  doc.text("Social Fund for Development", logoX, logoY + 17);
 
   // --- HEADER INFO BOXES ---
   const ibs = settings.infoBoxStyle || {};
-  drawInfoBox(doc, "اسم المشروع", project.projectName || "غير محدد", pageW - 10, 46, ibs);
-  drawInfoBox(doc, "اسم القاعة", hall.hallName || "غير محدد", 90, 46, ibs);
-  drawInfoBox(doc, "رقم المشروع", toArabicDigits(project.projectId), pageW - 10, 36, ibs);
-  drawInfoBox(doc, "رقم القاعة", toArabicDigits(hall.hallNo), 90, 36, ibs);
+  drawInfoBox(doc, "اسم المشروع", project.projectName || "غير محدد", pageW - 10, 38, ibs);
+  drawInfoBox(doc, "اسم القاعة", hall.hallName || "غير محدد", 90, 38, ibs);
+  drawInfoBox(doc, "رقم المشروع", toArabicDigits(project.projectId), pageW - 10, 28, ibs);
+  drawInfoBox(doc, "رقم القاعة", toArabicDigits(hall.hallNo), 90, 28, ibs);
 
 
   // --- FOOTER SECTION ---
