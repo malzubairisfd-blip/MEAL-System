@@ -111,12 +111,10 @@ const PdfSettingsSchema = z.object({
     pageOrientation: z.enum(['portrait', 'landscape']),
     headerHeight: z.coerce.number(),
     borderColor: z.string(),
+    borderWidth: z.coerce.number().default(0.5),
     title: z.string().min(1),
     titleStyle: CellStyleSchema.extend({ height: z.coerce.number().optional() }),
-    projectNumberInfoBoxStyle: InfoBoxStyleSchema,
-    hallNumberInfoBoxStyle: InfoBoxStyleSchema,
-    projectNameInfoBoxStyle: InfoBoxStyleSchema,
-    hallNameInfoBoxStyle: InfoBoxStyleSchema,
+    infoBoxStyle: InfoBoxStyleSchema,
     tableColumns: z.array(TableColumnSchema),
     rowHeight: z.coerce.number().default(8),
     footerStyle: CellStyleSchema,
@@ -124,7 +122,7 @@ const PdfSettingsSchema = z.object({
 
 type PdfSettings = z.infer<typeof PdfSettingsSchema>;
 
-const InfoBoxStyleControls = ({ namePrefix, control }: { namePrefix: 'projectNumberInfoBoxStyle' | 'hallNumberInfoBoxStyle' | 'projectNameInfoBoxStyle' | 'hallNameInfoBoxStyle', control: any }) => (
+const InfoBoxStyleControls = ({ namePrefix, control }: { namePrefix: 'infoBoxStyle', control: any }) => (
     <div className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <FormField control={control} name={`${namePrefix}.width`} render={({ field }) => (<FormItem><FormLabel>Box Width (mm)</FormLabel><Input type="number" {...field} /></FormItem>)} />
@@ -164,15 +162,13 @@ function ExportExactPDFPageContent() {
             pageOrientation: 'portrait',
             headerHeight: 60,
             borderColor: "#000000",
+            borderWidth: 0.5,
             title: "كشف درجات المتقدمات للمقابلة",
             titleStyle: {
                 fontSize: 14, textColor: "#FFFFFF", bgColor: "#2F3C50",
                 bold: true, italic: false, height: 10, halign: 'center', valign: 'middle'
             },
-            projectNumberInfoBoxStyle: { ...defaultInfoBoxStyle },
-            hallNumberInfoBoxStyle: { ...defaultInfoBoxStyle, width: 30 },
-            projectNameInfoBoxStyle: { ...defaultInfoBoxStyle },
-            hallNameInfoBoxStyle: { ...defaultInfoBoxStyle, width: 30 },
+            infoBoxStyle: { ...defaultInfoBoxStyle },
             rowHeight: 10,
             tableColumns: [
                 {
@@ -340,6 +336,9 @@ function ExportExactPDFPageContent() {
                                     <FormField control={form.control} name="headerHeight" render={({ field }) => (
                                         <FormItem><FormLabel>Top Margin (mm)</FormLabel><Input type="number" {...field} /></FormItem>
                                     )} />
+                                    <FormField control={form.control} name="borderWidth" render={({ field }) => (
+                                        <FormItem><FormLabel>Border Width (mm)</FormLabel><Input type="number" step="0.1" {...field} /></FormItem>
+                                    )} />
                                      <FormField control={form.control} name="borderColor" render={({ field }) => (
                                         <FormItem><FormLabel>Page Border Color</FormLabel>
                                         <ColorPicker value={field.value} onChange={field.onChange} />
@@ -365,18 +364,7 @@ function ExportExactPDFPageContent() {
                          <AccordionItem value="info-box">
                             <AccordionTrigger>4. Header Info Boxes</AccordionTrigger>
                             <AccordionContent className="p-4 space-y-4 bg-slate-900/50">
-                                <Tabs defaultValue="projectNumber">
-                                    <TabsList>
-                                        <TabsTrigger value="projectNumber">Project #</TabsTrigger>
-                                        <TabsTrigger value="hallNumber">Hall #</TabsTrigger>
-                                        <TabsTrigger value="projectName">Project Name</TabsTrigger>
-                                        <TabsTrigger value="hallName">Hall Name</TabsTrigger>
-                                    </TabsList>
-                                    <TabsContent value="projectNumber" className="p-2 border rounded-md mt-2"><InfoBoxStyleControls namePrefix="projectNumberInfoBoxStyle" control={form.control} /></TabsContent>
-                                    <TabsContent value="hallNumber" className="p-2 border rounded-md mt-2"><InfoBoxStyleControls namePrefix="hallNumberInfoBoxStyle" control={form.control} /></TabsContent>
-                                    <TabsContent value="projectName" className="p-2 border rounded-md mt-2"><InfoBoxStyleControls namePrefix="projectNameInfoBoxStyle" control={form.control} /></TabsContent>
-                                    <TabsContent value="hallName" className="p-2 border rounded-md mt-2"><InfoBoxStyleControls namePrefix="hallNameInfoBoxStyle" control={form.control} /></TabsContent>
-                                </Tabs>
+                               <InfoBoxStyleControls namePrefix="infoBoxStyle" control={form.control} />
                             </AccordionContent>
                         </AccordionItem>
 

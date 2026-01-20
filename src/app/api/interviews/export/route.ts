@@ -44,15 +44,16 @@ function drawInfoBox(
   style: any
 ): number {
   const padding = 2;
+  const trimmedValue = (value || "").trim();
 
   applyTextStyle(doc, style);
   
   const labelW = doc.getTextWidth(label) + padding * 2;
   const valueW = style.width || 60;
   
-  const valueLines = doc.splitTextToSize((value || "").trim(), valueW - (padding * 2));
+  const valueLines = doc.splitTextToSize(trimmedValue, valueW - (padding * 2));
   const textDimensions = doc.getTextDimensions(valueLines);
-  const h = Math.max(style.height || 8, textDimensions.h + padding * 2); // Use padding * 2 for top/bottom
+  const h = Math.max(style.height || 8, textDimensions.h + padding * 2.5);
 
   // 1. Label Background
   if (style.labelBgColor) {
@@ -73,7 +74,7 @@ function drawInfoBox(
   doc.rect(xRight - labelW - valueW, y, valueW, h); // Value Border
   
   // 4. Text
-  const labelY = y + h / 2; // Center label
+  const labelY = y + h / 2;
   doc.text(label, xRight - padding, labelY, { align: "right", baseline: "middle" });
   
   // Draw value text line by line for vertical centering
@@ -96,36 +97,43 @@ function drawPageFrame(
 ) {
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
-  const boxMargin = 5;
-
+  
   // --- PAGE BORDER ---
   if (settings.borderColor) {
-      doc.setLineWidth(0.5);
+      doc.setLineWidth(settings.borderWidth || 0.5);
       doc.setDrawColor(settings.borderColor);
       doc.rect(5, 5, pageW - 10, pageH - 10);
   }
 
+  // --- CUSTOM HEADER TEXT ---
+  doc.setFont("Amiri", "bold");
+  doc.setFontSize(10);
+  doc.setTextColor("#000000");
+  doc.text("رئاسة الوزراء", pageW - 10, 10, { align: "right" });
+  doc.setFont("Amiri", "normal");
+  doc.text("الصندوق الاجتماعي للتنمية فرع (صنعاء، الامانة، المحويت، الجوف، مارب)", pageW - 10, 15, { align: "right" });
+
+
   // --- TITLE SECTION ---
   const tts = settings.titleStyle || {};
+  const titleY = 22; // Adjusted Y position
   const titleH = Number(tts.height) || 10;
   
-  // Title Background
   if (tts.bgColor) {
       doc.setFillColor(tts.bgColor);
-      doc.rect(45, 10, pageW - 90, titleH, "F");
+      doc.rect(45, titleY, pageW - 90, titleH, "F");
   }
   
-  // Title Text
   applyTextStyle(doc, tts);
-  doc.text(settings.title, pageW / 2, 10 + (titleH / 2) + 1.5, { 
+  doc.text(settings.title, pageW / 2, titleY + (titleH / 2) + 1.5, { 
       align: "center", 
       baseline: "middle" 
   });
 
   // --- SFD LOGO (Manual Vector Drawing) ---
   const logoX = 15;
-  const logoY = 8;
-  doc.setFillColor(40, 60, 80); // SFD Blue
+  const logoY = 12; // Adjusted Y position
+  doc.setFillColor(40, 60, 80); 
   doc.rect(logoX, logoY, 6, 15, "F");
   
   doc.setTextColor(255, 255, 255);
@@ -143,12 +151,13 @@ function drawPageFrame(
   doc.text("للتنمية", logoX + 8, logoY + 14);
 
   // --- HEADER INFO BOXES ---
+  const ibs = settings.infoBoxStyle || {};
   // Row 1
-  const projectNameBoxWidth = drawInfoBox(doc, "اسم المشروع", project.projectName || "غير محدد", pageW - 10, 26, settings.projectNameInfoBoxStyle);
-  drawInfoBox(doc, "رقم المشروع", toArabicDigits(project.projectId), pageW - 10 - projectNameBoxWidth - boxMargin, 26, settings.projectNumberInfoBoxStyle);
+  drawInfoBox(doc, "رقم المشروع", toArabicDigits(project.projectId), pageW - 10, 36, ibs);
+  drawInfoBox(doc, "رقم القاعة", toArabicDigits(hall.hallNo), 90, 36, ibs);
   // Row 2
-  const hallNameBoxWidth = drawInfoBox(doc, "اسم القاعة", hall.hallName || "غير محدد", pageW - 10, 36, settings.hallNameInfoBoxStyle);
-  drawInfoBox(doc, "رقم القاعة", toArabicDigits(hall.hallNo), pageW - 10 - hallNameBoxWidth - boxMargin, 36, settings.hallNumberInfoBoxStyle);
+  drawInfoBox(doc, "اسم المشروع", project.projectName || "غير محدد", pageW - 10, 46, ibs);
+  drawInfoBox(doc, "اسم القاعة", hall.hallName || "غير محدد", 90, 46, ibs);
 
 
   // --- FOOTER SECTION ---
