@@ -139,11 +139,13 @@ function drawPageFrame(
   doc.text("الصندوق", logoX + 8, logoY + 4);
   doc.text("الاجتماعي", logoX + 8, logoY + 9);
   doc.text("للتنمية", logoX + 8, logoY + 14);
+  doc.setFontSize(6);
+    doc.text("Social Fund for Development", logoX, logoY + 17);
 
   // --- HEADER INFO BOXES ---
   const ibs = settings.infoBoxStyle || {};
   // Row 1
-  drawInfoBox(doc, "رقم المشروع", toArabicDigits(project.projectId), pageW - 10, 26, ibs);
+  drawInfoBox(doc, "رقم المشروع", toArabicDigits(project.projectId), pageW - 10, 36, ibs);
   drawInfoBox(doc, "رقم القاعة", toArabicDigits(hall.hallNo), 90, 26, ibs);
   // Row 2
   drawInfoBox(doc, "اسم المشروع", project.projectName || "غير محدد", pageW - 10, 36, ibs);
@@ -339,6 +341,9 @@ export async function POST(req: Request) {
                 overflow: 'linebreak'
             },
             
+            // FIX: Added top: 60 to margin so table doesn't overlap header on new pages
+            margin: { top: 60, left: startX, bottom: 45 },
+
             // Column Specifics
             columnStyles: columnStylesMap,
 

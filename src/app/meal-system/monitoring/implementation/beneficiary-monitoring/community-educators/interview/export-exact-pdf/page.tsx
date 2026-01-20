@@ -238,7 +238,7 @@ function ExportExactPDFPageContent() {
     };
 
     return (
-        <div className="container mx-auto py-6 space-y-6">
+        <div className="container mx-auto py-6 space-y-6 bg-black">
             <div className="flex justify-between items-center">
                 <h1 className="text-3xl font-bold">Advanced PDF Designer</h1>
                 <Button variant="outline" onClick={() => router.back()}><ArrowLeft className="mr-2 h-4 w-4" /> Back</Button>
@@ -321,7 +321,7 @@ function ExportExactPDFPageContent() {
                         {/* 4. TABLE COLUMNS (DETAILED) */}
                         <AccordionItem value="table">
                             <AccordionTrigger>4. Table Columns & Styling</AccordionTrigger>
-                            <AccordionContent className="p-4 space-y-4 bg-slate-50">
+                            <AccordionContent className="p-4 space-y-4">
                                 
                                 <div className="flex items-center gap-4 mb-4">
                                     <Label>Global Row Height:</Label>
@@ -443,4 +443,3 @@ function ExportExactPDFPageContent() {
 export default function ExportExactPDFPage() {
     return <Suspense fallback={<Loader2 className="h-8 w-8 animate-spin" />}><ExportExactPDFPageContent /></Suspense>
 }
-
