@@ -214,7 +214,7 @@ function drawPageFrame(
 
 export async function POST(req: Request) {
   try {
-    const { projectId, settings } = await req.json();
+    const { projectId, settings, type } = await req.json();
 
     if (!projectId) {
       return NextResponse.json({ error: "Missing Project ID" }, { status: 400 });
@@ -231,16 +231,27 @@ export async function POST(req: Request) {
         projectName: projectRow?.project_name || "Unknown Project"
     };
 
-    // Fetch Applicants (Grouped later)
-    // We select * to allow dynamic column mapping based on settings
-    const applicants = db.prepare(
-        'SELECT * FROM educators WHERE project_id = ? AND interview_hall_no IS NOT NULL ORDER BY interview_hall_no, total_score DESC'
-    ).all(projectId) as any[];
+    let applicants;
+    let hallNoKey: string, hallNameKey: string;
+
+    if (type === 'training') {
+        applicants = db.prepare(
+            'SELECT * FROM educators WHERE project_id = ? AND training_qualification = ? AND training_hall_no IS NOT NULL ORDER BY training_hall_no, grand_total_score DESC'
+        ).all(projectId, 'مؤهلة للتدريب') as any[];
+        hallNoKey = 'training_hall_no';
+        hallNameKey = 'training_hall_name';
+    } else { // Default to interview
+        applicants = db.prepare(
+            'SELECT * FROM educators WHERE project_id = ? AND interview_hall_no IS NOT NULL ORDER BY interview_hall_no, total_score DESC'
+        ).all(projectId) as any[];
+        hallNoKey = 'interview_hall_no';
+        hallNameKey = 'interview_hall_name';
+    }
 
     db.close();
 
     if (applicants.length === 0) {
-        return NextResponse.json({ error: "No applicants found for this project." }, { status: 404 });
+        return NextResponse.json({ error: "No applicants found for this project and statement type." }, { status: 404 });
     }
 
     // 2. PDF INITIALIZATION
@@ -271,11 +282,11 @@ export async function POST(req: Request) {
     // 4. GROUPING DATA (By Hall)
     const groups: Record<string, any> = {};
     applicants.forEach(app => {
-        const id = app.interview_hall_no || "Unassigned";
+        const id = app[hallNoKey] || "Unassigned";
         if (!groups[id]) {
             groups[id] = { 
                 hallNo: id, 
-                hallName: app.interview_hall_name, 
+                hallName: app[hallNameKey], 
                 items: [] 
             };
         }
@@ -348,7 +359,7 @@ export async function POST(req: Request) {
         const startX = pageW - tableWidth - 10; 
 
         autoTable(doc, {
-            rowPageBreak: "avoid", // ⭐⭐⭐ THIS FIXES THE ISSUE ⭐⭐⭐
+            rowPageBreak: "avoid",
             
             // Header configuration
             head: [headRow],

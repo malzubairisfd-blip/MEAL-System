@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useEffect, useState, Suspense, useMemo } from 'react';
@@ -20,6 +19,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 // --- REUSABLE COLOR PICKER COMPONENT ---
 const globalColorHistory = new Set<string>(["#000000", "#FFFFFF", "#2F80B5", "#F3F4F6"]);
@@ -155,6 +155,14 @@ function ExportExactPDFPageContent() {
     const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
     const [savedTemplates, setSavedTemplates] = useState<string[]>([]);
     const [selectedTemplate, setSelectedTemplate] = useState<string>('');
+    const [exportType, setExportType] = useState<'interview' | 'training'>('interview');
+
+    useEffect(() => {
+        const typeFromUrl = searchParams.get('type') as 'interview' | 'training';
+        if (typeFromUrl) {
+            setExportType(typeFromUrl);
+        }
+    }, [searchParams]);
 
     useEffect(() => {
         const templates: string[] = [];
@@ -325,7 +333,11 @@ function ExportExactPDFPageContent() {
             const response = await fetch('/api/interviews/export', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ projectId: selectedProjectId, settings: form.getValues() })
+                body: JSON.stringify({ 
+                    projectId: selectedProjectId, 
+                    settings: form.getValues(),
+                    type: exportType 
+                })
             });
 
             if (!response.ok) {
@@ -361,27 +373,48 @@ function ExportExactPDFPageContent() {
             <Card>
                 <CardHeader className="pb-3"><CardTitle>1. Data Source</CardTitle></CardHeader>
                 <CardContent>
-                    <div className="flex gap-4 items-end">
-                        <div className="grid w-full max-w-sm items-center gap-1.5">
-                            <Label>Select Project</Label>
-                            <Select onValueChange={setSelectedProjectId} value={selectedProjectId}>
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select a project..." />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {projects.map(p => <SelectItem key={p.projectId} value={p.projectId}>{p.projectName}</SelectItem>)}
-                                </SelectContent>
-                            </Select>
-                        </div>
+                    <div className="grid w-full max-w-sm items-center gap-1.5">
+                        <Label>Select Project</Label>
+                        <Select onValueChange={setSelectedProjectId} value={selectedProjectId}>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Select a project..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {projects.map(p => <SelectItem key={p.projectId} value={p.projectId}>{p.projectName}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
                     </div>
                 </CardContent>
             </Card>
 
             <Form {...form}>
                 <form className="space-y-6">
+                     <Card>
+                        <CardHeader className="pb-3"><CardTitle>2. Statement Type</CardTitle></CardHeader>
+                        <CardContent>
+                            <RadioGroup
+                                value={exportType}
+                                onValueChange={(value) => setExportType(value as 'interview' | 'training')}
+                                className="flex gap-4 pt-2"
+                            >
+                                <FormItem className="flex items-center space-x-2">
+                                    <FormControl>
+                                        <RadioGroupItem value="interview" id="r1" />
+                                    </FormControl>
+                                    <Label htmlFor="r1">Interview Statements</Label>
+                                </FormItem>
+                                <FormItem className="flex items-center space-x-2">
+                                    <FormControl>
+                                        <RadioGroupItem value="training" id="r2" />
+                                    </FormControl>
+                                    <Label htmlFor="r2">Training Statements</Label>
+                                </FormItem>
+                            </RadioGroup>
+                        </CardContent>
+                    </Card>
 
                     <Card>
-                        <CardHeader className="pb-3"><CardTitle>2. Template Manager</CardTitle></CardHeader>
+                        <CardHeader className="pb-3"><CardTitle>3. Template Manager</CardTitle></CardHeader>
                          <CardContent className="space-y-4">
                             <FormField control={form.control} name="templateName" render={({ field }) => (
                                 <FormItem>
@@ -414,7 +447,7 @@ function ExportExactPDFPageContent() {
 
                     <Accordion type="multiple" defaultValue={['page', 'info-box', 'footer', 'table']} className="w-full">
                         <AccordionItem value="page">
-                            <AccordionTrigger>3. Page, Title & Border Settings</AccordionTrigger>
+                            <AccordionTrigger>4. Page, Title & Border Settings</AccordionTrigger>
                             <AccordionContent className="p-4 space-y-4 bg-slate-900/50">
                                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                                     <FormField control={form.control} name="pageSize" render={({ field }) => (
@@ -452,14 +485,14 @@ function ExportExactPDFPageContent() {
                         </AccordionItem>
                         
                          <AccordionItem value="info-box">
-                            <AccordionTrigger>4. Header Info Boxes</AccordionTrigger>
+                            <AccordionTrigger>5. Header Info Boxes</AccordionTrigger>
                             <AccordionContent className="p-4 space-y-4 bg-slate-900/50">
                                <InfoBoxStyleControls namePrefix="infoBoxStyle" control={form.control} />
                             </AccordionContent>
                         </AccordionItem>
 
                          <AccordionItem value="footer">
-                            <AccordionTrigger>5. Footer Settings</AccordionTrigger>
+                            <AccordionTrigger>6. Footer Settings</AccordionTrigger>
                             <AccordionContent className="p-4 space-y-4 bg-slate-900/50">
                                 <div className="flex gap-4 items-center">
                                     <FormField control={form.control} name="footerStyle.textColor" render={({ field }) => (<FormItem><ColorPicker label="Text" value={field.value} onChange={field.onChange} /></FormItem>)} />
@@ -476,7 +509,7 @@ function ExportExactPDFPageContent() {
                         </AccordionItem>
 
                         <AccordionItem value="table">
-                            <AccordionTrigger>6. Table Columns & Styling</AccordionTrigger>
+                            <AccordionTrigger>7. Table Columns & Styling</AccordionTrigger>
                              <AccordionContent className="p-4 space-y-4 bg-slate-900/50">
 
                                 <Card className="mb-4 bg-slate-800 border-slate-700">
