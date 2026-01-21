@@ -82,14 +82,13 @@ self.onmessage = async (event) => {
                 edu.local_community_marks = Number(edu.local_community_marks) || 0;
                 
                 edu.interview_total_marks = edu.sfd_marks + edu.health_marks + edu.local_community_marks;
+                edu.grand_total_score = edu.interview_total_marks + (Number(edu.total_score) || 0);
+                edu.training_qualification = undefined;
 
                 if (edu.interview_total_marks < 15) {
                     edu.grand_total_score = 0;
                     edu.training_qualification = 'غير مؤهلة للتدريب';
                     edu.disqualified_reasons = 'رسوب في المقابلة';
-                } else {
-                    edu.grand_total_score = edu.interview_total_marks + (Number(edu.total_score) || 0);
-                    edu.training_qualification = 'مؤهلة للتدريب';
                 }
             } else {
                 // If absent, reset scores
