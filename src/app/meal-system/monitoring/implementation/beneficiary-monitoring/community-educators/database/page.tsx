@@ -4,6 +4,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useForm } from "react-hook-form";
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -19,7 +20,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Label } from '@/components/ui/label';
 
 import { useToast } from "@/hooks/use-toast";
@@ -357,12 +358,11 @@ export default function EducatorDatabasePage() {
     
     // Global search
     if (globalSearchTerm) {
-        const lowercasedTerm = globalSearchTerm.toLowerCase();
-        filtered = filtered.filter(record =>
-          Object.values(record).some(value =>
-            String(value).toLowerCase().includes(lowercasedTerm)
-          )
-        );
+      const lowercasedTerm = globalSearchTerm.toLowerCase();
+      filtered = filtered.filter(record =>
+        String(record.applicant_id).toLowerCase().includes(lowercasedTerm) ||
+        String(record.applicant_name).toLowerCase().includes(lowercasedTerm)
+      );
     }
     
     // Column filters
@@ -501,9 +501,9 @@ export default function EducatorDatabasePage() {
             Displaying {paginatedRecords.length} of {filteredRecords.length} records.
           </CardDescription>
           <div className="relative pt-4">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 text-muted-foreground" />
+            <Search className="absolute left-3 top-1/2 h-4 w-4 text-muted-foreground -translate-y-1/2" />
             <Input
-              placeholder="Search all columns..."
+              placeholder="Search by applicant ID or name..."
               value={globalSearchTerm}
               onChange={(e) => {
                 setGlobalSearchTerm(e.target.value);
