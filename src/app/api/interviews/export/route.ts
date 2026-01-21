@@ -32,95 +32,72 @@ function applyTextStyle(doc: jsPDF, styleObj: any) {
   doc.setTextColor(styleObj?.textColor || "#000000");
 }
 
-function autoWrapArabic(
-  doc: jsPDF,
-  text: string,
-  boxWidth: number,
-  maxLines = 2
-): string[] {
-  const padding = 6;
-
-  // Start with full width
-  let width = boxWidth - padding;
-
-  // Try expanding virtual width to force fewer breaks
-  for (let extra = 0; extra <= boxWidth; extra += 4) {
-    const lines = doc.splitTextToSize(text, width + extra);
-
-    if (lines.length <= maxLines) {
-      return lines;
-    }
-  }
-
-  // Absolute fallback: force into maxLines by joining
-  const forced = doc.splitTextToSize(text, boxWidth * 2);
-  if (forced.length > maxLines) {
-    return [
-      forced.slice(0, Math.ceil(forced.length / 2)).join(" "),
-      forced.slice(Math.ceil(forced.length / 2)).join(" ")
-    ];
-  }
-
-  return forced;
-}
-
 /**
- * Draws a labelled box (e.g., "Project Name: X") used in the header
+ * 🚀 MINI-TABLE GENERATOR (REPLACES SMART BOX)
+ * Creates an independent table for a single field to match the Excel/Professional look.
  */
-function drawInfoBox(
+function drawInfoTable(
   doc: jsPDF,
   label: string,
   value: string,
+  yStart: number,
   xRight: number,
-  y: number,
-  style: any
+  config: { labelW: number; valueW: number; style: any }
 ): number {
-  const padding = 2;
-  const trimmedValue = (value || "").trim();
+  const { labelW, valueW, style } = config;
+  const totalWidth = labelW + valueW;
+  const startX = xRight - totalWidth;
 
-  // Apply general style first (bold, italic, font size)
-  applyTextStyle(doc, { ...style, textColor: style.textColor || '#000000' });
-  
-  const labelW = doc.getTextWidth(label) + padding * 2;
-  const valueW = style.width || 60;
-  
-  const valueLines = doc.splitTextToSize(trimmedValue, valueW - (padding * 2));
-  const textDimensions = doc.getTextDimensions(valueLines);
-  const h = Math.max(style.height || 8, textDimensions.h + padding * 2.5);
+  autoTable(doc, {
+    startY: yStart,
+    margin: { left: startX },
+    tableWidth: totalWidth,
+    theme: 'grid',
+    styles: {
+      font: 'Amiri',
+      fontSize: style.fontSize || 10,
+      cellPadding: 1.5,
+      lineColor: [0, 0, 0],
+      lineWidth: 0.1,
+      minCellHeight: style.height || 8,
+      valign: 'middle',
+      halign: 'right',
+      overflow: 'linebreak',
+    },
+    head: [],
+    body: [
+      [
+        { 
+          content: value || " ", 
+          styles: { 
+            cellWidth: valueW, 
+            fillColor: style.valueBgColor || [255, 255, 255],
+            textColor: style.textColor || [0, 0, 0]
+          } 
+        },
+        { 
+          content: label, 
+          styles: { 
+            cellWidth: labelW, 
+            fillColor: style.labelBgColor || [240, 240, 240], 
+            fontStyle: 'bold',
+            halign: 'center',
+            textColor: style.labelTextColor || [0, 0, 0]
+          } 
+        }
+      ]
+    ],
+    // Tightening line height for professional Arabic appearance
+    didParseCell: (data) => {
+        if (data.section === 'body') {
+            // This replicates the 0.85 line-height factor manually
+            data.cell.styles.cellPadding = { top: 1.2, bottom: 1.2, left: 2, right: 2 };
+        }
+    }
+  });
 
-  // 1. Label Background
-  if (style.labelBgColor) {
-    doc.setFillColor(style.labelBgColor);
-    doc.rect(xRight - labelW, y, labelW, h, "F");
-  }
-  
-  // 2. Value Background
-  if (style.valueBgColor) {
-    doc.setFillColor(style.valueBgColor);
-    doc.rect(xRight - labelW - valueW, y, valueW, h, "F");
-  }
-
-  // 3. Borders
-  doc.setLineWidth(0.1);
-  doc.setDrawColor(0);
-  doc.rect(xRight - labelW, y, labelW, h); // Label Border
-  doc.rect(xRight - labelW - valueW, y, valueW, h); // Value Border
-  
-  // 4. Text
-  const labelY = y + h / 2;
-  
-  // Set label text color before drawing
-  doc.setTextColor(style.labelTextColor || style.textColor || '#000000');
-  doc.text(label, xRight - padding, labelY, { align: "right", baseline: "middle" });
-  
-  // Set value text color before drawing
-  doc.setTextColor(style.textColor || '#000000');
-  
-  // Draw value text line by line for vertical centering
-  const valueYStart = y + (h - textDimensions.h) / 2;
-  doc.text(valueLines, xRight - labelW - padding, valueYStart, { align: "right", baseline: "top" });
-
-  return labelW + valueW;
+  // Return the Y position where this mini-table ended
+  return (doc as any).lastAutoTable.finalY;
 }
 
 
@@ -202,28 +179,61 @@ function drawPageFrame(
 
   // --- HEADER INFO BOXES ---
   const ibs = settings.infoBoxStyle || {};
-  drawInfoBox(doc, "رقم المشروع", toArabicDigits(project.projectId), pageW - 10, 28, ibs);
-  drawInfoBox(doc, "رقم القاعة", toArabicDigits(hall.hallNo), 90, 28, ibs);
-  drawInfoBox(doc, "اسم المشروع", project.projectName || "غير محدد", pageW - 10, 38, ibs);
-  drawInfoBox(doc, "اسم القاعة", hall.hallName || "غير محدد", 90, 38, ibs);
+  
+  let currentY = 28; // Starting Y position for the first table
 
-  // --- TRAINING-SPECIFIC INFO BOXES ---
+  // --- ROW 1: Project ID & Hall Number ---
+  const yAfterRow1 = drawInfoTable(doc, "رقم المشروع", toArabicDigits(project.projectId), currentY, pageW - 10, {
+    labelW: 25,
+    valueW: 45,
+    style: ibs
+  });
+
+  drawInfoTable(doc, "رقم القاعة", toArabicDigits(hall.hallNo), currentY, 85, {
+    labelW: 25,
+    valueW: 45,
+    style: ibs
+  });
+
+  currentY = yAfterRow1 + 2; // "Leave a little space" (2mm gap)
+
+  // --- ROW 2: Project Name & Hall Name ---
+  const yAfterRow2 = drawInfoTable(doc, "اسم المشروع", project.projectName, currentY, pageW - 10, {
+    labelW: 25,
+    valueW: 65,
+    style: ibs
+  });
+
+  drawInfoTable(doc, "اسم القاعة", hall.hallName, currentY, 85, {
+    labelW: 25,
+    valueW: 45,
+    style: ibs
+  });
+  
+  currentY = yAfterRow2 + 2;
+
+  // --- ROW 3: TRAINING-SPECIFIC INFO ---
   if (type === 'training') {
-    const yPos = 38 + (ibs.height || 8);
-      if(settings.trainingCourseName) {
-        const courseStyle = { ...ibs, ...(settings.trainingInfoStyle || {}) };
-        drawInfoBox(doc, "اسم الدورة التدريبية", settings.trainingCourseName, pageW - 10, yPos, courseStyle);
-      }
+    if(settings.trainingCourseName) {
+      const courseStyle = { ...ibs, ...(settings.trainingInfoStyle || {}) };
+      currentY = drawInfoTable(doc, "اسم الدورة التدريبية", settings.trainingCourseName, currentY, pageW - 10, {
+        labelW: 25,
+        valueW: 165,
+        style: courseStyle
+      }) + 2;
+    }
       
-      const dateParts = [];
-      if (settings.showTrainingDay && settings.trainingDay) dateParts.push(settings.trainingDay);
-      if (settings.showTrainingMonth && settings.trainingMonth) dateParts.push(settings.trainingMonth);
-      if (settings.showTrainingYear && settings.trainingYear) dateParts.push(settings.trainingYear);
-      const trainingDate = dateParts.filter(Boolean).join('/');
+    const dateParts = [];
+    if (settings.showTrainingDay && settings.trainingDay) dateParts.push(settings.trainingDay);
+    if (settings.showTrainingMonth && settings.trainingMonth) dateParts.push(settings.trainingMonth);
+    if (settings.showTrainingYear && settings.trainingYear) dateParts.push(settings.trainingYear);
+    const trainingDate = dateParts.filter(Boolean).join('/');
       
-      if (trainingDate) {
-        drawInfoBox(doc, "تاريخ الدورة", toArabicDigits(trainingDate), 90, yPos, ibs);
-      }
+    if (trainingDate) {
+       drawInfoTable(doc, "تاريخ الدورة", toArabicDigits(trainingDate), yAfterRow2 + 2, 85, {
+            labelW: 25, valueW: 45, style: ibs
+        });
+    }
   }
 
 
