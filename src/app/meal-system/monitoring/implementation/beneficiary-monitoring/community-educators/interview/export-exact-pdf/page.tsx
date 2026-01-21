@@ -106,6 +106,12 @@ const InfoBoxStyleSchema = CellStyleSchema.extend({
     height: z.coerce.number()
 });
 
+const TrainingInfoStyleSchema = z.object({
+    width: z.coerce.number().default(60),
+    height: z.coerce.number().default(8)
+});
+
+
 const PdfSettingsSchema = z.object({
     templateName: z.string().min(1),
     pageSize: z.enum(['a4', 'letter', 'legal']),
@@ -127,6 +133,11 @@ const PdfSettingsSchema = z.object({
       showPositionLine: z.boolean().default(true),
       showPageNumber: z.boolean().default(true),
     }),
+    trainingCourseName: z.string().optional(),
+    trainingDay: z.string().optional(),
+    trainingMonth: z.string().optional(),
+    trainingYear: z.string().optional(),
+    trainingInfoStyle: TrainingInfoStyleSchema.optional(),
 });
 
 type PdfSettings = z.infer<typeof PdfSettingsSchema>;
@@ -229,7 +240,12 @@ function ExportExactPDFPageContent() {
                 showNameLine: true,
                 showPositionLine: true,
                 showPageNumber: true,
-            }
+            },
+            trainingCourseName: "دورة تدريبية للمثقفات المجتمعيات",
+            trainingDay: "",
+            trainingMonth: "",
+            trainingYear: "",
+            trainingInfoStyle: { width: 60, height: 8 },
         },
     });
 
@@ -423,6 +439,45 @@ function ExportExactPDFPageContent() {
                         </CardContent>
                     </Card>
 
+                    {exportType === 'training' && (
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Training Specific Information</CardTitle>
+                                <CardDescription>These details will appear on the training statement PDF.</CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <FormField control={form.control} name="trainingCourseName" render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>اسم الدورة التدريبية</FormLabel>
+                                        <Input {...field} />
+                                    </FormItem>
+                                )} />
+                                <div className="grid grid-cols-3 gap-4">
+                                    <FormField control={form.control} name="trainingDay" render={({ field }) => (
+                                        <FormItem><FormLabel>اليوم</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Day" /></SelectTrigger></FormControl><SelectContent>{Array.from({length: 31}, (_,i) => i+1).map(d => <SelectItem key={d} value={String(d).padStart(2,'0')}>{d}</SelectItem>)}</SelectContent></Select></FormItem>
+                                    )} />
+                                    <FormField control={form.control} name="trainingMonth" render={({ field }) => (
+                                        <FormItem><FormLabel>الشهر</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Month" /></SelectTrigger></FormControl><SelectContent>{Array.from({length: 12}, (_,i) => i+1).map(m => <SelectItem key={m} value={String(m).padStart(2,'0')}>{m}</SelectItem>)}</SelectContent></Select></FormItem>
+                                    )} />
+                                    <FormField control={form.control} name="trainingYear" render={({ field }) => (
+                                        <FormItem><FormLabel>السنه</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Year" /></SelectTrigger></FormControl><SelectContent>{Array.from({length: 10}, (_,i) => new Date().getFullYear() - 5 + i).map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}</SelectContent></Select></FormItem>
+                                    )} />
+                                </div>
+                                <div className="border-t pt-4">
+                                    <h4 className="font-semibold mb-2">Training Info Box Style</h4>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <FormField control={form.control} name="trainingInfoStyle.width" render={({ field }) => (
+                                            <FormItem><FormLabel>Box Width (mm)</FormLabel><Input type="number" {...field} /></FormItem>
+                                        )} />
+                                        <FormField control={form.control} name="trainingInfoStyle.height" render={({ field }) => (
+                                            <FormItem><FormLabel>Box Height (mm)</FormLabel><Input type="number" {...field} /></FormItem>
+                                        )} />
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
+
                     <Card>
                         <CardHeader className="pb-3"><CardTitle>3. Template Manager</CardTitle></CardHeader>
                          <CardContent className="space-y-4">
@@ -457,7 +512,7 @@ function ExportExactPDFPageContent() {
 
                     <Accordion type="multiple" defaultValue={['page', 'info-box', 'footer', 'table']} className="w-full">
                         <AccordionItem value="page">
-                            <AccordionTrigger>4. Page, Title & Border Settings</AccordionTrigger>
+                            <AccordionTrigger>4. Page, Title &amp; Border Settings</AccordionTrigger>
                             <AccordionContent className="p-4 space-y-4 bg-slate-900/50">
                                 <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                                     <FormField control={form.control} name="pageSize" render={({ field }) => (

@@ -100,7 +100,8 @@ function drawPageFrame(
   settings: any,
   project: any,
   hall: any,
-  pageNumber: number
+  pageNumber: number,
+  type: 'interview' | 'training'
 ) {
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
@@ -173,6 +174,20 @@ function drawPageFrame(
   drawInfoBox(doc, "رقم القاعة", toArabicDigits(hall.hallNo), 90, 28, ibs);
   drawInfoBox(doc, "اسم المشروع", project.projectName || "غير محدد", pageW - 10, 38, ibs);
   drawInfoBox(doc, "اسم القاعة", hall.hallName || "غير محدد", 90, 38, ibs);
+
+  // --- NEW: TRAINING-SPECIFIC INFO BOXES ---
+  if (type === 'training') {
+    const yPos = 38 + (ibs.height || 8);
+      if(settings.trainingCourseName) {
+        const courseStyle = { ...ibs, ...(settings.trainingInfoStyle || {}) };
+        drawInfoBox(doc, "اسم الدورة التدريبية", settings.trainingCourseName, pageW - 10, yPos, courseStyle);
+      }
+      
+      const trainingDate = [settings.trainingDay, settings.trainingMonth, settings.trainingYear].filter(Boolean).join('/');
+      if (trainingDate) {
+        drawInfoBox(doc, "تاريخ الدورة", toArabicDigits(trainingDate), 90, yPos, ibs);
+      }
+  }
 
 
   // --- FOOTER SECTION ---
@@ -393,7 +408,7 @@ export async function POST(req: Request) {
 
             // Frame & Decoration
             didDrawPage: (data) => {
-                drawPageFrame(doc, settings, project, group, data.pageNumber);
+                drawPageFrame(doc, settings, project, group, data.pageNumber, type);
             }
         });
     }
