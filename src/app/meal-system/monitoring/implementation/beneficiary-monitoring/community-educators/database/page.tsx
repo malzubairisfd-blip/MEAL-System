@@ -1,7 +1,8 @@
+
 // src/app/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/database/page.tsx
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { useToast } from "@/hooks/use-toast";
 import { exportEducatorsToExcel } from "@/lib/exportEducatorsToExcel";
@@ -46,6 +47,7 @@ import {
 } from "@/components/ui/command";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 
 interface ApplicantRecord {
