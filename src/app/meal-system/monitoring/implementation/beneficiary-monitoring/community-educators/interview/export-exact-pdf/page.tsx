@@ -135,8 +135,11 @@ const PdfSettingsSchema = z.object({
     }),
     trainingCourseName: z.string().optional(),
     trainingDay: z.string().optional(),
+    showTrainingDay: z.boolean().default(true),
     trainingMonth: z.string().optional(),
+    showTrainingMonth: z.boolean().default(true),
     trainingYear: z.string().optional(),
+    showTrainingYear: z.boolean().default(true),
     trainingInfoStyle: TrainingInfoStyleSchema.optional(),
 });
 
@@ -243,8 +246,11 @@ function ExportExactPDFPageContent() {
             },
             trainingCourseName: "دورة تدريبية للمثقفات المجتمعيات",
             trainingDay: "",
+            showTrainingDay: true,
             trainingMonth: "",
+            showTrainingMonth: true,
             trainingYear: "",
+            showTrainingYear: true,
             trainingInfoStyle: { width: 60, height: 8 },
         },
     });
@@ -452,17 +458,54 @@ function ExportExactPDFPageContent() {
                                         <Input {...field} />
                                     </FormItem>
                                 )} />
-                                <div className="grid grid-cols-3 gap-4">
-                                    <FormField control={form.control} name="trainingDay" render={({ field }) => (
-                                        <FormItem><FormLabel>اليوم</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Day" /></SelectTrigger></FormControl><SelectContent>{Array.from({length: 31}, (_,i) => i+1).map(d => <SelectItem key={d} value={String(d).padStart(2,'0')}>{d}</SelectItem>)}</SelectContent></Select></FormItem>
-                                    )} />
-                                    <FormField control={form.control} name="trainingMonth" render={({ field }) => (
-                                        <FormItem><FormLabel>الشهر</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Month" /></SelectTrigger></FormControl><SelectContent>{Array.from({length: 12}, (_,i) => i+1).map(m => <SelectItem key={m} value={String(m).padStart(2,'0')}>{m}</SelectItem>)}</SelectContent></Select></FormItem>
-                                    )} />
-                                    <FormField control={form.control} name="trainingYear" render={({ field }) => (
-                                        <FormItem><FormLabel>السنه</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Year" /></SelectTrigger></FormControl><SelectContent>{Array.from({length: 10}, (_,i) => new Date().getFullYear() - 5 + i).map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}</SelectContent></Select></FormItem>
-                                    )} />
+                                <div className="border-t pt-4">
+                                    <h4 className="font-semibold mb-2">تاريخ الدورة</h4>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        <FormField control={form.control} name="trainingDay" render={({ field }) => (
+                                            <FormItem>
+                                                <div className="flex items-center justify-between">
+                                                    <FormLabel>اليوم</FormLabel>
+                                                    <FormField control={form.control} name="showTrainingDay" render={({ field: switchField }) => (
+                                                        <FormItem className="flex items-center gap-2 space-y-0">
+                                                            <Switch id="showTrainingDay" checked={switchField.value} onCheckedChange={switchField.onChange} />
+                                                            <Label htmlFor="showTrainingDay" className="text-xs">إظهار</Label>
+                                                        </FormItem>
+                                                    )} />
+                                                </div>
+                                                <Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Day" /></SelectTrigger></FormControl><SelectContent>{Array.from({length: 31}, (_,i) => i+1).map(d => <SelectItem key={d} value={String(d).padStart(2,'0')}>{d}</SelectItem>)}</SelectContent></Select>
+                                            </FormItem>
+                                        )} />
+                                        <FormField control={form.control} name="trainingMonth" render={({ field }) => (
+                                            <FormItem>
+                                                <div className="flex items-center justify-between">
+                                                    <FormLabel>الشهر</FormLabel>
+                                                    <FormField control={form.control} name="showTrainingMonth" render={({ field: switchField }) => (
+                                                        <FormItem className="flex items-center gap-2 space-y-0">
+                                                            <Switch id="showTrainingMonth" checked={switchField.value} onCheckedChange={switchField.onChange} />
+                                                            <Label htmlFor="showTrainingMonth" className="text-xs">إظهار</Label>
+                                                        </FormItem>
+                                                    )} />
+                                                </div>
+                                                <Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Month" /></SelectTrigger></FormControl><SelectContent>{Array.from({length: 12}, (_,i) => i+1).map(m => <SelectItem key={m} value={String(m).padStart(2,'0')}>{m}</SelectItem>)}</SelectContent></Select>
+                                            </FormItem>
+                                        )} />
+                                        <FormField control={form.control} name="trainingYear" render={({ field }) => (
+                                            <FormItem>
+                                                <div className="flex items-center justify-between">
+                                                    <FormLabel>السنه</FormLabel>
+                                                    <FormField control={form.control} name="showTrainingYear" render={({ field: switchField }) => (
+                                                        <FormItem className="flex items-center gap-2 space-y-0">
+                                                            <Switch id="showTrainingYear" checked={switchField.value} onCheckedChange={switchField.onChange} />
+                                                            <Label htmlFor="showTrainingYear" className="text-xs">إظهار</Label>
+                                                        </FormItem>
+                                                    )} />
+                                                </div>
+                                                <Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Year" /></SelectTrigger></FormControl><SelectContent>{Array.from({length: 10}, (_,i) => new Date().getFullYear() - 5 + i).map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}</SelectContent></Select>
+                                            </FormItem>
+                                        )} />
+                                    </div>
                                 </div>
+
                                 <div className="border-t pt-4">
                                     <h4 className="font-semibold mb-2">Training Info Box Style</h4>
                                     <div className="grid grid-cols-2 gap-4">

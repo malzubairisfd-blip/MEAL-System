@@ -175,7 +175,7 @@ function drawPageFrame(
   drawInfoBox(doc, "اسم المشروع", project.projectName || "غير محدد", pageW - 10, 38, ibs);
   drawInfoBox(doc, "اسم القاعة", hall.hallName || "غير محدد", 90, 38, ibs);
 
-  // --- NEW: TRAINING-SPECIFIC INFO BOXES ---
+  // --- TRAINING-SPECIFIC INFO BOXES ---
   if (type === 'training') {
     const yPos = 38 + (ibs.height || 8);
       if(settings.trainingCourseName) {
@@ -183,7 +183,12 @@ function drawPageFrame(
         drawInfoBox(doc, "اسم الدورة التدريبية", settings.trainingCourseName, pageW - 10, yPos, courseStyle);
       }
       
-      const trainingDate = [settings.trainingDay, settings.trainingMonth, settings.trainingYear].filter(Boolean).join('/');
+      const dateParts = [];
+      if (settings.showTrainingDay && settings.trainingDay) dateParts.push(settings.trainingDay);
+      if (settings.showTrainingMonth && settings.trainingMonth) dateParts.push(settings.trainingMonth);
+      if (settings.showTrainingYear && settings.trainingYear) dateParts.push(settings.trainingYear);
+      const trainingDate = dateParts.filter(Boolean).join('/');
+      
       if (trainingDate) {
         drawInfoBox(doc, "تاريخ الدورة", toArabicDigits(trainingDate), 90, yPos, ibs);
       }
