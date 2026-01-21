@@ -1,7 +1,7 @@
 // src/app/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/selection/review/page.tsx
 "use client";
 
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import * as XLSX from 'xlsx';
@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Upload, Users, UserCheck, UserX, Save, FileDown, GitCompareArrows, Search, Plus, Trash2, CheckCircle, XCircle, ClipboardList, Database } from 'lucide-react';
+import { Loader2, Upload, Users, UserCheck, UserX, Save, FileDown, GitCompareArrows, Search, Plus, Trash2, CheckCircle, XCircle, ClipboardList, Database, ArrowLeft } from 'lucide-react';
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -301,12 +301,14 @@ export default function InterviewAnalysisPage() {
 
     return (
         <div className="space-y-6">
-             <Card>
-                <CardHeader>
-                    <CardTitle>Analyze Interview Results</CardTitle>
-                    <CardDescription>Upload interview scores to calculate final rankings and identify relationships.</CardDescription>
-                </CardHeader>
-            </Card>
+             <div className="flex justify-between items-center">
+                <h1 className="text-3xl font-bold">Analyze Interview Results</h1>
+                <Button variant="outline" asChild>
+                    <Link href="/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/selection">
+                        <ArrowLeft className="mr-2 h-4 w-4" /> Back to Selection
+                    </Link>
+                </Button>
+            </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="space-y-6">
@@ -392,7 +394,7 @@ export default function InterviewAnalysisPage() {
                             <SummaryCard icon={<UserX className="text-red-500" />} title="Failed Interview" value={results.totalFailed} />
                         </div>
                         <div className="flex gap-2 mt-4">
-                           <Button asChild><Link href="/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/selection/database"><Database className="mr-2 h-4 w-4"/>Go to Database</Link></Button>
+                           <Button asChild><Link href="/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/database"><Database className="mr-2 h-4 w-4"/>Go to Database</Link></Button>
                            <Button asChild variant="outline"><Link href="/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/training"><ClipboardList className="mr-2 h-4 w-4"/>Go to Training Page</Link></Button>
                         </div>
                     </CardContent>
@@ -411,7 +413,8 @@ export default function InterviewAnalysisPage() {
                         <AlertDialogCancel onClick={() => setLoading(p => ({...p, saving: false}))}>Cancel</AlertDialogCancel>
                         <Button variant="outline" onClick={async () => {
                             setDuplicateDialog({ isOpen: false, duplicates: [], nonDuplicates: [] });
-                            await executeSave(duplicateDialog.nonDuplicates);
+                            const project = projects.find(p => p.projectId === selectedProjectId);
+                            if (project) await executeSave(duplicateDialog.nonDuplicates);
                         }}>
                             Skip Duplicates
                         </Button>
