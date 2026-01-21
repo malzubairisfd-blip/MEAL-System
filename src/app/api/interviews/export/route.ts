@@ -1,3 +1,4 @@
+
 import { NextResponse } from "next/server";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -19,13 +20,13 @@ const getDbPath = () => path.join(process.cwd(), "src", "data", "educators.db");
  * Applies font styling (size, color, weight) to the jsPDF instance
  */
 function applyTextStyle(doc: jsPDF, styleObj: any) {
-  const fontName = "Amiri";
+  const fontName = "NotoNaskhArabic";
   
   // Map boolean bold/italic to jsPDF font styles
   let style = "normal";
-  if (styleObj?.bold && styleObj?.italic) style = "bolditalic";
-  else if (styleObj?.bold) style = "bold";
-  else if (styleObj?.italic) style = "italic";
+  if (styleObj?.bold) {
+    style = "bold";
+  }
 
   doc.setFont(fontName, style);
   doc.setFontSize(styleObj?.fontSize || 10);
@@ -54,7 +55,7 @@ function drawInfoTable(
     tableWidth: totalWidth,
     theme: 'grid',
     styles: {
-      font: 'Amiri',
+      font: 'NotoNaskhArabic',
       fontSize: style.fontSize || 10,
       cellPadding: 1.5,
       lineColor: [0, 0, 0],
@@ -166,7 +167,7 @@ function drawPageFrame(
   doc.text("F", logoX + 3, logoY + 8, { align: "center", baseline: "middle" });
   doc.text("D", logoX + 3, logoY + 12, { align: "center", baseline: "middle" });
   
-  doc.setFont("Amiri", "normal");
+  doc.setFont("NotoNaskhArabic", "normal");
   doc.setTextColor(40, 60, 80);
   doc.setFontSize(10);
   doc.text("الصندوق", logoX + 8, logoY + 4);
@@ -330,22 +331,23 @@ export async function POST(req: Request) {
     });
 
     // 3. FONT LOADING (Robust Path Handling)
-    const fontNames = [
+    const fontBaseName = "NotoNaskhArabic";
+    const fontFiles = [
         { name: "Regular", style: "normal" },
         { name: "Bold", style: "bold" },
-        { name: "Italic", style: "italic" },
-        { name: "BoldItalic", style: "bolditalic" }
     ];
 
-    fontNames.forEach(f => {
-        const fontPath = path.join(process.cwd(), `public/fonts/Amiri-${f.name}.ttf`);
+    fontFiles.forEach(f => {
+        const fontPath = path.join(process.cwd(), `public/fonts/${fontBaseName}-${f.name}.ttf`);
         if (fs.existsSync(fontPath)) {
             const fontBytes = fs.readFileSync(fontPath);
-            doc.addFileToVFS(`Amiri-${f.name}.ttf`, fontBytes.toString('base64'));
-            doc.addFont(`Amiri-${f.name}.ttf`, "Amiri", f.style);
+            doc.addFileToVFS(`${fontBaseName}-${f.name}.ttf`, fontBytes.toString('base64'));
+            doc.addFont(`${fontBaseName}-${f.name}.ttf`, fontBaseName, f.style);
+        } else {
+            console.warn(`Font file not found: ${fontPath}`);
         }
     });
-    doc.setFont("Amiri", "normal"); // Default
+    doc.setFont(fontBaseName, "normal"); // Default
 
     // 4. GROUPING DATA (By Hall)
     const groups: Record<string, any> = {};
@@ -447,7 +449,7 @@ export async function POST(req: Request) {
             // Global Styles (Fallbacks)
             theme: 'grid',
             styles: {
-                font: 'Amiri',
+                font: 'NotoNaskhArabic',
                 lineColor: "#444444",
                 lineWidth: 0.1,
                 minCellHeight: Number(settings.rowHeight) || 8,
