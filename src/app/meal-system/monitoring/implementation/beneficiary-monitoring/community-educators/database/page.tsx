@@ -2,8 +2,9 @@
 // src/app/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/database/page.tsx
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useToast } from "@/hooks/use-toast";
 import { exportEducatorsToExcel } from "@/lib/exportEducatorsToExcel";
 import { Button } from "@/components/ui/button";
@@ -31,6 +32,7 @@ import {
   Filter,
   ArrowUpAZ,
   ArrowDownAZ,
+  Trash2
 } from "lucide-react";
 import {
   Popover,
@@ -48,6 +50,18 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 
 interface ApplicantRecord {
@@ -174,29 +188,71 @@ export default function EducatorDatabasePage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [filters, setFilters] = useState<Record<string, Set<any>>>({});
   const [sortConfig, setSortConfig] = useState<{key: string; direction: 'asc' | 'desc'} | null>(null);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [columnToEmpty, setColumnToEmpty] = useState<string | null>(null);
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
 
   const itemsPerPage = 20;
   const { toast } = useToast();
 
-  useEffect(() => {
-    const fetchRecords = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const res = await fetch("/api/ed-selection");
-        if (!res.ok) {
-          throw new Error("Failed to fetch data from the database.");
-        }
-        const data = await res.json();
-        setRecords(Array.isArray(data) ? data : []);
-      } catch (err: any) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
+  const fetchRecords = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/ed-selection");
+      if (!res.ok) {
+        throw new Error("Failed to fetch data from the database.");
       }
-    };
-    fetchRecords();
+      const data = await res.json();
+      setRecords(Array.isArray(data) ? data : []);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchRecords();
+  }, [fetchRecords]);
+
+  const handleEmptyColumn = async () => {
+    if (!columnToEmpty) {
+      toast({ title: "No Column Selected", description: "Please select a column to empty.", variant: "destructive" });
+      return;
+    }
+    
+    setIsUpdating(true);
+    setIsConfirmOpen(false);
+
+    try {
+      const updates = records.map(r => ({
+        applicant_id: r.applicant_id,
+        [columnToEmpty]: null
+      }));
+
+      const res = await fetch('/api/ed-selection', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates)
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || `Failed to empty column ${columnToEmpty}.`);
+      }
+
+      toast({ title: "Success", description: `Column "${columnToEmpty}" has been emptied for all records.` });
+      
+      await fetchRecords();
+
+    } catch (error: any) {
+      toast({ title: "Update Failed", description: error.message, variant: "destructive" });
+    } finally {
+      setIsUpdating(false);
+      setColumnToEmpty(null);
+    }
+  };
 
   const handleFilterChange = useCallback((column: string, selected: Set<any>) => {
     setFilters(prev => ({
@@ -348,6 +404,38 @@ export default function EducatorDatabasePage() {
 
       <Card>
         <CardHeader>
+            <CardTitle>Data Management</CardTitle>
+            <CardDescription>Perform bulk operations on the database. These actions are irreversible.</CardDescription>
+        </CardHeader>
+        <CardContent className="flex items-end gap-4">
+            <div className="flex-1 space-y-2">
+                <Label htmlFor="column-to-empty">Column to Empty</Label>
+                <Select onValueChange={setColumnToEmpty} value={columnToEmpty || ''}>
+                    <SelectTrigger id="column-to-empty">
+                        <SelectValue placeholder="Select a column..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <ScrollArea className="h-60">
+                            {allColumns.filter(c => c !== 'applicant_id').map(col => (
+                                <SelectItem key={col} value={col}>{col.replace(/_/g, ' ')}</SelectItem>
+                            ))}
+                        </ScrollArea>
+                    </SelectContent>
+                </Select>
+            </div>
+            <Button 
+                variant="destructive" 
+                onClick={() => setIsConfirmOpen(true)}
+                disabled={!columnToEmpty || isUpdating}
+            >
+                {isUpdating ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Trash2 className="mr-2 h-4 w-4"/>}
+                Empty Selected Column
+            </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>Applicant Records</CardTitle>
           <CardDescription>
             Displaying {paginatedRecords.length} of {filteredRecords.length} records.
@@ -431,6 +519,24 @@ export default function EducatorDatabasePage() {
           )}
         </CardContent>
       </Card>
+       <AlertDialog open={isConfirmOpen} onOpenChange={setIsConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete all data from the column
+              <span className="font-bold text-destructive"> "{columnToEmpty}" </span> 
+              for all {records.length} records.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleEmptyColumn} className="bg-destructive hover:bg-destructive/90">
+              Yes, empty column
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
