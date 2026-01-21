@@ -1,7 +1,7 @@
-// src/app/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/selection/review/page.tsx
+// src/app/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/interview/interview-results/page.tsx
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import * as XLSX from 'xlsx';
@@ -113,7 +113,7 @@ export default function InterviewAnalysisPage() {
                 setEducators(projectEducators);
                 setEligibleApplicants(projectEducators.filter((e: any) => e.interview_qualification === 'مؤهلة للمقابلة'));
             } catch (error: any) {
-                toast({ title: "Error", description: `Could not load educators: ${error.message}`, variant: "destructive" });
+                toast({ title: "Error", description: `Could not load educators: ${'\'\'\'error.message\'\'\''}`, variant: "destructive" });
             } finally {
                 setLoading(p => ({ ...p, educators: false }));
             }
@@ -304,8 +304,8 @@ export default function InterviewAnalysisPage() {
              <div className="flex justify-between items-center">
                 <h1 className="text-3xl font-bold">Analyze Interview Results</h1>
                 <Button variant="outline" asChild>
-                    <Link href="/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/selection">
-                        <ArrowLeft className="mr-2 h-4 w-4" /> Back to Selection
+                    <Link href="/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/interview">
+                        <ArrowLeft className="mr-2 h-4 w-4" /> Back to Interview
                     </Link>
                 </Button>
             </div>

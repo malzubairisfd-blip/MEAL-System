@@ -17,7 +17,7 @@ export default function CommunityEducatorsInterviewPage() {
     {
       title: "Analyzing Interview Results",
       description: "Analyze scores and results from the interviews.",
-      href: "/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/selection/review",
+      href: "/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/interview/interview-results",
       icon: <BarChart2 className="h-8 w-8 text-teal-500" />,
     },
     {
