@@ -111,6 +111,7 @@ const PdfSettingsSchema = z.object({
     pageSize: z.enum(['a4', 'letter', 'legal']),
     pageOrientation: z.enum(['portrait', 'landscape']),
     headerHeight: z.coerce.number(),
+    footerMargin: z.coerce.number().default(40),
     borderColor: z.string(),
     borderWidth: z.coerce.number().default(0.5),
     title: z.string().min(1),
@@ -120,7 +121,11 @@ const PdfSettingsSchema = z.object({
     rowHeight: z.coerce.number().default(8),
     addEmptyRows: z.boolean().default(false),
     footerStyle: CellStyleSchema.extend({
-      showStampBoxes: z.boolean().default(true),
+      showDirectorateStampBox: z.boolean().default(true),
+      showSignatureBox: z.boolean().default(true),
+      showNameLine: z.boolean().default(true),
+      showPositionLine: z.boolean().default(true),
+      showPageNumber: z.boolean().default(true),
     }),
 });
 
@@ -189,6 +194,7 @@ function ExportExactPDFPageContent() {
             pageSize: 'a4',
             pageOrientation: 'portrait',
             headerHeight: 60,
+            footerMargin: 40,
             borderColor: "#000000",
             borderWidth: 0.5,
             title: "كشف درجات المتقدمات للمقابلة",
@@ -218,7 +224,11 @@ function ExportExactPDFPageContent() {
             ],
             footerStyle: {
                 fontSize: 10, textColor: "#000000", bold: true, italic: false, halign: 'right', valign: 'middle',
-                showStampBoxes: true,
+                showDirectorateStampBox: true,
+                showSignatureBox: true,
+                showNameLine: true,
+                showPositionLine: true,
+                showPageNumber: true,
             }
         },
     });
@@ -449,7 +459,7 @@ function ExportExactPDFPageContent() {
                         <AccordionItem value="page">
                             <AccordionTrigger>4. Page, Title & Border Settings</AccordionTrigger>
                             <AccordionContent className="p-4 space-y-4 bg-slate-900/50">
-                                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                                     <FormField control={form.control} name="pageSize" render={({ field }) => (
                                         <FormItem><FormLabel>Size</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent><SelectItem value="a4">A4</SelectItem><SelectItem value="letter">Letter</SelectItem></SelectContent></Select></FormItem>
                                     )} />
@@ -458,6 +468,9 @@ function ExportExactPDFPageContent() {
                                     )} />
                                     <FormField control={form.control} name="headerHeight" render={({ field }) => (
                                         <FormItem><FormLabel>Top Margin (mm)</FormLabel><Input type="number" {...field} /></FormItem>
+                                    )} />
+                                    <FormField control={form.control} name="footerMargin" render={({ field }) => (
+                                        <FormItem><FormLabel>Footer Margin (mm)</FormLabel><Input type="number" {...field} /></FormItem>
                                     )} />
                                     <FormField control={form.control} name="borderWidth" render={({ field }) => (
                                         <FormItem><FormLabel>Border Width (mm)</FormLabel><Input type="number" step="0.1" {...field} /></FormItem>
@@ -494,15 +507,26 @@ function ExportExactPDFPageContent() {
                          <AccordionItem value="footer">
                             <AccordionTrigger>6. Footer Settings</AccordionTrigger>
                             <AccordionContent className="p-4 space-y-4 bg-slate-900/50">
-                                <div className="flex gap-4 items-center">
+                                <div className="flex flex-wrap gap-4 items-center">
                                     <FormField control={form.control} name="footerStyle.textColor" render={({ field }) => (<FormItem><ColorPicker label="Text" value={field.value} onChange={field.onChange} /></FormItem>)} />
                                     <FormField control={form.control} name="footerStyle.fontSize" render={({ field }) => (<FormItem><FormLabel>Size</FormLabel><Input type="number" {...field} className="w-20" /></FormItem>)} />
                                     <FormField control={form.control} name="footerStyle.bold" render={({ field }) => (<FormItem className="flex items-center gap-2 pt-6"><Switch checked={field.value} onCheckedChange={field.onChange} /><Label>Bold</Label></FormItem>)} />
-                                     <FormField control={form.control} name="footerStyle.showStampBoxes" render={({ field }) => (
-                                        <FormItem className="flex items-center gap-2 pt-6">
-                                            <Switch id="showStampBoxes" checked={field.value} onCheckedChange={field.onChange} />
-                                            <Label htmlFor="showStampBoxes">Show Stamp Boxes</Label>
-                                        </FormItem>
+                                </div>
+                                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4 pt-4 border-t border-slate-700">
+                                      <FormField control={form.control} name="footerStyle.showNameLine" render={({ field }) => (
+                                        <FormItem className="flex items-center gap-2 space-y-0"><Switch id="showNameLine" checked={field.value} onCheckedChange={field.onChange} /><Label htmlFor="showNameLine">Show Name Line</Label></FormItem>
+                                     )} />
+                                      <FormField control={form.control} name="footerStyle.showPositionLine" render={({ field }) => (
+                                        <FormItem className="flex items-center gap-2 space-y-0"><Switch id="showPositionLine" checked={field.value} onCheckedChange={field.onChange} /><Label htmlFor="showPositionLine">Show Position Line</Label></FormItem>
+                                     )} />
+                                     <FormField control={form.control} name="footerStyle.showSignatureBox" render={({ field }) => (
+                                        <FormItem className="flex items-center gap-2 space-y-0"><Switch id="showSignatureBox" checked={field.value} onCheckedChange={field.onChange} /><Label htmlFor="showSignatureBox">Show Signature Box</Label></FormItem>
+                                     )} />
+                                     <FormField control={form.control} name="footerStyle.showDirectorateStampBox" render={({ field }) => (
+                                        <FormItem className="flex items-center gap-2 space-y-0"><Switch id="showDirectorateStampBox" checked={field.value} onCheckedChange={field.onChange} /><Label htmlFor="showDirectorateStampBox">Show Directorate Stamp Box</Label></FormItem>
+                                     )} />
+                                      <FormField control={form.control} name="footerStyle.showPageNumber" render={({ field }) => (
+                                        <FormItem className="flex items-center gap-2 space-y-0"><Switch id="showPageNumber" checked={field.value} onCheckedChange={field.onChange} /><Label htmlFor="showPageNumber">Show Page Number</Label></FormItem>
                                      )} />
                                 </div>
                             </AccordionContent>

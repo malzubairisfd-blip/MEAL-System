@@ -177,37 +177,43 @@ function drawPageFrame(
 
   // --- FOOTER SECTION ---
   const fts = settings.footerStyle || {};
-  const footerY = pageH - 30;
+  const footerY = pageH - (Number(settings.footerMargin) || 40);
   
   applyTextStyle(doc, fts);
 
   // Signature Lines
-  doc.text("الاسم:", pageW - 15, footerY, { align: "right" });
-  doc.line(pageW - 45, footerY + 1, pageW - 100, footerY + 1);
+  if (fts.showNameLine !== false) {
+    doc.text("الاسم:", pageW - 15, footerY, { align: "right" });
+    doc.line(pageW - 45, footerY + 1, pageW - 100, footerY + 1);
+  }
   
-  doc.text("الصفة:", pageW - 15, footerY + 8, { align: "right" });
-  doc.line(pageW - 45, footerY + 9, pageW - 100, footerY + 9);
+  if (fts.showPositionLine !== false) {
+    doc.text("الصفة:", pageW - 15, footerY + 8, { align: "right" });
+    doc.line(pageW - 45, footerY + 9, pageW - 100, footerY + 9);
+  }
 
   // Conditional Signature Boxes
-  if (fts.showStampBoxes !== false) {
-      doc.setDrawColor(0);
-      doc.setLineWidth(0.1);
+  doc.setDrawColor(0);
+  doc.setLineWidth(0.1);
+  doc.setFontSize(9);
       
-      // Committee Signature Box
+  if (fts.showSignatureBox !== false) {
       doc.rect(60, footerY - 5, 35, 20);
-      doc.setFontSize(9);
       doc.text("توقيع اللجنة", 77.5, footerY + 12, { align: "center" });
+  }
 
-      // Directorate Stamp Box
+  if (fts.showDirectorateStampBox !== false) {
       doc.rect(15, footerY - 5, 35, 20);
       doc.text("ختم المديرية", 32.5, footerY + 12, { align: "center" });
   }
 
 
   // Page Number
-  doc.setFontSize(8);
-  doc.setTextColor(100);
-  doc.text(`صفحة ${toArabicDigits(pageNumber)}`, pageW / 2, pageH - 7, { align: "center" });
+  if (fts.showPageNumber !== false) {
+    doc.setFontSize(8);
+    doc.setTextColor(100);
+    doc.text(`صفحة ${toArabicDigits(pageNumber)}`, pageW / 2, pageH - 7, { align: "center" });
+  }
 }
 
 // --- API HANDLER ---
@@ -370,7 +376,7 @@ export async function POST(req: Request) {
             // Positioning
             startY: Number(settings.headerHeight) || 60,
             tableWidth: tableWidth,
-            margin: { top: Number(settings.headerHeight) || 60, left: startX, right: 10, bottom: 40 },
+            margin: { top: Number(settings.headerHeight) || 60, left: startX, right: 10, bottom: Number(settings.footerMargin) || 40 },
             
             // Global Styles (Fallbacks)
             theme: 'grid',
