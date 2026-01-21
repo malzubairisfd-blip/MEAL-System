@@ -2,67 +2,29 @@
 // src/app/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/database/page.tsx
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useForm } from "react-hook-form";
+
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Loader2, Search, ChevronLeft, ChevronRight, ArrowLeft, UserCheck, UserX, Users, FileDown, Filter, ArrowUpAZ, ArrowDownAZ, Trash2, Edit } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Label } from '@/components/ui/label';
+
 import { useToast } from "@/hooks/use-toast";
 import { exportEducatorsToExcel } from "@/lib/exportEducatorsToExcel";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import {
-  Loader2,
-  Search,
-  ChevronLeft,
-  ChevronRight,
-  ArrowLeft,
-  UserCheck,
-  UserX,
-  Users,
-  FileDown,
-  Filter,
-  ArrowUpAZ,
-  ArrowDownAZ,
-  Trash2
-} from "lucide-react";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
-import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
-import { ScrollArea } from '@/components/ui/scroll-area';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-
 
 interface ApplicantRecord {
   [key: string]: any;
@@ -180,6 +142,77 @@ const ColumnFilter = ({
   );
 };
 
+
+const EditRecordDialog = ({
+  open,
+  onOpenChange,
+  record,
+  columns,
+  onSave,
+  isUpdating
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  record: ApplicantRecord;
+  columns: string[];
+  onSave: (data: ApplicantRecord) => Promise<void>;
+  isUpdating: boolean;
+}) => {
+  const form = useForm<ApplicantRecord>({
+    defaultValues: record
+  });
+
+  const onSubmit = (data: ApplicantRecord) => {
+    onSave(data);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-3xl">
+        <DialogHeader>
+          <DialogTitle>Edit Record: {record.applicant_name}</DialogTitle>
+          <DialogDescription>Applicant ID: {record.applicant_id} (Read-only)</DialogDescription>
+        </DialogHeader>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)}>
+            <ScrollArea className="h-[60vh] p-1">
+              <div className="p-4 space-y-4">
+                {columns
+                  .filter(col => col !== 'applicant_id' && col !== 'id') // Make key fields read-only
+                  .map((column) => (
+                  <FormField
+                    key={column}
+                    control={form.control}
+                    name={column}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{column.replace(/_/g, ' ')}</FormLabel>
+                        <FormControl>
+                          <Input {...field} value={field.value ?? ''} onChange={field.onChange} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                ))}
+              </div>
+            </ScrollArea>
+            <DialogFooter className="mt-4">
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isUpdating}>
+                {isUpdating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Save Changes
+              </Button>
+            </DialogFooter>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
 export default function EducatorDatabasePage() {
   const [records, setRecords] = useState<ApplicantRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -191,6 +224,8 @@ export default function EducatorDatabasePage() {
   const [isUpdating, setIsUpdating] = useState(false);
   const [columnToEmpty, setColumnToEmpty] = useState<string | null>(null);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const [editingRecord, setEditingRecord] = useState<ApplicantRecord | null>(null);
+
 
   const itemsPerPage = 20;
   const { toast } = useToast();
@@ -215,6 +250,31 @@ export default function EducatorDatabasePage() {
   useEffect(() => {
     fetchRecords();
   }, [fetchRecords]);
+
+  const handleUpdateRecord = async (updatedData: ApplicantRecord) => {
+    setIsUpdating(true);
+    try {
+      const res = await fetch('/api/ed-selection', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify([updatedData])
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || `Failed to update record for applicant ${updatedData.applicant_id}.`);
+      }
+
+      toast({ title: "Success", description: `Record for applicant ${updatedData.applicant_name} has been updated.` });
+      setEditingRecord(null);
+      await fetchRecords();
+
+    } catch (error: any) {
+      toast({ title: "Update Failed", description: error.message, variant: "destructive" });
+    } finally {
+      setIsUpdating(false);
+    }
+  };
 
   const handleEmptyColumn = async () => {
     if (!columnToEmpty) {
@@ -471,6 +531,7 @@ export default function EducatorDatabasePage() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="sticky left-0 bg-card z-10">Actions</TableHead>
                     {allColumns.map((col) => (
                       <TableHead key={col} className="whitespace-nowrap">
                           <div className="flex items-center">
@@ -490,6 +551,11 @@ export default function EducatorDatabasePage() {
                 <TableBody>
                   {paginatedRecords.map((record, index) => (
                     <TableRow key={index}>
+                      <TableCell className="sticky left-0 bg-card z-10">
+                          <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setEditingRecord(record)}>
+                              <Edit className="h-4 w-4" />
+                          </Button>
+                      </TableCell>
                       {allColumns.map((col) => (
                         <TableCell key={col} className="whitespace-nowrap">
                             {record[col] === 'مقبولة' ? <Badge variant="default" className="bg-green-500">مقبولة</Badge>
@@ -537,6 +603,16 @@ export default function EducatorDatabasePage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      {editingRecord && (
+        <EditRecordDialog
+            open={!!editingRecord}
+            onOpenChange={(isOpen) => !isOpen && setEditingRecord(null)}
+            record={editingRecord}
+            onSave={handleUpdateRecord}
+            columns={allColumns}
+            isUpdating={isUpdating}
+        />
+      )}
     </div>
   );
 }
