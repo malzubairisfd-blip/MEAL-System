@@ -32,6 +32,38 @@ function applyTextStyle(doc: jsPDF, styleObj: any) {
   doc.setTextColor(styleObj?.textColor || "#000000");
 }
 
+function autoWrapArabic(
+  doc: jsPDF,
+  text: string,
+  boxWidth: number,
+  maxLines = 2
+): string[] {
+  const padding = 6;
+
+  // Start with full width
+  let width = boxWidth - padding;
+
+  // Try expanding virtual width to force fewer breaks
+  for (let extra = 0; extra <= boxWidth; extra += 4) {
+    const lines = doc.splitTextToSize(text, width + extra);
+
+    if (lines.length <= maxLines) {
+      return lines;
+    }
+  }
+
+  // Absolute fallback: force into maxLines by joining
+  const forced = doc.splitTextToSize(text, boxWidth * 2);
+  if (forced.length > maxLines) {
+    return [
+      forced.slice(0, Math.ceil(forced.length / 2)).join(" "),
+      forced.slice(Math.ceil(forced.length / 2)).join(" ")
+    ];
+  }
+
+  return forced;
+}
+
 /**
  * Draws a labelled box (e.g., "Project Name: X") used in the header
  */
