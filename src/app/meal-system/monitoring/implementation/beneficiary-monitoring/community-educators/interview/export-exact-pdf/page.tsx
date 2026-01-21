@@ -20,6 +20,13 @@ import { Switch } from '@/components/ui/switch';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+
 
 // --- REUSABLE COLOR PICKER COMPONENT ---
 const globalColorHistory = new Set<string>(["#000000", "#FFFFFF", "#2F80B5", "#F3F4F6"]);
@@ -85,7 +92,8 @@ const CellStyleSchema = z.object({
 
 const TableColumnSchema = z.object({
     header: z.string().min(1),
-    dataKey: z.string().min(1),
+    columnType: z.enum(['data', 'manual']).default('data'),
+    dataKey: z.string().optional(),
     width: z.coerce.number().default(30),
     headerStyle: CellStyleSchema.extend({
         bgColor: z.string().default("#2F80B5"),
@@ -96,7 +104,16 @@ const TableColumnSchema = z.object({
         bgColor: z.string().optional(),
         textColor: z.string().default("#000000")
     }),
+}).refine(data => {
+    if (data.columnType === 'data') {
+        return !!data.dataKey;
+    }
+    return true;
+}, {
+    message: "Data Field is required for Data Columns.",
+    path: ["dataKey"],
 });
+
 
 const InfoBoxStyleSchema = CellStyleSchema.extend({
     labelTextColor: z.string().optional(),
@@ -221,17 +238,17 @@ function ExportExactPDFPageContent() {
             addEmptyRows: false,
             tableColumns: [
                 {
-                    header: 'م', dataKey: '_index', width: 15,
+                    header: 'م', dataKey: '_index', width: 15, columnType: 'data',
                     headerStyle: { fontSize: 10, textColor: "#FFFFFF", bgColor: "#2F80B5", bold: true, halign: 'center', valign: 'middle', italic: false },
                     bodyStyle: { fontSize: 10, textColor: "#000000", bold: false, halign: 'center', valign: 'middle', italic: false }
                 },
                 {
-                    header: 'اسم المتقدمة', dataKey: 'applicant_name', width: 70,
+                    header: 'اسم المتقدمة', dataKey: 'applicant_name', width: 70, columnType: 'data',
                     headerStyle: { fontSize: 10, textColor: "#FFFFFF", bgColor: "#2F80B5", bold: true, halign: 'center', valign: 'middle', italic: false },
                     bodyStyle: { fontSize: 10, textColor: "#000000", bold: false, halign: 'right', valign: 'middle', italic: false }
                 },
                 {
-                    header: 'الدرجة', dataKey: 'total_score', width: 25,
+                    header: 'الدرجة', dataKey: 'total_score', width: 25, columnType: 'data',
                     headerStyle: { fontSize: 10, textColor: "#FFFFFF", bgColor: "#2F80B5", bold: true, halign: 'center', valign: 'middle', italic: false },
                     bodyStyle: { fontSize: 10, textColor: "#000000", bold: true, halign: 'center', valign: 'middle', italic: false }
                 },
@@ -681,14 +698,37 @@ function ExportExactPDFPageContent() {
                                                     <FormField control={form.control} name={`tableColumns.${index}.header`} render={({ field }) => (
                                                         <FormItem><FormLabel>Header Text</FormLabel><Input {...field} /></FormItem>
                                                     )} />
-                                                    <FormField control={form.control} name={`tableColumns.${index}.dataKey`} render={({ field }) => (
-                                                        <FormItem><FormLabel>Data Field</FormLabel>
-                                                            <Select onValueChange={field.onChange} value={field.value}>
-                                                                <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
-                                                                <SelectContent>{applicantColumns.map(col => <SelectItem key={col} value={col}>{col}</SelectItem>)}</SelectContent>
-                                                            </Select>
-                                                        </FormItem>
-                                                    )} />
+                                                    <Controller
+                                                        control={form.control}
+                                                        name={`tableColumns.${index}.columnType`}
+                                                        render={({ field }) => (
+                                                            <FormItem>
+                                                                <FormLabel>Column Type</FormLabel>
+                                                                <RadioGroup onValueChange={field.onChange} value={field.value} className="flex gap-4 pt-2">
+                                                                    <FormItem className="flex items-center space-x-2">
+                                                                        <FormControl><RadioGroupItem value="data" /></FormControl>
+                                                                        <FormLabel>Data Field</FormLabel>
+                                                                    </FormItem>
+                                                                    <FormItem className="flex items-center space-x-2">
+                                                                        <FormControl><RadioGroupItem value="manual" /></FormControl>
+                                                                        <FormLabel>Manual Input</FormLabel>
+                                                                    </FormItem>
+                                                                </RadioGroup>
+                                                            </FormItem>
+                                                        )}
+                                                    />
+
+                                                    {watch(`tableColumns.${index}.columnType`) === 'data' && (
+                                                        <FormField control={form.control} name={`tableColumns.${index}.dataKey`} render={({ field }) => (
+                                                            <FormItem><FormLabel>Data Field</FormLabel>
+                                                                <Select onValueChange={field.onChange} value={field.value}>
+                                                                    <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                                                                    <SelectContent>{applicantColumns.map(col => <SelectItem key={col} value={col}>{col}</SelectItem>)}</SelectContent>
+                                                                </Select>
+                                                                <FormMessage/>
+                                                            </FormItem>
+                                                        )} />
+                                                    )}
                                                     <FormField control={form.control} name={`tableColumns.${index}.width`} render={({ field }) => (
                                                         <FormItem><FormLabel>Width (mm)</FormLabel><Input type="number" {...field} /></FormItem>
                                                     )} />
@@ -745,13 +785,29 @@ function ExportExactPDFPageContent() {
                                         </CardContent>
                                     </Card>
                                 ))}
-                                <Button type="button" variant="outline" className="w-full border-dashed" onClick={() => append({
-                                    header: 'جديد', dataKey: 'applicant_name', width: 30,
-                                    headerStyle: { fontSize: 10, textColor: "#FFFFFF", bgColor: "#2F80B5", bold: true, halign: 'center', valign: 'middle', italic: false },
-                                    bodyStyle: { fontSize: 10, textColor: "#000000", bold: false, halign: 'right', valign: 'middle', italic: false }
-                                })}>
-                                    <Plus className="mr-2 h-4 w-4" /> Add Column
-                                </Button>
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button type="button" variant="outline" className="w-full border-dashed">
+                                            <Plus className="mr-2 h-4 w-4" /> Add Column
+                                        </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent>
+                                        <DropdownMenuItem onSelect={() => append({
+                                            header: 'New Data Column', columnType: 'data', dataKey: 'applicant_name', width: 30,
+                                            headerStyle: { fontSize: 10, textColor: "#FFFFFF", bgColor: "#2F80B5", bold: true, italic: false, halign: 'center', valign: 'middle' },
+                                            bodyStyle: { fontSize: 10, textColor: "#000000", bold: false, italic: false, halign: 'right', valign: 'middle' },
+                                        })}>
+                                            Add Data Column
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onSelect={() => append({
+                                            header: 'Manual Column', columnType: 'manual', dataKey: undefined, width: 30,
+                                            headerStyle: { fontSize: 10, textColor: "#FFFFFF", bgColor: "#2F80B5", bold: true, italic: false, halign: 'center', valign: 'middle' },
+                                            bodyStyle: { fontSize: 10, textColor: "#000000", bold: false, italic: false, halign: 'right', valign: 'middle' },
+                                        })}>
+                                            Add Manual Column
+                                        </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
                             </AccordionContent>
                         </AccordionItem>
                     </Accordion>

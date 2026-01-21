@@ -350,6 +350,10 @@ export async function POST(req: Request) {
         const bodyRows: any[][] = [];
         group.items.forEach((row: any, index: number) => {
             const rowData = rtlColumns.map((col: any) => {
+                if (col.columnType === 'manual') {
+                    return ''; // Return an empty string for manual columns
+                }
+                
                 let value = row[col.dataKey];
                 if (col.dataKey === '_index') value = index + 1;
                 if (value === null || value === undefined) value = "";
