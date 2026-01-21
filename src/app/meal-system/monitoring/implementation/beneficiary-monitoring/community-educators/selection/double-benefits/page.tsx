@@ -1,5 +1,1 @@
-import { UnderConstructionPage } from "@/components/under-construction-page";
-
-export default function DoubleBenefitsAnalysisPage() {
-  return <UnderConstructionPage title="Double Benefits Analysis" />;
-}
+// This file is now empty as the page has been moved.

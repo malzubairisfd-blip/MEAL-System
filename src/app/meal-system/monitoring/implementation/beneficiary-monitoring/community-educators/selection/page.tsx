@@ -4,14 +4,12 @@
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ArrowRight, Upload, Microscope, Database, Layers } from "lucide-react";
+import { ArrowLeft, ArrowRight, Upload, Microscope } from "lucide-react";
 
 export default function CommunityEducatorsSelectionPage() {
   const features = [
     { title: "Upload Page", href: "/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/selection/upload", icon: <Upload className="h-8 w-8 text-blue-500" /> },
-    { title: "Double Benefits Analysis", href: "/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/selection/double-benefits", icon: <Layers className="h-8 w-8 text-purple-500" /> },
     { title: "ED Review Page", href: "/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/selection/review", icon: <Microscope className="h-8 w-8 text-orange-500" /> },
-    { title: "ED Database", href: "/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/selection/database", icon: <Database className="h-8 w-8 text-green-500" /> },
   ];
 
   return (

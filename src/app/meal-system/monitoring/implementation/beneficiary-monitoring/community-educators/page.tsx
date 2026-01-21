@@ -4,7 +4,7 @@
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ArrowRight, UserSearch, MessageSquare, ClipboardPenLine, Network, FileText } from "lucide-react";
+import { ArrowLeft, ArrowRight, UserSearch, MessageSquare, ClipboardPenLine, Network, FileText, Database, Layers } from "lucide-react";
 
 export default function CommunityEducatorsPage() {
   const features = [
@@ -13,6 +13,8 @@ export default function CommunityEducatorsPage() {
     { title: "Community Educators Training", href: "/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/training", icon: <ClipboardPenLine className="h-8 w-8 text-green-500" /> },
     { title: "Connecting BNF ED EC PC", href: "/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/connecting", icon: <Network className="h-8 w-8 text-purple-500" /> },
     { title: "Community Educators Contracts", href: "/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/contracts", icon: <FileText className="h-8 w-8 text-orange-500" /> },
+    { title: "ED Database", href: "/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/database", icon: <Database className="h-8 w-8 text-green-500" /> },
+    { title: "Double Benefits Analysis", href: "/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/double-benefits", icon: <Layers className="h-8 w-8 text-purple-500" /> },
   ];
 
   return (
