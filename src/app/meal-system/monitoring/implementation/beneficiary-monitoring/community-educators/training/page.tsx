@@ -124,7 +124,7 @@ function TrainingStatementsPageContent() {
     fetch("/api/projects").then(r => r.json()).then(data => setProjects(Array.isArray(data) ? data : []));
   }, []);
 
-  const getLocalStorageKey = (type: string) => `training-selections-${type}-${projectId}`;
+  const getLocalStorageKey = useCallback((type: string) => `training-selections-${type}-${projectId}`, [projectId]);
 
   // --- Project Data Loading (Stats & Educators) ---
   const fetchProjectData = useCallback(async () => {
@@ -183,7 +183,7 @@ function TrainingStatementsPageContent() {
       setBnfPerEd({});
     }
 
-  }, [projectId, toast]);
+  }, [projectId, toast, getLocalStorageKey]);
   
   useEffect(() => {
     fetchProjectData();
@@ -192,15 +192,15 @@ function TrainingStatementsPageContent() {
   // --- Save selections to local storage ---
   useEffect(() => {
     if (projectId) localStorage.setItem(getLocalStorageKey('contract'), JSON.stringify(selections));
-  }, [selections, projectId]);
+  }, [selections, projectId, getLocalStorageKey]);
 
   useEffect(() => {
     if (projectId) localStorage.setItem(getLocalStorageKey('hall'), JSON.stringify(Array.from(selectedApplicantsForHall)));
-  }, [selectedApplicantsForHall, projectId]);
+  }, [selectedApplicantsForHall, projectId, getLocalStorageKey]);
 
   useEffect(() => {
     if (projectId) localStorage.setItem(getLocalStorageKey('absentee'), JSON.stringify(Array.from(selectedAbsentees)));
-  }, [selectedAbsentees, projectId]);
+  }, [selectedAbsentees, projectId, getLocalStorageKey]);
   
   useEffect(() => {
     if (projectId && Object.keys(bnfPerEd).length > 0) {
@@ -406,7 +406,7 @@ function TrainingStatementsPageContent() {
   }, [allProjectEducators]);
 
   useEffect(() => {
-    const qualifiedForTraining = allProjectEducators.filter(e => e.training_qualification === 'مؤهلة للتدريب' && !e.training_attendance);
+    const qualifiedForTraining = allProjectEducators.filter(e => e.training_qualification === 'مؤهلة للتدريب' && e.training_attendance === null);
     setTrainingAbsentees(qualifiedForTraining);
   }, [allProjectEducators]);
 
@@ -751,5 +751,3 @@ export default function TrainingPage() {
         </Suspense>
     )
 }
-
-    
