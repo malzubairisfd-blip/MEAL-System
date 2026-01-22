@@ -153,43 +153,33 @@ function TrainingStatementsPageContent() {
     } finally {
       setLoading(prev => ({ ...prev, stats: false, candidates: false }));
     }
-    
-    // Load selections from local storage
-    const savedSelections = localStorage.getItem(getLocalStorageKey('contract'));
-    if (savedSelections) {
-      setSelections(JSON.parse(savedSelections));
-    } else {
-      setSelections({});
-    }
-
-    const savedHallSelections = localStorage.getItem(getLocalStorageKey('hall'));
-    if (savedHallSelections) {
-      setSelectedApplicantsForHall(new Set(JSON.parse(savedHallSelections)));
-    } else {
-      setSelectedApplicantsForHall(new Set());
-    }
-
-    const savedAbsenteeSelections = localStorage.getItem(getLocalStorageKey('absentee'));
-    if (savedAbsenteeSelections) {
-      setSelectedAbsentees(new Set(JSON.parse(savedAbsenteeSelections)));
-    } else {
-      setSelectedAbsentees(new Set());
-    }
-    
-    const savedBnfPerEd = localStorage.getItem(`training-bnf-per-ed-${projectId}`);
-    if (savedBnfPerEd) {
-      setBnfPerEd(JSON.parse(savedBnfPerEd));
-    } else {
-      setBnfPerEd({});
-    }
-
-  }, [projectId, toast, getLocalStorageKey]);
+  }, [projectId, toast]);
   
   useEffect(() => {
     fetchProjectData();
   }, [fetchProjectData]);
   
-  // --- Save selections to local storage ---
+  // --- Save/Load selections to/from local storage ---
+   useEffect(() => {
+    if (!projectId) return;
+    
+    const savedSelections = localStorage.getItem(getLocalStorageKey('contract'));
+    if (savedSelections) setSelections(JSON.parse(savedSelections));
+    else setSelections({});
+
+    const savedHallSelections = localStorage.getItem(getLocalStorageKey('hall'));
+    if (savedHallSelections) setSelectedApplicantsForHall(new Set(JSON.parse(savedHallSelections)));
+    else setSelectedApplicantsForHall(new Set());
+
+    const savedAbsenteeSelections = localStorage.getItem(getLocalStorageKey('absentee'));
+    if (savedAbsenteeSelections) setSelectedAbsentees(new Set(JSON.parse(savedAbsenteeSelections)));
+    else setSelectedAbsentees(new Set());
+    
+    const savedBnfPerEd = localStorage.getItem(`training-bnf-per-ed-${projectId}`);
+    if (savedBnfPerEd) setBnfPerEd(JSON.parse(savedBnfPerEd));
+    else setBnfPerEd({});
+  }, [projectId, getLocalStorageKey]);
+
   useEffect(() => {
     if (projectId) localStorage.setItem(getLocalStorageKey('contract'), JSON.stringify(selections));
   }, [selections, projectId, getLocalStorageKey]);
@@ -384,11 +374,12 @@ function TrainingStatementsPageContent() {
 
       setLoading(p => ({...p, saving: true}));
       try {
-          await fetch("/api/trainings/link", {
+          const res = await fetch("/api/trainings/link", {
               method: 'POST',
               headers: {'Content-Type': 'application/json'},
-              body: JSON.stringify({ projectId, hallNumber: hall.hallNumber, hallName: hall.hallName, applicantIds: Array.from(selectedApplicantsForHall)})
+              body: JSON.stringify({ projectId, hallNumber: hall.hallNumber, hallName: hall.hallName, applicantIds: Array.from(selectedApplicantsForHall) })
           });
+          if(!res.ok) throw new Error("Failed to link applicants.");
 
           toast({ title: "Success!", description: "Applicants linked to training hall."});
           setSelectedApplicantsForHall(new Set());
