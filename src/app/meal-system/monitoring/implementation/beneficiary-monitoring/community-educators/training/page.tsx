@@ -156,14 +156,32 @@ function TrainingStatementsPageContent() {
     
     // Load selections from local storage
     const savedSelections = localStorage.getItem(getLocalStorageKey('contract'));
-    const savedHallSelections = localStorage.getItem(getLocalStorageKey('hall'));
-    const savedAbsenteeSelections = localStorage.getItem(getLocalStorageKey('absentee'));
-    const savedBnfPerEd = localStorage.getItem(`training-bnf-per-ed-${projectId}`);
+    if (savedSelections) {
+      setSelections(JSON.parse(savedSelections));
+    } else {
+      setSelections({});
+    }
 
-    if (savedSelections) setSelections(JSON.parse(savedSelections));
-    if (savedHallSelections) setSelectedApplicantsForHall(new Set(JSON.parse(savedHallSelections)));
-    if (savedAbsenteeSelections) setSelectedAbsentees(new Set(JSON.parse(savedAbsenteeSelections)));
-    if (savedBnfPerEd) setBnfPerEd(JSON.parse(savedBnfPerEd));
+    const savedHallSelections = localStorage.getItem(getLocalStorageKey('hall'));
+    if (savedHallSelections) {
+      setSelectedApplicantsForHall(new Set(JSON.parse(savedHallSelections)));
+    } else {
+      setSelectedApplicantsForHall(new Set());
+    }
+
+    const savedAbsenteeSelections = localStorage.getItem(getLocalStorageKey('absentee'));
+    if (savedAbsenteeSelections) {
+      setSelectedAbsentees(new Set(JSON.parse(savedAbsenteeSelections)));
+    } else {
+      setSelectedAbsentees(new Set());
+    }
+    
+    const savedBnfPerEd = localStorage.getItem(`training-bnf-per-ed-${projectId}`);
+    if (savedBnfPerEd) {
+      setBnfPerEd(JSON.parse(savedBnfPerEd));
+    } else {
+      setBnfPerEd({});
+    }
 
   }, [projectId, toast]);
   
@@ -203,7 +221,7 @@ function TrainingStatementsPageContent() {
   }, [villageStats, bnfPerEd]);
   
   const totalAvailableApplicants = useMemo(() => {
-    return allProjectEducators.filter(e => e.interview_attendance === 'حضرت المقابلة' && (e.training_qualification === 'مؤهلة للتدريب' || e.training_qualification === null)).length;
+    return allProjectEducators.filter(e => e.training_qualification === 'حضرت التدريب').length;
   }, [allProjectEducators]);
 
   const { totalEdReq, finalSpareReq, finalTotalQualified } = useMemo(() => {
