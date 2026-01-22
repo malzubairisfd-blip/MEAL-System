@@ -76,12 +76,14 @@ function TrainingStatementsPageContent() {
     
     setLoadingStats(true);
     fetch(`/api/training/requirements?projectId=${projectId}`)
-      .then(r => r.json())
+      .then(r => {
+        if (!r.ok) throw new Error("Failed to fetch training requirements");
+        return r.json();
+      })
       .then(data => {
         if (Array.isArray(data)) {
           setVillageStats(data);
         } else {
-            // If API not ready, mock empty or show error
             console.error("Invalid data format", data);
             toast({ title: "Failed to load requirements", description: "Check API response", variant: 'destructive'});
         }
@@ -99,17 +101,34 @@ function TrainingStatementsPageContent() {
     }
 
     setLoadingCandidates(true);
-    // This API endpoint doesn't exist yet, so we'll just mock an empty array
-    // In a real scenario, this would fetch candidates for the selected village.
-    // fetch(`/api/training/candidates?village=${encodeURIComponent(selectedVillage)}`)
-    new Promise<any[]>(resolve => setTimeout(() => resolve([]), 500))
-      .then(data => {
-        setCandidates(Array.isArray(data) ? data : []);
-        setSelections({}); // Reset selections on village change
+    fetch('/api/ed-selection')
+      .then(res => {
+        if (!res.ok) {
+          throw new Error('Failed to fetch educator data');
+        }
+        return res.json();
       })
-      .catch(err => toast({ title: "Failed to load candidates", variant: 'destructive'}))
+      .then(allEducators => {
+        if (Array.isArray(allEducators)) {
+          const villageCandidates = allEducators.filter((edu: any) => 
+            edu.loc_name === selectedVillage &&
+            edu.interview_attendance === 'حضرت المقابلة' &&
+            edu.training_qualification === null
+          ).sort((a: any,b: any) => (b.grand_total_score || 0) - (a.grand_total_score || 0));
+          
+          setCandidates(villageCandidates);
+        } else {
+            setCandidates([]);
+        }
+        setSelections({}); // Reset selections on new village
+      })
+      .catch(err => {
+        toast({ title: "Failed to load candidates", description: err.message, variant: "destructive" });
+        setCandidates([]);
+      })
       .finally(() => setLoadingCandidates(false));
   }, [selectedVillage, toast]);
+
 
   // --- Calculated Totals for "Required Educators" Box ---
   const totalEdReq = villageStats.reduce((sum, v) => sum + v.edReq, 0);
