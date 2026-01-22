@@ -176,8 +176,11 @@ function TrainingStatementsPageContent() {
     else setSelectedAbsentees(new Set());
     
     const savedBnfPerEd = localStorage.getItem(`training-bnf-per-ed-${projectId}`);
-    if (savedBnfPerEd) setBnfPerEd(JSON.parse(savedBnfPerEd));
-    else setBnfPerEd({});
+    if (savedBnfPerEd) {
+      setBnfPerEd(JSON.parse(savedBnfPerEd));
+    } else {
+      setBnfPerEd({});
+    }
   }, [projectId, getLocalStorageKey]);
 
   useEffect(() => {
@@ -692,9 +695,10 @@ function TrainingStatementsPageContent() {
                         <TableHead>Age Rank <ColumnFilter column="age_per_village_ranking" onSort={setSortConfig} /></TableHead>
                         <TableHead>Location <ColumnFilter column="loc_name" onSort={setSortConfig} /></TableHead>
                         <TableHead>Total Score <ColumnFilter column="grand_total_score" onSort={setSortConfig} /></TableHead>
+                        <TableHead>Rank <ColumnFilter column="grand_score_rank" onSort={setSortConfig} /></TableHead>
                     </TableRow></TableHeader>
                     <TableBody>
-                        {loading.candidates ? <TableRow><TableCell colSpan={7} className="h-24 text-center"><Loader2 className="animate-spin mx-auto"/></TableCell></TableRow> : filteredCandidates.map((c, idx) => (
+                        {loading.candidates ? <TableRow><TableCell colSpan={8} className="h-24 text-center"><Loader2 className="animate-spin mx-auto"/></TableCell></TableRow> : filteredCandidates.map((c, idx) => (
                             <TableRow key={c.applicant_id} onClick={() => setActiveCandidateIndex(idx)} className={activeCandidateIndex === idx ? "bg-muted" : ""}>
                                 <TableCell>
                                     <Checkbox 
@@ -712,7 +716,7 @@ function TrainingStatementsPageContent() {
                                         }}
                                     />
                                 </TableCell>
-                                <TableCell>{c.applicant_id}</TableCell><TableCell>{c.applicant_name}</TableCell><TableCell>{c.applicant_qualification}</TableCell><TableCell>{c.age_per_village_ranking}</TableCell><TableCell>{c.loc_name}</TableCell><TableCell>{c.grand_total_score}</TableCell>
+                                <TableCell>{c.applicant_id}</TableCell><TableCell>{c.applicant_name}</TableCell><TableCell>{c.applicant_qualification}</TableCell><TableCell>{c.age_per_village_ranking}</TableCell><TableCell>{c.loc_name}</TableCell><TableCell>{c.grand_total_score}</TableCell><TableCell>{c.grand_score_rank}</TableCell>
                             </TableRow>
                         ))}
                     </TableBody></Table></div>
