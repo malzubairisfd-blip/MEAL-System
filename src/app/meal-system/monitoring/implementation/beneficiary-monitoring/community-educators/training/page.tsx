@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState, Suspense, useMemo } from "react";
@@ -201,7 +202,7 @@ function TrainingStatementsPageContent() {
         <h1 className="text-3xl font-bold">Training & Qualification Management</h1>
       </div>
 
-      /* --- SECTION 1: Project & Requirement Calculation --- */
+      {/* --- SECTION 1: Project & Requirement Calculation --- */}
       <Card>
         <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -222,7 +223,7 @@ function TrainingStatementsPageContent() {
                 </Select>
             </div>
 
-            /* Requirements Table */
+            {/* Requirements Table */}
             {projectId && (
                 <div className="rounded-md border">
                     <Table>
@@ -254,7 +255,7 @@ function TrainingStatementsPageContent() {
                 </div>
             )}
 
-            /* Summary Boxes */
+            {/* Summary Boxes */}
             {projectId && (
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pt-4">
                     <Card className="bg-blue-50 border-blue-200">
@@ -270,7 +271,7 @@ function TrainingStatementsPageContent() {
                         <CardContent>
                             <Input 
                                 type="number" 
-                                className="h-8 w-24 bg-white" 
+                                className="h-8 w-24 bg-white text-black" 
                                 value={manualMonitorsReq}
                                 onChange={(e) => setManualMonitorsReq(+e.target.value)}
                             />
@@ -285,7 +286,7 @@ function TrainingStatementsPageContent() {
         </CardContent>
       </Card>
 
-      /* --- SECTION 2: Select Qualified Educators --- */
+      {/* --- SECTION 2: Select Qualified Educators --- */}
       {projectId && (
       <Card className="border-t-4 border-t-indigo-500">
         <CardHeader>
@@ -296,7 +297,7 @@ function TrainingStatementsPageContent() {
         </CardHeader>
         <CardContent className="space-y-6">
             
-            /* Village Selector & Dynamic Progress Boxes */
+            {/* Village Selector & Dynamic Progress Boxes */}
             <div className="flex flex-col md:flex-row gap-6 bg-slate-50 p-4 rounded-lg border">
                 <div className="w-full md:w-1/3">
                     <label className="text-sm font-medium mb-1 block">Select Village</label>
@@ -312,11 +313,11 @@ function TrainingStatementsPageContent() {
                             ))}
                         </SelectContent>
                     </Select>
-                    /* "Allow selecting from another village" is implicit as the user can just select a different village in the dropdown */
+                    {/* "Allow selecting from another village" is implicit as the user can just select a different village in the dropdown */}
                 </div>
 
                 <div className="flex-1 grid grid-cols-3 gap-4">
-                     /* Dynamic Box: Educators */
+                     {/* Dynamic Box: Educators */}
                     <div className="bg-white p-3 rounded border text-center shadow-sm">
                         <div className="text-xs text-gray-500 font-semibold uppercase">Educators</div>
                         <div className="text-xl font-bold mt-1">
@@ -327,7 +328,7 @@ function TrainingStatementsPageContent() {
                             <span className="text-gray-600">{villageEdReq}</span>
                         </div>
                     </div>
-                     /* Dynamic Box: Spare */
+                     {/* Dynamic Box: Spare */}
                      <div className="bg-white p-3 rounded border text-center shadow-sm">
                         <div className="text-xs text-gray-500 font-semibold uppercase">Spare</div>
                         <div className="text-xl font-bold mt-1">
@@ -338,7 +339,7 @@ function TrainingStatementsPageContent() {
                             <span className="text-gray-600">{villageSpareReq}</span>
                         </div>
                     </div>
-                     /* Dynamic Box: Monitors */
+                     {/* Dynamic Box: Monitors */}
                      <div className="bg-white p-3 rounded border text-center shadow-sm">
                         <div className="text-xs text-gray-500 font-semibold uppercase">Field Monitors</div>
                         <div className="text-xl font-bold mt-1 text-green-600">
@@ -348,7 +349,7 @@ function TrainingStatementsPageContent() {
                 </div>
             </div>
 
-            /* Candidates Table */
+            {/* Candidates Table */}
             <div className="border rounded-md">
                 <Table>
                     <TableHeader>
@@ -401,7 +402,7 @@ function TrainingStatementsPageContent() {
                 </Table>
             </div>
 
-            /* Action Button */
+            {/* Action Button */}
             <div className="flex justify-end">
                 <Button 
                     size="lg" 
@@ -419,7 +420,7 @@ function TrainingStatementsPageContent() {
       </Card>
       )}
 
-      /* --- SECTION 3: Export Link (Kept from original) --- */
+      {/* --- SECTION 3: Export Link (Kept from original) --- */}
       {projectId && (
         <div className="flex justify-end">
             <Button variant="outline" asChild>
@@ -441,3 +442,4 @@ export default function TrainingPage() {
         </Suspense>
     )
 }
+    
