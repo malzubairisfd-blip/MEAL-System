@@ -51,8 +51,7 @@ export async function GET(request: Request) {
                 COUNT(applicant_id) as edCount
             FROM educators
             WHERE project_id = ? 
-              AND interview_attendance = 'حضرت المقابلة'
-              AND training_qualification IS NULL
+              AND training_attendance = 'حضرت التدريب'
             GROUP BY loc_name
         `);
         const edCounts: { villageName: string, edCount: number }[] = edStmt.all(projectId);
