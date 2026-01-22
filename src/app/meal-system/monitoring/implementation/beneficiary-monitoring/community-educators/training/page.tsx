@@ -108,7 +108,7 @@ function TrainingStatementsPageContent() {
   const [selectedAbsentees, setSelectedAbsentees] = useState<Set<number>>(new Set());
   const [absenteeSearch, setAbsenteeSearch] = useState('');
   
-  const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
+  const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>({ key: 'grand_score_rank', direction: 'asc' });
   const [qualifiedCandidatesSearch, setQualifiedCandidatesSearch] = useState('');
   const [hallAssignmentSearch, setHallAssignmentSearch] = useState('');
 
@@ -287,8 +287,23 @@ function TrainingStatementsPageContent() {
         sorted.sort((a, b) => {
             const aVal = a[sortConfig.key];
             const bVal = b[sortConfig.key];
-            if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
-            if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+
+            if (aVal === null || aVal === undefined) return 1;
+            if (bVal === null || bVal === undefined) return -1;
+            
+            if (typeof aVal === 'number' && typeof bVal === 'number') {
+                return sortConfig.direction === 'asc' ? aVal - bVal : bVal - aVal;
+            }
+
+            const strA = String(aVal).toLowerCase();
+            const strB = String(bVal).toLowerCase();
+
+            if (strA < strB) {
+              return sortConfig.direction === 'asc' ? -1 : 1;
+            }
+            if (strA > strB) {
+              return sortConfig.direction === 'asc' ? 1 : -1;
+            }
             return 0;
         });
     }
