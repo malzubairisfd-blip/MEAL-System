@@ -31,6 +31,7 @@ type EducatorCandidate = {
   applicant_id: number;
   applicant_name: string;
   loc_name: string;
+  applicant_qualification: string;
   age_per_village_ranking: number;
   sfd_marks: number;
   health_marks: number;
@@ -38,7 +39,6 @@ type EducatorCandidate = {
   interview_total_marks: number;
   grand_total_score: number;
   grand_score_rank: number;
-  applicant_qualification: string;
 };
 
 type SelectionState = {
@@ -90,7 +90,6 @@ function TrainingStatementsPageContent() {
   const [activeCandidateIndex, setActiveCandidateIndex] = useState<number | null>(null);
 
   const [halls, setHalls] = useState<Hall[]>([]);
-  const [hallCount, setHallCount] = useState(1);
   const [selectedHall, setSelectedHall] = useState<number | null>(null);
   const [selectedApplicantsForHall, setSelectedApplicantsForHall] = useState<Set<number>>(new Set());
   
@@ -102,8 +101,8 @@ function TrainingStatementsPageContent() {
 
   // --- Initial Project Load ---
   useEffect(() => {
-    fetch("/api/projects").then(r => r.json()).then(data => setProjects(Array.isArray(data) ? data : [])).catch(() => toast({ title: "Failed to load projects", variant: 'destructive' }));
-  }, [toast]);
+    fetch("/api/projects").then(r => r.json()).then(data => setProjects(Array.isArray(data) ? data : []));
+  }, []);
 
   // --- Project Data Loading (Stats & Educators) ---
   useEffect(() => {
@@ -174,7 +173,11 @@ function TrainingStatementsPageContent() {
     if (totalQualified > totalAvailableApplicants) {
         spare = Math.max(0, totalAvailableApplicants - totalRequired);
         totalQualified = totalRequired + spare;
+        setValidationMessage(`Warning: Target (${totalRequired + initialSpare}) exceeds available candidates (${totalAvailableApplicants}). Spare educators adjusted to ${spare}.`);
+    } else {
+        setValidationMessage('');
     }
+
     return { totalEdReq: totalEd, finalSpareReq: spare, finalTotalQualified: totalQualified };
   }, [villageStatsWithEdReq, manualMonitorsReq, totalAvailableApplicants]);
 
@@ -217,14 +220,12 @@ function TrainingStatementsPageContent() {
     const hasZeroCandidates = villageCandidates.length === 0;
     const hasInsufficientCandidates = villageCandidates.length < (villageStat?.edReq || 0);
 
-    if (hasZeroCandidates) {
-      if ((villageStat?.bnfCount || 0) >= 15) {
-          const otherCandidates = qualifiedApplicants.filter(edu => edu.loc_name !== selectedVillage && !assignedCandidateIds.has(edu.applicant_id));
-          villageCandidates = [...otherCandidates];
-      }
+    if (hasZeroCandidates && villageStat && villageStat.bnfCount >= 15) {
+        const otherCandidates = qualifiedApplicants.filter(edu => edu.loc_name !== selectedVillage && !assignedCandidateIds.has(edu.applicant_id));
+        villageCandidates = [...otherCandidates];
     } else if (hasInsufficientCandidates) {
-      const otherCandidates = qualifiedApplicants.filter(edu => edu.loc_name !== selectedVillage && !assignedCandidateIds.has(edu.applicant_id));
-      villageCandidates = [...villageCandidates, ...otherCandidates];
+        const otherCandidates = qualifiedApplicants.filter(edu => edu.loc_name !== selectedVillage && !assignedCandidateIds.has(edu.applicant_id));
+        villageCandidates = [...villageCandidates, ...otherCandidates];
     }
     
     let sorted = [...villageCandidates];
@@ -285,7 +286,6 @@ function TrainingStatementsPageContent() {
         applicant_id: Number(id), 
         contract_type: sel.contractType, 
         working_village: sel.workingVillage,
-        training_qualification: 'مؤهلة للتدريب' 
       }));
 
     if (payload.length === 0) {
@@ -320,13 +320,12 @@ function TrainingStatementsPageContent() {
 
       setLoading(p => ({...p, saving: true}));
       try {
-          const res = await fetch("/api/trainings/link", {
+          await fetch("/api/trainings/link", {
               method: 'POST',
               headers: {'Content-Type': 'application/json'},
               body: JSON.stringify({ projectId, hallNumber: hall.hallNumber, hallName: hall.hallName, applicantIds: Array.from(selectedApplicantsForHall)})
           });
-          if(!res.ok) throw new Error('Failed to link');
-          
+
           await fetch('/api/training/qualify', {
               method: 'POST',
               headers: {'Content-Type': 'application/json'},
@@ -336,7 +335,6 @@ function TrainingStatementsPageContent() {
           toast({ title: "Success!", description: "Applicants linked to training hall and qualified."});
           setSelectedApplicantsForHall(new Set());
           
-          // Refetch educators
           fetch(`/api/ed-selection`).then(r => r.json()).then(data => setAllProjectEducators(data.filter((e: any) => e.project_id === projectId)));
 
       } catch (err: any) {
@@ -346,11 +344,27 @@ function TrainingStatementsPageContent() {
       }
   };
   
+  const applicantsForHallAssignment = useMemo(() => {
+    return allProjectEducators.filter(e => e.interview_attendance === 'حضرت المقابلة' && e.training_qualification === null);
+  }, [allProjectEducators]);
+
   useEffect(() => {
     const qualifiedForTraining = allProjectEducators.filter(e => e.training_qualification === 'مؤهلة للتدريب');
     setTrainingAbsentees(qualifiedForTraining);
   }, [allProjectEducators]);
 
+  const filteredAbsentees = useMemo(() => {
+    if (!absenteeSearch.trim()) return trainingAbsentees;
+    const searchTerms = absenteeSearch.split(',').map(term => term.trim().toLowerCase()).filter(Boolean);
+    if (searchTerms.length === 0) return trainingAbsentees;
+    
+    return trainingAbsentees.filter(app => 
+        searchTerms.some(term => 
+            String(app.applicant_id).includes(term) || 
+            app.applicant_name?.toLowerCase().includes(term)
+        )
+    );
+  }, [absenteeSearch, trainingAbsentees]);
 
   const handleSubmitAttendance = async () => {
     setLoading(p => ({...p, saving: true}));
@@ -386,17 +400,18 @@ function TrainingStatementsPageContent() {
                     <ScrollArea className="h-[250px]"><Table><TableBody>
                         {loading.stats ? <TableRow><TableCell colSpan={5} className="h-24 text-center"><Loader2 className="animate-spin mx-auto"/></TableCell></TableRow> : villageStatsWithEdReq.map((row, i) => (
                             <TableRow key={i}><TableCell>{row.villageName}</TableCell><TableCell>{row.bnfCount}</TableCell>
-                            <TableCell><Input type="number" value={bnfPerEd[row.villageName] || ''} placeholder="0" onChange={e => setBnfPerEd(prev => ({ ...prev, [row.villageName]: +e.target.value }))} className="w-20 text-black bg-white"/></TableCell>
+                            <TableCell><Input type="number" value={bnfPerEd[row.villageName] || ''} placeholder="0" onChange={e => setBnfPerEd(prev => ({ ...prev, [row.villageName]: +e.target.value }))} className="w-20 bg-background"/></TableCell>
                             <TableCell>{row.edReq}</TableCell><TableCell>{row.edCount}</TableCell></TableRow>
                         ))}
                     </TableBody></Table></ScrollArea>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pt-4">
                     <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Required Educators</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{totalEdReq}</div></CardContent></Card>
-                    <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Required Spare (40%)</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{finalSpareReq}</div></CardContent></Card>
-                    <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Required Field Monitors</CardTitle></CardHeader><CardContent><Input type="number" className="h-8 w-24 bg-white text-black" value={manualMonitorsReq} onChange={(e) => setManualMonitorsReq(+e.target.value)} /></CardContent></Card>
+                    <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Required Spare</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{finalSpareReq}</div></CardContent></Card>
+                    <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Required Field Monitors</CardTitle></CardHeader><CardContent><Input type="number" className="h-8 w-24 bg-background" value={manualMonitorsReq} onChange={(e) => setManualMonitorsReq(+e.target.value)} /></CardContent></Card>
                     <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Total Qualified</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{finalTotalQualified}</div></CardContent></Card>
                 </div>
+                 {validationMessage && <p className="text-sm text-amber-500">{validationMessage}</p>}
                 </>
             )}
         </CardContent>
@@ -409,13 +424,21 @@ function TrainingStatementsPageContent() {
                     <CardTitle className="flex items-center gap-2">2. Assign to Training Halls</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                    <div className="flex gap-2"><Input type="number" min={1} value={hallCount} onChange={e => setHallCount(Math.max(1, +e.target.value))} className="w-24"/><Button onClick={() => setHalls(Array.from({ length: hallCount }, (_, i) => ({ hallName: `Hall ${i + 1}`, hallNumber: i + 1 })))}>Create Halls</Button></div>
-                    {halls.length > 0 && <div className="grid grid-cols-1 md:grid-cols-3 gap-4">{halls.map((h, i) => (<Input key={i} value={h.hallName} onChange={e => {const copy=[...halls]; copy[i].hallName=e.target.value; setHalls(copy);}}/>))}</div>}
+                    <div className="flex flex-col gap-2">
+                        {halls.map((h, i) => (
+                           <div key={i} className="flex items-center gap-2">
+                                <Input placeholder="Hall Name" value={h.hallName} onChange={e => {const copy = [...halls]; copy[i].hallName = e.target.value; setHalls(copy);}} />
+                                <Input type="number" placeholder="No." value={h.hallNumber} onChange={e => { const copy = [...halls]; copy[i].hallNumber = +e.target.value; setHalls(copy); }} className="w-20" />
+                                <Button variant="destructive" size="icon" onClick={() => setHalls(halls.filter((_, idx) => idx !== i))}><Trash2 className="h-4 w-4" /></Button>
+                            </div>
+                        ))}
+                    </div>
+                    <Button type="button" variant="outline" onClick={() => setHalls(prev => [...prev, { hallName: `Hall ${prev.length + 1}`, hallNumber: prev.length + 1 }])}><Plus className="mr-2 h-4 w-4" /> Add Hall</Button>
                     
                     <ScrollArea className="h-72 border rounded-md">
                         <Table><TableHeader><TableRow><TableHead></TableHead><TableHead>ID</TableHead><TableHead>Name</TableHead><TableHead>Location</TableHead><TableHead>Score</TableHead><TableHead>Rank</TableHead></TableRow></TableHeader>
                         <TableBody>
-                            {allProjectEducators.filter(e => e.interview_attendance === 'حضرت المقابلة' && e.training_qualification === 'مؤهلة للتدريب' && !e.training_hall_no).map(app => (
+                            {applicantsForHallAssignment.map(app => (
                                 <TableRow key={app.applicant_id}><TableCell><Checkbox checked={selectedApplicantsForHall.has(app.applicant_id)} onCheckedChange={c => setSelectedApplicantsForHall(p => { const s=new Set(p); if(c) s.add(app.applicant_id); else s.delete(app.applicant_id); return s;})}/></TableCell><TableCell>{app.applicant_id}</TableCell><TableCell>{app.applicant_name}</TableCell><TableCell>{app.loc_name}</TableCell><TableCell>{app.grand_total_score}</TableCell><TableCell>{app.grand_score_rank}</TableCell></TableRow>
                             ))}
                         </TableBody></Table>
@@ -432,11 +455,11 @@ function TrainingStatementsPageContent() {
                     <CardTitle className="flex items-center gap-2">3. Mark Training Attendance</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                    <div className="relative"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input placeholder="Search by ID or name..." value={absenteeSearch} onChange={e=>setAbsenteeSearch(e.target.value)} className="pl-10" /></div>
+                    <div className="relative"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input placeholder="Search by ID or name (comma-separated)..." value={absenteeSearch} onChange={e=>setAbsenteeSearch(e.target.value)} className="pl-10" /></div>
                     <ScrollArea className="h-72 border rounded-md"><Table>
                         <TableHeader><TableRow><TableHead><Checkbox onCheckedChange={c => setSelectedAbsentees(c ? new Set(trainingAbsentees.map(a=>a.applicant_id)) : new Set())} /></TableHead><TableHead>ID</TableHead><TableHead>Name</TableHead><TableHead>Hall</TableHead></TableRow></TableHeader>
                         <TableBody>
-                            {trainingAbsentees.filter(a => String(a.applicant_id).includes(absenteeSearch) || a.applicant_name.toLowerCase().includes(absenteeSearch.toLowerCase())).map(app => (
+                            {filteredAbsentees.map(app => (
                                 <TableRow key={app.applicant_id}><TableCell><Checkbox checked={selectedAbsentees.has(app.applicant_id)} onCheckedChange={c => setSelectedAbsentees(p => {const s=new Set(p); if(c)s.add(app.applicant_id); else s.delete(app.applicant_id); return s;})} /></TableCell><TableCell>{app.applicant_id}</TableCell><TableCell>{app.applicant_name}</TableCell><TableCell>{app.training_hall_name}</TableCell></TableRow>
                             ))}
                         </TableBody>
@@ -444,7 +467,7 @@ function TrainingStatementsPageContent() {
                     <Button onClick={handleSubmitAttendance} disabled={loading.saving}>Submit Attendance ({selectedAbsentees.size} Absent)</Button>
                 </CardContent>
             </Card>
-
+            
             <Card>
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">4. Select Qualified Educators</CardTitle>
