@@ -67,6 +67,17 @@ const ColumnFilter = ({ column, onSort }: { column: string; onSort: (column: str
   );
 };
 
+const SummaryCard = ({ icon, title, value }: { icon: React.ReactNode, title: string, value: string | number }) => (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-sm font-medium">{title}</CardTitle>
+        {icon}
+      </CardHeader>
+      <CardContent>
+        <div className="text-2xl font-bold">{value}</div>
+      </CardContent>
+    </Card>
+);
 
 function TrainingStatementsPageContent() {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -101,11 +112,19 @@ function TrainingStatementsPageContent() {
   const [qualifiedCandidatesSearch, setQualifiedCandidatesSearch] = useState('');
   const [hallAssignmentSearch, setHallAssignmentSearch] = useState('');
 
+  const [selectedContractTypes, setSelectedContractTypes] = useState({
+    'مثقفة مجتمعية': 0,
+    'رقابة': 0,
+    'احتياط': 0
+  });
+
 
   // --- Initial Project Load ---
   useEffect(() => {
     fetch("/api/projects").then(r => r.json()).then(data => setProjects(Array.isArray(data) ? data : []));
   }, []);
+
+  const getLocalStorageKey = (type: string) => `training-selections-${type}-${projectId}`;
 
   // --- Project Data Loading (Stats & Educators) ---
   const fetchProjectData = useCallback(async () => {
@@ -135,19 +154,36 @@ function TrainingStatementsPageContent() {
       setLoading(prev => ({ ...prev, stats: false, candidates: false }));
     }
     
+    // Load selections from local storage
+    const savedSelections = localStorage.getItem(getLocalStorageKey('contract'));
+    const savedHallSelections = localStorage.getItem(getLocalStorageKey('hall'));
+    const savedAbsenteeSelections = localStorage.getItem(getLocalStorageKey('absentee'));
     const savedBnfPerEd = localStorage.getItem(`training-bnf-per-ed-${projectId}`);
-    if (savedBnfPerEd) {
-      setBnfPerEd(JSON.parse(savedBnfPerEd));
-    } else {
-      setBnfPerEd({});
-    }
+
+    if (savedSelections) setSelections(JSON.parse(savedSelections));
+    if (savedHallSelections) setSelectedApplicantsForHall(new Set(JSON.parse(savedHallSelections)));
+    if (savedAbsenteeSelections) setSelectedAbsentees(new Set(JSON.parse(savedAbsenteeSelections)));
+    if (savedBnfPerEd) setBnfPerEd(JSON.parse(savedBnfPerEd));
+
   }, [projectId, toast]);
   
   useEffect(() => {
     fetchProjectData();
   }, [fetchProjectData]);
   
-  // Save BNF per ED to local storage
+  // --- Save selections to local storage ---
+  useEffect(() => {
+    if (projectId) localStorage.setItem(getLocalStorageKey('contract'), JSON.stringify(selections));
+  }, [selections, projectId]);
+
+  useEffect(() => {
+    if (projectId) localStorage.setItem(getLocalStorageKey('hall'), JSON.stringify(Array.from(selectedApplicantsForHall)));
+  }, [selectedApplicantsForHall, projectId]);
+
+  useEffect(() => {
+    if (projectId) localStorage.setItem(getLocalStorageKey('absentee'), JSON.stringify(Array.from(selectedAbsentees)));
+  }, [selectedAbsentees, projectId]);
+  
   useEffect(() => {
     if (projectId && Object.keys(bnfPerEd).length > 0) {
         localStorage.setItem(`training-bnf-per-ed-${projectId}`, JSON.stringify(bnfPerEd));
@@ -166,7 +202,9 @@ function TrainingStatementsPageContent() {
     });
   }, [villageStats, bnfPerEd]);
   
-  const totalAvailableApplicants = useMemo(() => allProjectEducators.filter(e => e.interview_attendance === 'حضرت المقابلة' && e.training_qualification === null).length, [allProjectEducators]);
+  const totalAvailableApplicants = useMemo(() => {
+    return allProjectEducators.filter(e => e.interview_attendance === 'حضرت المقابلة' && (e.training_qualification === 'مؤهلة للتدريب' || e.training_qualification === null)).length;
+  }, [allProjectEducators]);
 
   const { totalEdReq, finalSpareReq, finalTotalQualified } = useMemo(() => {
     const totalEd = villageStatsWithEdReq.reduce((sum, v) => sum + v.edReq, 0);
@@ -212,9 +250,13 @@ function TrainingStatementsPageContent() {
 
     const assignedCandidateIds = new Set(Object.keys(selections).map(Number));
 
-    const qualifiedApplicants = allProjectEducators.filter(
-      edu => edu.training_attendance === 'حضرت التدريب'
+    let qualifiedApplicants = allProjectEducators.filter(
+      edu => edu.training_qualification === 'حضرت التدريب'
     );
+    
+    if (qualifiedApplicants.length === 0) {
+        qualifiedApplicants = allProjectEducators.filter(e => e.interview_attendance === 'حضرت المقابلة');
+    }
 
     let villageCandidates = qualifiedApplicants.filter(edu => edu.loc_name === selectedVillage && !assignedCandidateIds.has(edu.applicant_id));
     
@@ -270,6 +312,16 @@ function TrainingStatementsPageContent() {
       }
   }, [selections, activeCandidateIndex, candidates, selectedVillage, sortedVillages, villageStatsWithEdReq, toast]);
 
+  useEffect(() => {
+    const counts = { 'مثقفة مجتمعية': 0, 'رقابة': 0, 'احتياط': 0 };
+    Object.values(selections).forEach(sel => {
+      if (sel.isSelected && sel.contractType) {
+        counts[sel.contractType]++;
+      }
+    });
+    setSelectedContractTypes(counts);
+  }, [selections]);
+
 
   const handleContractTypeSelect = (type: SelectionState['contractType']) => {
       if (activeCandidateIndex === null || !candidates[activeCandidateIndex]) return;
@@ -324,13 +376,7 @@ function TrainingStatementsPageContent() {
               body: JSON.stringify({ projectId, hallNumber: hall.hallNumber, hallName: hall.hallName, applicantIds: Array.from(selectedApplicantsForHall)})
           });
 
-          await fetch('/api/training/qualify', {
-              method: 'POST',
-              headers: {'Content-Type': 'application/json'},
-              body: JSON.stringify({ applicants: Array.from(selectedApplicantsForHall).map(id => ({ applicant_id: id, contract_type: selections[id]?.contractType || 'مثقفة مجتمعية' })) })
-          });
-
-          toast({ title: "Success!", description: "Applicants linked to training hall and qualified."});
+          toast({ title: "Success!", description: "Applicants linked to training hall."});
           setSelectedApplicantsForHall(new Set());
           fetchProjectData();
 
@@ -526,6 +572,7 @@ function TrainingStatementsPageContent() {
                                 <TableRow>
                                     <TableHead>
                                         <Checkbox
+                                            className='bg-primary'
                                             checked={filteredApplicantsForHallAssignment.length > 0 && filteredApplicantsForHallAssignment.every(app => selectedApplicantsForHall.has(app.applicant_id))}
                                             onCheckedChange={handleSelectAllForHallAssignment}
                                         />
@@ -567,6 +614,7 @@ function TrainingStatementsPageContent() {
                             <TableRow>
                                 <TableHead>
                                     <Checkbox 
+                                        className='bg-primary'
                                         checked={filteredAbsentees.length > 0 && filteredAbsentees.every(app => selectedAbsentees.has(app.applicant_id))}
                                         onCheckedChange={handleSelectAllAbsentees}
                                     />
@@ -605,6 +653,12 @@ function TrainingStatementsPageContent() {
                     <CardTitle className="flex items-center gap-2">4. Select Qualified Educators</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <SummaryCard icon={<Users />} title="Community Educators" value={`${selectedContractTypes['مثقفة مجتمعية']} / ${totalEdReq}`} />
+                        <SummaryCard icon={<Briefcase />} title="Field Monitors" value={`${selectedContractTypes['رقابة']} / ${manualMonitorsReq}`} />
+                        <SummaryCard icon={<User />} title="Spare" value={`${selectedContractTypes['احتياط']} / ${finalSpareReq}`} />
+                    </div>
+
                     <div className="bg-muted p-4 rounded-lg border">
                         <Select onValueChange={setSelectedVillage} value={selectedVillage}><SelectTrigger className="w-full md:w-1/3"><SelectValue placeholder="Choose Village..." /></SelectTrigger>
                         <SelectContent>{sortedVillages.map((v) => (<SelectItem key={v.villageName} value={v.villageName}>{v.villageName} (Avail: {v.edCount})</SelectItem>))}</SelectContent></Select>
@@ -622,6 +676,7 @@ function TrainingStatementsPageContent() {
                     <div className="border rounded-md"><Table><TableHeader><TableRow>
                         <TableHead className="w-[50px]">
                             <Checkbox
+                                className='bg-primary'
                                 checked={filteredCandidates.length > 0 && filteredCandidates.every(c => selections[c.applicant_id]?.isSelected)}
                                 onCheckedChange={handleSelectAllCandidates}
                             />
