@@ -65,7 +65,7 @@ self.onmessage = async (event) => {
             }
             
             const attended = !absenteeSet.has(edu.applicant_id);
-            edu.interview_attendance = attended ? 'حظرت المقابلة' : 'غائبة من المقابلة';
+            edu.interview_attendance = attended ? 'حضرت المقابلة' : 'غائبة من المقابلة';
             
             if (attended) {
                 const interviewData = mappedUploadedData.get(String(edu.applicant_id));
@@ -105,7 +105,7 @@ self.onmessage = async (event) => {
         });
         
         // Relationship clustering and Ranking
-        const attendedApplicants = processedEducators.filter((edu: any) => edu.interview_attendance === 'حظرت المقابلة');
+        const attendedApplicants = processedEducators.filter((edu: any) => edu.interview_attendance === 'حضرت المقابلة');
         
         // Relationship Clustering
         const applicantNameParts = new Map(attendedApplicants.map(app => [app.applicant_id, normalizeArabicWithCompounds(app.applicant_name).split(' ')]));
