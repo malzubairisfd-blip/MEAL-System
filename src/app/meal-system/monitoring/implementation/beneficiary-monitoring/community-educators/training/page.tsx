@@ -1,16 +1,16 @@
 // src/app/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/training/page.tsx
 "use client";
 
-import React, { useEffect, useState, useMemo, useCallback, Suspense, useRef } from "react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import React, { useEffect, useState, useMemo, useCallback, Suspense } from "react";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
+import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, FileText, Calculator, UserCheck, CheckCircle2, User, Users, Briefcase, Filter, ArrowUpAZ, ArrowDownAZ, Save, Trash2, Plus, ArrowLeft, Search } from "lucide-react";
+import { Loader2, FileText, UserCheck, User, Users, Briefcase, Filter, ArrowUpAZ, ArrowDownAZ, Save, Trash2, Plus, ArrowLeft, Search } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -131,16 +131,34 @@ function TrainingStatementsPageContent() {
     }).finally(() => {
       setLoading(prev => ({ ...prev, stats: false, candidates: false }));
     });
+    
+    // Load BNF per ED settings from local storage
+    const savedBnfPerEd = localStorage.getItem(`training-bnf-per-ed-${projectId}`);
+    if (savedBnfPerEd) {
+      setBnfPerEd(JSON.parse(savedBnfPerEd));
+    } else {
+      setBnfPerEd({});
+    }
 
   }, [projectId, toast]);
+  
+  // Save BNF per ED to local storage
+  useEffect(() => {
+    if (projectId && Object.keys(bnfPerEd).length > 0) {
+        localStorage.setItem(`training-bnf-per-ed-${projectId}`, JSON.stringify(bnfPerEd));
+    }
+  }, [bnfPerEd, projectId]);
 
   // --- Derived State & Calculations ---
   const villageStatsWithEdReq = useMemo(() => {
-    return villageStats.map(v => ({
-      ...v,
-      bnfPerEd: bnfPerEd[v.villageName] || 22,
-      edReq: Math.ceil(v.bnfCount / (bnfPerEd[v.villageName] || 22))
-    }));
+    return villageStats.map(v => {
+      const bnfPerEdValue = bnfPerEd[v.villageName] || 0;
+      return {
+        ...v,
+        bnfPerEd: bnfPerEdValue,
+        edReq: bnfPerEdValue > 0 ? Math.ceil(v.bnfCount / bnfPerEdValue) : 0,
+      };
+    });
   }, [villageStats, bnfPerEd]);
   
   const totalAvailableApplicants = useMemo(() => allProjectEducators.filter(e => e.interview_attendance === 'حضرت المقابلة' && e.training_qualification === null).length, [allProjectEducators]);
@@ -199,9 +217,17 @@ function TrainingStatementsPageContent() {
     
     const villageStat = villageStatsWithEdReq.find(v => v.villageName === selectedVillage);
 
-    if (villageCandidates.length < (villageStat?.edReq || 0) || villageCandidates.length === 0) {
-        const otherCandidates = qualifiedApplicants.filter(edu => edu.loc_name !== selectedVillage && !assignedCandidateIds.has(edu.applicant_id));
-        villageCandidates = [...villageCandidates, ...otherCandidates];
+    const hasZeroCandidates = villageCandidates.length === 0;
+    const hasInsufficientCandidates = villageCandidates.length < (villageStat?.edReq || 0);
+
+    if (hasZeroCandidates) {
+      if ((villageStat?.bnfCount || 0) >= 15) {
+          const otherCandidates = qualifiedApplicants.filter(edu => edu.loc_name !== selectedVillage && !assignedCandidateIds.has(edu.applicant_id));
+          villageCandidates = [...otherCandidates];
+      }
+    } else if (hasInsufficientCandidates) {
+      const otherCandidates = qualifiedApplicants.filter(edu => edu.loc_name !== selectedVillage && !assignedCandidateIds.has(edu.applicant_id));
+      villageCandidates = [...villageCandidates, ...otherCandidates];
     }
     
     let sorted = [...villageCandidates];
@@ -350,7 +376,7 @@ function TrainingStatementsPageContent() {
                     <ScrollArea className="h-[250px]"><Table><TableBody>
                         {loading.stats ? <TableRow><TableCell colSpan={5} className="h-24 text-center"><Loader2 className="animate-spin mx-auto"/></TableCell></TableRow> : villageStatsWithEdReq.map((row, i) => (
                             <TableRow key={i}><TableCell>{row.villageName}</TableCell><TableCell>{row.bnfCount}</TableCell>
-                            <TableCell><Input type="number" value={row.bnfPerEd} onChange={e => setBnfPerEd(prev => ({ ...prev, [row.villageName]: +e.target.value }))} className="w-20"/></TableCell>
+                            <TableCell><Input type="number" value={bnfPerEd[row.villageName] || ''} placeholder="0" onChange={e => setBnfPerEd(prev => ({ ...prev, [row.villageName]: +e.target.value }))} className="w-20"/></TableCell>
                             <TableCell>{row.edReq}</TableCell><TableCell>{row.edCount}</TableCell></TableRow>
                         ))}
                     </TableBody></Table></ScrollArea>
@@ -358,7 +384,7 @@ function TrainingStatementsPageContent() {
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pt-4">
                     <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Required Educators</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{totalEdReq}</div></CardContent></Card>
                     <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Required Spare (40%)</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{finalSpareReq}</div></CardContent></Card>
-                    <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Required Field Monitors</CardTitle></CardHeader><CardContent><Input type="number" value={manualMonitorsReq} onChange={(e) => setManualMonitorsReq(+e.target.value)} /></CardContent></Card>
+                    <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Required Field Monitors</CardTitle></CardHeader><CardContent><Input type="number" className="text-black" value={manualMonitorsReq} onChange={(e) => setManualMonitorsReq(+e.target.value)} /></CardContent></Card>
                     <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Total Qualified</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{finalTotalQualified}</div></CardContent></Card>
                 </div>
                 {validationMessage && <p className="text-sm font-semibold text-red-500">{validationMessage}</p>}
@@ -366,80 +392,91 @@ function TrainingStatementsPageContent() {
             )}
         </CardContent>
       </Card>
-
+      
       {projectId && (
-        <Card><CardHeader><CardTitle className="flex items-center gap-2">2. Select Qualified Educators</CardTitle></CardHeader>
-        <CardContent className="space-y-6">
-            <div className="bg-muted p-4 rounded-lg border">
-                <Select onValueChange={setSelectedVillage} value={selectedVillage}><SelectTrigger className="w-full md:w-1/3"><SelectValue placeholder="Choose Village..." /></SelectTrigger>
-                <SelectContent>{sortedVillages.map((v) => (<SelectItem key={v.villageName} value={v.villageName}>{v.villageName} (Avail: {v.edCount})</SelectItem>))}</SelectContent></Select>
-            </div>
+        <>
+            <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">2. Assign to Training Halls</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <div className="flex gap-2"><Input type="number" min={1} value={hallCount} onChange={e => setHallCount(Math.max(1, +e.target.value))} className="w-24"/><Button onClick={() => setHalls(Array.from({ length: hallCount }, (_, i) => ({ hallName: `Hall ${i + 1}`, hallNumber: i + 1 })))}>Create Halls</Button></div>
+                    {halls.length > 0 && <div className="grid grid-cols-1 md:grid-cols-3 gap-4">{halls.map((h, i) => (<Input key={i} value={h.hallName} onChange={e => {const copy=[...halls]; copy[i].hallName=e.target.value; setHalls(copy);}}/>))}</div>}
+                    
+                    <ScrollArea className="h-72 border rounded-md">
+                        <Table><TableHeader><TableRow><TableHead></TableHead><TableHead>ID</TableHead><TableHead>Name</TableHead><TableHead>Location</TableHead><TableHead>Score</TableHead><TableHead>Rank</TableHead></TableRow></TableHeader>
+                        <TableBody>
+                            {allProjectEducators.filter(e => e.interview_attendance === 'حضرت المقابلة' && e.training_qualification === 'مؤهلة للتدريب' && !e.training_hall_no).map(app => (
+                                <TableRow key={app.applicant_id}><TableCell><Checkbox checked={selectedApplicantsForHall.has(app.applicant_id)} onCheckedChange={c => setSelectedApplicantsForHall(p => { const s=new Set(p); if(c) s.add(app.applicant_id); else s.delete(app.applicant_id); return s;})}/></TableCell><TableCell>{app.applicant_id}</TableCell><TableCell>{app.applicant_name}</TableCell><TableCell>{app.loc_name}</TableCell><TableCell>{app.grand_total_score}</TableCell><TableCell>{app.grand_score_rank}</TableCell></TableRow>
+                            ))}
+                        </TableBody></Table>
+                    </ScrollArea>
+                    <div className="flex items-center gap-4">
+                        <Select onValueChange={v => setSelectedHall(v ? +v : null)}><SelectTrigger className="flex-1"><SelectValue placeholder="Select hall..." /></SelectTrigger><SelectContent>{halls.map(h=>(<SelectItem key={h.hallNumber} value={String(h.hallNumber)}>{h.hallName}</SelectItem>))}</SelectContent></Select>
+                        <Button onClick={handleLinkToHall} disabled={loading.saving}>Link {selectedApplicantsForHall.size} to Hall</Button>
+                    </div>
+                    {finalTotalQualified !== selectedApplicantsForHall.size && <p className="text-red-500 text-sm">Warning: Number of selected applicants for training ({selectedApplicantsForHall.size}) does not match the total qualified target ({finalTotalQualified}).</p>}
+                </CardContent>
+            </Card>
 
-            <div className="border rounded-md"><Table><TableHeader><TableRow>
-                <TableHead className="w-[50px]">Select</TableHead>
-                <TableHead>ID <ColumnFilter column="applicant_id" onSort={setSortConfig} /></TableHead>
-                <TableHead>Applicant Name <ColumnFilter column="applicant_name" onSort={setSortConfig} /></TableHead>
-                <TableHead>Qualification <ColumnFilter column="applicant_qualification" onSort={setSortConfig} /></TableHead>
-                <TableHead>Age Rank <ColumnFilter column="age_per_village_ranking" onSort={setSortConfig} /></TableHead>
-                <TableHead>Location <ColumnFilter column="loc_name" onSort={setSortConfig} /></TableHead>
-                <TableHead>Total Score <ColumnFilter column="grand_total_score" onSort={setSortConfig} /></TableHead>
-            </TableRow></TableHeader>
-            <TableBody>
-                {loading.candidates ? <TableRow><TableCell colSpan={7} className="h-24 text-center"><Loader2 className="animate-spin mx-auto"/></TableCell></TableRow> : candidates.map((c, idx) => (
-                    <TableRow key={c.applicant_id} onClick={() => setActiveCandidateIndex(idx)} className={activeCandidateIndex === idx ? "bg-muted" : ""}>
-                        <TableCell><Checkbox checked={selections[c.applicant_id]?.isSelected || false} onCheckedChange={(chk) => setSelections(p => ({...p, [c.applicant_id]: {...(p[c.applicant_id] || {contractType: 'مثقفة مجتمعية', workingVillage: selectedVillage}), isSelected: chk as boolean}}))}/></TableCell>
-                        <TableCell>{c.applicant_id}</TableCell><TableCell>{c.applicant_name}</TableCell><TableCell>{c.applicant_qualification}</TableCell><TableCell>{c.age_per_village_ranking}</TableCell><TableCell>{c.loc_name}</TableCell><TableCell>{c.grand_total_score}</TableCell>
-                    </TableRow>
-                ))}
-            </TableBody></Table></div>
+            <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">3. Mark Training Attendance</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <div className="relative"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input placeholder="Search by ID or name..." value={absenteeSearch} onChange={e=>setAbsenteeSearch(e.target.value)} className="pl-10" /></div>
+                    <ScrollArea className="h-72 border rounded-md"><Table>
+                        <TableHeader><TableRow><TableHead><Checkbox onCheckedChange={c => setSelectedAbsentees(c ? new Set(trainingAbsentees.map(a=>a.applicant_id)) : new Set())} /></TableHead><TableHead>ID</TableHead><TableHead>Name</TableHead><TableHead>Hall</TableHead></TableRow></TableHeader>
+                        <TableBody>
+                            {trainingAbsentees.filter(a => String(a.applicant_id).includes(absenteeSearch) || a.applicant_name.toLowerCase().includes(absenteeSearch.toLowerCase())).map(app => (
+                                <TableRow key={app.applicant_id}><TableCell><Checkbox checked={selectedAbsentees.has(app.applicant_id)} onCheckedChange={c => setSelectedAbsentees(p => {const s=new Set(p); if(c)s.add(app.applicant_id); else s.delete(app.applicant_id); return s;})} /></TableCell><TableCell>{app.applicant_id}</TableCell><TableCell>{app.applicant_name}</TableCell><TableCell>{app.training_hall_name}</TableCell></TableRow>
+                            ))}
+                        </TableBody>
+                    </Table></ScrollArea>
+                    <Button onClick={handleSubmitAttendance} disabled={loading.saving}>Submit Attendance ({selectedAbsentees.size} Absent)</Button>
+                </CardContent>
+            </Card>
 
-            <div className="flex justify-between items-center">
-                <div className="flex gap-2">
-                    <Button variant="outline" onClick={() => handleContractTypeSelect('مثقفة مجتمعية')}><Users className="mr-2 h-4 w-4"/>Community Educator</Button>
-                    <Button variant="outline" onClick={() => handleContractTypeSelect('احتياط')}><User className="mr-2 h-4 w-4"/>Spare</Button>
-                    <Button variant="outline" onClick={() => handleContractTypeSelect('رقابة')}><Briefcase className="mr-2 h-4 w-4"/>Field Monitor</Button>
-                </div>
-                <Button onClick={handleSaveSelections} disabled={loading.saving}><Save className="mr-2 h-4 w-4"/>Save Selections</Button>
-            </div>
-        </CardContent></Card>
-      )}
+            <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">4. Select Qualified Educators</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                    <div className="bg-muted p-4 rounded-lg border">
+                        <Select onValueChange={setSelectedVillage} value={selectedVillage}><SelectTrigger className="w-full md:w-1/3"><SelectValue placeholder="Choose Village..." /></SelectTrigger>
+                        <SelectContent>{sortedVillages.map((v) => (<SelectItem key={v.villageName} value={v.villageName}>{v.villageName} (Avail: {v.edCount})</SelectItem>))}</SelectContent></Select>
+                    </div>
 
-      {projectId && (
-        <Card><CardHeader><CardTitle>3. Assign to Training Halls</CardTitle></CardHeader>
-        <CardContent className="space-y-4">
-            <div className="flex gap-2"><Input type="number" min={1} value={hallCount} onChange={e => setHallCount(Math.max(1, +e.target.value))} className="w-24"/><Button onClick={() => setHalls(Array.from({ length: hallCount }, (_, i) => ({ hallName: `Hall ${i + 1}`, hallNumber: i + 1 })))}>Create Halls</Button></div>
-            {halls.length > 0 && <div className="grid grid-cols-1 md:grid-cols-3 gap-4">{halls.map((h, i) => (<Input key={i} value={h.hallName} onChange={e => {const copy=[...halls]; copy[i].hallName=e.target.value; setHalls(copy);}}/>))}</div>}
-            
-            <ScrollArea className="h-72 border rounded-md">
-                <Table><TableHeader><TableRow><TableHead></TableHead><TableHead>ID</TableHead><TableHead>Name</TableHead><TableHead>Location</TableHead><TableHead>Score</TableHead><TableHead>Rank</TableHead></TableRow></TableHeader>
-                <TableBody>
-                    {allProjectEducators.filter(e => e.interview_attendance === 'حضرت المقابلة' && e.training_qualification === null).map(app => (
-                        <TableRow key={app.applicant_id}><TableCell><Checkbox checked={selectedApplicantsForHall.has(app.applicant_id)} onCheckedChange={c => setSelectedApplicantsForHall(p => { const s=new Set(p); if(c) s.add(app.applicant_id); else s.delete(app.applicant_id); return s;})}/></TableCell><TableCell>{app.applicant_id}</TableCell><TableCell>{app.applicant_name}</TableCell><TableCell>{app.loc_name}</TableCell><TableCell>{app.grand_total_score}</TableCell><TableCell>{app.grand_score_rank}</TableCell></TableRow>
-                    ))}
-                </TableBody></Table>
-            </ScrollArea>
-            <div className="flex items-center gap-4">
-                <Select onValueChange={v => setSelectedHall(v ? +v : null)}><SelectTrigger className="flex-1"><SelectValue placeholder="Select hall..." /></SelectTrigger><SelectContent>{halls.map(h=>(<SelectItem key={h.hallNumber} value={String(h.hallNumber)}>{h.hallName}</SelectItem>))}</SelectContent></Select>
-                <Button onClick={handleLinkToHall} disabled={loading.saving}>Link {selectedApplicantsForHall.size} to Hall & Qualify</Button>
-            </div>
-            {finalTotalQualified !== selectedApplicantsForHall.size && <p className="text-red-500 text-sm">Warning: Number of selected applicants for training ({selectedApplicantsForHall.size}) does not match the total qualified target ({finalTotalQualified}).</p>}
-        </CardContent></Card>
-      )}
+                    <div className="border rounded-md"><Table><TableHeader><TableRow>
+                        <TableHead className="w-[50px]">Select</TableHead>
+                        <TableHead>ID <ColumnFilter column="applicant_id" onSort={setSortConfig} /></TableHead>
+                        <TableHead>Applicant Name <ColumnFilter column="applicant_name" onSort={setSortConfig} /></TableHead>
+                        <TableHead>Qualification <ColumnFilter column="applicant_qualification" onSort={setSortConfig} /></TableHead>
+                        <TableHead>Age Rank <ColumnFilter column="age_per_village_ranking" onSort={setSortConfig} /></TableHead>
+                        <TableHead>Location <ColumnFilter column="loc_name" onSort={setSortConfig} /></TableHead>
+                        <TableHead>Total Score <ColumnFilter column="grand_total_score" onSort={setSortConfig} /></TableHead>
+                    </TableRow></TableHeader>
+                    <TableBody>
+                        {loading.candidates ? <TableRow><TableCell colSpan={7} className="h-24 text-center"><Loader2 className="animate-spin mx-auto"/></TableCell></TableRow> : candidates.map((c, idx) => (
+                            <TableRow key={c.applicant_id} onClick={() => setActiveCandidateIndex(idx)} className={activeCandidateIndex === idx ? "bg-muted" : ""}>
+                                <TableCell><Checkbox checked={selections[c.applicant_id]?.isSelected || false} onCheckedChange={(chk) => setSelections(p => ({...p, [c.applicant_id]: {...(p[c.applicant_id] || {contractType: 'مثقفة مجتمعية', workingVillage: selectedVillage}), isSelected: chk as boolean}}))}/></TableCell>
+                                <TableCell>{c.applicant_id}</TableCell><TableCell>{c.applicant_name}</TableCell><TableCell>{c.applicant_qualification}</TableCell><TableCell>{c.age_per_village_ranking}</TableCell><TableCell>{c.loc_name}</TableCell><TableCell>{c.grand_total_score}</TableCell>
+                            </TableRow>
+                        ))}
+                    </TableBody></Table></div>
 
-      {projectId && (
-        <Card><CardHeader><CardTitle>4. Mark Training Attendance</CardTitle></CardHeader>
-        <CardContent className="space-y-4">
-            <div className="relative"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input placeholder="Search by ID or name..." value={absenteeSearch} onChange={e=>setAbsenteeSearch(e.target.value)} className="pl-10" /></div>
-            <ScrollArea className="h-72 border rounded-md"><Table>
-                <TableHeader><TableRow><TableHead><Checkbox onCheckedChange={c => setSelectedAbsentees(c ? new Set(trainingAbsentees.map(a=>a.applicant_id)) : new Set())} /></TableHead><TableHead>ID</TableHead><TableHead>Name</TableHead></TableRow></TableHeader>
-                <TableBody>
-                    {trainingAbsentees.filter(a => String(a.applicant_id).includes(absenteeSearch) || a.applicant_name.toLowerCase().includes(absenteeSearch.toLowerCase())).map(app => (
-                        <TableRow key={app.applicant_id}><TableCell><Checkbox checked={selectedAbsentees.has(app.applicant_id)} onCheckedChange={c => setSelectedAbsentees(p => {const s=new Set(p); if(c)s.add(app.applicant_id); else s.delete(app.applicant_id); return s;})} /></TableCell><TableCell>{app.applicant_id}</TableCell><TableCell>{app.applicant_name}</TableCell></TableRow>
-                    ))}
-                </TableBody>
-            </Table></ScrollArea>
-            <Button onClick={handleSubmitAttendance} disabled={loading.saving}>Submit Attendance ({selectedAbsentees.size} Absent)</Button>
-        </CardContent></Card>
+                    <div className="flex justify-between items-center">
+                        <div className="flex gap-2">
+                            <Button variant="outline" onClick={() => handleContractTypeSelect('مثقفة مجتمعية')}><Users className="mr-2 h-4 w-4"/>Community Educator</Button>
+                            <Button variant="outline" onClick={() => handleContractTypeSelect('احتياط')}><User className="mr-2 h-4 w-4"/>Spare</Button>
+                            <Button variant="outline" onClick={() => handleContractTypeSelect('رقابة')}><Briefcase className="mr-2 h-4 w-4"/>Field Monitor</Button>
+                        </div>
+                        <Button onClick={handleSaveSelections} disabled={loading.saving}><Save className="mr-2 h-4 w-4"/>Save Selections</Button>
+                    </div>
+                </CardContent>
+            </Card>
+
+        </>
       )}
 
     </div>
