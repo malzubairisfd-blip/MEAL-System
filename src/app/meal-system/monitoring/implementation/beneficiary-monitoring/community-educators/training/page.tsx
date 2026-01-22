@@ -221,7 +221,7 @@ function TrainingStatementsPageContent() {
   }, [villageStats, bnfPerEd]);
   
   const totalAvailableApplicants = useMemo(() => {
-    return allProjectEducators.filter(e => e.training_qualification === 'حضرت التدريب').length;
+    return allProjectEducators.filter(e => e.interview_attendance === 'حضرت المقابلة' && (e.training_qualification === 'مؤهلة للتدريب' || e.training_qualification === null)).length;
   }, [allProjectEducators]);
 
   const { totalEdReq, finalSpareReq, finalTotalQualified } = useMemo(() => {
@@ -402,7 +402,7 @@ function TrainingStatementsPageContent() {
   };
   
   const applicantsForHallAssignment = useMemo(() => {
-    return allProjectEducators.filter(e => e.interview_attendance === 'حضرت المقابلة' && e.training_qualification === null);
+    return allProjectEducators.filter(e => e.interview_attendance === 'حضرت المقابلة' && e.training_qualification === null && e.training_hall_name === null);
   }, [allProjectEducators]);
 
   useEffect(() => {
@@ -543,10 +543,10 @@ function TrainingStatementsPageContent() {
                     </TableBody></Table></ScrollArea>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pt-4">
-                    <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Required Educators</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{totalEdReq}</div></CardContent></Card>
-                    <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Required Spare</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{finalSpareReq}</div></CardContent></Card>
-                    <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Required Field Monitors</CardTitle></CardHeader><CardContent><Input type="number" className="h-8 w-24 bg-card text-white" value={manualMonitorsReq} onChange={(e) => setManualMonitorsReq(+e.target.value)} /></CardContent></Card>
-                    <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Total Qualified</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{finalTotalQualified}</div></CardContent></Card>
+                    <SummaryCard icon={<Users />} title="Required Educators" value={totalEdReq} />
+                    <SummaryCard icon={<User />} title="Required Spare" value={finalSpareReq} />
+                    <SummaryCard icon={<Briefcase />} title="Required Field Monitors" value={<Input type="number" className="h-8 w-24 bg-card text-white" value={manualMonitorsReq} onChange={(e) => setManualMonitorsReq(+e.target.value)} />} />
+                    <SummaryCard icon={<UserCheck />} title="Total Qualified" value={finalTotalQualified} />
                 </div>
                 </>
             )}
@@ -751,3 +751,5 @@ export default function TrainingPage() {
         </Suspense>
     )
 }
+
+    
