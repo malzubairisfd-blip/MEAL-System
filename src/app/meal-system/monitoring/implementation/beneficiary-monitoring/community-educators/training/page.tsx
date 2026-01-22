@@ -98,6 +98,9 @@ function TrainingStatementsPageContent() {
   const [absenteeSearch, setAbsenteeSearch] = useState('');
   
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
+  const [qualifiedCandidatesSearch, setQualifiedCandidatesSearch] = useState('');
+  const [hallAssignmentSearch, setHallAssignmentSearch] = useState('');
+
 
   // --- Initial Project Load ---
   useEffect(() => {
@@ -367,6 +370,19 @@ function TrainingStatementsPageContent() {
     );
   }, [absenteeSearch, trainingAbsentees]);
 
+  const handleAbsenteeToggle = (applicantId: number, checked: boolean | "indeterminate") => {
+    if (typeof checked !== 'boolean') return;
+    setSelectedAbsentees(prev => {
+        const newSet = new Set(prev);
+        if (checked) {
+            newSet.add(applicantId);
+        } else {
+            newSet.delete(applicantId);
+        }
+        return newSet;
+    });
+};
+
   const handleSubmitAttendance = async (present: boolean) => {
     setLoading(p => ({...p, saving: true}));
     try {
@@ -388,6 +404,72 @@ function TrainingStatementsPageContent() {
     } finally {
         setLoading(p => ({...p, saving: false}));
     }
+  };
+
+  const filteredCandidates = useMemo(() => {
+      if (!qualifiedCandidatesSearch.trim()) return candidates;
+      const searchTerms = qualifiedCandidatesSearch.split(',').map(term => term.trim().toLowerCase()).filter(Boolean);
+      if (searchTerms.length === 0) return candidates;
+      return candidates.filter(app => 
+          searchTerms.some(term => 
+              String(app.applicant_id).toLowerCase().includes(term) || 
+              app.applicant_name?.toLowerCase().includes(term)
+          )
+      );
+  }, [qualifiedCandidatesSearch, candidates]);
+
+  const filteredApplicantsForHallAssignment = useMemo(() => {
+      if (!hallAssignmentSearch.trim()) return applicantsForHallAssignment;
+      const searchTerms = hallAssignmentSearch.split(',').map(term => term.trim().toLowerCase()).filter(Boolean);
+      if (searchTerms.length === 0) return applicantsForHallAssignment;
+      return applicantsForHallAssignment.filter(app => 
+          searchTerms.some(term => 
+              String(app.applicant_id).toLowerCase().includes(term) || 
+              app.applicant_name?.toLowerCase().includes(term)
+          )
+      );
+  }, [hallAssignmentSearch, applicantsForHallAssignment]);
+
+  const handleSelectAllCandidates = (checked: boolean | 'indeterminate') => {
+      if (typeof checked !== 'boolean') return;
+      const newSelections = {...selections};
+      if (checked) {
+          filteredCandidates.forEach(c => {
+              newSelections[c.applicant_id] = {
+                  ...newSelections[c.applicant_id],
+                  isSelected: true,
+                  contractType: newSelections[c.applicant_id]?.contractType || 'مثقفة مجتمعية',
+                  workingVillage: selectedVillage
+              };
+          });
+      } else {
+          filteredCandidates.forEach(c => {
+              if(newSelections[c.applicant_id]) {
+                  newSelections[c.applicant_id].isSelected = false;
+              }
+          });
+      }
+      setSelections(newSelections);
+  };
+  
+  const handleSelectAllForHallAssignment = (checked: boolean | 'indeterminate') => {
+      if (typeof checked !== 'boolean') return;
+      const idsToChange = new Set(filteredApplicantsForHallAssignment.map(app => app.applicant_id));
+      if (checked) {
+          setSelectedApplicantsForHall(prev => new Set([...prev, ...idsToChange]));
+      } else {
+          setSelectedApplicantsForHall(prev => new Set([...prev].filter(id => !idsToChange.has(id))));
+      }
+  }
+
+  const handleSelectAllAbsentees = (checked: boolean | 'indeterminate') => {
+      if (typeof checked !== 'boolean') return;
+      const idsToChange = new Set(filteredAbsentees.map(a => a.applicant_id));
+      if (checked) {
+          setSelectedAbsentees(prev => new Set([...prev, ...idsToChange]));
+      } else {
+          setSelectedAbsentees(prev => new Set([...prev].filter(id => !idsToChange.has(id))));
+      }
   };
 
 
@@ -441,11 +523,37 @@ function TrainingStatementsPageContent() {
                     </div>
                     <Button type="button" variant="outline" onClick={() => setHalls(prev => [...prev, { hallName: `Hall ${prev.length + 1}`, hallNumber: prev.length + 1 }])}><Plus className="mr-2 h-4 w-4" /> Add Hall</Button>
                     
+                    <div className="relative">
+                        <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                        <Input
+                            placeholder="Search applicants..."
+                            value={hallAssignmentSearch}
+                            onChange={e => setHallAssignmentSearch(e.target.value)}
+                            className="pl-10 mb-2"
+                        />
+                    </div>
                     <ScrollArea className="h-72 border rounded-md">
-                        <Table><TableHeader><TableRow><TableHead></TableHead><TableHead>ID</TableHead><TableHead>Name</TableHead><TableHead>Location</TableHead><TableHead>Score</TableHead><TableHead>Rank</TableHead></TableRow></TableHeader>
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>
+                                        <Checkbox
+                                            checked={filteredApplicantsForHallAssignment.length > 0 && filteredApplicantsForHallAssignment.every(app => selectedApplicantsForHall.has(app.applicant_id))}
+                                            onCheckedChange={handleSelectAllForHallAssignment}
+                                        />
+                                    </TableHead>
+                                    <TableHead>ID</TableHead>
+                                    <TableHead>Name</TableHead>
+                                    <TableHead>Location</TableHead>
+                                    <TableHead>Score</TableHead>
+                                    <TableHead>Rank</TableHead>
+                                </TableRow>
+                            </TableHeader>
                         <TableBody>
-                            {applicantsForHallAssignment.map(app => (
-                                <TableRow key={app.applicant_id}><TableCell><Checkbox checked={selectedApplicantsForHall.has(app.applicant_id)} onCheckedChange={c => setSelectedApplicantsForHall(p => { const s=new Set(p); if(c) s.add(app.applicant_id); else s.delete(app.applicant_id); return s;})}/></TableCell><TableCell>{app.applicant_id}</TableCell><TableCell>{app.applicant_name}</TableCell><TableCell>{app.loc_name}</TableCell><TableCell>{app.grand_total_score}</TableCell><TableCell>{app.grand_score_rank}</TableCell></TableRow>
+                            {filteredApplicantsForHallAssignment.map(app => (
+                                <TableRow key={app.applicant_id}><TableCell>
+                                    <Checkbox checked={selectedApplicantsForHall.has(app.applicant_id)} onCheckedChange={c => setSelectedApplicantsForHall(p => { const s=new Set(p); if(c) s.add(app.applicant_id); else s.delete(app.applicant_id); return s;})}/>
+                                </TableCell><TableCell>{app.applicant_id}</TableCell><TableCell>{app.applicant_name}</TableCell><TableCell>{app.loc_name}</TableCell><TableCell>{app.grand_total_score}</TableCell><TableCell>{app.grand_score_rank}</TableCell></TableRow>
                             ))}
                         </TableBody></Table>
                     </ScrollArea>
@@ -461,15 +569,42 @@ function TrainingStatementsPageContent() {
                     <CardTitle className="flex items-center gap-2">3. Mark Training Attendance</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                    <div className="relative"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input placeholder="Search by ID or name (comma-separated)..." value={absenteeSearch} onChange={e=>setAbsenteeSearch(e.target.value)} className="pl-10" /></div>
-                    <ScrollArea className="h-72 border rounded-md"><Table>
-                        <TableHeader><TableRow><TableHead><Checkbox onCheckedChange={c => setSelectedAbsentees(c ? new Set(trainingAbsentees.map(a=>a.applicant_id)) : new Set())} /></TableHead><TableHead>ID</TableHead><TableHead>Name</TableHead><TableHead>Hall</TableHead></TableRow></TableHeader>
+                    <div className="relative">
+                        <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                        <Input placeholder="Search by ID or name (comma-separated)..." value={absenteeSearch} onChange={e=>setAbsenteeSearch(e.target.value)} className="pl-10 mb-2" />
+                    </div>
+                    <ScrollArea className="h-72 border rounded-md">
+                        <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>
+                                    <Checkbox 
+                                        checked={filteredAbsentees.length > 0 && filteredAbsentees.every(app => selectedAbsentees.has(app.applicant_id))}
+                                        onCheckedChange={handleSelectAllAbsentees}
+                                    />
+                                </TableHead>
+                                <TableHead>ID</TableHead>
+                                <TableHead>Name</TableHead>
+                                <TableHead>Hall</TableHead>
+                            </TableRow>
+                        </TableHeader>
                         <TableBody>
                             {filteredAbsentees.map(app => (
-                                <TableRow key={app.applicant_id}><TableCell><Checkbox checked={selectedAbsentees.has(app.applicant_id)} onCheckedChange={c => setSelectedAbsentees(p => {const s=new Set(p); if(c)s.add(app.applicant_id); else s.delete(app.applicant_id); return s;})} /></TableCell><TableCell>{app.applicant_id}</TableCell><TableCell>{app.applicant_name}</TableCell><TableCell>{app.training_hall_name}</TableCell></TableRow>
+                                <TableRow key={app.applicant_id}>
+                                    <TableCell>
+                                        <Checkbox 
+                                            checked={selectedAbsentees.has(app.applicant_id)} 
+                                            onCheckedChange={(checked) => handleAbsenteeToggle(app.applicant_id, checked)}
+                                        />
+                                    </TableCell>
+                                    <TableCell>{app.applicant_id}</TableCell>
+                                    <TableCell>{app.applicant_name}</TableCell>
+                                    <TableCell>{app.training_hall_name}</TableCell>
+                                </TableRow>
                             ))}
                         </TableBody>
-                    </Table></ScrollArea>
+                        </Table>
+                    </ScrollArea>
                     <div className='flex gap-2'>
                         <Button onClick={() => handleSubmitAttendance(false)} disabled={loading.saving || selectedAbsentees.size === 0}>Mark Selected as Absent</Button>
                         <Button onClick={() => handleSubmitAttendance(true)} disabled={loading.saving}>Mark Unselected as Attended</Button>
@@ -486,9 +621,23 @@ function TrainingStatementsPageContent() {
                         <Select onValueChange={setSelectedVillage} value={selectedVillage}><SelectTrigger className="w-full md:w-1/3"><SelectValue placeholder="Choose Village..." /></SelectTrigger>
                         <SelectContent>{sortedVillages.map((v) => (<SelectItem key={v.villageName} value={v.villageName}>{v.villageName} (Avail: {v.edCount})</SelectItem>))}</SelectContent></Select>
                     </div>
-
+                    
+                    <div className="relative">
+                        <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                        <Input 
+                            placeholder="Search candidates..."
+                            value={qualifiedCandidatesSearch}
+                            onChange={e => setQualifiedCandidatesSearch(e.target.value)}
+                            className="pl-10 mb-2"
+                        />
+                    </div>
                     <div className="border rounded-md"><Table><TableHeader><TableRow>
-                        <TableHead className="w-[50px]">Select</TableHead>
+                        <TableHead className="w-[50px]">
+                            <Checkbox
+                                checked={filteredCandidates.length > 0 && filteredCandidates.every(c => selections[c.applicant_id]?.isSelected)}
+                                onCheckedChange={handleSelectAllCandidates}
+                            />
+                        </TableHead>
                         <TableHead>ID <ColumnFilter column="applicant_id" onSort={setSortConfig} /></TableHead>
                         <TableHead>Applicant Name <ColumnFilter column="applicant_name" onSort={setSortConfig} /></TableHead>
                         <TableHead>Qualification <ColumnFilter column="applicant_qualification" onSort={setSortConfig} /></TableHead>
@@ -497,9 +646,24 @@ function TrainingStatementsPageContent() {
                         <TableHead>Total Score <ColumnFilter column="grand_total_score" onSort={setSortConfig} /></TableHead>
                     </TableRow></TableHeader>
                     <TableBody>
-                        {loading.candidates ? <TableRow><TableCell colSpan={7} className="h-24 text-center"><Loader2 className="animate-spin mx-auto"/></TableCell></TableRow> : candidates.map((c, idx) => (
+                        {loading.candidates ? <TableRow><TableCell colSpan={7} className="h-24 text-center"><Loader2 className="animate-spin mx-auto"/></TableCell></TableRow> : filteredCandidates.map((c, idx) => (
                             <TableRow key={c.applicant_id} onClick={() => setActiveCandidateIndex(idx)} className={activeCandidateIndex === idx ? "bg-muted" : ""}>
-                                <TableCell><Checkbox checked={selections[c.applicant_id]?.isSelected || false} onCheckedChange={(chk) => setSelections(p => ({...p, [c.applicant_id]: {...(p[c.applicant_id] || {contractType: 'مثقفة مجتمعية', workingVillage: selectedVillage}), isSelected: chk as boolean}}))}/></TableCell>
+                                <TableCell>
+                                    <Checkbox 
+                                        checked={selections[c.applicant_id]?.isSelected || false} 
+                                        onCheckedChange={(checked) => {
+                                            setSelections(prev => ({
+                                                ...prev,
+                                                [c.applicant_id]: {
+                                                    ...prev[c.applicant_id],
+                                                    isSelected: !!checked,
+                                                    contractType: prev[c.applicant_id]?.contractType || 'مثقفة مجتمعية',
+                                                    workingVillage: selectedVillage,
+                                                }
+                                            }));
+                                        }}
+                                    />
+                                </TableCell>
                                 <TableCell>{c.applicant_id}</TableCell><TableCell>{c.applicant_name}</TableCell><TableCell>{c.applicant_qualification}</TableCell><TableCell>{c.age_per_village_ranking}</TableCell><TableCell>{c.loc_name}</TableCell><TableCell>{c.grand_total_score}</TableCell>
                             </TableRow>
                         ))}
