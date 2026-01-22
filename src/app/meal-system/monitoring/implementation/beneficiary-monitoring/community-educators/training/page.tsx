@@ -210,7 +210,7 @@ function TrainingStatementsPageContent() {
     const assignedCandidateIds = new Set(Object.keys(selections).map(Number));
 
     const qualifiedApplicants = allProjectEducators.filter(
-        edu => edu.interview_attendance === 'حضرت المقابلة' && edu.training_qualification === null
+        edu => edu.interview_attendance === 'حضرت المقابلة'
     );
 
     let villageCandidates = qualifiedApplicants.filter(edu => edu.loc_name === selectedVillage && !assignedCandidateIds.has(edu.applicant_id));
@@ -226,6 +226,8 @@ function TrainingStatementsPageContent() {
     } else if (hasInsufficientCandidates) {
         const otherCandidates = qualifiedApplicants.filter(edu => edu.loc_name !== selectedVillage && !assignedCandidateIds.has(edu.applicant_id));
         villageCandidates = [...villageCandidates, ...otherCandidates];
+    } else if (hasZeroCandidates && villageStat && villageStat.bnfCount < 15) {
+        villageCandidates = []; // Do not load others
     }
     
     let sorted = [...villageCandidates];
@@ -366,12 +368,12 @@ function TrainingStatementsPageContent() {
     );
   }, [absenteeSearch, trainingAbsentees]);
 
-  const handleSubmitAttendance = async () => {
+  const handleSubmitAttendance = async (present: boolean) => {
     setLoading(p => ({...p, saving: true}));
     try {
         const payload = {
-            attended: trainingAbsentees.filter(a => !selectedAbsentees.has(a.applicant_id)).map(a => a.applicant_id),
-            absent: Array.from(selectedAbsentees)
+            attended: present ? trainingAbsentees.filter(a => !selectedAbsentees.has(a.applicant_id)).map(a => a.applicant_id) : [],
+            absent: present ? [] : Array.from(selectedAbsentees)
         };
         const res = await fetch("/api/training/attendance", { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)});
         if(!res.ok) throw new Error("Failed to submit attendance.");
@@ -408,7 +410,7 @@ function TrainingStatementsPageContent() {
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pt-4">
                     <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Required Educators</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{totalEdReq}</div></CardContent></Card>
                     <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Required Spare</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{finalSpareReq}</div></CardContent></Card>
-                    <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Required Field Monitors</CardTitle></CardHeader><CardContent><Input type="number" className="h-8 w-24 bg-background" value={manualMonitorsReq} onChange={(e) => setManualMonitorsReq(+e.target.value)} /></CardContent></Card>
+                    <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Required Field Monitors</CardTitle></CardHeader><CardContent><Input type="number" className="h-8 w-24 bg-card text-white" value={manualMonitorsReq} onChange={(e) => setManualMonitorsReq(+e.target.value)} /></CardContent></Card>
                     <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Total Qualified</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{finalTotalQualified}</div></CardContent></Card>
                 </div>
                  {validationMessage && <p className="text-sm text-amber-500">{validationMessage}</p>}
@@ -464,7 +466,10 @@ function TrainingStatementsPageContent() {
                             ))}
                         </TableBody>
                     </Table></ScrollArea>
-                    <Button onClick={handleSubmitAttendance} disabled={loading.saving}>Submit Attendance ({selectedAbsentees.size} Absent)</Button>
+                    <div className='flex gap-2'>
+                        <Button onClick={() => handleSubmitAttendance(false)} disabled={loading.saving || selectedAbsentees.size === 0}>Mark Selected as Absent</Button>
+                        <Button onClick={() => handleSubmitAttendance(true)} disabled={loading.saving}>Mark Unselected as Attended</Button>
+                    </div>
                 </CardContent>
             </Card>
             

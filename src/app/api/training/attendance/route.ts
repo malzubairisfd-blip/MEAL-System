@@ -9,8 +9,8 @@ export async function POST(request: Request) {
   const body = await request.json();
   const { attended, absent } = body; 
 
-  if (!Array.isArray(attended) || !Array.isArray(absent)) {
-      return NextResponse.json({ error: 'Invalid payload. "attended" and "absent" arrays are required.' }, { status: 400 });
+  if (!Array.isArray(attended) && !Array.isArray(absent)) {
+      return NextResponse.json({ error: 'Invalid payload. "attended" and/or "absent" arrays are required.' }, { status: 400 });
   }
 
   let db;
@@ -21,13 +21,17 @@ export async function POST(request: Request) {
 
       const transaction = db.transaction((attendedIds, absentIds) => {
         let changes = 0;
-        for (const id of attendedIds) {
-            const info = updateStmt.run('حضرت التدريب', id);
-            changes += info.changes;
+        if (Array.isArray(attendedIds)) {
+            for (const id of attendedIds) {
+                const info = updateStmt.run('حضرت التدريب', id);
+                changes += info.changes;
+            }
         }
-         for (const id of absentIds) {
-            const info = updateStmt.run('غائبة من التدريب', id);
-            changes += info.changes;
+        if (Array.isArray(absentIds)) {
+            for (const id of absentIds) {
+                const info = updateStmt.run('غائبة من التدريب', id);
+                changes += info.changes;
+            }
         }
         return changes;
       });
