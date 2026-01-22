@@ -250,14 +250,10 @@ function TrainingStatementsPageContent() {
 
     const assignedCandidateIds = new Set(Object.keys(selections).map(Number));
 
-    let qualifiedApplicants = allProjectEducators.filter(
-      edu => edu.training_qualification === 'حضرت التدريب'
+    const qualifiedApplicants = allProjectEducators.filter(
+      edu => edu.training_attendance === 'حضرت التدريب'
     );
     
-    if (qualifiedApplicants.length === 0) {
-        qualifiedApplicants = allProjectEducators.filter(e => e.interview_attendance === 'حضرت المقابلة');
-    }
-
     let villageCandidates = qualifiedApplicants.filter(edu => edu.loc_name === selectedVillage && !assignedCandidateIds.has(edu.applicant_id));
     
     const villageStat = villageStatsWithEdReq.find(v => v.villageName === selectedVillage);
