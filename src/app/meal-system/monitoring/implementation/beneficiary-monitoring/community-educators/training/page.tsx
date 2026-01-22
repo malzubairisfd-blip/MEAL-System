@@ -14,6 +14,7 @@ import { Loader2, FileText, UserCheck, User, Users, Briefcase, Filter, ArrowUpAZ
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 
 // --- Types ---
 type Project = { projectId: string; projectName: string };
@@ -109,12 +110,7 @@ function TrainingStatementsPageContent() {
   const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>({ key: 'grand_score_rank', direction: 'asc' });
   const [qualifiedCandidatesSearch, setQualifiedCandidatesSearch] = useState('');
   const [hallAssignmentSearch, setHallAssignmentSearch] = useState('');
-
-  const [selectedContractTypes, setSelectedContractTypes] = useState({
-    'مثقفة مجتمعية': 0,
-    'رقابة': 0,
-    'احتياط': 0
-  });
+  const [currentlySelectedApplicantId, setCurrentlySelectedApplicantId] = useState<number | null>(null);
 
 
   // --- Initial Project Load ---
@@ -161,12 +157,10 @@ function TrainingStatementsPageContent() {
     if (!projectId) return;
     
     const savedHallSelections = localStorage.getItem(getLocalStorageKey('hall'));
-    if (savedHallSelections) setSelectedApplicantsForHall(new Set(JSON.parse(savedHallSelections)));
-    else setSelectedApplicantsForHall(new Set());
+    setSelectedApplicantsForHall(savedHallSelections ? new Set(JSON.parse(savedHallSelections)) : new Set());
 
     const savedAbsenteeSelections = localStorage.getItem(getLocalStorageKey('absentee'));
-    if (savedAbsenteeSelections) setSelectedAbsentees(new Set(JSON.parse(savedAbsenteeSelections)));
-    else setSelectedAbsentees(new Set());
+    setSelectedAbsentees(savedAbsenteeSelections ? new Set(JSON.parse(savedAbsenteeSelections)) : new Set());
     
     const savedBnfPerEd = localStorage.getItem(`training-bnf-per-ed-${projectId}`);
     if (savedBnfPerEd) {
@@ -246,13 +240,11 @@ function TrainingStatementsPageContent() {
   useEffect(() => {
     if (!selectedVillage) return;
 
-    const assignedCandidateIds = new Set(Object.keys(selections).map(Number));
-
     const qualifiedApplicants = allProjectEducators.filter(
       edu => edu.training_attendance === 'حضرت التدريب'
     );
     
-    let villageCandidates = qualifiedApplicants.filter(edu => edu.loc_name === selectedVillage && !assignedCandidateIds.has(edu.applicant_id));
+    let villageCandidates = qualifiedApplicants.filter(edu => edu.loc_name === selectedVillage);
     
     const villageStat = villageStatsWithEdReq.find(v => v.villageName === selectedVillage);
 
@@ -260,10 +252,10 @@ function TrainingStatementsPageContent() {
     const hasInsufficientCandidates = villageCandidates.length < (villageStat?.edReq || 0);
 
     if (hasZeroCandidates && villageStat && villageStat.bnfCount >= 15) {
-        const otherCandidates = qualifiedApplicants.filter(edu => edu.loc_name !== selectedVillage && !assignedCandidateIds.has(edu.applicant_id));
+        const otherCandidates = qualifiedApplicants.filter(edu => edu.loc_name !== selectedVillage);
         villageCandidates = [...otherCandidates];
     } else if (hasInsufficientCandidates) {
-        const otherCandidates = qualifiedApplicants.filter(edu => edu.loc_name !== selectedVillage && !assignedCandidateIds.has(edu.applicant_id));
+        const otherCandidates = qualifiedApplicants.filter(edu => edu.loc_name !== selectedVillage);
         villageCandidates = [...villageCandidates, ...otherCandidates];
     } else if (hasZeroCandidates && villageStat && villageStat.bnfCount < 15) {
         villageCandidates = [];
@@ -299,41 +291,19 @@ function TrainingStatementsPageContent() {
   }, [selectedVillage, allProjectEducators, villageStatsWithEdReq, selections, sortConfig]);
 
   useEffect(() => {
-    const counts = { 'مثقفة مجتمعية': 0, 'رقابة': 0, 'احتياط': 0 };
-    Object.values(selections).forEach(sel => {
-      if (sel.isSelected && sel.contractType) {
-        counts[sel.contractType]++;
-      }
-    });
-    setSelectedContractTypes(counts);
-  }, [selections]);
-
-
-  const handleSaveSelections = async () => {
-    const payload = Object.entries(selections)
-      .filter(([_, sel]) => sel.isSelected)
-      .map(([id, sel]) => ({ 
-        applicant_id: Number(id), 
-        contract_type: sel.contractType, 
-        working_village: sel.workingVillage,
-      }));
-
-    if (payload.length === 0) {
-      toast({ title: "No selections to save." });
-      return;
+    if (loading.candidates || candidates.length === 0) {
+        setCurrentlySelectedApplicantId(null);
+        return;
     }
-    setLoading(prev => ({...prev, saving: true}));
-    try {
-        const res = await fetch("/api/ed-selection", { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-        if(!res.ok) throw new Error('Failed to save selections.');
-        toast({ title: "Success", description: "Educator contract types and working villages have been saved." });
-        fetchProjectData();
-    } catch(err: any) {
-        toast({ title: "Save Error", description: err.message, variant: "destructive" });
-    } finally {
-        setLoading(prev => ({...prev, saving: false}));
+
+    const firstUnassigned = candidates.find(c => !selections[c.applicant_id]?.isSelected);
+
+    if (firstUnassigned) {
+        setCurrentlySelectedApplicantId(firstUnassigned.applicant_id);
+    } else {
+        setCurrentlySelectedApplicantId(null);
     }
-  };
+}, [candidates, selections, loading.candidates]);
 
   const handleLinkToHall = async () => {
       if (!selectedHall || selectedApplicantsForHall.size === 0) return toast({ title: "Incomplete", description: "Select a hall and applicants."});
@@ -439,24 +409,7 @@ function TrainingStatementsPageContent() {
       );
   }, [hallAssignmentSearch, applicantsForHallAssignment]);
 
-  const handleSelectAllCandidates = (checked: boolean | 'indeterminate') => {
-    if (typeof checked !== 'boolean') return;
-    const newSelections = { ...selections };
-    filteredCandidates.forEach(c => {
-      if (checked) {
-        newSelections[c.applicant_id] = {
-          isSelected: true,
-          contractType: selections[c.applicant_id]?.contractType || 'مثقفة مجتمعية',
-          workingVillage: selectedVillage,
-        };
-      } else {
-        delete newSelections[c.applicant_id];
-      }
-    });
-    setSelections(newSelections);
-  };
-  
-  const handleSelectAllForHallAssignment = (checked: boolean | 'indeterminate') => {
+    const handleSelectAllForHallAssignment = (checked: boolean | 'indeterminate') => {
       if (typeof checked !== 'boolean') return;
       const idsToChange = new Set(filteredApplicantsForHallAssignment.map(app => app.applicant_id));
       if (checked) {
@@ -476,52 +429,75 @@ function TrainingStatementsPageContent() {
       }
   };
 
+    const selectedApplicantForDisplay = useMemo(() => {
+    if (!currentlySelectedApplicantId) return null;
+    return allProjectEducators.find(c => c.applicant_id === currentlySelectedApplicantId);
+    }, [currentlySelectedApplicantId, allProjectEducators]);
+
+  const handleAssignContractType = useCallback(async (type: SelectionState['contractType']) => {
+    if (!currentlySelectedApplicantId || !selectedVillage) {
+      toast({ title: "No applicant selected", variant: "destructive" });
+      return;
+    }
+    setLoading(p => ({ ...p, saving: true }));
+    const applicantToUpdate = {
+      applicant_id: currentlySelectedApplicantId,
+      contract_type: type,
+      working_village: selectedVillage,
+    };
+    setSelections(prev => ({ ...prev, [currentlySelectedApplicantId]: { isSelected: true, contractType: type, workingVillage: selectedVillage } }));
+    try {
+      const res = await fetch("/api/ed-selection", { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify([applicantToUpdate]) });
+      if (!res.ok) {
+        setSelections(prev => { const newS = { ...prev }; delete newS[currentlySelectedApplicantId]; return newS; });
+        throw new Error('Failed to save selection.');
+      }
+      toast({ title: "Saved", description: `Assigned ${type} to applicant ${currentlySelectedApplicantId}.` });
+      
+      const villageStats = villageStatsWithEdReq.find(v => v.villageName === selectedVillage);
+      const chosenCount = Object.values(selections).filter(s => s.isSelected && s.workingVillage === selectedVillage).length + 1;
+      
+      if (villageStats && chosenCount >= villageStats.edReq) {
+        const currentVillageIndex = sortedVillages.findIndex(v => v.villageName === selectedVillage);
+        if (currentVillageIndex < sortedVillages.length - 1) {
+          const nextVillage = sortedVillages[currentVillageIndex + 1];
+          setSelectedVillage(nextVillage.villageName);
+        } else {
+          toast({ title: "All villages complete!" });
+          setCurrentlySelectedApplicantId(null);
+        }
+      } else {
+        const currentIndex = filteredCandidates.findIndex(c => c.applicant_id === currentlySelectedApplicantId);
+        let nextUnassigned = null;
+        for (let i = currentIndex + 1; i < filteredCandidates.length; i++) {
+          if (!selections[filteredCandidates[i].applicant_id]?.isSelected) {
+            nextUnassigned = filteredCandidates[i];
+            break;
+          }
+        }
+        setCurrentlySelectedApplicantId(nextUnassigned ? nextUnassigned.applicant_id : null);
+      }
+    } catch (err: any) {
+      toast({ title: "Save Error", description: err.message, variant: "destructive" });
+      setSelections(prev => { const newS = { ...prev }; delete newS[currentlySelectedApplicantId]; return newS; });
+    } finally {
+      setLoading(p => ({ ...p, saving: false }));
+    }
+  }, [currentlySelectedApplicantId, selectedVillage, toast, filteredCandidates, selections, villageStatsWithEdReq, sortedVillages]);
+
   const selectedVillageStats = useMemo(() => {
     if (!selectedVillage || !villageStatsWithEdReq) return { required: 0, available: 0 };
     const village = villageStatsWithEdReq.find(v => v.villageName === selectedVillage);
     return {
       required: village?.edReq || 0,
-      available: village?.edCount || 0,
+      available: allProjectEducators.filter(e => e.loc_name === selectedVillage && e.training_attendance === 'حضرت التدريب').length || 0,
     };
-  }, [selectedVillage, villageStatsWithEdReq]);
+  }, [selectedVillage, villageStatsWithEdReq, allProjectEducators]);
 
   const chosenInVillage = useMemo(() => {
     return Object.values(selections).filter(s => s.isSelected && s.workingVillage === selectedVillage).length;
   }, [selections, selectedVillage]);
 
-  const selectedCandidatesForVillage = useMemo(() => {
-    const selectedIds = new Set(Object.keys(selections).filter(id => selections[id]?.isSelected).map(Number));
-    return allProjectEducators.filter(app => selectedIds.has(app.applicant_id) && selections[app.applicant_id]?.workingVillage === selectedVillage);
-  }, [selections, allProjectEducators, selectedVillage]);
-
-  const handleAssignContractType = useCallback((type: SelectionState['contractType']) => {
-    const idsToUpdate = Object.keys(selections).filter(id => selections[id].isSelected && selections[id].workingVillage === selectedVillage).map(Number);
-    
-    if (idsToUpdate.length === 0) {
-      toast({
-        title: "No applicants selected",
-        description: "Please select applicants from the list for this village.",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    setSelections(prev => {
-      const newSelections = { ...prev };
-      idsToUpdate.forEach(id => {
-        if (newSelections[id]) {
-          newSelections[id].contractType = type;
-        }
-      });
-      return newSelections;
-    });
-
-    toast({
-      title: "Contract Type Assigned",
-      description: `Assigned '${type}' to ${idsToUpdate.length} selected applicants for ${selectedVillage}.`
-    });
-
-  }, [selections, selectedVillage, toast]);
 
   return (
     <div className="space-y-8 pb-12">
@@ -683,13 +659,6 @@ function TrainingStatementsPageContent() {
                         />
                     </div>
                     <div className="border rounded-md"><Table><TableHeader><TableRow>
-                        <TableHead className="w-[50px]">
-                            <Checkbox
-                                className='bg-primary'
-                                checked={filteredCandidates.length > 0 && filteredCandidates.every(c => selections[c.applicant_id]?.isSelected)}
-                                onCheckedChange={handleSelectAllCandidates}
-                            />
-                        </TableHead>
                         <TableHead>ID <ColumnFilter column="applicant_id" onSort={setSortConfig} /></TableHead>
                         <TableHead>Applicant Name <ColumnFilter column="applicant_name" onSort={setSortConfig} /></TableHead>
                         <TableHead>Qualification <ColumnFilter column="applicant_qualification" onSort={setSortConfig} /></TableHead>
@@ -699,29 +668,8 @@ function TrainingStatementsPageContent() {
                         <TableHead>Rank <ColumnFilter column="grand_score_rank" onSort={setSortConfig} /></TableHead>
                     </TableRow></TableHeader>
                     <TableBody>
-                        {loading.candidates ? <TableRow><TableCell colSpan={8} className="h-24 text-center"><Loader2 className="animate-spin mx-auto"/></TableCell></TableRow> : filteredCandidates.map((c, idx) => (
-                            <TableRow key={c.applicant_id}>
-                                <TableCell>
-                                    <Checkbox 
-                                        checked={selections[c.applicant_id]?.isSelected || false} 
-                                        onCheckedChange={(checked) => {
-                                            const applicantId = c.applicant_id;
-                                            setSelections(prev => {
-                                                const newSelections = { ...prev };
-                                                if (checked) {
-                                                    newSelections[applicantId] = {
-                                                        isSelected: true,
-                                                        contractType: prev[applicantId]?.contractType || 'مثقفة مجتمعية',
-                                                        workingVillage: selectedVillage,
-                                                    };
-                                                } else {
-                                                   delete newSelections[applicantId];
-                                                }
-                                                return newSelections;
-                                            });
-                                        }}
-                                    />
-                                </TableCell>
+                        {loading.candidates ? <TableRow><TableCell colSpan={7} className="h-24 text-center"><Loader2 className="animate-spin mx-auto"/></TableCell></TableRow> : filteredCandidates.map((c) => (
+                            <TableRow key={c.applicant_id} className={cn(currentlySelectedApplicantId === c.applicant_id && "bg-blue-100 dark:bg-blue-900/30")}>
                                 <TableCell>{c.applicant_id}</TableCell><TableCell>{c.applicant_name}</TableCell><TableCell>{c.applicant_qualification}</TableCell><TableCell>{c.age_per_village_ranking}</TableCell><TableCell>{c.loc_name}</TableCell><TableCell>{c.grand_total_score}</TableCell><TableCell>{c.grand_score_rank}</TableCell>
                             </TableRow>
                         ))}
@@ -741,43 +689,30 @@ function TrainingStatementsPageContent() {
                             <SummaryCard icon={<UserCheck className="text-blue-500"/>} title="Chosen for Village" value={chosenInVillage} />
                         </div>
                         
-                        <h4 className="font-semibold text-lg mb-2">Selected Applicants for {selectedVillage}</h4>
-                        <div className="border rounded-md">
+                        <h4 className="font-semibold text-lg mb-2">Currently Selected Applicant</h4>
+                         <div className="border rounded-md">
                             <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>ID</TableHead>
-                                        <TableHead>Name</TableHead>
-                                        <TableHead>Location</TableHead>
-                                        <TableHead>Score</TableHead>
-                                        <TableHead>Rank</TableHead>
-                                        <TableHead>Contract Type</TableHead>
-                                    </TableRow>
-                                </TableHeader>
+                               <TableHeader><TableRow><TableHead>ID</TableHead><TableHead>Name</TableHead><TableHead>Location</TableHead><TableHead>Score</TableHead><TableHead>Rank</TableHead></TableRow></TableHeader>
                                 <TableBody>
-                                    {selectedCandidatesForVillage.length > 0 ? (
-                                        selectedCandidatesForVillage.map(c => (
-                                        <TableRow key={c.applicant_id}>
-                                            <TableCell>{c.applicant_id}</TableCell>
-                                            <TableCell>{c.applicant_name}</TableCell>
-                                            <TableCell>{c.loc_name}</TableCell>
-                                            <TableCell>{c.grand_total_score}</TableCell>
-                                            <TableCell>{c.grand_score_rank}</TableCell>
-                                            <TableCell>{selections[c.applicant_id]?.contractType}</TableCell>
+                                    {selectedApplicantForDisplay ? (
+                                        <TableRow>
+                                            <TableCell>{selectedApplicantForDisplay.applicant_id}</TableCell>
+                                            <TableCell>{selectedApplicantForDisplay.applicant_name}</TableCell>
+                                            <TableCell>{selectedApplicantForDisplay.loc_name}</TableCell>
+                                            <TableCell>{selectedApplicantForDisplay.grand_total_score}</TableCell>
+                                            <TableCell>{selectedApplicantForDisplay.grand_score_rank}</TableCell>
                                         </TableRow>
-                                    ))) : (
-                                        <TableRow><TableCell colSpan={6} className="text-center">No applicants selected for this village yet.</TableCell></TableRow>
+                                    ) : (
+                                        <TableRow><TableCell colSpan={5} className="text-center">No applicant selected for assignment.</TableCell></TableRow>
                                     )}
                                 </TableBody>
                             </Table>
                         </div>
-                        <div className="flex justify-between items-center mt-4">
-                            <div className="flex gap-2">
-                                <Button variant="outline" onClick={() => handleAssignContractType('مثقفة مجتمعية')}><Users className="mr-2 h-4 w-4"/>Assign as Community Educator</Button>
-                                <Button variant="outline" onClick={() => handleAssignContractType('احتياط')}><User className="mr-2 h-4 w-4"/>Assign as Spare</Button>
-                                <Button variant="outline" onClick={() => handleAssignContractType('رقابة')}><Briefcase className="mr-2 h-4 w-4"/>Assign as Field Monitor</Button>
-                            </div>
-                            <Button onClick={handleSaveSelections} disabled={loading.saving}><Save className="mr-2 h-4 w-4"/>Save Selections</Button>
+
+                        <div className="flex justify-start items-center mt-4 gap-2">
+                            <Button variant="outline" onClick={() => handleAssignContractType('مثقفة مجتمعية')}><Users className="mr-2 h-4 w-4"/>Assign as Community Educator</Button>
+                            <Button variant="outline" onClick={() => handleAssignContractType('احتياط')}><User className="mr-2 h-4 w-4"/>Assign as Spare</Button>
+                            <Button variant="outline" onClick={() => handleAssignContractType('رقابة')}><Briefcase className="mr-2 h-4 w-4"/>Assign as Field Monitor</Button>
                         </div>
                     </CardContent>
                 </Card>
