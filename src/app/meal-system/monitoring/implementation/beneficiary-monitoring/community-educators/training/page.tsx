@@ -213,7 +213,7 @@ function TrainingStatementsPageContent() {
     const assignedCandidateIds = new Set(Object.keys(selections).map(Number));
 
     const qualifiedApplicants = allProjectEducators.filter(
-      edu => edu.interview_attendance === 'حضرت المقابلة'
+      edu => edu.training_attendance === 'حضرت التدريب'
     );
 
     let villageCandidates = qualifiedApplicants.filter(edu => edu.loc_name === selectedVillage && !assignedCandidateIds.has(edu.applicant_id));
