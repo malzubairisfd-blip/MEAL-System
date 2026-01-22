@@ -21,13 +21,13 @@ export async function POST(request: Request) {
 
       const transaction = db.transaction((attendedIds, absentIds) => {
         let changes = 0;
-        if (Array.isArray(attendedIds)) {
+        if (Array.isArray(attendedIds) && attendedIds.length > 0) {
             for (const id of attendedIds) {
                 const info = updateStmt.run('حضرت التدريب', id);
                 changes += info.changes;
             }
         }
-        if (Array.isArray(absentIds)) {
+        if (Array.isArray(absentIds) && absentIds.length > 0) {
             for (const id of absentIds) {
                 const info = updateStmt.run('غائبة من التدريب', id);
                 changes += info.changes;

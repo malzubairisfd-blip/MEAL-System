@@ -131,7 +131,6 @@ function TrainingStatementsPageContent() {
       setLoading(prev => ({ ...prev, stats: false, candidates: false }));
     });
     
-    // Load BNF per ED settings from local storage
     const savedBnfPerEd = localStorage.getItem(`training-bnf-per-ed-${projectId}`);
     if (savedBnfPerEd) {
       setBnfPerEd(JSON.parse(savedBnfPerEd));
@@ -210,7 +209,7 @@ function TrainingStatementsPageContent() {
     const assignedCandidateIds = new Set(Object.keys(selections).map(Number));
 
     const qualifiedApplicants = allProjectEducators.filter(
-        edu => edu.interview_attendance === 'حضرت المقابلة'
+        edu => edu.interview_attendance === 'حضرت المقابلة' && edu.training_qualification === null
     );
 
     let villageCandidates = qualifiedApplicants.filter(edu => edu.loc_name === selectedVillage && !assignedCandidateIds.has(edu.applicant_id));
@@ -351,7 +350,7 @@ function TrainingStatementsPageContent() {
   }, [allProjectEducators]);
 
   useEffect(() => {
-    const qualifiedForTraining = allProjectEducators.filter(e => e.training_qualification === 'مؤهلة للتدريب');
+    const qualifiedForTraining = allProjectEducators.filter(e => e.training_qualification === 'مؤهلة للتدريب' && !e.training_attendance);
     setTrainingAbsentees(qualifiedForTraining);
   }, [allProjectEducators]);
 
@@ -378,7 +377,12 @@ function TrainingStatementsPageContent() {
         const res = await fetch("/api/training/attendance", { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)});
         if(!res.ok) throw new Error("Failed to submit attendance.");
         toast({ title: "Attendance Submitted" });
-        fetch(`/api/ed-selection`).then(r => r.json()).then(data => setAllProjectEducators(data.filter((e: any) => e.project_id === projectId)));
+        fetch(`/api/ed-selection`).then(r => r.json()).then(data => {
+            if(Array.isArray(data)) {
+                setAllProjectEducators(data.filter((e: any) => e.project_id === projectId));
+            }
+        });
+        setSelectedAbsentees(new Set()); // Clear selection
     } catch (err:any) {
          toast({ title: "Error", description: err.message, variant: "destructive" });
     } finally {
