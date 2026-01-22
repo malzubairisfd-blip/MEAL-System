@@ -23,12 +23,12 @@ export async function POST(req: Request) {
       }
 
       const updateStmt = db.prepare(
-        'UPDATE educators SET training_hall_no = ?, training_hall_name = ? WHERE applicant_id = ? AND project_id = ?'
+        'UPDATE educators SET training_hall_no = ?, training_hall_name = ?, training_qualification = ? WHERE applicant_id = ? AND project_id = ?'
       );
 
       const updateMany = db.transaction((applicants) => {
         for (const applicantId of applicants) {
-          updateStmt.run(hallNumber, hallName, applicantId, projectId);
+          updateStmt.run(hallNumber, hallName, 'مؤهلة للتدريب', applicantId, projectId);
         }
       });
 
