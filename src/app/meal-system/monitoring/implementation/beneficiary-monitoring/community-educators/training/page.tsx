@@ -174,9 +174,6 @@ function TrainingStatementsPageContent() {
     if (totalQualified > totalAvailableApplicants) {
         spare = Math.max(0, totalAvailableApplicants - totalRequired);
         totalQualified = totalRequired + spare;
-        setValidationMessage(`Warning: Target (${totalRequired + initialSpare}) exceeds available candidates (${totalAvailableApplicants}). Spare educators adjusted.`);
-    } else {
-        setValidationMessage('');
     }
     return { totalEdReq: totalEd, finalSpareReq: spare, finalTotalQualified: totalQualified };
   }, [villageStatsWithEdReq, manualMonitorsReq, totalAvailableApplicants]);
@@ -284,7 +281,12 @@ function TrainingStatementsPageContent() {
   const handleSaveSelections = async () => {
     const payload = Object.entries(selections)
       .filter(([_, sel]) => sel.isSelected)
-      .map(([id, sel]) => ({ applicant_id: Number(id), contract_type: sel.contractType, working_village: sel.workingVillage }));
+      .map(([id, sel]) => ({ 
+        applicant_id: Number(id), 
+        contract_type: sel.contractType, 
+        working_village: sel.workingVillage,
+        training_qualification: 'مؤهلة للتدريب' 
+      }));
 
     if (payload.length === 0) {
       toast({ title: "No selections to save." });
@@ -295,6 +297,14 @@ function TrainingStatementsPageContent() {
         const res = await fetch("/api/ed-selection", { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
         if(!res.ok) throw new Error('Failed to save selections.');
         toast({ title: "Success", description: "Educator contract types and working villages have been saved." });
+        
+        // Refetch educators to update UI
+        fetch(`/api/ed-selection`).then(r => r.json()).then(data => {
+            if(Array.isArray(data)) {
+                setAllProjectEducators(data.filter((e: any) => e.project_id === projectId));
+            }
+        });
+
     } catch(err: any) {
         toast({ title: "Save Error", description: err.message, variant: "destructive" });
     } finally {
@@ -324,8 +334,8 @@ function TrainingStatementsPageContent() {
           });
 
           toast({ title: "Success!", description: "Applicants linked to training hall and qualified."});
-          // Refresh data by re-fetching educators
           setSelectedApplicantsForHall(new Set());
+          
           // Refetch educators
           fetch(`/api/ed-selection`).then(r => r.json()).then(data => setAllProjectEducators(data.filter((e: any) => e.project_id === projectId)));
 
@@ -376,7 +386,7 @@ function TrainingStatementsPageContent() {
                     <ScrollArea className="h-[250px]"><Table><TableBody>
                         {loading.stats ? <TableRow><TableCell colSpan={5} className="h-24 text-center"><Loader2 className="animate-spin mx-auto"/></TableCell></TableRow> : villageStatsWithEdReq.map((row, i) => (
                             <TableRow key={i}><TableCell>{row.villageName}</TableCell><TableCell>{row.bnfCount}</TableCell>
-                            <TableCell><Input type="number" value={bnfPerEd[row.villageName] || ''} placeholder="0" onChange={e => setBnfPerEd(prev => ({ ...prev, [row.villageName]: +e.target.value }))} className="w-20"/></TableCell>
+                            <TableCell><Input type="number" value={bnfPerEd[row.villageName] || ''} placeholder="0" onChange={e => setBnfPerEd(prev => ({ ...prev, [row.villageName]: +e.target.value }))} className="w-20 text-black bg-white"/></TableCell>
                             <TableCell>{row.edReq}</TableCell><TableCell>{row.edCount}</TableCell></TableRow>
                         ))}
                     </TableBody></Table></ScrollArea>
@@ -384,10 +394,9 @@ function TrainingStatementsPageContent() {
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pt-4">
                     <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Required Educators</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{totalEdReq}</div></CardContent></Card>
                     <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Required Spare (40%)</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{finalSpareReq}</div></CardContent></Card>
-                    <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Required Field Monitors</CardTitle></CardHeader><CardContent><Input type="number" className="text-black" value={manualMonitorsReq} onChange={(e) => setManualMonitorsReq(+e.target.value)} /></CardContent></Card>
+                    <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Required Field Monitors</CardTitle></CardHeader><CardContent><Input type="number" className="h-8 w-24 bg-white text-black" value={manualMonitorsReq} onChange={(e) => setManualMonitorsReq(+e.target.value)} /></CardContent></Card>
                     <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Total Qualified</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{finalTotalQualified}</div></CardContent></Card>
                 </div>
-                {validationMessage && <p className="text-sm font-semibold text-red-500">{validationMessage}</p>}
                 </>
             )}
         </CardContent>
@@ -415,7 +424,6 @@ function TrainingStatementsPageContent() {
                         <Select onValueChange={v => setSelectedHall(v ? +v : null)}><SelectTrigger className="flex-1"><SelectValue placeholder="Select hall..." /></SelectTrigger><SelectContent>{halls.map(h=>(<SelectItem key={h.hallNumber} value={String(h.hallNumber)}>{h.hallName}</SelectItem>))}</SelectContent></Select>
                         <Button onClick={handleLinkToHall} disabled={loading.saving}>Link {selectedApplicantsForHall.size} to Hall</Button>
                     </div>
-                    {finalTotalQualified !== selectedApplicantsForHall.size && <p className="text-red-500 text-sm">Warning: Number of selected applicants for training ({selectedApplicantsForHall.size}) does not match the total qualified target ({finalTotalQualified}).</p>}
                 </CardContent>
             </Card>
 
