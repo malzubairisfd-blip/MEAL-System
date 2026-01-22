@@ -304,7 +304,7 @@ function TrainingStatementsPageContent() {
                 <div className="w-full md:w-1/3">
                     <label className="text-sm font-medium mb-1 block">Select Village</label>
                     <Select onValueChange={setSelectedVillage} value={selectedVillage}>
-                        <SelectTrigger className="bg-white">
+                        <SelectTrigger className="bg-white text-black">
                             <SelectValue placeholder="Choose Village..." />
                         </SelectTrigger>
                         <SelectContent>
@@ -444,4 +444,6 @@ export default function TrainingPage() {
         </Suspense>
     )
 }
+    
+
     

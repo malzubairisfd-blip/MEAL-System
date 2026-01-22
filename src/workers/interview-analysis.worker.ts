@@ -193,3 +193,5 @@ self.onmessage = async (event) => {
         postMessage({ type: 'error', error: e.message || 'An unknown error occurred in the worker.' });
     }
 };
+
+    
