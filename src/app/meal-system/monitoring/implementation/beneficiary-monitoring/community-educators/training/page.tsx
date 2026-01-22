@@ -108,14 +108,15 @@ function TrainingStatementsPageContent() {
   }, []);
 
   // --- Project Data Loading (Stats & Educators) ---
-  useEffect(() => {
+  const fetchProjectData = useCallback(async () => {
     if (!projectId) return;
 
     setLoading(prev => ({ ...prev, stats: true, candidates: true }));
-    Promise.all([
-      fetch(`/api/training/requirements?projectId=${projectId}`),
-      fetch('/api/ed-selection')
-    ]).then(async ([reqRes, edRes]) => {
+    try {
+      const [reqRes, edRes] = await Promise.all([
+        fetch(`/api/training/requirements?projectId=${projectId}`),
+        fetch('/api/ed-selection')
+      ]);
       if (reqRes.ok) {
         const data = await reqRes.json();
         setVillageStats(Array.isArray(data) ? data : []);
@@ -128,11 +129,11 @@ function TrainingStatementsPageContent() {
       } else {
         toast({ title: "Failed to load educators", variant: "destructive" });
       }
-    }).catch(err => {
+    } catch (err: any) {
       toast({ title: "Error loading project data", description: err.message, variant: "destructive" });
-    }).finally(() => {
+    } finally {
       setLoading(prev => ({ ...prev, stats: false, candidates: false }));
-    });
+    }
     
     const savedBnfPerEd = localStorage.getItem(`training-bnf-per-ed-${projectId}`);
     if (savedBnfPerEd) {
@@ -140,8 +141,11 @@ function TrainingStatementsPageContent() {
     } else {
       setBnfPerEd({});
     }
-
   }, [projectId, toast]);
+  
+  useEffect(() => {
+    fetchProjectData();
+  }, [fetchProjectData]);
   
   // Save BNF per ED to local storage
   useEffect(() => {
@@ -175,9 +179,6 @@ function TrainingStatementsPageContent() {
     if (totalQualified > totalAvailableApplicants) {
         spare = Math.max(0, totalAvailableApplicants - totalRequired);
         totalQualified = totalRequired + spare;
-        setValidationMessage(`Warning: Target (${totalRequired + initialSpare}) exceeds available candidates (${totalAvailableApplicants}). Spare educators adjusted to ${spare}.`);
-    } else {
-        setValidationMessage('');
     }
 
     return { totalEdReq: totalEd, finalSpareReq: spare, finalTotalQualified: totalQualified };
@@ -212,7 +213,7 @@ function TrainingStatementsPageContent() {
     const assignedCandidateIds = new Set(Object.keys(selections).map(Number));
 
     const qualifiedApplicants = allProjectEducators.filter(
-        edu => edu.interview_attendance === 'حضرت المقابلة' && edu.training_qualification === null
+      edu => edu.interview_attendance === 'حضرت المقابلة'
     );
 
     let villageCandidates = qualifiedApplicants.filter(edu => edu.loc_name === selectedVillage && !assignedCandidateIds.has(edu.applicant_id));
@@ -301,14 +302,7 @@ function TrainingStatementsPageContent() {
         const res = await fetch("/api/ed-selection", { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
         if(!res.ok) throw new Error('Failed to save selections.');
         toast({ title: "Success", description: "Educator contract types and working villages have been saved." });
-        
-        // Refetch educators to update UI
-        fetch(`/api/ed-selection`).then(r => r.json()).then(data => {
-            if(Array.isArray(data)) {
-                setAllProjectEducators(data.filter((e: any) => e.project_id === projectId));
-            }
-        });
-
+        fetchProjectData();
     } catch(err: any) {
         toast({ title: "Save Error", description: err.message, variant: "destructive" });
     } finally {
@@ -338,8 +332,7 @@ function TrainingStatementsPageContent() {
 
           toast({ title: "Success!", description: "Applicants linked to training hall and qualified."});
           setSelectedApplicantsForHall(new Set());
-          
-          fetch(`/api/ed-selection`).then(r => r.json()).then(data => setAllProjectEducators(data.filter((e: any) => e.project_id === projectId)));
+          fetchProjectData();
 
       } catch (err: any) {
           toast({ title: "Error", description: err.message, variant: "destructive" });
@@ -393,11 +386,7 @@ function TrainingStatementsPageContent() {
         const res = await fetch("/api/training/attendance", { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)});
         if(!res.ok) throw new Error("Failed to submit attendance.");
         toast({ title: "Attendance Submitted" });
-        fetch(`/api/ed-selection`).then(r => r.json()).then(data => {
-            if(Array.isArray(data)) {
-                setAllProjectEducators(data.filter((e: any) => e.project_id === projectId));
-            }
-        });
+        fetchProjectData();
         setSelectedAbsentees(new Set()); // Clear selection
     } catch (err:any) {
          toast({ title: "Error", description: err.message, variant: "destructive" });
@@ -499,7 +488,6 @@ function TrainingStatementsPageContent() {
                     <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Required Field Monitors</CardTitle></CardHeader><CardContent><Input type="number" className="h-8 w-24 bg-card text-white" value={manualMonitorsReq} onChange={(e) => setManualMonitorsReq(+e.target.value)} /></CardContent></Card>
                     <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Total Qualified</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{finalTotalQualified}</div></CardContent></Card>
                 </div>
-                 {validationMessage && <p className="text-sm text-amber-500">{validationMessage}</p>}
                 </>
             )}
         </CardContent>
