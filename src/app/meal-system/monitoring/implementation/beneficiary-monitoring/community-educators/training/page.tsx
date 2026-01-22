@@ -14,7 +14,6 @@ import { Loader2, FileText, UserCheck, User, Users, Briefcase, Filter, ArrowUpAZ
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 
 // --- Types ---
 type Project = { projectId: string; projectName: string };
@@ -98,8 +97,7 @@ function TrainingStatementsPageContent() {
   
   const [candidates, setCandidates] = useState<EducatorCandidate[]>([]);
   const [selections, setSelections] = useState<Record<number, SelectionState>>({});
-  const [activeCandidateIndex, setActiveCandidateIndex] = useState<number | null>(null);
-
+  
   const [halls, setHalls] = useState<Hall[]>([]);
   const [selectedHall, setSelectedHall] = useState<number | null>(null);
   const [selectedApplicantsForHall, setSelectedApplicantsForHall] = useState<Set<number>>(new Set());
@@ -126,11 +124,11 @@ function TrainingStatementsPageContent() {
 
   const getLocalStorageKey = useCallback((type: string) => `training-selections-${type}-${projectId}`, [projectId]);
 
-  // --- Project Data Loading (Stats & Educators) ---
   const fetchProjectData = useCallback(async () => {
     if (!projectId) return;
 
     setLoading(prev => ({ ...prev, stats: true, candidates: true }));
+    setSelections({}); // Reset selections when project changes
     try {
       const [reqRes, edRes] = await Promise.all([
         fetch(`/api/training/requirements?projectId=${projectId}`),
@@ -159,14 +157,9 @@ function TrainingStatementsPageContent() {
     fetchProjectData();
   }, [fetchProjectData]);
   
-  // --- Save/Load selections to/from local storage ---
-   useEffect(() => {
+  useEffect(() => {
     if (!projectId) return;
     
-    const savedSelections = localStorage.getItem(getLocalStorageKey('contract'));
-    if (savedSelections) setSelections(JSON.parse(savedSelections));
-    else setSelections({});
-
     const savedHallSelections = localStorage.getItem(getLocalStorageKey('hall'));
     if (savedHallSelections) setSelectedApplicantsForHall(new Set(JSON.parse(savedHallSelections)));
     else setSelectedApplicantsForHall(new Set());
@@ -184,10 +177,6 @@ function TrainingStatementsPageContent() {
   }, [projectId, getLocalStorageKey]);
 
   useEffect(() => {
-    if (projectId) localStorage.setItem(getLocalStorageKey('contract'), JSON.stringify(selections));
-  }, [selections, projectId, getLocalStorageKey]);
-
-  useEffect(() => {
     if (projectId) localStorage.setItem(getLocalStorageKey('hall'), JSON.stringify(Array.from(selectedApplicantsForHall)));
   }, [selectedApplicantsForHall, projectId, getLocalStorageKey]);
 
@@ -201,7 +190,6 @@ function TrainingStatementsPageContent() {
     }
   }, [bnfPerEd, projectId]);
 
-  // --- Derived State & Calculations ---
   const villageStatsWithEdReq = useMemo(() => {
     return villageStats.map(v => {
       const bnfPerEdValue = bnfPerEd[v.villageName] || 0;
@@ -255,7 +243,6 @@ function TrainingStatementsPageContent() {
   }, [villageStatsWithEdReq, selectedVillage]);
 
 
-  // --- Candidate Loading & Sorting ---
   useEffect(() => {
     if (!selectedVillage) return;
 
@@ -279,7 +266,7 @@ function TrainingStatementsPageContent() {
         const otherCandidates = qualifiedApplicants.filter(edu => edu.loc_name !== selectedVillage && !assignedCandidateIds.has(edu.applicant_id));
         villageCandidates = [...villageCandidates, ...otherCandidates];
     } else if (hasZeroCandidates && villageStat && villageStat.bnfCount < 15) {
-        villageCandidates = []; // Do not load others
+        villageCandidates = [];
     }
     
     let sorted = [...villageCandidates];
@@ -309,30 +296,7 @@ function TrainingStatementsPageContent() {
     }
 
     setCandidates(sorted);
-    setActiveCandidateIndex(0);
-
   }, [selectedVillage, allProjectEducators, villageStatsWithEdReq, selections, sortConfig]);
-
-  // --- Auto-advance Logic ---
-  useEffect(() => {
-      const currentVillageNeeds = villageStatsWithEdReq.find(v => v.villageName === selectedVillage);
-      if (!currentVillageNeeds || !candidates.length) return;
-
-      const currentSelectionsForVillage = Object.values(selections).filter(s => s.workingVillage === selectedVillage && s.contractType === 'مثقفة مجتمعية');
-
-      if (currentSelectionsForVillage.length >= currentVillageNeeds.edReq) {
-          const currentIndex = sortedVillages.findIndex(v => v.villageName === selectedVillage);
-          if (currentIndex < sortedVillages.length - 1) {
-              setSelectedVillage(sortedVillages[currentIndex + 1].villageName);
-          } else {
-              toast({ title: "All village requirements met." });
-          }
-      } else {
-          if(activeCandidateIndex !== null && activeCandidateIndex >= candidates.length - 1) {
-              // Reached end of list, do nothing or show message
-          }
-      }
-  }, [selections, activeCandidateIndex, candidates, selectedVillage, sortedVillages, villageStatsWithEdReq, toast]);
 
   useEffect(() => {
     const counts = { 'مثقفة مجتمعية': 0, 'رقابة': 0, 'احتياط': 0 };
@@ -345,19 +309,6 @@ function TrainingStatementsPageContent() {
   }, [selections]);
 
 
-  const handleContractTypeSelect = (type: SelectionState['contractType']) => {
-      if (activeCandidateIndex === null || !candidates[activeCandidateIndex]) return;
-      
-      const applicantId = candidates[activeCandidateIndex].applicant_id;
-      setSelections(prev => ({
-          ...prev,
-          [applicantId]: { isSelected: true, contractType: type, workingVillage: selectedVillage }
-      }));
-      
-      // Auto-advance
-      setActiveCandidateIndex(prev => (prev === null || prev >= candidates.length - 1) ? prev : prev + 1);
-  };
-  
   const handleSaveSelections = async () => {
     const payload = Object.entries(selections)
       .filter(([_, sel]) => sel.isSelected)
@@ -489,25 +440,20 @@ function TrainingStatementsPageContent() {
   }, [hallAssignmentSearch, applicantsForHallAssignment]);
 
   const handleSelectAllCandidates = (checked: boolean | 'indeterminate') => {
-      if (typeof checked !== 'boolean') return;
-      const newSelections = {...selections};
+    if (typeof checked !== 'boolean') return;
+    const newSelections = { ...selections };
+    filteredCandidates.forEach(c => {
       if (checked) {
-          filteredCandidates.forEach(c => {
-              newSelections[c.applicant_id] = {
-                  ...newSelections[c.applicant_id],
-                  isSelected: true,
-                  contractType: newSelections[c.applicant_id]?.contractType || 'مثقفة مجتمعية',
-                  workingVillage: selectedVillage
-              };
-          });
+        newSelections[c.applicant_id] = {
+          isSelected: true,
+          contractType: selections[c.applicant_id]?.contractType || 'مثقفة مجتمعية',
+          workingVillage: selectedVillage,
+        };
       } else {
-          filteredCandidates.forEach(c => {
-              if(newSelections[c.applicant_id]) {
-                  newSelections[c.applicant_id].isSelected = false;
-              }
-          });
+        delete newSelections[c.applicant_id];
       }
-      setSelections(newSelections);
+    });
+    setSelections(newSelections);
   };
   
   const handleSelectAllForHallAssignment = (checked: boolean | 'indeterminate') => {
@@ -530,6 +476,52 @@ function TrainingStatementsPageContent() {
       }
   };
 
+  const selectedVillageStats = useMemo(() => {
+    if (!selectedVillage || !villageStatsWithEdReq) return { required: 0, available: 0 };
+    const village = villageStatsWithEdReq.find(v => v.villageName === selectedVillage);
+    return {
+      required: village?.edReq || 0,
+      available: village?.edCount || 0,
+    };
+  }, [selectedVillage, villageStatsWithEdReq]);
+
+  const chosenInVillage = useMemo(() => {
+    return Object.values(selections).filter(s => s.isSelected && s.workingVillage === selectedVillage).length;
+  }, [selections, selectedVillage]);
+
+  const selectedCandidatesForVillage = useMemo(() => {
+    const selectedIds = new Set(Object.keys(selections).filter(id => selections[id]?.isSelected).map(Number));
+    return allProjectEducators.filter(app => selectedIds.has(app.applicant_id) && selections[app.applicant_id]?.workingVillage === selectedVillage);
+  }, [selections, allProjectEducators, selectedVillage]);
+
+  const handleAssignContractType = useCallback((type: SelectionState['contractType']) => {
+    const idsToUpdate = Object.keys(selections).filter(id => selections[id].isSelected && selections[id].workingVillage === selectedVillage).map(Number);
+    
+    if (idsToUpdate.length === 0) {
+      toast({
+        title: "No applicants selected",
+        description: "Please select applicants from the list for this village.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setSelections(prev => {
+      const newSelections = { ...prev };
+      idsToUpdate.forEach(id => {
+        if (newSelections[id]) {
+          newSelections[id].contractType = type;
+        }
+      });
+      return newSelections;
+    });
+
+    toast({
+      title: "Contract Type Assigned",
+      description: `Assigned '${type}' to ${idsToUpdate.length} selected applicants for ${selectedVillage}.`
+    });
+
+  }, [selections, selectedVillage, toast]);
 
   return (
     <div className="space-y-8 pb-12">
@@ -676,12 +668,6 @@ function TrainingStatementsPageContent() {
                     <CardTitle className="flex items-center gap-2">4. Select Qualified Educators</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <SummaryCard icon={<Users />} title="Community Educators" value={`${selectedContractTypes['مثقفة مجتمعية']} / ${totalEdReq}`} />
-                        <SummaryCard icon={<Briefcase />} title="Field Monitors" value={`${selectedContractTypes['رقابة']} / ${manualMonitorsReq}`} />
-                        <SummaryCard icon={<User />} title="Spare" value={`${selectedContractTypes['احتياط']} / ${finalSpareReq}`} />
-                    </div>
-
                     <div className="bg-muted p-4 rounded-lg border">
                         <Select onValueChange={setSelectedVillage} value={selectedVillage}><SelectTrigger className="w-full md:w-1/3"><SelectValue placeholder="Choose Village..." /></SelectTrigger>
                         <SelectContent>{sortedVillages.map((v) => (<SelectItem key={v.villageName} value={v.villageName}>{v.villageName} (Avail: {v.edCount} / Req: {v.edReq})</SelectItem>))}</SelectContent></Select>
@@ -714,20 +700,25 @@ function TrainingStatementsPageContent() {
                     </TableRow></TableHeader>
                     <TableBody>
                         {loading.candidates ? <TableRow><TableCell colSpan={8} className="h-24 text-center"><Loader2 className="animate-spin mx-auto"/></TableCell></TableRow> : filteredCandidates.map((c, idx) => (
-                            <TableRow key={c.applicant_id} onClick={() => setActiveCandidateIndex(idx)} className={activeCandidateIndex === idx ? "bg-muted" : ""}>
+                            <TableRow key={c.applicant_id}>
                                 <TableCell>
                                     <Checkbox 
                                         checked={selections[c.applicant_id]?.isSelected || false} 
                                         onCheckedChange={(checked) => {
-                                            setSelections(prev => ({
-                                                ...prev,
-                                                [c.applicant_id]: {
-                                                    ...prev[c.applicant_id],
-                                                    isSelected: !!checked,
-                                                    contractType: prev[c.applicant_id]?.contractType || 'مثقفة مجتمعية',
-                                                    workingVillage: selectedVillage,
+                                            const applicantId = c.applicant_id;
+                                            setSelections(prev => {
+                                                const newSelections = { ...prev };
+                                                if (checked) {
+                                                    newSelections[applicantId] = {
+                                                        isSelected: true,
+                                                        contractType: prev[applicantId]?.contractType || 'مثقفة مجتمعية',
+                                                        workingVillage: selectedVillage,
+                                                    };
+                                                } else {
+                                                   delete newSelections[applicantId];
                                                 }
-                                            }));
+                                                return newSelections;
+                                            });
                                         }}
                                     />
                                 </TableCell>
@@ -735,21 +726,64 @@ function TrainingStatementsPageContent() {
                             </TableRow>
                         ))}
                     </TableBody></Table></div>
-
-                    <div className="flex justify-between items-center">
-                        <div className="flex gap-2">
-                            <Button variant="outline" onClick={() => handleContractTypeSelect('مثقفة مجتمعية')}><Users className="mr-2 h-4 w-4"/>Community Educator</Button>
-                            <Button variant="outline" onClick={() => handleContractTypeSelect('احتياط')}><User className="mr-2 h-4 w-4"/>Spare</Button>
-                            <Button variant="outline" onClick={() => handleContractTypeSelect('رقابة')}><Briefcase className="mr-2 h-4 w-4"/>Field Monitor</Button>
-                        </div>
-                        <Button onClick={handleSaveSelections} disabled={loading.saving}><Save className="mr-2 h-4 w-4"/>Save Selections</Button>
-                    </div>
                 </CardContent>
             </Card>
 
+            {selectedVillage && (
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Selection Summary & Actions for: {selectedVillage}</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                            <SummaryCard icon={<Users />} title="Available in Village" value={selectedVillageStats.available} />
+                            <SummaryCard icon={<UserCheck className="text-green-500"/>} title="Required for Village" value={selectedVillageStats.required} />
+                            <SummaryCard icon={<UserCheck className="text-blue-500"/>} title="Chosen for Village" value={chosenInVillage} />
+                        </div>
+                        
+                        <h4 className="font-semibold text-lg mb-2">Selected Applicants for {selectedVillage}</h4>
+                        <div className="border rounded-md">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>ID</TableHead>
+                                        <TableHead>Name</TableHead>
+                                        <TableHead>Location</TableHead>
+                                        <TableHead>Score</TableHead>
+                                        <TableHead>Rank</TableHead>
+                                        <TableHead>Contract Type</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {selectedCandidatesForVillage.length > 0 ? (
+                                        selectedCandidatesForVillage.map(c => (
+                                        <TableRow key={c.applicant_id}>
+                                            <TableCell>{c.applicant_id}</TableCell>
+                                            <TableCell>{c.applicant_name}</TableCell>
+                                            <TableCell>{c.loc_name}</TableCell>
+                                            <TableCell>{c.grand_total_score}</TableCell>
+                                            <TableCell>{c.grand_score_rank}</TableCell>
+                                            <TableCell>{selections[c.applicant_id]?.contractType}</TableCell>
+                                        </TableRow>
+                                    ))) : (
+                                        <TableRow><TableCell colSpan={6} className="text-center">No applicants selected for this village yet.</TableCell></TableRow>
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </div>
+                        <div className="flex justify-between items-center mt-4">
+                            <div className="flex gap-2">
+                                <Button variant="outline" onClick={() => handleAssignContractType('مثقفة مجتمعية')}><Users className="mr-2 h-4 w-4"/>Assign as Community Educator</Button>
+                                <Button variant="outline" onClick={() => handleAssignContractType('احتياط')}><User className="mr-2 h-4 w-4"/>Assign as Spare</Button>
+                                <Button variant="outline" onClick={() => handleAssignContractType('رقابة')}><Briefcase className="mr-2 h-4 w-4"/>Assign as Field Monitor</Button>
+                            </div>
+                            <Button onClick={handleSaveSelections} disabled={loading.saving}><Save className="mr-2 h-4 w-4"/>Save Selections</Button>
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
         </>
       )}
-
     </div>
   );
 }
