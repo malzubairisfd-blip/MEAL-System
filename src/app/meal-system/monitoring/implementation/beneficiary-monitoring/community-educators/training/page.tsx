@@ -1,8 +1,8 @@
 // src/app/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/training/page.tsx
 "use client";
 
-import { useEffect, useState, Suspense, useMemo } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import React, { useEffect, useState, useMemo, useCallback, Suspense, useRef } from "react";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
@@ -10,9 +10,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, FileText, Calculator, UserCheck, CheckCircle2 } from "lucide-react";
+import { Loader2, FileText, Calculator, UserCheck, CheckCircle2, User, Users, Briefcase, Filter, ArrowUpAZ, ArrowDownAZ, Save, Trash2, Plus, ArrowLeft, Search } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 
 // --- Types ---
 type Project = { projectId: string; projectName: string };
@@ -20,8 +22,9 @@ type Project = { projectId: string; projectName: string };
 type VillageRequirement = {
   villageName: string;
   bnfCount: number;
-  edCount: number; // Applicants available
-  edReq: number;   // Calculated (BNF / 22)
+  edCount: number;
+  bnfPerEd: number;
+  edReq: number;
 };
 
 type EducatorCandidate = {
@@ -35,13 +38,35 @@ type EducatorCandidate = {
   interview_total_marks: number;
   grand_total_score: number;
   grand_score_rank: number;
+  applicant_qualification: string;
 };
 
-// Tracks selection state for a single row
 type SelectionState = {
   isSelected: boolean;
-  contractType: string; // 'مثقفة مجتمعية' | 'رقابة' | 'احتياط'
+  contractType: 'مثقفة مجتمعية' | 'رقابة' | 'احتياط';
+  workingVillage: string;
 };
+
+type Hall = { hallName: string; hallNumber: number };
+
+const ColumnFilter = ({ column, onSort }: { column: string; onSort: (column: string, direction: 'asc' | 'desc') => void; }) => {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="ghost" size="icon" className="h-6 w-6 ml-2">
+          <Filter className="h-4 w-4" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-48 p-2" align="start">
+        <div className="grid grid-cols-1 gap-2">
+            <Button variant="outline" onClick={() => onSort(column, 'asc')}><ArrowUpAZ className="mr-2 h-4 w-4"/> Sort Ascending</Button>
+            <Button variant="outline" onClick={() => onSort(column, 'desc')}><ArrowDownAZ className="mr-2 h-4 w-4"/> Sort Descending</Button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+};
+
 
 function TrainingStatementsPageContent() {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -50,408 +75,373 @@ function TrainingStatementsPageContent() {
   const [projectId, setProjectId] = useState(projectIdFromUrl || "");
   const { toast } = useToast();
 
-  // --- 1. Requirements Section States ---
-  const [villageStats, setVillageStats] = useState<VillageRequirement[]>([]);
+  const [allProjectEducators, setAllProjectEducators] = useState<any[]>([]);
+  const [villageStats, setVillageStats] = useState<Omit<VillageRequirement, 'bnfPerEd' | 'edReq'>[]>([]);
+  const [bnfPerEd, setBnfPerEd] = useState<Record<string, number>>({});
   const [manualMonitorsReq, setManualMonitorsReq] = useState<number>(0);
-  const [loadingStats, setLoadingStats] = useState(false);
+  const [loading, setLoading] = useState({ projects: true, stats: false, candidates: false, saving: false });
+  const [validationMessage, setValidationMessage] = useState('');
 
-  // --- 2. Qualification Section States ---
+  const [sortedVillages, setSortedVillages] = useState<VillageRequirement[]>([]);
   const [selectedVillage, setSelectedVillage] = useState<string>("");
+  
   const [candidates, setCandidates] = useState<EducatorCandidate[]>([]);
   const [selections, setSelections] = useState<Record<number, SelectionState>>({});
-  const [loadingCandidates, setLoadingCandidates] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [activeCandidateIndex, setActiveCandidateIndex] = useState<number | null>(null);
 
-  // --- Initial Load ---
+  const [halls, setHalls] = useState<Hall[]>([]);
+  const [hallCount, setHallCount] = useState(1);
+  const [selectedHall, setSelectedHall] = useState<number | null>(null);
+  const [selectedApplicantsForHall, setSelectedApplicantsForHall] = useState<Set<number>>(new Set());
+  
+  const [trainingAbsentees, setTrainingAbsentees] = useState<any[]>([]);
+  const [selectedAbsentees, setSelectedAbsentees] = useState<Set<number>>(new Set());
+  const [absenteeSearch, setAbsenteeSearch] = useState('');
+  
+  const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
+
+  // --- Initial Project Load ---
   useEffect(() => {
-    fetch("/api/projects")
-      .then(r => r.json())
-      .then(data => setProjects(Array.isArray(data) ? data : []))
-      .catch(() => toast({ title: "Failed to load projects", variant: 'destructive' }));
+    fetch("/api/projects").then(r => r.json()).then(data => setProjects(Array.isArray(data) ? data : [])).catch(() => toast({ title: "Failed to load projects", variant: 'destructive' }));
   }, [toast]);
 
-  // --- Load Requirements when Project Selected ---
+  // --- Project Data Loading (Stats & Educators) ---
   useEffect(() => {
     if (!projectId) return;
-    
-    setLoadingStats(true);
-    fetch(`/api/training/requirements?projectId=${projectId}`)
-      .then(r => {
-        if (!r.ok) throw new Error("Failed to fetch training requirements");
-        return r.json();
-      })
-      .then(data => {
-        if (Array.isArray(data)) {
-          setVillageStats(data);
-        } else {
-            console.error("Invalid data format", data);
-            toast({ title: "Failed to load requirements", description: "Check API response", variant: 'destructive'});
-        }
-      })
-      .catch(err => toast({ title: "Failed to load requirements", description: err.message, variant: 'destructive'}))
-      .finally(() => setLoadingStats(false));
+
+    setLoading(prev => ({ ...prev, stats: true, candidates: true }));
+    Promise.all([
+      fetch(`/api/training/requirements?projectId=${projectId}`),
+      fetch('/api/ed-selection')
+    ]).then(async ([reqRes, edRes]) => {
+      if (reqRes.ok) {
+        const data = await reqRes.json();
+        setVillageStats(Array.isArray(data) ? data : []);
+      } else {
+        toast({ title: "Failed to load requirements", variant: "destructive" });
+      }
+      if (edRes.ok) {
+        const allEducators = await edRes.json();
+        setAllProjectEducators(allEducators.filter((e: any) => e.project_id === projectId));
+      } else {
+        toast({ title: "Failed to load educators", variant: "destructive" });
+      }
+    }).catch(err => {
+      toast({ title: "Error loading project data", description: err.message, variant: "destructive" });
+    }).finally(() => {
+      setLoading(prev => ({ ...prev, stats: false, candidates: false }));
+    });
+
   }, [projectId, toast]);
 
-  // --- Load Candidates when Village Selected ---
-  useEffect(() => {
-    if (!selectedVillage) {
-      setCandidates([]);
-      setSelections({});
-      return;
-    }
-
-    setLoadingCandidates(true);
-    fetch('/api/ed-selection')
-      .then(res => {
-        if (!res.ok) {
-          throw new Error('Failed to fetch educator data');
-        }
-        return res.json();
-      })
-      .then(allEducators => {
-        if (Array.isArray(allEducators)) {
-          const villageCandidates = allEducators.filter((edu: any) => 
-            edu.loc_name === selectedVillage &&
-            edu.interview_attendance === 'حضرت المقابلة' &&
-            edu.training_qualification === null
-          ).sort((a: any,b: any) => (b.grand_total_score || 0) - (a.grand_total_score || 0));
-          
-          setCandidates(villageCandidates);
-        } else {
-            setCandidates([]);
-        }
-        setSelections({}); // Reset selections on new village
-      })
-      .catch(err => {
-        toast({ title: "Failed to load candidates", description: err.message, variant: "destructive" });
-        setCandidates([]);
-      })
-      .finally(() => setLoadingCandidates(false));
-  }, [selectedVillage, toast]);
-
-
-  // --- Calculated Totals for "Required Educators" Box ---
-  const totalEdReq = villageStats.reduce((sum, v) => sum + v.edReq, 0);
-  const totalSpareReq = Math.round(totalEdReq * 0.40);
-  const totalReqFieldMonitors = manualMonitorsReq; // User input
-  const totalQualified = totalEdReq + totalSpareReq + totalReqFieldMonitors;
-
-  // --- Statistics for Currently Selected Village ---
-  const currentVillageStat = villageStats.find(v => v.villageName === selectedVillage);
-  const villageEdReq = currentVillageStat?.edReq || 0;
-  const villageSpareReq = Math.round(villageEdReq * 0.40);
+  // --- Derived State & Calculations ---
+  const villageStatsWithEdReq = useMemo(() => {
+    return villageStats.map(v => ({
+      ...v,
+      bnfPerEd: bnfPerEd[v.villageName] || 22,
+      edReq: Math.ceil(v.bnfCount / (bnfPerEd[v.villageName] || 22))
+    }));
+  }, [villageStats, bnfPerEd]);
   
-  // Count current selections by type
-  const currentCounts = useMemo(() => {
-    let edu = 0, spare = 0, monitor = 0;
-    Object.values(selections).forEach(s => {
-      if (!s.isSelected) return;
-      if (s.contractType === 'مثقفة مجتمعية') edu++;
-      if (s.contractType === 'احتياط') spare++;
-      if (s.contractType === 'رقابة') monitor++;
-    });
-    return { edu, spare, monitor };
-  }, [selections]);
+  const totalAvailableApplicants = useMemo(() => allProjectEducators.filter(e => e.interview_attendance === 'حضرت المقابلة' && e.training_qualification === null).length, [allProjectEducators]);
 
-  // --- Handlers ---
+  const { totalEdReq, finalSpareReq, finalTotalQualified } = useMemo(() => {
+    const totalEd = villageStatsWithEdReq.reduce((sum, v) => sum + v.edReq, 0);
+    const initialSpare = Math.round(totalEd * 0.40);
+    const totalRequired = totalEd + manualMonitorsReq;
 
-  const handleCheckboxChange = (id: number, checked: boolean) => {
-    setSelections(prev => ({
-      ...prev,
-      [id]: {
-        isSelected: checked,
-        contractType: prev[id]?.contractType || 'مثقفة مجتمعية' // Default to Educator if not set
-      }
-    }));
-  };
-
-  const handleContractTypeChange = (id: number, type: string) => {
-    setSelections(prev => ({
-      ...prev,
-      [id]: {
-        isSelected: true, // Auto-select row when type is changed
-        contractType: type
-      }
-    }));
-  };
-
-  const handleSubmitQualification = async () => {
-    const selectedIds = Object.keys(selections).filter(id => selections[+id].isSelected);
+    let spare = initialSpare;
+    let totalQualified = totalRequired + spare;
     
-    if (selectedIds.length === 0) {
-      toast({ title: "No selection", description: "Please select at least one candidate.", variant: "destructive" });
+    if (totalQualified > totalAvailableApplicants) {
+        spare = Math.max(0, totalAvailableApplicants - totalRequired);
+        totalQualified = totalRequired + spare;
+        setValidationMessage(`Warning: Target (${totalRequired + initialSpare}) exceeds available candidates (${totalAvailableApplicants}). Spare educators adjusted.`);
+    } else {
+        setValidationMessage('');
+    }
+    return { totalEdReq: totalEd, finalSpareReq: spare, finalTotalQualified: totalQualified };
+  }, [villageStatsWithEdReq, manualMonitorsReq, totalAvailableApplicants]);
+
+  useEffect(() => {
+    const sorted = [...villageStatsWithEdReq].sort((a, b) => {
+        const aHasEnough = a.edCount >= a.edReq;
+        const bHasEnough = b.edCount >= b.edReq;
+        if (aHasEnough && !bHasEnough) return -1;
+        if (!aHasEnough && bHasEnough) return 1;
+        if (a.edCount < a.edReq && b.edCount < b.edReq) return b.edCount - a.edCount;
+        if (a.edCount === 0 && b.edCount > 0) return 1;
+        if (b.edCount === 0 && a.edCount > 0) return -1;
+        if (a.edCount === 0 && b.edCount === 0) {
+            if (a.bnfCount >= 15 && b.bnfCount < 15) return -1;
+            if (a.bnfCount < 15 && b.bnfCount >= 15) return 1;
+        }
+        return b.edCount - a.edCount;
+    });
+    setSortedVillages(sorted);
+    if (!selectedVillage && sorted.length > 0) {
+        setSelectedVillage(sorted[0].villageName);
+    }
+  }, [villageStatsWithEdReq, selectedVillage]);
+
+
+  // --- Candidate Loading & Sorting ---
+  useEffect(() => {
+    if (!selectedVillage) return;
+
+    const assignedCandidateIds = new Set(Object.keys(selections).map(Number));
+
+    const qualifiedApplicants = allProjectEducators.filter(
+        edu => edu.interview_attendance === 'حضرت المقابلة' && edu.training_qualification === null
+    );
+
+    let villageCandidates = qualifiedApplicants.filter(edu => edu.loc_name === selectedVillage && !assignedCandidateIds.has(edu.applicant_id));
+    
+    const villageStat = villageStatsWithEdReq.find(v => v.villageName === selectedVillage);
+
+    if (villageCandidates.length < (villageStat?.edReq || 0) || villageCandidates.length === 0) {
+        const otherCandidates = qualifiedApplicants.filter(edu => edu.loc_name !== selectedVillage && !assignedCandidateIds.has(edu.applicant_id));
+        villageCandidates = [...villageCandidates, ...otherCandidates];
+    }
+    
+    let sorted = [...villageCandidates];
+    if (sortConfig) {
+        sorted.sort((a, b) => {
+            const aVal = a[sortConfig.key];
+            const bVal = b[sortConfig.key];
+            if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+            if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+            return 0;
+        });
+    }
+
+    setCandidates(sorted);
+    setActiveCandidateIndex(0);
+
+  }, [selectedVillage, allProjectEducators, villageStatsWithEdReq, selections, sortConfig]);
+
+  // --- Auto-advance Logic ---
+  useEffect(() => {
+      const currentVillageNeeds = villageStatsWithEdReq.find(v => v.villageName === selectedVillage);
+      if (!currentVillageNeeds || !candidates.length) return;
+
+      const currentSelectionsForVillage = Object.values(selections).filter(s => s.workingVillage === selectedVillage && s.contractType === 'مثقفة مجتمعية');
+
+      if (currentSelectionsForVillage.length >= currentVillageNeeds.edReq) {
+          const currentIndex = sortedVillages.findIndex(v => v.villageName === selectedVillage);
+          if (currentIndex < sortedVillages.length - 1) {
+              setSelectedVillage(sortedVillages[currentIndex + 1].villageName);
+          } else {
+              toast({ title: "All village requirements met." });
+          }
+      } else {
+          if(activeCandidateIndex !== null && activeCandidateIndex >= candidates.length - 1) {
+              // Reached end of list, do nothing or show message
+          }
+      }
+  }, [selections, activeCandidateIndex, candidates, selectedVillage, sortedVillages, villageStatsWithEdReq, toast]);
+
+
+  const handleContractTypeSelect = (type: SelectionState['contractType']) => {
+      if (activeCandidateIndex === null || !candidates[activeCandidateIndex]) return;
+      
+      const applicantId = candidates[activeCandidateIndex].applicant_id;
+      setSelections(prev => ({
+          ...prev,
+          [applicantId]: { isSelected: true, contractType: type, workingVillage: selectedVillage }
+      }));
+      
+      // Auto-advance
+      setActiveCandidateIndex(prev => (prev === null || prev >= candidates.length - 1) ? prev : prev + 1);
+  };
+  
+  const handleSaveSelections = async () => {
+    const payload = Object.entries(selections)
+      .filter(([_, sel]) => sel.isSelected)
+      .map(([id, sel]) => ({ applicant_id: Number(id), contract_type: sel.contractType, working_village: sel.workingVillage }));
+
+    if (payload.length === 0) {
+      toast({ title: "No selections to save." });
       return;
     }
-
-    setIsSubmitting(true);
+    setLoading(prev => ({...prev, saving: true}));
     try {
-      const payload = {
-        applicants: selectedIds.map(id => ({
-          applicant_id: +id,
-          contract_type: selections[+id].contractType
-        }))
-      };
-
-      const res = await fetch("/api/training/qualify", {
-        method: "POST",
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      if (!res.ok) throw new Error("Failed to update");
-
-      toast({ title: "Success", description: "Educators qualified successfully." });
-
-      // Refresh data
-      // 1. Remove processed candidates from list
-      setCandidates(prev => prev.filter(c => !selectedIds.includes(String(c.applicant_id))));
-      setSelections({});
-      
-      // 2. Refresh stats (counts might change)
-      // trigger stats refresh if needed
-
-    } catch (err: any) {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+        const res = await fetch("/api/ed-selection", { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        if(!res.ok) throw new Error('Failed to save selections.');
+        toast({ title: "Success", description: "Educator contract types and working villages have been saved." });
+    } catch(err: any) {
+        toast({ title: "Save Error", description: err.message, variant: "destructive" });
     } finally {
-      setIsSubmitting(false);
+        setLoading(prev => ({...prev, saving: false}));
     }
   };
+
+  const handleLinkToHall = async () => {
+      if (!selectedHall || selectedApplicantsForHall.size === 0) return toast({ title: "Incomplete", description: "Select a hall and applicants."});
+      
+      const hall = halls.find(h => h.hallNumber === selectedHall);
+      if(!hall) return;
+
+      setLoading(p => ({...p, saving: true}));
+      try {
+          const res = await fetch("/api/trainings/link", {
+              method: 'POST',
+              headers: {'Content-Type': 'application/json'},
+              body: JSON.stringify({ projectId, hallNumber: hall.hallNumber, hallName: hall.hallName, applicantIds: Array.from(selectedApplicantsForHall)})
+          });
+          if(!res.ok) throw new Error('Failed to link');
+          
+          await fetch('/api/training/qualify', {
+              method: 'POST',
+              headers: {'Content-Type': 'application/json'},
+              body: JSON.stringify({ applicants: Array.from(selectedApplicantsForHall).map(id => ({ applicant_id: id, contract_type: selections[id]?.contractType || 'مثقفة مجتمعية' })) })
+          });
+
+          toast({ title: "Success!", description: "Applicants linked to training hall and qualified."});
+          // Refresh data by re-fetching educators
+          setSelectedApplicantsForHall(new Set());
+          // Refetch educators
+          fetch(`/api/ed-selection`).then(r => r.json()).then(data => setAllProjectEducators(data.filter((e: any) => e.project_id === projectId)));
+
+      } catch (err: any) {
+          toast({ title: "Error", description: err.message, variant: "destructive" });
+      } finally {
+          setLoading(p => ({...p, saving: false}));
+      }
+  };
+  
+  useEffect(() => {
+    const qualifiedForTraining = allProjectEducators.filter(e => e.training_qualification === 'مؤهلة للتدريب');
+    setTrainingAbsentees(qualifiedForTraining);
+  }, [allProjectEducators]);
+
+
+  const handleSubmitAttendance = async () => {
+    setLoading(p => ({...p, saving: true}));
+    try {
+        const payload = {
+            attended: trainingAbsentees.filter(a => !selectedAbsentees.has(a.applicant_id)).map(a => a.applicant_id),
+            absent: Array.from(selectedAbsentees)
+        };
+        const res = await fetch("/api/training/attendance", { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)});
+        if(!res.ok) throw new Error("Failed to submit attendance.");
+        toast({ title: "Attendance Submitted" });
+        fetch(`/api/ed-selection`).then(r => r.json()).then(data => setAllProjectEducators(data.filter((e: any) => e.project_id === projectId)));
+    } catch (err:any) {
+         toast({ title: "Error", description: err.message, variant: "destructive" });
+    } finally {
+        setLoading(p => ({...p, saving: false}));
+    }
+  };
+
 
   return (
     <div className="space-y-8 pb-12">
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">Training & Qualification Management</h1>
-      </div>
-
-      {/* --- SECTION 1: Project & Requirement Calculation --- */}
       <Card>
         <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-                <Calculator className="w-5 h-5 text-blue-600"/>
-                Training Requirements Calculation
-            </CardTitle>
+            <CardTitle className="flex items-center gap-2">1. Training Requirements Calculation</CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
-            <div className="max-w-md">
-                <label className="text-sm font-medium mb-1 block">Select Project</label>
-                <Select onValueChange={setProjectId} value={projectId}>
-                    <SelectTrigger><SelectValue placeholder="Select Project" /></SelectTrigger>
-                    <SelectContent>
-                    {projects.map(p => (
-                        <SelectItem key={p.projectId} value={p.projectId}>{p.projectName}</SelectItem>
-                    ))}
-                    </SelectContent>
-                </Select>
-            </div>
-
-            {/* Requirements Table */}
+            <Select onValueChange={setProjectId} value={projectId}><SelectTrigger><SelectValue placeholder="Select Project" /></SelectTrigger><SelectContent>{projects.map(p => (<SelectItem key={p.projectId} value={p.projectId}>{p.projectName}</SelectItem>))}</SelectContent></Select>
             {projectId && (
+                <>
                 <div className="rounded-md border">
-                    <Table>
-                        <TableHeader className="bg-muted/50">
-                            <TableRow>
-                                <TableHead>Village Name</TableHead>
-                                <TableHead className="text-center">Beneficiaries (BNF_CNT)</TableHead>
-                                <TableHead className="text-center">Available Applicants (ED_CNT)</TableHead>
-                                <TableHead className="text-center font-bold text-blue-700">Req. Educators (ED_REQ)</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                    </Table>
-                    <ScrollArea className="h-[250px]">
-                        <Table>
-                            <TableBody>
-                                {loadingStats ? (
-                                    <TableRow><TableCell colSpan={4} className="h-24 text-center"><Loader2 className="animate-spin mx-auto"/></TableCell></TableRow>
-                                ) : villageStats.map((row, i) => (
-                                    <TableRow key={i}>
-                                        <TableCell className="font-medium">{row.villageName}</TableCell>
-                                        <TableCell className="text-center">{row.bnfCount}</TableCell>
-                                        <TableCell className="text-center">{row.edCount}</TableCell>
-                                        <TableCell className="text-center font-bold bg-blue-50/50">{row.edReq}</TableCell>
-                                    </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
-                    </ScrollArea>
+                    <Table><TableHeader><TableRow><TableHead>Village Name</TableHead><TableHead>BNF_CNT</TableHead><TableHead>BNF Per ED</TableHead><TableHead>ED_REQ</TableHead><TableHead>ED_CNT</TableHead></TableRow></TableHeader></Table>
+                    <ScrollArea className="h-[250px]"><Table><TableBody>
+                        {loading.stats ? <TableRow><TableCell colSpan={5} className="h-24 text-center"><Loader2 className="animate-spin mx-auto"/></TableCell></TableRow> : villageStatsWithEdReq.map((row, i) => (
+                            <TableRow key={i}><TableCell>{row.villageName}</TableCell><TableCell>{row.bnfCount}</TableCell>
+                            <TableCell><Input type="number" value={row.bnfPerEd} onChange={e => setBnfPerEd(prev => ({ ...prev, [row.villageName]: +e.target.value }))} className="w-20"/></TableCell>
+                            <TableCell>{row.edReq}</TableCell><TableCell>{row.edCount}</TableCell></TableRow>
+                        ))}
+                    </TableBody></Table></ScrollArea>
                 </div>
-            )}
-
-            {/* Summary Boxes */}
-            {projectId && (
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pt-4">
-                    <Card className="bg-blue-50 border-blue-200">
-                        <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-blue-700">Required Educators</CardTitle></CardHeader>
-                        <CardContent><div className="text-2xl font-bold text-blue-900">{totalEdReq}</div></CardContent>
-                    </Card>
-                    <Card className="bg-amber-50 border-amber-200">
-                        <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-amber-700">Required Spare (40%)</CardTitle></CardHeader>
-                        <CardContent><div className="text-2xl font-bold text-amber-900">{totalSpareReq}</div></CardContent>
-                    </Card>
-                    <Card className="bg-green-50 border-green-200">
-                        <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-green-700">Required Field Monitors</CardTitle></CardHeader>
-                        <CardContent>
-                            <Input 
-                                type="number" 
-                                className="h-8 w-24 bg-white text-black" 
-                                value={manualMonitorsReq}
-                                onChange={(e) => setManualMonitorsReq(+e.target.value)}
-                            />
-                        </CardContent>
-                    </Card>
-                    <Card className="bg-slate-100 border-slate-300">
-                        <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-slate-700">Total Qualified</CardTitle></CardHeader>
-                        <CardContent><div className="text-2xl font-bold text-slate-900">{totalQualified}</div></CardContent>
-                    </Card>
+                    <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Required Educators</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{totalEdReq}</div></CardContent></Card>
+                    <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Required Spare (40%)</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{finalSpareReq}</div></CardContent></Card>
+                    <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Required Field Monitors</CardTitle></CardHeader><CardContent><Input type="number" value={manualMonitorsReq} onChange={(e) => setManualMonitorsReq(+e.target.value)} /></CardContent></Card>
+                    <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Total Qualified</CardTitle></CardHeader><CardContent><div className="text-2xl font-bold">{finalTotalQualified}</div></CardContent></Card>
                 </div>
+                {validationMessage && <p className="text-sm font-semibold text-red-500">{validationMessage}</p>}
+                </>
             )}
         </CardContent>
       </Card>
 
-      {/* --- SECTION 2: Select Qualified Educators --- */}
       {projectId && (
-      <Card className="border-t-4 border-t-indigo-500">
-        <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-                <UserCheck className="w-5 h-5 text-indigo-600"/>
-                Select Qualified Educators
-            </CardTitle>
-        </CardHeader>
+        <Card><CardHeader><CardTitle className="flex items-center gap-2">2. Select Qualified Educators</CardTitle></CardHeader>
         <CardContent className="space-y-6">
-            
-            {/* Village Selector & Dynamic Progress Boxes */}
-            <div className="flex flex-col md:flex-row gap-6 bg-muted p-4 rounded-lg border">
-                <div className="w-full md:w-1/3">
-                    <label className="text-sm font-medium mb-1 block">Select Village</label>
-                    <Select onValueChange={setSelectedVillage} value={selectedVillage}>
-                        <SelectTrigger className="bg-white text-black">
-                            <SelectValue placeholder="Choose Village..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {villageStats.map((v) => (
-                                <SelectItem key={v.villageName} value={v.villageName}>
-                                    {v.villageName} (Avail: {v.edCount})
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                    {/* "Allow selecting from another village" is implicit as the user can just select a different village in the dropdown */}
+            <div className="bg-muted p-4 rounded-lg border">
+                <Select onValueChange={setSelectedVillage} value={selectedVillage}><SelectTrigger className="w-full md:w-1/3"><SelectValue placeholder="Choose Village..." /></SelectTrigger>
+                <SelectContent>{sortedVillages.map((v) => (<SelectItem key={v.villageName} value={v.villageName}>{v.villageName} (Avail: {v.edCount})</SelectItem>))}</SelectContent></Select>
+            </div>
+
+            <div className="border rounded-md"><Table><TableHeader><TableRow>
+                <TableHead className="w-[50px]">Select</TableHead>
+                <TableHead>ID <ColumnFilter column="applicant_id" onSort={setSortConfig} /></TableHead>
+                <TableHead>Applicant Name <ColumnFilter column="applicant_name" onSort={setSortConfig} /></TableHead>
+                <TableHead>Qualification <ColumnFilter column="applicant_qualification" onSort={setSortConfig} /></TableHead>
+                <TableHead>Age Rank <ColumnFilter column="age_per_village_ranking" onSort={setSortConfig} /></TableHead>
+                <TableHead>Location <ColumnFilter column="loc_name" onSort={setSortConfig} /></TableHead>
+                <TableHead>Total Score <ColumnFilter column="grand_total_score" onSort={setSortConfig} /></TableHead>
+            </TableRow></TableHeader>
+            <TableBody>
+                {loading.candidates ? <TableRow><TableCell colSpan={7} className="h-24 text-center"><Loader2 className="animate-spin mx-auto"/></TableCell></TableRow> : candidates.map((c, idx) => (
+                    <TableRow key={c.applicant_id} onClick={() => setActiveCandidateIndex(idx)} className={activeCandidateIndex === idx ? "bg-muted" : ""}>
+                        <TableCell><Checkbox checked={selections[c.applicant_id]?.isSelected || false} onCheckedChange={(chk) => setSelections(p => ({...p, [c.applicant_id]: {...(p[c.applicant_id] || {contractType: 'مثقفة مجتمعية', workingVillage: selectedVillage}), isSelected: chk as boolean}}))}/></TableCell>
+                        <TableCell>{c.applicant_id}</TableCell><TableCell>{c.applicant_name}</TableCell><TableCell>{c.applicant_qualification}</TableCell><TableCell>{c.age_per_village_ranking}</TableCell><TableCell>{c.loc_name}</TableCell><TableCell>{c.grand_total_score}</TableCell>
+                    </TableRow>
+                ))}
+            </TableBody></Table></div>
+
+            <div className="flex justify-between items-center">
+                <div className="flex gap-2">
+                    <Button variant="outline" onClick={() => handleContractTypeSelect('مثقفة مجتمعية')}><Users className="mr-2 h-4 w-4"/>Community Educator</Button>
+                    <Button variant="outline" onClick={() => handleContractTypeSelect('احتياط')}><User className="mr-2 h-4 w-4"/>Spare</Button>
+                    <Button variant="outline" onClick={() => handleContractTypeSelect('رقابة')}><Briefcase className="mr-2 h-4 w-4"/>Field Monitor</Button>
                 </div>
-
-                <div className="flex-1 grid grid-cols-3 gap-4">
-                     {/* Dynamic Box: Educators */}
-                    <div className="bg-white p-3 rounded border text-center shadow-sm">
-                        <div className="text-xs text-gray-500 font-semibold uppercase">Educators</div>
-                        <div className="text-xl font-bold mt-1">
-                            <span className={currentCounts.edu >= villageEdReq ? "text-green-600" : "text-indigo-600"}>
-                                {currentCounts.edu}
-                            </span>
-                            <span className="text-gray-400 mx-1">/</span>
-                            <span className="text-gray-600">{villageEdReq}</span>
-                        </div>
-                    </div>
-                     {/* Dynamic Box: Spare */}
-                     <div className="bg-white p-3 rounded border text-center shadow-sm">
-                        <div className="text-xs text-gray-500 font-semibold uppercase">Spare</div>
-                        <div className="text-xl font-bold mt-1">
-                            <span className={currentCounts.spare >= villageSpareReq ? "text-green-600" : "text-amber-600"}>
-                                {currentCounts.spare}
-                            </span>
-                            <span className="text-gray-400 mx-1">/</span>
-                            <span className="text-gray-600">{villageSpareReq}</span>
-                        </div>
-                    </div>
-                     {/* Dynamic Box: Monitors */}
-                     <div className="bg-white p-3 rounded border text-center shadow-sm">
-                        <div className="text-xs text-gray-500 font-semibold uppercase">Field Monitors</div>
-                        <div className="text-xl font-bold mt-1 text-green-600">
-                            {currentCounts.monitor}
-                        </div>
-                    </div>
-                </div>
+                <Button onClick={handleSaveSelections} disabled={loading.saving}><Save className="mr-2 h-4 w-4"/>Save Selections</Button>
             </div>
-
-            {/* Candidates Table */}
-            <div className="border rounded-md">
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead className="w-[50px]">Select</TableHead>
-                            <TableHead>ID</TableHead>
-                            <TableHead>Applicant Name</TableHead>
-                            <TableHead>Total Score</TableHead>
-                            <TableHead>Rank</TableHead>
-                            <TableHead className="w-[200px]">Contract Type</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {loadingCandidates ? (
-                            <TableRow><TableCell colSpan={6} className="h-24 text-center"><Loader2 className="animate-spin mx-auto"/></TableCell></TableRow>
-                        ) : candidates.length === 0 ? (
-                            <TableRow><TableCell colSpan={6} className="h-24 text-center text-gray-500">No qualified candidates found for this village.</TableCell></TableRow>
-                        ) : (
-                            candidates.map((c) => (
-                                <TableRow key={c.applicant_id} className={selections[c.applicant_id]?.isSelected ? "bg-indigo-50" : ""}>
-                                    <TableCell>
-                                        <Checkbox 
-                                            checked={selections[c.applicant_id]?.isSelected || false}
-                                            onCheckedChange={(chk) => handleCheckboxChange(c.applicant_id, chk as boolean)}
-                                        />
-                                    </TableCell>
-                                    <TableCell>{c.applicant_id}</TableCell>
-                                    <TableCell className="font-medium">{c.applicant_name}</TableCell>
-                                    <TableCell>{c.grand_total_score}</TableCell>
-                                    <TableCell>{c.grand_score_rank}</TableCell>
-                                    <TableCell>
-                                        <Select 
-                                            value={selections[c.applicant_id]?.contractType || ""}
-                                            onValueChange={(val) => handleContractTypeChange(c.applicant_id, val)}
-                                        >
-                                            <SelectTrigger className="h-8">
-                                                <SelectValue placeholder="Select Type" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="مثقفة مجتمعية">مثقفة مجتمعية</SelectItem>
-                                                <SelectItem value="احتياط">احتياط</SelectItem>
-                                                <SelectItem value="رقابة">رقابة</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </TableCell>
-                                </TableRow>
-                            ))
-                        )}
-                    </TableBody>
-                </Table>
-            </div>
-
-            {/* Action Button */}
-            <div className="flex justify-end">
-                <Button 
-                    size="lg" 
-                    onClick={handleSubmitQualification} 
-                    disabled={isSubmitting || Object.keys(selections).filter(k => selections[+k].isSelected).length === 0}
-                    className="bg-indigo-600 hover:bg-indigo-700"
-                >
-                    {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                    {!isSubmitting && <CheckCircle2 className="mr-2 h-4 w-4"/>}
-                    Confirm Qualification
-                </Button>
-            </div>
-
-        </CardContent>
-      </Card>
+        </CardContent></Card>
       )}
 
-      {/* --- SECTION 3: Export Link (Kept from original) --- */}
       {projectId && (
-        <div className="flex justify-end">
-            <Button variant="outline" asChild>
-                <Link href={`/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/interview/export-exact-pdf?projectId=${projectId}&type=training`}>
-                    <FileText className="mr-2 h-4 w-4"/>
-                    Go to PDF Designer
-                </Link>
-            </Button>
-        </div>
+        <Card><CardHeader><CardTitle>3. Assign to Training Halls</CardTitle></CardHeader>
+        <CardContent className="space-y-4">
+            <div className="flex gap-2"><Input type="number" min={1} value={hallCount} onChange={e => setHallCount(Math.max(1, +e.target.value))} className="w-24"/><Button onClick={() => setHalls(Array.from({ length: hallCount }, (_, i) => ({ hallName: `Hall ${i + 1}`, hallNumber: i + 1 })))}>Create Halls</Button></div>
+            {halls.length > 0 && <div className="grid grid-cols-1 md:grid-cols-3 gap-4">{halls.map((h, i) => (<Input key={i} value={h.hallName} onChange={e => {const copy=[...halls]; copy[i].hallName=e.target.value; setHalls(copy);}}/>))}</div>}
+            
+            <ScrollArea className="h-72 border rounded-md">
+                <Table><TableHeader><TableRow><TableHead></TableHead><TableHead>ID</TableHead><TableHead>Name</TableHead><TableHead>Location</TableHead><TableHead>Score</TableHead><TableHead>Rank</TableHead></TableRow></TableHeader>
+                <TableBody>
+                    {allProjectEducators.filter(e => e.interview_attendance === 'حضرت المقابلة' && e.training_qualification === null).map(app => (
+                        <TableRow key={app.applicant_id}><TableCell><Checkbox checked={selectedApplicantsForHall.has(app.applicant_id)} onCheckedChange={c => setSelectedApplicantsForHall(p => { const s=new Set(p); if(c) s.add(app.applicant_id); else s.delete(app.applicant_id); return s;})}/></TableCell><TableCell>{app.applicant_id}</TableCell><TableCell>{app.applicant_name}</TableCell><TableCell>{app.loc_name}</TableCell><TableCell>{app.grand_total_score}</TableCell><TableCell>{app.grand_score_rank}</TableCell></TableRow>
+                    ))}
+                </TableBody></Table>
+            </ScrollArea>
+            <div className="flex items-center gap-4">
+                <Select onValueChange={v => setSelectedHall(v ? +v : null)}><SelectTrigger className="flex-1"><SelectValue placeholder="Select hall..." /></SelectTrigger><SelectContent>{halls.map(h=>(<SelectItem key={h.hallNumber} value={String(h.hallNumber)}>{h.hallName}</SelectItem>))}</SelectContent></Select>
+                <Button onClick={handleLinkToHall} disabled={loading.saving}>Link {selectedApplicantsForHall.size} to Hall & Qualify</Button>
+            </div>
+            {finalTotalQualified !== selectedApplicantsForHall.size && <p className="text-red-500 text-sm">Warning: Number of selected applicants for training ({selectedApplicantsForHall.size}) does not match the total qualified target ({finalTotalQualified}).</p>}
+        </CardContent></Card>
       )}
+
+      {projectId && (
+        <Card><CardHeader><CardTitle>4. Mark Training Attendance</CardTitle></CardHeader>
+        <CardContent className="space-y-4">
+            <div className="relative"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input placeholder="Search by ID or name..." value={absenteeSearch} onChange={e=>setAbsenteeSearch(e.target.value)} className="pl-10" /></div>
+            <ScrollArea className="h-72 border rounded-md"><Table>
+                <TableHeader><TableRow><TableHead><Checkbox onCheckedChange={c => setSelectedAbsentees(c ? new Set(trainingAbsentees.map(a=>a.applicant_id)) : new Set())} /></TableHead><TableHead>ID</TableHead><TableHead>Name</TableHead></TableRow></TableHeader>
+                <TableBody>
+                    {trainingAbsentees.filter(a => String(a.applicant_id).includes(absenteeSearch) || a.applicant_name.toLowerCase().includes(absenteeSearch.toLowerCase())).map(app => (
+                        <TableRow key={app.applicant_id}><TableCell><Checkbox checked={selectedAbsentees.has(app.applicant_id)} onCheckedChange={c => setSelectedAbsentees(p => {const s=new Set(p); if(c)s.add(app.applicant_id); else s.delete(app.applicant_id); return s;})} /></TableCell><TableCell>{app.applicant_id}</TableCell><TableCell>{app.applicant_name}</TableCell></TableRow>
+                    ))}
+                </TableBody>
+            </Table></ScrollArea>
+            <Button onClick={handleSubmitAttendance} disabled={loading.saving}>Submit Attendance ({selectedAbsentees.size} Absent)</Button>
+        </CardContent></Card>
+      )}
+
     </div>
   );
 }
@@ -463,6 +453,3 @@ export default function TrainingPage() {
         </Suspense>
     )
 }
-    
-
-    
