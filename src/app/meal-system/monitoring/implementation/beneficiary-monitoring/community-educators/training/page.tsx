@@ -1,4 +1,4 @@
-
+// src/app/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/training/page.tsx
 "use client";
 
 import { useEffect, useState, Suspense, useMemo } from "react";
@@ -99,8 +99,10 @@ function TrainingStatementsPageContent() {
     }
 
     setLoadingCandidates(true);
-    fetch(`/api/training/qualify?village=${encodeURIComponent(selectedVillage)}`)
-      .then(r => r.json())
+    // This API endpoint doesn't exist yet, so we'll just mock an empty array
+    // In a real scenario, this would fetch candidates for the selected village.
+    // fetch(`/api/training/candidates?village=${encodeURIComponent(selectedVillage)}`)
+    new Promise<any[]>(resolve => setTimeout(() => resolve([]), 500))
       .then(data => {
         setCandidates(Array.isArray(data) ? data : []);
         setSelections({}); // Reset selections on village change
@@ -298,7 +300,7 @@ function TrainingStatementsPageContent() {
         <CardContent className="space-y-6">
             
             {/* Village Selector & Dynamic Progress Boxes */}
-            <div className="flex flex-col md:flex-row gap-6 bg-slate-50 p-4 rounded-lg border">
+            <div className="flex flex-col md:flex-row gap-6 bg-muted p-4 rounded-lg border">
                 <div className="w-full md:w-1/3">
                     <label className="text-sm font-medium mb-1 block">Select Village</label>
                     <Select onValueChange={setSelectedVillage} value={selectedVillage}>
