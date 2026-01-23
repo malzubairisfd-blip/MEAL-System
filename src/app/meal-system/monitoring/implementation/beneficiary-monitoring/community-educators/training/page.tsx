@@ -1,3 +1,4 @@
+
 // src/app/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/training/page.tsx
 "use client";
 
@@ -731,6 +732,8 @@ function TrainingStatementsPageContent() {
                 <SummaryCard title="Available in Village" value={selectedVillageStats.available} />
                 <SummaryCard title="Required Educators" value={selectedVillageStats.required} />
                 <SummaryCard title="Chosen Educators" value={chosenInVillage} total={selectedVillageStats.required} />
+                <SummaryCard title="Field Monitors" value={chosenMonitors} total={manualMonitorsReq} />
+                <SummaryCard title="Chosen Spares" value={chosenSpares} total={finalSpareReq} />
                 <SummaryCard title="Beneficiaries Connected" value={totalBnfConnected.toLocaleString()} total={totalBnfForVillage.toLocaleString()} />
             </div>
 
@@ -746,6 +749,7 @@ function TrainingStatementsPageContent() {
                                <TableHeader><TableRow>
                                 <TableHead>ID</TableHead>
                                 <TableHead>Name</TableHead>
+                                <TableHead>Original Village</TableHead>
                                 <TableHead>Qualification</TableHead>
                                 <TableHead>Working Village</TableHead>
                                 <TableHead>BNF_CONN</TableHead>
@@ -755,12 +759,13 @@ function TrainingStatementsPageContent() {
                                         <TableRow>
                                             <TableCell>{selectedApplicantForDisplay.applicant_id}</TableCell>
                                             <TableCell>{selectedApplicantForDisplay.applicant_name}</TableCell>
+                                            <TableCell>{selectedApplicantForDisplay.loc_name}</TableCell>
                                             <TableCell>{selectedApplicantForDisplay.applicant_qualification}</TableCell>
                                             <TableCell>{selectedVillage}</TableCell>
                                             <TableCell>{currentApplicantBnfConn}</TableCell>
                                         </TableRow>
                                     ) : (
-                                        <TableRow><TableCell colSpan={5} className="text-center">No applicant selected for assignment.</TableCell></TableRow>
+                                        <TableRow><TableCell colSpan={6} className="text-center">No applicant selected for assignment.</TableCell></TableRow>
                                     )}
                                 </TableBody>
                             </Table>
@@ -800,3 +805,5 @@ export default function TrainingPage() {
         </Suspense>
     )
 }
+
+    
