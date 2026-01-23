@@ -90,8 +90,8 @@ export default function UploadCentersPage() {
             const ws = wb.Sheets[sheetName];
             const jsonData = XLSX.utils.sheet_to_json(ws);
             setRawFileData(jsonData);
-            const headers = XLSX.utils.sheet_to_json(ws, { header: 1 })[0] as string[];
-            setColumns(headers || []);
+            const headers = (XLSX.utils.sheet_to_json(ws, { header: 1 })[0] as string[]) || [];
+            setColumns(headers.filter(h => h && h.trim() !== ''));
         };
         reader.readAsBinaryString(selectedFile);
     }
