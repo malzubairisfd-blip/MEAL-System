@@ -1,138 +1,204 @@
-
 // src/app/api/education-payment-centers/route.ts
 import { NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
+import Database from 'better-sqlite3';
 import * as XLSX from "xlsx";
 
 const getDataPath = () => path.join(process.cwd(), 'src/data');
-const getEpcFile = () => path.join(getDataPath(), 'epc.json');
+const getDbPath = () => path.join(getDataPath(), 'ec_pc.db');
 
-const normalizeArabic = (s: string | null | undefined): string => {
-    if (!s) return "";
-    return String(s)
-        .replace(/[أإآ]/g, "ا")
-        .replace(/ى/g, "ي")
-        .replace(/ؤ/g, "و")
-        .replace(/ئ/g, "ي")
-        .replace(/ة/g, "ه")
-        .replace(/\s+/g, ' ')
-        .trim();
-};
+const DB_COLUMNS = [
+    "id", "project_id", "project_name", "proj_no", "mud_no", "mud_name",
+    "ozla_no", "ozla_name", "vill_no", "vill_name", "fac_id", "fac_name",
+    "loc_id", "loc_full_name", "is_ec", "is_pc", "pc_id", "notes",
+    "pc_name2", "is_pc2", "pc_loc2", "same_ozla", "same_ec_pc",
+    "pc_ec_cnt", "pc_ed_cnt", "ec_ed_cnt", "pc_bnf_cnt", "ec_bnf_cnt"
+];
 
-async function getExistingCenters() {
-    const EPC_FILE = getEpcFile();
-    try {
-        await fs.access(EPC_FILE);
-        const raw = await fs.readFile(EPC_FILE, 'utf-8');
-        return JSON.parse(raw);
-    } catch (e) {
-        return [];
+function initializeDatabase(recreate: boolean = false) {
+    const db = new Database(getDbPath());
+    if (recreate) {
+        db.exec('DROP TABLE IF EXISTS ec_pc_data');
     }
-}
 
-async function ensureDataFile() {
-    await fs.mkdir(getDataPath(), { recursive: true });
-    try {
-        await fs.access(getEpcFile());
-    } catch {
-        await fs.writeFile(getEpcFile(), "[]", "utf-8");
-    }
+    const createTableStmt = `
+        CREATE TABLE IF NOT EXISTS ec_pc_data (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          project_id TEXT,
+          project_name TEXT,
+          proj_no REAL,
+          mud_no REAL,
+          mud_name TEXT,
+          ozla_no REAL,
+          ozla_name TEXT,
+          vill_no REAL,
+          vill_name TEXT,
+          fac_id TEXT UNIQUE,
+          fac_name TEXT,
+          loc_id REAL,
+          loc_full_name TEXT,
+          is_ec REAL,
+          is_pc REAL,
+          pc_id TEXT,
+          notes TEXT,
+          pc_name2 TEXT,
+          is_pc2 REAL,
+          pc_loc2 REAL,
+          same_ozla REAL,
+          same_ec_pc REAL,
+          pc_ec_cnt REAL,
+          pc_ed_cnt REAL,
+          ec_ed_cnt REAL,
+          pc_bnf_cnt REAL,
+          ec_bnf_cnt REAL
+        );
+    `;
+    db.exec(createTableStmt);
+    
+    return db;
 }
 
 export async function GET() {
     try {
-        await ensureDataFile();
-        const centers = await getExistingCenters();
-        return NextResponse.json(centers);
-    } catch (err: any) {
-        return NextResponse.json({ error: "Failed to read centers file.", details: String(err) }, { status: 500 });
+        await fs.mkdir(getDataPath(), { recursive: true });
+        const db = new Database(getDbPath(), { fileMustExist: true });
+        
+        const stmt = db.prepare('SELECT * FROM ec_pc_data');
+        const rows = stmt.all();
+        
+        db.close();
+
+        return NextResponse.json(rows);
+
+    } catch (error: any) {
+        if (error.code === 'SQLITE_CANTOPEN') {
+            return NextResponse.json([]);
+        }
+        console.error("[EPC_DB_API_GET_ERROR]", error);
+        return NextResponse.json({ error: "Failed to fetch EPC data.", details: error.message }, { status: 500 });
     }
 }
 
 export async function POST(req: Request) {
-    await ensureDataFile();
+    const { searchParams } = new URL(req.url);
+    const init = searchParams.get('init') === 'true';
     const contentType = req.headers.get('content-type');
 
-    if (contentType?.includes('multipart/form-data')) {
-        try {
+    try {
+        await fs.mkdir(getDataPath(), { recursive: true });
+        const db = initializeDatabase(init);
+
+        let results: any[] = [];
+
+        if (contentType?.includes('multipart/form-data')) {
             const formData = await req.formData();
             const file = formData.get('file') as File | null;
-            if (!file) return NextResponse.json({ error: "No file uploaded." }, { status: 400 });
+            if (!file) {
+                db.close();
+                return NextResponse.json({ error: "No file uploaded." }, { status: 400 });
+            }
             const bytes = await file.arrayBuffer();
             const buffer = Buffer.from(bytes);
             const workbook = XLSX.read(buffer, { type: 'buffer' });
             const sheetName = workbook.SheetNames[0];
             const sheet = workbook.Sheets[sheetName];
-            const jsonData = XLSX.utils.sheet_to_json(sheet, { defval: 0 });
-            
-            const data = jsonData.map((row: any) => ({
-                ...row,
-                MUD_NAME: normalizeArabic(row.MUD_NAME),
-                IS_PC: row.IS_PC !== undefined ? String(row.IS_PC) : '0',
-            }));
-
-            await fs.writeFile(getEpcFile(), JSON.stringify(data, null, 2), 'utf8');
-            return NextResponse.json({ message: "Education and Payment Centers data saved successfully.", count: data.length });
-        } catch (error: any) {
-            return NextResponse.json({ error: "Failed to process and save file.", details: error.message }, { status: 500 });
+            results = XLSX.utils.sheet_to_json(sheet);
+        } else if (contentType?.includes('application/json')) {
+            const body = await req.json();
+            results = Array.isArray(body) ? body : [body];
+        } else {
+             db.close();
+             return NextResponse.json({ error: "Unsupported Content-Type" }, { status: 415 });
         }
-    }
-    
-    else if (contentType?.includes('application/json')) {
-        try {
-            const newCenter = await req.json();
-            if (!newCenter || typeof newCenter !== "object") {
-                return NextResponse.json({ error: "Invalid center payload" }, { status: 400 });
+
+        if (!Array.isArray(results) || results.length === 0) {
+            db.close();
+            return NextResponse.json({ message: "No records to insert." }, { status: 200 });
+        }
+        
+        const columns = Object.keys(results[0]).filter(col => DB_COLUMNS.includes(col));
+        if (columns.length === 0) {
+            db.close();
+            return NextResponse.json({ message: "No valid columns to insert." }, { status: 400 });
+        }
+        
+        const columnsString = columns.join(', ');
+        const placeholders = columns.map(() => '?').join(', ');
+        const insert = db.prepare(`INSERT OR REPLACE INTO ec_pc_data (${columnsString}) VALUES (${placeholders})`);
+        
+        const insertMany = db.transaction((records) => {
+            for (const record of records) {
+                const values = columns.map(col => record[col] ?? null);
+                insert.run(...values);
             }
-            const existingCenters = await getExistingCenters();
-            existingCenters.push(newCenter);
-            await fs.writeFile(getEpcFile(), JSON.stringify(existingCenters, null, 2), "utf8");
-            return NextResponse.json({ message: "Center saved successfully." });
-        } catch (err: any) {
-            return NextResponse.json({ error: "Failed to save center.", details: String(err) }, { status: 500 });
-        }
-    }
+        });
 
-    return NextResponse.json({ error: "Unsupported Content-Type" }, { status: 415 });
+        insertMany(results);
+        db.close();
+
+        return NextResponse.json({ message: "Education/Payment Center data saved successfully.", count: results.length });
+
+    } catch (error: any) {
+        console.error("[EPC_DB_API_ERROR]", error);
+        return NextResponse.json({ error: "Failed to save EPC data to SQLite.", details: error.message }, { status: 500 });
+    }
 }
 
 export async function PUT(req: Request) {
-    await ensureDataFile();
     try {
-        const updatedCenter = await req.json();
-        if (!updatedCenter || !updatedCenter.FAC_ID) {
+        const recordToUpdate = await req.json();
+        if (!recordToUpdate || !recordToUpdate.FAC_ID) {
             return NextResponse.json({ error: "Invalid payload, FAC_ID is required." }, { status: 400 });
         }
-        let existingCenters = await getExistingCenters();
-        const index = existingCenters.findIndex((c: any) => c.FAC_ID === updatedCenter.FAC_ID);
+        
+        const db = new Database(getDbPath());
 
-        if (index === -1) {
-            return NextResponse.json({ error: "Center not found." }, { status: 404 });
+        const columnsToUpdate = Object.keys(recordToUpdate).filter(col => DB_COLUMNS.includes(col) && col !== 'id' && col !== 'FAC_ID');
+        if (columnsToUpdate.length === 0) {
+            db.close();
+            return NextResponse.json({ message: "No fields to update." });
         }
-        existingCenters[index] = updatedCenter;
-        await fs.writeFile(getEpcFile(), JSON.stringify(existingCenters, null, 2), 'utf8');
+
+        const setClause = columnsToUpdate.map(col => `${col} = ?`).join(', ');
+        const values = [...columnsToUpdate.map(col => recordToUpdate[col]), recordToUpdate.FAC_ID];
+
+        const stmt = db.prepare(`UPDATE ec_pc_data SET ${setClause} WHERE fac_id = ?`);
+        const info = stmt.run(...values);
+        
+        db.close();
+
+        if (info.changes === 0) {
+             return NextResponse.json({ error: "Center not found." }, { status: 404 });
+        }
+
         return NextResponse.json({ message: "Center updated successfully." });
-    } catch (err: any) {
-        return NextResponse.json({ error: "Failed to update center.", details: String(err) }, { status: 500 });
+
+    } catch (error: any) {
+        console.error("[EPC_DB_PUT_API_ERROR]", error);
+        return NextResponse.json({ error: "Failed to update EPC data.", details: error.message }, { status: 500 });
     }
 }
 
 export async function DELETE(req: Request) {
-    await ensureDataFile();
     try {
         const { FAC_ID } = await req.json();
         if (!FAC_ID) {
             return NextResponse.json({ error: "FAC_ID is required for deletion." }, { status: 400 });
         }
-        let existingCenters = await getExistingCenters();
-        const updatedCenters = existingCenters.filter((c: any) => c.FAC_ID !== FAC_ID);
-        if (updatedCenters.length === existingCenters.length) {
+
+        const db = new Database(getDbPath());
+        const stmt = db.prepare('DELETE FROM ec_pc_data WHERE fac_id = ?');
+        const info = stmt.run(FAC_ID);
+        db.close();
+
+        if (info.changes === 0) {
             return NextResponse.json({ error: "Center not found." }, { status: 404 });
         }
-        await fs.writeFile(getEpcFile(), JSON.stringify(updatedCenters, null, 2), 'utf8');
+
         return NextResponse.json({ message: "Center deleted successfully." });
     } catch (err: any) {
+        console.error("[EPC_DB_DELETE_API_ERROR]", err);
         return NextResponse.json({ error: "Failed to delete center.", details: String(err) }, { status: 500 });
     }
 }
