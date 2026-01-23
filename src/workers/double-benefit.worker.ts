@@ -9,7 +9,7 @@ function baseArabicNormalize(value: any): string {
 }
 
 const FIXED_COMPOUND_NAMES = ["عبد الله", "عبد الرحمن", "عبد الرحيم", "عبد الكريم", "عبد العزيز", "عبد الملك", "عبد السلام", "عبد القادر", "عبد الجليل", "عبد الرزاق", "عبد الغني", "عبد الوهاب", "عبد الاله", "عبد الواحد", "عبد الماجد", "امه الله", "امه الرحمن", "امه الرحيم", "امه الكريم", "صنع الله", "عطاء الله", "نور الله", "فتح الله", "نصر الله", "فضل الله", "رحمه الله", "حسب الله", "جود الله", "نور الدين", "شمس الدين", "سيف الدين", "زين الدين", "جمال الدين", "كمال الدين", "صلاح الدين", "علاء الدين", "تقي الدين", "نجم الدين", "ابو بكر", "ابو طالب", "ابو هريره", "ام كلثوم", "ام سلمه", "ام حبيبه", "ابن تيميه", "ابن سينا", "ابن خلدون", "ابن رشد", "بنت الشاطئ"];
-const PREFIX_COMPOPOUND_RULES: RegExp[] = [/^امه\s+[ء-ي]{3,}$/, /^ابو\s+[ء-ي]{3,}$/, /^ام\s+[ء-ي]{3,}$/, /^ابن\s+[ء-ي]{3,}$/, /^بنت\s+[ء-ي]{3,}$/, /^[ء-ي]{3,}\s+الدين$/, /^[ء-ي]{3,}\s+الله$/];
+const PREFIX_COMPOUND_RULES: RegExp[] = [/^امه\s+[ء-ي]{3,}$/, /^ابو\s+[ء-ي]{3,}$/, /^ام\s+[ء-ي]{3,}$/, /^ابن\s+[ء-ي]{3,}$/, /^بنت\s+[ء-ي]{3,}$/, /^[ء-ي]{3,}\s+الدين$/, /^[ء-ي]{3,}\s+الله$/];
 
 function normalizeArabicWithCompounds(value: any): string {
     let s = baseArabicNormalize(value);
@@ -23,7 +23,7 @@ function normalizeArabicWithCompounds(value: any): string {
     for (let i = 0; i < parts.length; i++) {
         if (i < parts.length - 1) {
             const pair = `${parts[i]} ${parts[i + 1]}`;
-            if (PREFIX_COMPOPOUND_RULES.some((r) => r.test(pair))) {
+            if (PREFIX_COMPOUND_RULES.some((r) => r.test(pair))) {
                 result.push(pair.replace(" ", "_"));
                 i++;
                 continue;
@@ -78,6 +78,9 @@ self.onmessage = async (event) => {
     try {
         const potentialDuplicates: any[] = [];
 
+        // Filter educators to only include community educators
+        const communityEducators = educators.filter((edu: any) => edu.contract_type === 'مثقفة مجتمعية');
+
         // Simple blocking strategy: match on first 3 chars of normalized name
         const bnfMap = new Map<string, any[]>();
         beneficiaries.forEach((bnf: any) => {
@@ -89,7 +92,8 @@ self.onmessage = async (event) => {
             }
         });
 
-        educators.forEach((edu: any) => {
+        // Use the filtered list of educators
+        communityEducators.forEach((edu: any) => {
             const name = normalizeArabicWithCompounds(edu[mapping.educatorName]);
             if (name.length >= 3) {
                 const key = name.substring(0, 3);
