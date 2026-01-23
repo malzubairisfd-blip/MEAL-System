@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ArrowLeft, Loader2, GitCompareArrows, UserCheck, UserX, Check, X } from "lucide-react";
 import { Progress } from '@/components/ui/progress';
+import { Label } from '@/components/ui/label';
 
 interface Project {
   projectId: string;
