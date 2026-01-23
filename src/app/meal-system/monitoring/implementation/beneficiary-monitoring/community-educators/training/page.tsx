@@ -164,9 +164,9 @@ function TrainingStatementsPageContent() {
     
     const savedBnfPerEd = localStorage.getItem(`training-bnf-per-ed-${projectId}`);
     if (savedBnfPerEd) {
-      setBnfPerEd(JSON.parse(savedBnfPerEd));
+        setBnfPerEd(JSON.parse(savedBnfPerEd));
     } else {
-      setBnfPerEd({});
+        setBnfPerEd({});
     }
   }, [projectId, getLocalStorageKey]);
 
@@ -494,9 +494,14 @@ function TrainingStatementsPageContent() {
     };
   }, [selectedVillage, villageStatsWithEdReq, allProjectEducators]);
 
-  const chosenInVillage = useMemo(() => {
-    return Object.values(selections).filter(s => s.isSelected && s.workingVillage === selectedVillage).length;
-  }, [selections, selectedVillage]);
+    const chosenInVillage = useMemo(() => {
+        return Object.values(selections).filter(
+            (s) =>
+                s.isSelected &&
+                s.workingVillage === selectedVillage &&
+                s.contractType === 'مثقفة مجتمعية'
+        ).length;
+    }, [selections, selectedVillage]);
 
 
   return (
@@ -649,6 +654,12 @@ function TrainingStatementsPageContent() {
                         <SelectContent>{sortedVillages.map((v) => (<SelectItem key={v.villageName} value={v.villageName}>{v.villageName} (Avail: {v.edCount} / Req: {v.edReq})</SelectItem>))}</SelectContent></Select>
                     </div>
                     
+                     <div className="grid grid-cols-3 gap-4">
+                        <SummaryCard icon={<Users />} title="Available in Village" value={selectedVillageStats.available} />
+                        <SummaryCard icon={<UserCheck className="text-green-500"/>} title="Required for Village" value={selectedVillageStats.required} />
+                        <SummaryCard icon={<UserCheck className="text-blue-500"/>} title="Chosen as Educator" value={chosenInVillage} />
+                    </div>
+
                     <div className="relative">
                         <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                         <Input 
@@ -683,12 +694,6 @@ function TrainingStatementsPageContent() {
                         <CardTitle>Selection Summary & Actions for: {selectedVillage}</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                            <SummaryCard icon={<Users />} title="Available in Village" value={selectedVillageStats.available} />
-                            <SummaryCard icon={<UserCheck className="text-green-500"/>} title="Required for Village" value={selectedVillageStats.required} />
-                            <SummaryCard icon={<UserCheck className="text-blue-500"/>} title="Chosen for Village" value={chosenInVillage} />
-                        </div>
-                        
                         <h4 className="font-semibold text-lg mb-2">Currently Selected Applicant</h4>
                          <div className="border rounded-md">
                             <Table>
