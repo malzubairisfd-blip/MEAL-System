@@ -60,34 +60,44 @@ export default function CenterModificationPage() {
     const [projects, setProjects] = useState<Project[]>([]);
     const [centers, setCenters] = useState<Center[]>([]);
     const [selectedProjectId, setSelectedProjectId] = useState('all');
-    const [loading, setLoading] = useState({ projects: true, centers: true });
+    const [loading, setLoading] = useState({ projects: true, centers: false });
     const [deletingCenterId, setDeletingCenterId] = useState<string | null>(null);
 
-    const fetchData = useCallback(async () => {
-        setLoading({ projects: true, centers: true });
-        try {
-            const [projRes, centerRes] = await Promise.all([
-                fetch('/api/projects'),
-                fetch('/api/education-payment-centers')
-            ]);
-
-            if (projRes.ok) setProjects(await projRes.json());
-            else throw new Error("Failed to load projects");
-            
-            if (centerRes.ok) setCenters(await centerRes.json());
-            else setCenters([]);
-            
-        } catch (error: any) {
-            toast({ title: "Error", description: error.message, variant: "destructive" });
-        } finally {
-            setLoading({ projects: false, centers: false });
-        }
-    }, [toast]);
-
     useEffect(() => {
-        fetchData();
-    }, [fetchData]);
+        const fetchProjects = async () => {
+            setLoading(prev => ({ ...prev, projects: true }));
+            try {
+                const res = await fetch('/api/projects');
+                if (!res.ok) throw new Error("Failed to load projects");
+                setProjects(await res.json());
+            } catch (error: any) {
+                toast({ title: "Error", description: error.message, variant: "destructive" });
+            } finally {
+                setLoading(prev => ({ ...prev, projects: false }));
+            }
+        };
+        fetchProjects();
+    }, [toast]);
     
+    useEffect(() => {
+        const fetchCenters = async () => {
+            setLoading(prev => ({ ...prev, centers: true }));
+            try {
+                const url = `/api/education-payment-centers?projectId=${selectedProjectId}`;
+                const res = await fetch(url);
+                if (!res.ok) throw new Error("Failed to load centers data.");
+                setCenters(await res.json());
+            } catch (error: any) {
+                setCenters([]); // Clear centers on error
+                toast({ title: "Error loading centers", description: error.message, variant: "destructive" });
+            } finally {
+                setLoading(prev => ({ ...prev, centers: false }));
+            }
+        };
+
+        fetchCenters();
+    }, [selectedProjectId, toast]);
+
     const handleDelete = async () => {
         if (!deletingCenterId) return;
         try {
@@ -106,19 +116,7 @@ export default function CenterModificationPage() {
             setDeletingCenterId(null);
         }
     };
-
-    const filteredCenters = useMemo(() => {
-        if (selectedProjectId === 'all') {
-            return centers;
-        }
-        const selectedProject = projects.find(p => p.projectId === selectedProjectId);
-        if (!selectedProject) return [];
-        
-        return centers.filter(center => 
-            selectedProject.districts.includes(center.MUD_NAME)
-        );
-    }, [selectedProjectId, projects, centers]);
-
+    
     const tableHeaders = [ "S", "PROJ_NO", "MUD_NO", "MUD_NAME", "OZLA_NO", "OZLA_NAME", "VILL_NAME", "FAC_ID", "FAC_NAME", "LOC_ID", "LOC_FULL_NAME", "IS_EC", "IS_PC", "PC_ID", "NOTES", "PC_NAME2", "IS_PC2", "PC_LOC2", "SAME_OZLA", "same_ec_pc", "pc_ec_cnt", "pc_ed_cnt", "ec_ed_cnt", "pc_bnf_cnt", "ec_bnf_cnt", "Notes2" ];
 
 
@@ -162,7 +160,7 @@ export default function CenterModificationPage() {
             <Card>
                 <CardHeader>
                     <CardTitle>Centers List</CardTitle>
-                    <CardDescription>Displaying centers based on the selected project's districts.</CardDescription>
+                    <CardDescription>Displaying centers for the selected project.</CardDescription>
                 </CardHeader>
                 <CardContent>
                     {loading.centers ? (
@@ -177,7 +175,7 @@ export default function CenterModificationPage() {
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {filteredCenters.map((center, index) => (
+                                    {centers.map((center, index) => (
                                         <TableRow key={index}>
                                             <TableCell className="sticky left-0 bg-card z-10">
                                                 <div className="flex gap-1">
@@ -200,7 +198,7 @@ export default function CenterModificationPage() {
                                     ))}
                                 </TableBody>
                             </Table>
-                             {filteredCenters.length === 0 && <p className="p-4 text-center text-muted-foreground">No centers found for the selected project criteria.</p>}
+                             {centers.length === 0 && <p className="p-4 text-center text-muted-foreground">No centers found for the selected project criteria.</p>}
                         </div>
                     )}
                 </CardContent>
@@ -223,4 +221,3 @@ export default function CenterModificationPage() {
         </div>
     );
 }
-

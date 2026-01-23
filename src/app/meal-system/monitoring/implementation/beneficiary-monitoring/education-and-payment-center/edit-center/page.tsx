@@ -103,42 +103,40 @@ function EditCenterPageContent() {
     const { control, watch, setValue, reset } = form;
     
     useEffect(() => {
+        if (!FAC_ID) {
+            toast({ title: "Error", description: "No center ID provided.", variant: "destructive" });
+            router.push('/meal-system/monitoring/implementation/beneficiary-monitoring/education-and-payment-center/modification');
+            return;
+        }
+
         const fetchData = async () => {
             setLoading(true);
             try {
-                const [projRes, locRes, epcRes] = await Promise.all([
+                const [projRes, locRes, centerRes, allEpcsRes] = await Promise.all([
                     fetch('/api/projects'),
                     fetch('/api/locations'),
+                    fetch(`/api/education-payment-centers?FAC_ID=${FAC_ID}`),
                     fetch('/api/education-payment-centers')
                 ]);
                 
-                const projectsData = projRes.ok ? await projRes.json() : [];
-                const locationsData = locRes.ok ? await locRes.json() : [];
-                const epcsData = epcRes.ok ? await epcRes.json() : [];
-
-                setProjects(projectsData);
-                setLocations(locationsData);
-                setEpcs(epcsData);
-
-                if (FAC_ID) {
-                    const centerToEdit = epcsData.find((c: any) => c.FAC_ID === FAC_ID);
-                    if (centerToEdit) {
-                        const castedCenter = {
-                            ...centerToEdit,
-                            IS_EC: String(centerToEdit.IS_EC),
-                            IS_PC: String(centerToEdit.IS_PC),
-                        };
-                        reset(castedCenter);
-                    } else {
-                        toast({ title: "Error", description: "Center not found.", variant: "destructive" });
-                        router.push('/meal-system/monitoring/implementation/beneficiary-monitoring/education-and-payment-center/modification');
-                    }
+                if (projRes.ok) setProjects(await projRes.json());
+                if (locRes.ok) setLocations(await locRes.json());
+                if (allEpcsRes.ok) setEpcs(await allEpcsRes.json());
+                
+                if (centerRes.ok) {
+                    const centerToEdit = await centerRes.json();
+                    const castedCenter = {
+                        ...centerToEdit,
+                        IS_EC: String(centerToEdit.IS_EC), 
+                        IS_PC: String(centerToEdit.IS_PC),
+                    };
+                    reset(castedCenter);
                 } else {
-                     toast({ title: "Error", description: "No center ID provided.", variant: "destructive" });
-                     router.push('/meal-system/monitoring/implementation/beneficiary-monitoring/education-and-payment-center/modification');
+                     throw new Error("Center not found or failed to load.");
                 }
-            } catch (error) {
-                toast({ title: "Failed to load initial data", variant: "destructive" });
+            } catch (error: any) {
+                toast({ title: "Failed to load data", description: error.message, variant: "destructive" });
+                router.push('/meal-system/monitoring/implementation/beneficiary-monitoring/education-and-payment-center/modification');
             } finally {
                 setLoading(false);
             }

@@ -59,17 +59,30 @@ function initializeDatabase(recreate: boolean = false) {
     return db;
 }
 
-export async function GET() {
+export async function GET(req: Request) {
+    const { searchParams } = new URL(req.url);
+    const facId = searchParams.get('FAC_ID');
+    const projectId = searchParams.get('projectId');
+    
     try {
         await fs.mkdir(getDataPath(), { recursive: true });
         const db = new Database(getDbPath(), { fileMustExist: true });
         
-        const stmt = db.prepare('SELECT * FROM ec_pc_data');
-        const rows = stmt.all();
+        let data;
+        if (facId) {
+            data = db.prepare('SELECT * FROM ec_pc_data WHERE fac_id = ?').get(facId);
+            if (!data) {
+                db.close();
+                return NextResponse.json({ error: "Center not found" }, { status: 404 });
+            }
+        } else if (projectId && projectId !== 'all') {
+            data = db.prepare('SELECT * FROM ec_pc_data WHERE project_id = ?').all(projectId);
+        } else {
+            data = db.prepare('SELECT * FROM ec_pc_data').all();
+        }
         
         db.close();
-
-        return NextResponse.json(rows);
+        return NextResponse.json(data);
 
     } catch (error: any) {
         if (error.code === 'SQLITE_CANTOPEN') {
@@ -148,20 +161,20 @@ export async function POST(req: Request) {
 export async function PUT(req: Request) {
     try {
         const recordToUpdate = await req.json();
-        if (!recordToUpdate || !recordToUpdate.FAC_ID) {
-            return NextResponse.json({ error: "Invalid payload, FAC_ID is required." }, { status: 400 });
+        if (!recordToUpdate || !recordToUpdate.fac_id) {
+            return NextResponse.json({ error: "Invalid payload, fac_id is required." }, { status: 400 });
         }
         
         const db = new Database(getDbPath());
 
-        const columnsToUpdate = Object.keys(recordToUpdate).filter(col => DB_COLUMNS.includes(col) && col !== 'id' && col !== 'FAC_ID');
+        const columnsToUpdate = Object.keys(recordToUpdate).filter(col => DB_COLUMNS.includes(col) && col !== 'id' && col !== 'fac_id');
         if (columnsToUpdate.length === 0) {
             db.close();
             return NextResponse.json({ message: "No fields to update." });
         }
 
         const setClause = columnsToUpdate.map(col => `${col} = ?`).join(', ');
-        const values = [...columnsToUpdate.map(col => recordToUpdate[col]), recordToUpdate.FAC_ID];
+        const values = [...columnsToUpdate.map(col => recordToUpdate[col]), recordToUpdate.fac_id];
 
         const stmt = db.prepare(`UPDATE ec_pc_data SET ${setClause} WHERE fac_id = ?`);
         const info = stmt.run(...values);
