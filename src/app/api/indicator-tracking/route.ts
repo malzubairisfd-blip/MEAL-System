@@ -1,82 +1,105 @@
-
 // src/app/api/indicator-tracking/route.ts
 import { NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
+import Database from 'better-sqlite3';
 
 const getDataPath = () => path.join(process.cwd(), 'src/data');
-const getTrackingFile = () => path.join(getDataPath(), 'indicator-tracking.json');
+const getDbPath = () => path.join(getDataPath(), 'indicator_tracking.db');
+const getJsonPath = () => path.join(getDataPath(), 'indicator-tracking.json');
 
-async function getExistingPlans() {
-    const PLANS_FILE = getTrackingFile();
-    try {
-        await fs.access(PLANS_FILE);
-        const raw = await fs.readFile(PLANS_FILE, 'utf-8');
-        const plans = JSON.parse(raw);
-        return Array.isArray(plans) ? plans : [];
-    } catch (e) {
-        return [];
-    }
-}
-
-async function ensureDataFile() {
+async function initializeDatabase() {
     await fs.mkdir(getDataPath(), { recursive: true });
-    try {
-        await fs.access(getTrackingFile());
-    } catch {
-        await fs.writeFile(getTrackingFile(), "[]", "utf-8");
+    const db = new Database(getDbPath());
+
+    db.exec(`
+        CREATE TABLE IF NOT EXISTS indicator_tracking (
+            projectId TEXT PRIMARY KEY,
+            indicators TEXT
+        );
+    `);
+
+    const result = db.prepare('SELECT COUNT(*) as count FROM indicator_tracking').get() as { count: number };
+    const count = result.count;
+    if (count === 0) {
+        console.log('Seeding indicator_tracking database from indicator-tracking.json...');
+        try {
+            const jsonString = await fs.readFile(getJsonPath(), 'utf-8');
+            const plans = JSON.parse(jsonString);
+            if (Array.isArray(plans)) {
+                const insert = db.prepare(`
+                    INSERT OR IGNORE INTO indicator_tracking (projectId, indicators)
+                    VALUES (@projectId, @indicators)
+                `);
+                const insertMany = db.transaction((items) => {
+                    for (const item of items) {
+                        insert.run({
+                            ...item,
+                            indicators: JSON.stringify(item.indicators || []),
+                        });
+                    }
+                });
+                insertMany(plans);
+            }
+        } catch (error) {
+            console.error("Failed to read or seed indicator-tracking.json:", error);
+        }
     }
+    return db;
 }
+
 
 export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const projectId = searchParams.get('projectId');
     
     try {
-        await ensureDataFile();
-        const plans = await getExistingPlans();
-        
-        if (!projectId) {
-            return NextResponse.json(plans);
+        const db = await initializeDatabase();
+        if (projectId) {
+            const plan = db.prepare('SELECT * FROM indicator_tracking WHERE projectId = ?').get(projectId);
+            db.close();
+            if (plan) {
+                return NextResponse.json({ ...plan, indicators: JSON.parse(plan.indicators) });
+            } else {
+                return NextResponse.json({ error: "Indicator Tracking data not found" }, { status: 404 });
+            }
         }
 
-        const plan = plans.find((p: any) => p.projectId === projectId);
-
-        if (plan) {
-            return NextResponse.json(plan);
-        } else {
-            return NextResponse.json({ error: "Indicator Tracking data not found" }, { status: 404 });
-        }
+        const plans = db.prepare('SELECT * FROM indicator_tracking').all();
+        db.close();
+        return NextResponse.json(plans.map(p => ({ ...p, indicators: JSON.parse(p.indicators) })));
     } catch (err: any) {
-        return NextResponse.json({ error: "Failed to read indicator tracking data file.", details: String(err) }, { status: 500 });
+        console.error("[INDICATOR_TRACKING_API_GET_ERROR]", err);
+        return NextResponse.json({ error: "Failed to read indicator tracking data database.", details: String(err) }, { status: 500 });
     }
 }
 
 export async function POST(req: Request) {
     try {
-        await ensureDataFile();
+        const db = await initializeDatabase();
         const newPlan = await req.json();
 
         if (!newPlan || !newPlan.projectId || !Array.isArray(newPlan.indicators)) {
+            db.close();
             return NextResponse.json({ ok: false, error: "Invalid payload. Expected projectId and indicators array." }, { status: 400 });
         }
 
-        const existingPlans = await getExistingPlans();
-        const index = existingPlans.findIndex((p: any) => p.projectId === newPlan.projectId);
-
-        if (index !== -1) {
-            existingPlans[index] = newPlan;
-        } else {
-            existingPlans.push(newPlan);
-        }
+        const stmt = db.prepare(`
+            INSERT INTO indicator_tracking (projectId, indicators)
+            VALUES (@projectId, @indicators)
+            ON CONFLICT(projectId) DO UPDATE SET indicators=excluded.indicators
+        `);
         
-        await fs.writeFile(getTrackingFile(), JSON.stringify(existingPlans, null, 2), "utf8");
+        stmt.run({
+            projectId: newPlan.projectId,
+            indicators: JSON.stringify(newPlan.indicators || []),
+        });
         
+        db.close();
         return NextResponse.json({ ok: true, message: `Indicator Tracking data for project ${newPlan.projectId} saved successfully.` });
 
     } catch (err: any) {
-        console.error("[INDICATOR_TRACKING_API_ERROR]", err);
+        console.error("[INDICATOR_TRACKING_API_POST_ERROR]", err);
         return NextResponse.json({ ok: false, error: "Failed to save Indicator Tracking data.", details: String(err) }, { status: 500 });
     }
 }
-
