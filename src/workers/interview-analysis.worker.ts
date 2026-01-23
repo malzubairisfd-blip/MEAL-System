@@ -157,7 +157,7 @@ self.onmessage = async (event) => {
              }
         });
 
-        // Ranking
+        // New Ranking and Tie-Breaking Logic
         const locationGroups: Record<string, any[]> = {};
         attendedApplicants.forEach(app => {
             const locId = app.loc_id || 'UNKNOWN';
@@ -165,10 +165,45 @@ self.onmessage = async (event) => {
             locationGroups[locId].push(app);
         });
 
-        Object.values(locationGroups).forEach(group => {
-            group.sort((a, b) => (b.grand_total_score || 0) - (a.grand_total_score || 0));
-            group.forEach((app, index) => {
-                if(app.interview_total_marks < 15) {
+        Object.values(locationGroups).forEach(locationGroup => {
+            // Group applicants by score within this location
+            const scoreGroups = new Map<number, any[]>();
+            locationGroup.forEach(app => {
+                const score = app.grand_total_score || 0;
+                if (!scoreGroups.has(score)) {
+                    scoreGroups.set(score, []);
+                }
+                scoreGroups.get(score)!.push(app);
+            });
+
+            // Find and process ties
+            scoreGroups.forEach((tiedApplicants, score) => {
+                if (tiedApplicants.length > 1) {
+                    // Apply +2 buffer to all applicants with a higher score in this location
+                    locationGroup.forEach(app => {
+                        if ((app.grand_total_score || 0) > score) {
+                            app.grand_total_score += 2;
+                        }
+                    });
+
+                    // Sort the tied group by age_per_village_ranking
+                    tiedApplicants.sort((a, b) => (a.age_per_village_ranking || 999) - (b.age_per_village_ranking || 999));
+
+                    // Apply descending bonus
+                    const baseBonus = tiedApplicants.length / 10.0;
+                    tiedApplicants.forEach((applicant, index) => {
+                        const bonus = baseBonus - (index * 0.1);
+                        if (bonus > 0) {
+                            applicant.grand_total_score += bonus;
+                        }
+                    });
+                }
+            });
+
+            // Finally, re-rank the entire location group with the adjusted scores
+            locationGroup.sort((a, b) => (b.grand_total_score || 0) - (a.grand_total_score || 0));
+            locationGroup.forEach((app, index) => {
+                if (app.interview_total_marks < 15) {
                     app.grand_score_rank = 0;
                 } else {
                     app.grand_score_rank = index + 1;
@@ -193,5 +228,3 @@ self.onmessage = async (event) => {
         postMessage({ type: 'error', error: e.message || 'An unknown error occurred in the worker.' });
     }
 };
-
-    
