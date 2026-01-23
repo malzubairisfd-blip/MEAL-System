@@ -13,6 +13,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+
 
 interface Project {
   projectId: string;
@@ -45,6 +47,8 @@ export default function UploadCentersPage() {
 
     const [columnMapping, setColumnMapping] = useState<Map<string, string>>(new Map());
     const [manualMapping, setManualMapping] = useState({ ui: '', db: '' });
+
+    const [duplicateDialog, setDuplicateDialog] = useState({ isOpen: false, duplicates: [], nonDuplicates: [] });
 
     useEffect(() => {
         const fetchProjects = async () => {
@@ -90,7 +94,8 @@ export default function UploadCentersPage() {
             const jsonData = XLSX.utils.sheet_to_json(ws);
             setRawFileData(jsonData);
             const headers = (XLSX.utils.sheet_to_json(ws, { header: 1 })[0] as string[]) || [];
-            setColumns(headers.filter(h => h && h.trim() !== ''));
+            const filteredHeaders = headers.filter(h => h && h.trim() !== '');
+            setColumns(filteredHeaders);
         };
         reader.readAsBinaryString(selectedFile);
     }
@@ -135,16 +140,21 @@ export default function UploadCentersPage() {
         setColumnMapping(newMap);
     };
 
-    const handleSave = async () => {
-        if (!file || !selectedProjectId || columnMapping.size === 0) {
-            toast({ title: "Incomplete Configuration", description: "Please select a project, upload a file, and map at least one column.", variant: "destructive" });
+    const executeSave = async (recordsToSave: any[], isOverwrite: boolean) => {
+        if (!selectedProjectId) {
+            toast({ title: "Save Aborted", description: "Project ID was lost. Please re-select the project.", variant: "destructive" });
             return;
         }
 
         setIsSaving(true);
         const selectedProjectData = projects.find(p => p.projectId === selectedProjectId);
+        if (!selectedProjectData) {
+            toast({ title: "Project not found", variant: "destructive" });
+            setIsSaving(false);
+            return;
+        }
 
-        const recordsToSave = rawFileData.map(row => {
+        const payload = recordsToSave.map(row => {
             const newRecord: {[key: string]: any} = {};
             columnMapping.forEach((dbCol, uiCol) => {
                 if (row[uiCol] !== undefined) {
@@ -152,7 +162,7 @@ export default function UploadCentersPage() {
                 }
             });
             newRecord.project_id = selectedProjectId;
-            newRecord.project_name = selectedProjectData?.projectName;
+            newRecord.project_name = selectedProjectData.projectName;
             return newRecord;
         });
 
@@ -160,7 +170,7 @@ export default function UploadCentersPage() {
             const response = await fetch('/api/education-payment-centers', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(recordsToSave),
+                body: JSON.stringify(payload),
             });
 
             const result = await response.json();
@@ -169,15 +179,45 @@ export default function UploadCentersPage() {
             }
 
             toast({ title: "Success!", description: `Education and Payment Center data has been saved. ${result.count} records processed.` });
-            setFile(null);
-            setColumns([]);
-            setColumnMapping(new Map());
-            setSheets([]);
-            setSelectedSheet('');
+            if (isOverwrite) {
+                setFile(null); setColumns([]); setColumnMapping(new Map()); setSheets([]); setSelectedSheet('');
+            }
         } catch (error: any) {
             toast({ title: "Error", description: error.message, variant: "destructive" });
         } finally {
             setIsSaving(false);
+            setDuplicateDialog({ isOpen: false, duplicates: [], nonDuplicates: [] });
+        }
+    };
+
+
+    const handleSave = async () => {
+        if (!file || !selectedProjectId || columnMapping.size === 0) {
+            toast({ title: "Incomplete Configuration", description: "Please select a project, upload a file, and map at least one column.", variant: "destructive" });
+            return;
+        }
+
+        setIsSaving(true);
+        try {
+            const existingRes = await fetch('/api/education-payment-centers');
+            if (!existingRes.ok) throw new Error("Could not check existing centers.");
+            const existingCenters: any[] = await existingRes.json();
+            const existingNames = new Set(existingCenters.map(c => c.fac_name));
+
+            const facNameMappedColumn = Array.from(columnMapping.entries()).find(([uiCol, dbCol]) => dbCol === 'fac_name')?.[0];
+            if (!facNameMappedColumn) throw new Error("Please map a source column to 'fac_name' to check for duplicates.");
+            
+            const duplicates = rawFileData.filter(row => existingNames.has(row[facNameMappedColumn]));
+            const nonDuplicates = rawFileData.filter(row => !existingNames.has(row[facNameMappedColumn]));
+
+            if (duplicates.length > 0) {
+                setDuplicateDialog({ isOpen: true, duplicates, nonDuplicates });
+            } else {
+                await executeSave(rawFileData, true);
+            }
+        } catch (error: any) {
+             toast({ title: "Error during pre-save check", description: error.message, variant: "destructive" });
+             setIsSaving(false);
         }
     };
 
@@ -301,12 +341,33 @@ export default function UploadCentersPage() {
                     <CardTitle>4. Save Data</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <Button onClick={handleSave} disabled={!file || isSaving}>
+                    <Button onClick={handleSave} disabled={!file || isSaving || !selectedProjectId}>
                         {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                         Save to Database
                     </Button>
                 </CardContent>
             </Card>
+
+            <AlertDialog open={duplicateDialog.isOpen} onOpenChange={(isOpen) => setDuplicateDialog(prev => ({...prev, isOpen}))}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Duplicate Records Found</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Found {duplicateDialog.duplicates.length} center(s) in your upload that already exist in the database based on Facility Name. How would you like to proceed?
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel onClick={() => setIsSaving(false)}>Cancel</AlertDialogCancel>
+                        <Button variant="outline" onClick={() => executeSave(duplicateDialog.nonDuplicates, false)}>
+                            Skip Duplicates
+                        </Button>
+                        <AlertDialogAction onClick={() => executeSave([...duplicateDialog.nonDuplicates, ...duplicateDialog.duplicates], true)}>
+                            Replace Existing
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
         </div>
     );
 }
