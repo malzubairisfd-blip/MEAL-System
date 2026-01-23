@@ -469,6 +469,7 @@ function TrainingStatementsPageContent() {
       applicant_id: currentlySelectedApplicantId,
       contract_type: type,
       working_village: selectedVillage,
+      ed_bnf_cnt: type === 'مثقفة مجتمعية' ? bnfToAssign : 0
     };
     
     try {
@@ -726,12 +727,10 @@ function TrainingStatementsPageContent() {
                 </CardContent>
             </Card>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
                 <SummaryCard title="Available in Village" value={selectedVillageStats.available} />
                 <SummaryCard title="Required Educators" value={selectedVillageStats.required} />
-                <SummaryCard title="Chosen Educators" value={chosenEducators} total={totalEdReq} />
-                <SummaryCard title="Chosen Monitors" value={chosenMonitors} total={manualMonitorsReq} />
-                <SummaryCard title="Chosen Spare" value={chosenSpares} total={finalSpareReq} />
+                <SummaryCard title="Chosen Educators" value={chosenInVillage} total={selectedVillageStats.required} />
                 <SummaryCard title="Beneficiaries Connected" value={totalBnfConnected.toLocaleString()} total={totalBnfForVillage.toLocaleString()} />
             </div>
 
