@@ -27,33 +27,36 @@ interface Project {
 }
 
 interface Center {
-  S: number;
-  PROJ_NO: number;
-  MUD_NO: number;
-  MUD_NAME: string;
-  OZLA_NO: number;
-  OZLA_NAME: string;
-  VILL_NAME: string;
-  FAC_ID: string;
-  FAC_NAME: string;
-  LOC_ID: string;
-  LOC_FULL_NAME: string;
-  IS_EC: string;
-  IS_PC: number;
-  PC_ID: string;
-  NOTES: string;
-  PC_NAME2: string;
-  IS_PC2: number;
-  PC_LOC2: string;
-  SAME_OZLA: boolean;
-  same_ec_pc: boolean;
-  pc_ec_cnt: number;
-  pc_ed_cnt: number;
-  ec_ed_cnt: number;
-  pc_bnf_cnt: number;
-  ec_bnf_cnt: number;
-  Notes2: string;
+    id: number;
+    project_id: string;
+    project_name: string;
+    proj_no: number;
+    mud_no: number;
+    mud_name: string;
+    ozla_no: number;
+    ozla_name: string;
+    vill_no: number;
+    vill_name: string;
+    fac_id: string;
+    fac_name: string;
+    loc_id: number;
+    loc_full_name: string;
+    is_ec: number;
+    is_pc: number;
+    pc_id: string;
+    notes: string;
+    pc_name2: string;
+    is_pc2: number;
+    pc_loc2: number;
+    same_ozla: number;
+    same_ec_pc: number;
+    pc_ec_cnt: number;
+    pc_ed_cnt: number;
+    ec_ed_cnt: number;
+    pc_bnf_cnt: number;
+    ec_bnf_cnt: number;
 }
+
 
 export default function CenterModificationPage() {
     const { toast } = useToast();
@@ -109,7 +112,7 @@ export default function CenterModificationPage() {
             const result = await response.json();
             if (!response.ok) throw new Error(result.error || 'Failed to delete center');
             toast({ title: "Center Deleted", description: "The center has been removed." });
-            setCenters(prev => prev.filter(c => c.FAC_ID !== deletingCenterId));
+            setCenters(prev => prev.filter(c => c.fac_id !== deletingCenterId));
         } catch (error: any) {
             toast({ title: "Error", description: error.message, variant: "destructive" });
         } finally {
@@ -117,7 +120,7 @@ export default function CenterModificationPage() {
         }
     };
     
-    const tableHeaders = [ "S", "PROJ_NO", "MUD_NO", "MUD_NAME", "OZLA_NO", "OZLA_NAME", "VILL_NAME", "FAC_ID", "FAC_NAME", "LOC_ID", "LOC_FULL_NAME", "IS_EC", "IS_PC", "PC_ID", "NOTES", "PC_NAME2", "IS_PC2", "PC_LOC2", "SAME_OZLA", "same_ec_pc", "pc_ec_cnt", "pc_ed_cnt", "ec_ed_cnt", "pc_bnf_cnt", "ec_bnf_cnt", "Notes2" ];
+    const tableHeaders = [ "id", "project_id", "project_name", "proj_no", "mud_no", "mud_name", "ozla_no", "ozla_name", "vill_no", "vill_name", "fac_id", "fac_name", "loc_id", "loc_full_name", "is_ec", "is_pc", "pc_id", "notes", "pc_name2", "is_pc2", "pc_loc2", "same_ozla", "same_ec_pc", "pc_ec_cnt", "pc_ed_cnt", "ec_ed_cnt", "pc_bnf_cnt", "ec_bnf_cnt" ];
 
 
     return (
@@ -171,7 +174,7 @@ export default function CenterModificationPage() {
                                 <TableHeader>
                                     <TableRow>
                                         <TableHead>Actions</TableHead>
-                                        {tableHeaders.map(header => <TableHead key={header}>{header}</TableHead>)}
+                                        {tableHeaders.map(header => <TableHead key={header}>{header.replace(/_/g, ' ').toUpperCase()}</TableHead>)}
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -180,11 +183,11 @@ export default function CenterModificationPage() {
                                             <TableCell className="sticky left-0 bg-card z-10">
                                                 <div className="flex gap-1">
                                                     <Button variant="outline" size="icon" asChild>
-                                                        <Link href={`/meal-system/monitoring/implementation/beneficiary-monitoring/education-and-payment-center/edit-center?FAC_ID=${center.FAC_ID}`}>
+                                                        <Link href={`/meal-system/monitoring/implementation/beneficiary-monitoring/education-and-payment-center/edit-center?FAC_ID=${center.fac_id}`}>
                                                             <Edit className="h-4 w-4" />
                                                         </Link>
                                                     </Button>
-                                                    <Button variant="destructive" size="icon" onClick={() => setDeletingCenterId(center.FAC_ID)}>
+                                                    <Button variant="destructive" size="icon" onClick={() => setDeletingCenterId(center.fac_id)}>
                                                         <Trash2 className="h-4 w-4" />
                                                     </Button>
                                                 </div>

@@ -18,30 +18,29 @@ import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft, Save, Loader2 } from 'lucide-react';
 
 const CenterSchema = z.object({
-  S: z.any().optional(),
-  PROJ_NO: z.literal(2),
-  MUD_NO: z.number({ required_error: "MUD_NO is required." }),
-  MUD_NAME: z.string().min(1, "District name is required."),
-  OZLA_NO: z.number({ required_error: "OZLA_NO is required." }),
-  OZLA_NAME: z.string().min(1, "Sub-district name is required."),
-  VILL_NO: z.number({ required_error: "VILL_NO is required." }),
-  VILL_NAME: z.string().min(1, "Village name is required."),
-  FAC_ID: z.string().min(1, "Facility ID is required."),
-  FAC_TYPE: z.string().min(1, "Facility type is required."),
-  FAC_TEXT: z.string().min(1, "Facility text is required."),
-  FAC_NAME: z.string().min(1, "Facility name is required."),
-  LOC_ID: z.string().min(1, "Location ID is required."),
-  LOC_FULL_NAME: z.string().min(1, "Full location name is required."),
-  IS_EC: z.enum(['yes', 'no', '1', '0']),
-  IS_PC: z.enum(['1', '0', 'yes', 'no']),
-  PC_ID: z.string().min(1, "PC_ID is required."),
-  NOTES: z.string().optional(),
-  PC_NAME2: z.string().optional(),
-  IS_PC2: z.coerce.number().optional(),
-  PC_LOC2: z.string().optional(),
-  SAME_OZLA: z.boolean().optional(),
-  same_ec_pc: z.boolean().optional(),
-  projectId: z.string().min(1, "Project is required."),
+  id: z.any().optional(),
+  project_id: z.string().min(1, "Project is required."),
+  project_name: z.string().optional(),
+  proj_no: z.coerce.number().optional(),
+  mud_no: z.coerce.number().optional(),
+  mud_name: z.string().min(1, "District name is required."),
+  ozla_no: z.coerce.number().optional(),
+  ozla_name: z.string().min(1, "Sub-district name is required."),
+  vill_no: z.coerce.number().optional(),
+  vill_name: z.string().min(1, "Village name is required."),
+  fac_id: z.string().min(1, "Facility ID is required."),
+  fac_name: z.string().min(1, "Facility name is required."),
+  loc_id: z.coerce.number().optional(),
+  loc_full_name: z.string().optional(),
+  is_ec: z.coerce.number().optional(),
+  is_pc: z.coerce.number().optional(),
+  pc_id: z.string().optional(),
+  notes: z.string().optional(),
+  pc_name2: z.string().optional(),
+  is_pc2: z.coerce.number().optional(),
+  pc_loc2: z.coerce.number().optional(),
+  same_ozla: z.coerce.boolean().optional(),
+  same_ec_pc: z.coerce.boolean().optional(),
 });
 
 type FormValues = z.infer<typeof CenterSchema>;
@@ -64,11 +63,11 @@ interface Location {
 }
 
 interface Epc {
-  FAC_ID: string;
-  FAC_NAME: string;
-  MUD_NAME: string;
-  LOC_ID: string;
-  IS_PC: '1' | '0' | 'yes' | 'no';
+  fac_id: string;
+  fac_name: string;
+  mud_name: string;
+  loc_id: string;
+  is_pc: '1' | '0' | 'yes' | 'no';
 }
 
 const normalizeArabic = (s: string | null | undefined): string => {
@@ -125,12 +124,10 @@ function EditCenterPageContent() {
                 
                 if (centerRes.ok) {
                     const centerToEdit = await centerRes.json();
-                    const castedCenter = {
+                     reset({
                         ...centerToEdit,
-                        IS_EC: String(centerToEdit.IS_EC), 
-                        IS_PC: String(centerToEdit.IS_PC),
-                    };
-                    reset(castedCenter);
+                        is_pc: String(centerToEdit.is_pc),
+                    });
                 } else {
                      throw new Error("Center not found or failed to load.");
                 }
@@ -144,26 +141,24 @@ function EditCenterPageContent() {
         fetchData();
     }, [FAC_ID, toast, router, reset]);
 
-    const selectedProject = watch('projectId');
-    const selectedMudName = watch('MUD_NAME');
-    const selectedOzlaName = watch('OZLA_NAME');
-    const selectedVillName = watch('VILL_NAME');
-    const facType = watch('FAC_TYPE');
-    const facText = watch('FAC_TEXT');
-    const isPc = watch('IS_PC');
-    const pcId = watch('PC_ID');
+    const selectedProjectId = watch('project_id');
+    const selectedMudName = watch('mud_name');
+    const selectedOzlaName = watch('ozla_name');
+    const selectedVillName = watch('vill_name');
+    const isPc = watch('is_pc');
+    const pcId = watch('pc_id');
     
     const projectOptions = useMemo(() => projects, [projects]);
     
     const mudOptions = useMemo(() => {
-        if (!selectedProject) return [];
-        const project = projects.find(p => p.projectId === selectedProject);
+        if (!selectedProjectId) return [];
+        const project = projects.find(p => p.projectId === selectedProjectId);
         if (!project) return [];
         const projectDistricts = new Set(project.districts.map(d => normalizeArabic(d)));
         return Array.from(new Set(locations
             .filter(l => projectDistricts.has(normalizeArabic(l.mud_name)))
             .map(l => l.mud_name)));
-    }, [selectedProject, projects, locations]);
+    }, [selectedProjectId, projects, locations]);
 
     const ozlaOptions = useMemo(() => {
         if (!selectedMudName) return [];
@@ -177,67 +172,57 @@ function EditCenterPageContent() {
 
     const paymentCenterOptions = useMemo(() => {
         if (!selectedMudName) return [];
-        return epcs.filter(e => (e.IS_PC === '1' || e.IS_PC === 'yes') && normalizeArabic(e.MUD_NAME) === normalizeArabic(selectedMudName));
+        return epcs.filter(e => (String(e.is_pc) === '1' || String(e.is_pc) === 'yes') && normalizeArabic(e.mud_name) === normalizeArabic(selectedMudName));
     }, [epcs, selectedMudName]);
     
     useEffect(() => {
         const location = locations.find(l => normalizeArabic(l.mud_name) === normalizeArabic(selectedMudName) && normalizeArabic(l.ozla_name) === normalizeArabic(selectedOzlaName) && normalizeArabic(l.vill_name) === normalizeArabic(selectedVillName));
         if (location) {
-            setValue('MUD_NO', location.mud_loc_id);
-            setValue('OZLA_NO', location.ozla_loc_id);
-            setValue('VILL_NO', location.vill_loc_id);
-            setValue('LOC_ID', String(location.vill_loc_id));
-            setValue('LOC_FULL_NAME', `${location.gov_name}/${location.mud_name}/${location.ozla_name}/${location.vill_name}`);
+            setValue('mud_no', location.mud_loc_id);
+            setValue('ozla_no', location.ozla_loc_id);
+            setValue('vill_no', location.vill_loc_id);
+            setValue('loc_id', location.vill_loc_id);
+            setValue('loc_full_name', `${location.gov_name}/${location.mud_name}/${location.ozla_name}/${location.vill_name}`);
         }
     }, [selectedMudName, selectedOzlaName, selectedVillName, locations, setValue]);
     
     useEffect(() => {
-        if (facType && facText && selectedVillName) {
-            setValue('FAC_NAME', `${facType} ${facText} - ${selectedVillName}`);
-        }
-    }, [facType, facText, selectedVillName, setValue]);
-    
-    useEffect(() => {
-      if (isPc === '1' || isPc === 'yes') {
-        setValue('PC_ID', watch('FAC_ID'));
-        setValue('PC_NAME2', watch('FAC_NAME'));
-        setValue('PC_LOC2', watch('LOC_ID'));
-        setValue('IS_PC2', 1);
+      if (String(isPc) === '1') {
+        setValue('pc_id', watch('fac_id'));
+        setValue('pc_name2', watch('fac_name'));
+        setValue('pc_loc2', watch('loc_id'));
+        setValue('is_pc2', 1);
       }
     }, [isPc, setValue, watch]);
     
     useEffect(() => {
-      if((isPc === '0' || isPc === 'no') && pcId) {
-        const selectedEpc = epcs.find(e => e.FAC_ID === pcId);
+      if(String(isPc) === '0' && pcId) {
+        const selectedEpc = epcs.find(e => e.fac_id === pcId);
         if(selectedEpc) {
-          setValue('PC_NAME2', selectedEpc.FAC_NAME);
-          setValue('PC_LOC2', selectedEpc.LOC_ID);
+          setValue('pc_name2', selectedEpc.fac_name);
+          setValue('pc_loc2', Number(selectedEpc.loc_id));
         }
       }
     }, [isPc, pcId, epcs, setValue]);
     
     useEffect(() => {
-        const locId = watch('LOC_ID');
-        const pcLoc2 = watch('PC_LOC2');
-        if (isPc === '1' || isPc === 'yes') {
-            setValue('SAME_OZLA', true);
+        const locId = watch('loc_id');
+        const pcLoc2 = watch('pc_loc2');
+        if (String(isPc) === '1') {
+            setValue('same_ozla', true);
         } else if (locId && pcLoc2) {
-            setValue('SAME_OZLA', String(locId).substring(0, 6) === String(pcLoc2).substring(0, 6));
+            setValue('same_ozla', String(locId).substring(0, 6) === String(pcLoc2).substring(0, 6));
         }
     }, [isPc, watch, setValue]);
     
     useEffect(() => {
-        setValue('same_ec_pc', watch('PC_ID') === watch('FAC_ID'));
+        setValue('same_ec_pc', watch('pc_id') === watch('fac_id'));
     }, [watch, setValue]);
 
     const onSubmit = async (data: FormValues) => {
         setIsSaving(true);
         try {
-             const payload = {
-              ...data,
-              IS_PC: data.IS_PC === 'yes' ? 1 : data.IS_PC === 'no' ? 0 : Number(data.IS_PC),
-              IS_EC: data.IS_EC === 'yes' ? 'yes' : 'no',
-            };
+             const payload = { ...data, is_pc: Number(data.is_pc), is_ec: data.is_ec === 'yes' ? 1 : 0 };
             const response = await fetch('/api/education-payment-centers', {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
@@ -253,7 +238,7 @@ function EditCenterPageContent() {
         }
     };
 
-    if (loading || !form.getValues('FAC_ID')) {
+    if (loading || !form.getValues('fac_id')) {
         return <div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin" /></div>;
     }
 
@@ -273,7 +258,7 @@ function EditCenterPageContent() {
                      <Card>
                         <CardHeader><CardTitle>Location Details</CardTitle></CardHeader>
                         <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            <FormField control={control} name="projectId" render={({ field }) => (
+                            <FormField control={control} name="project_id" render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Project</FormLabel>
                                     <Select onValueChange={field.onChange} value={field.value}>
@@ -283,17 +268,17 @@ function EditCenterPageContent() {
                                     <FormMessage />
                                 </FormItem>
                             )} />
-                            <FormField control={control} name="MUD_NAME" render={({ field }) => (
+                            <FormField control={control} name="mud_name" render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>District (MUD_NAME)</FormLabel>
-                                    <Select onValueChange={field.onChange} value={field.value} disabled={!selectedProject}>
+                                    <Select onValueChange={field.onChange} value={field.value} disabled={!selectedProjectId}>
                                         <FormControl><SelectTrigger><SelectValue placeholder="Select District" /></SelectTrigger></FormControl>
                                         <SelectContent>{mudOptions.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
                                     </Select>
                                      <FormMessage />
                                 </FormItem>
                             )} />
-                             <FormField control={control} name="OZLA_NAME" render={({ field }) => (
+                             <FormField control={control} name="ozla_name" render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Sub-District (OZLA_NAME)</FormLabel>
                                     <Select onValueChange={field.onChange} value={field.value} disabled={!selectedMudName}>
@@ -303,7 +288,7 @@ function EditCenterPageContent() {
                                      <FormMessage />
                                 </FormItem>
                             )} />
-                             <FormField control={control} name="VILL_NAME" render={({ field }) => (
+                             <FormField control={control} name="vill_name" render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Village (VILL_NAME)</FormLabel>
                                     <Select onValueChange={field.onChange} value={field.value} disabled={!selectedOzlaName}>
@@ -319,60 +304,40 @@ function EditCenterPageContent() {
                     <Card>
                          <CardHeader><CardTitle>Center Identification</CardTitle></CardHeader>
                          <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                              <FormField control={control} name="FAC_ID" render={({ field }) => (
+                              <FormField control={control} name="fac_id" render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Facility ID (FAC_ID)</FormLabel>
                                     <FormControl><Input {...field} readOnly /></FormControl>
                                     <FormMessage />
                                 </FormItem>
                             )} />
-                            <div className="space-y-2">
-                                <FormLabel>Facility Name (FAC_NAME)</FormLabel>
-                                <FormField control={control} name="FAC_TYPE" render={({ field }) => (
-                                    <FormItem>
-                                        <Select onValueChange={field.onChange} value={field.value}>
-                                            <FormControl><SelectTrigger><SelectValue placeholder="Select Facility Type" /></SelectTrigger></FormControl>
-                                            <SelectContent>
-                                                <SelectItem value="مدرسة">مدرسة</SelectItem>
-                                                <SelectItem value="ملحق جامع">ملحق جامع</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                        <FormMessage />
-                                    </FormItem>
-                                )} />
-                                 <FormField control={control} name="FAC_TEXT" render={({ field }) => (
-                                    <FormItem>
-                                        <FormControl><Input {...field} placeholder="Enter facility text..." /></FormControl>
-                                        <FormMessage />
-                                    </FormItem>
-                                )} />
-                                 <FormField control={control} name="FAC_NAME" render={({ field }) => (
-                                    <FormItem>
-                                        <FormControl><Input {...field} readOnly placeholder="Generated Name..." /></FormControl>
-                                        <FormMessage />
-                                    </FormItem>
-                                )} />
-                            </div>
+                             <FormField control={control} name="fac_name" render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Facility Name (FAC_NAME)</FormLabel>
+                                    <FormControl><Input {...field} /></FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )} />
                          </CardContent>
                     </Card>
                     
                     <Card>
                         <CardHeader><CardTitle>Center Type & Payment Info</CardTitle></CardHeader>
                         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <FormField control={control} name="IS_EC" render={({ field }) => (
+                            <FormField control={control} name="is_ec" render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Is Education Center (IS_EC)?</FormLabel>
                                     <Select onValueChange={field.onChange} value={String(field.value)}>
                                         <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
                                         <SelectContent>
-                                            <SelectItem value="yes">Yes</SelectItem>
-                                            <SelectItem value="no">No</SelectItem>
+                                            <SelectItem value="1">Yes</SelectItem>
+                                            <SelectItem value="0">No</SelectItem>
                                         </SelectContent>
                                     </Select>
                                     <FormMessage />
                                 </FormItem>
                             )} />
-                             <FormField control={control} name="IS_PC" render={({ field }) => (
+                             <FormField control={control} name="is_pc" render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Is Payment Center (IS_PC)?</FormLabel>
                                     <Select onValueChange={field.onChange} value={String(field.value)}>
@@ -385,15 +350,15 @@ function EditCenterPageContent() {
                                     <FormMessage />
                                 </FormItem>
                             )} />
-                            {(isPc === '0' || isPc === 'no') && (
-                                <FormField control={control} name="PC_ID" render={({ field }) => (
+                            {(String(isPc) === '0') && (
+                                <FormField control={control} name="pc_id" render={({ field }) => (
                                     <FormItem>
                                         <FormLabel>Payment Center ID (PC_ID)</FormLabel>
                                         <Select onValueChange={field.onChange} value={field.value} disabled={!selectedMudName}>
                                             <FormControl><SelectTrigger><SelectValue placeholder="Select Payment Center" /></SelectTrigger></FormControl>
                                             <SelectContent>
                                                 {paymentCenterOptions.map(e => (
-                                                    <SelectItem key={e.FAC_ID} value={e.FAC_ID}>{e.FAC_NAME} ({e.FAC_ID})</SelectItem>
+                                                    <SelectItem key={e.fac_id} value={e.fac_id}>{e.fac_name} ({e.fac_id})</SelectItem>
                                                 ))}
                                             </SelectContent>
                                         </Select>
@@ -407,7 +372,7 @@ function EditCenterPageContent() {
                     <Card>
                         <CardHeader><CardTitle>Additional Info & Notes</CardTitle></CardHeader>
                         <CardContent>
-                             <FormField control={control} name="NOTES" render={({ field }) => (
+                             <FormField control={control} name="notes" render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Notes</FormLabel>
                                     <FormControl><Textarea {...field} /></FormControl>
