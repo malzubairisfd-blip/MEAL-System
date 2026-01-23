@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, FileText, UserCheck, User, Users, Briefcase, Filter, ArrowUpAZ, ArrowDownAZ, Save, Trash2, Plus, ArrowLeft, Search } from "lucide-react";
+import { Loader2, FileText, UserCheck, User, Users, Briefcase, Filter, ArrowUpAZ, ArrowDownAZ, Save, Trash2, Plus, ArrowLeft, Search, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -39,6 +39,7 @@ type EducatorCandidate = {
   interview_total_marks: number;
   grand_total_score: number;
   grand_score_rank: number;
+  applcants_relationship?: string;
 };
 
 type SelectionState = {
@@ -290,20 +291,32 @@ function TrainingStatementsPageContent() {
     setCandidates(sorted);
   }, [selectedVillage, allProjectEducators, villageStatsWithEdReq, selections, sortConfig]);
 
+  const filteredCandidates = useMemo(() => {
+      if (!qualifiedCandidatesSearch.trim()) return candidates;
+      const searchTerms = qualifiedCandidatesSearch.split(',').map(term => term.trim().toLowerCase()).filter(Boolean);
+      if (searchTerms.length === 0) return candidates;
+      return candidates.filter(app => 
+          searchTerms.some(term => 
+              String(app.applicant_id).toLowerCase().includes(term) || 
+              app.applicant_name?.toLowerCase().includes(term)
+          )
+      );
+  }, [qualifiedCandidatesSearch, candidates]);
+
   useEffect(() => {
-    if (loading.candidates || candidates.length === 0) {
+    if (loading.candidates || filteredCandidates.length === 0) {
         setCurrentlySelectedApplicantId(null);
         return;
     }
 
-    const firstUnassigned = candidates.find(c => !selections[c.applicant_id]?.isSelected);
+    const firstUnassigned = filteredCandidates.find(c => !selections[c.applicant_id]?.isSelected);
 
     if (firstUnassigned) {
         setCurrentlySelectedApplicantId(firstUnassigned.applicant_id);
     } else {
         setCurrentlySelectedApplicantId(null);
     }
-}, [candidates, selections, loading.candidates]);
+}, [filteredCandidates, selections, loading.candidates]);
 
   const handleLinkToHall = async () => {
       if (!selectedHall || selectedApplicantsForHall.size === 0) return toast({ title: "Incomplete", description: "Select a hall and applicants."});
@@ -385,18 +398,6 @@ function TrainingStatementsPageContent() {
     }
   };
 
-  const filteredCandidates = useMemo(() => {
-      if (!qualifiedCandidatesSearch.trim()) return candidates;
-      const searchTerms = qualifiedCandidatesSearch.split(',').map(term => term.trim().toLowerCase()).filter(Boolean);
-      if (searchTerms.length === 0) return candidates;
-      return candidates.filter(app => 
-          searchTerms.some(term => 
-              String(app.applicant_id).toLowerCase().includes(term) || 
-              app.applicant_name?.toLowerCase().includes(term)
-          )
-      );
-  }, [qualifiedCandidatesSearch, candidates]);
-
   const filteredApplicantsForHallAssignment = useMemo(() => {
       if (!hallAssignmentSearch.trim()) return applicantsForHallAssignment;
       const searchTerms = hallAssignmentSearch.split(',').map(term => term.trim().toLowerCase()).filter(Boolean);
@@ -445,19 +446,19 @@ function TrainingStatementsPageContent() {
       contract_type: type,
       working_village: selectedVillage,
     };
-    setSelections(prev => ({ ...prev, [currentlySelectedApplicantId]: { isSelected: true, contractType: type, workingVillage: selectedVillage } }));
+    
     try {
       const res = await fetch("/api/ed-selection", { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify([applicantToUpdate]) });
       if (!res.ok) {
-        setSelections(prev => { const newS = { ...prev }; delete newS[currentlySelectedApplicantId]; return newS; });
         throw new Error('Failed to save selection.');
       }
+      setSelections(prev => ({ ...prev, [currentlySelectedApplicantId]: { isSelected: true, contractType: type, workingVillage: selectedVillage } }));
       toast({ title: "Saved", description: `Assigned ${type} to applicant ${currentlySelectedApplicantId}.` });
       
-      const villageStats = villageStatsWithEdReq.find(v => v.villageName === selectedVillage);
-      const chosenCount = Object.values(selections).filter(s => s.isSelected && s.workingVillage === selectedVillage).length + 1;
+      const villageStat = villageStatsWithEdReq.find(v => v.villageName === selectedVillage);
+      const chosenCount = Object.values(selections).filter(s => s.isSelected && s.workingVillage === selectedVillage && s.contractType === 'مثقفة مجتمعية').length + 1;
       
-      if (villageStats && chosenCount >= villageStats.edReq) {
+      if (villageStat && chosenCount >= villageStat.edReq) {
         const currentVillageIndex = sortedVillages.findIndex(v => v.villageName === selectedVillage);
         if (currentVillageIndex < sortedVillages.length - 1) {
           const nextVillage = sortedVillages[currentVillageIndex + 1];
@@ -479,11 +480,31 @@ function TrainingStatementsPageContent() {
       }
     } catch (err: any) {
       toast({ title: "Save Error", description: err.message, variant: "destructive" });
-      setSelections(prev => { const newS = { ...prev }; delete newS[currentlySelectedApplicantId]; return newS; });
     } finally {
       setLoading(p => ({ ...p, saving: false }));
     }
   }, [currentlySelectedApplicantId, selectedVillage, toast, filteredCandidates, selections, villageStatsWithEdReq, sortedVillages]);
+
+  const handleSkip = useCallback(() => {
+    if (!currentlySelectedApplicantId) return;
+
+    const currentIndex = filteredCandidates.findIndex(c => c.applicant_id === currentlySelectedApplicantId);
+    
+    let nextUnassignedIndex = -1;
+    for (let i = currentIndex + 1; i < filteredCandidates.length; i++) {
+        if (!selections[filteredCandidates[i].applicant_id]?.isSelected) {
+            nextUnassignedIndex = i;
+            break;
+        }
+    }
+
+    if (nextUnassignedIndex !== -1) {
+        setCurrentlySelectedApplicantId(filteredCandidates[nextUnassignedIndex].applicant_id);
+    } else {
+        toast({ title: "End of Village List", description: "No more unassigned candidates in this village." });
+        setCurrentlySelectedApplicantId(null);
+    }
+  }, [currentlySelectedApplicantId, filteredCandidates, selections, toast]);
 
   const selectedVillageStats = useMemo(() => {
     if (!selectedVillage || !villageStatsWithEdReq) return { required: 0, available: 0 };
@@ -653,13 +674,11 @@ function TrainingStatementsPageContent() {
                         <Select onValueChange={setSelectedVillage} value={selectedVillage}><SelectTrigger className="w-full md:w-1/3"><SelectValue placeholder="Choose Village..." /></SelectTrigger>
                         <SelectContent>{sortedVillages.map((v) => (<SelectItem key={v.villageName} value={v.villageName}>{v.villageName} (Avail: {v.edCount} / Req: {v.edReq})</SelectItem>))}</SelectContent></Select>
                     </div>
-                    
-                     <div className="grid grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <SummaryCard icon={<Users />} title="Available in Village" value={selectedVillageStats.available} />
                         <SummaryCard icon={<UserCheck className="text-green-500"/>} title="Required for Village" value={selectedVillageStats.required} />
                         <SummaryCard icon={<UserCheck className="text-blue-500"/>} title="Chosen as Educator" value={chosenInVillage} />
                     </div>
-
                     <div className="relative">
                         <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                         <Input 
@@ -697,27 +716,48 @@ function TrainingStatementsPageContent() {
                         <h4 className="font-semibold text-lg mb-2">Currently Selected Applicant</h4>
                          <div className="border rounded-md">
                             <Table>
-                               <TableHeader><TableRow><TableHead>ID</TableHead><TableHead>Name</TableHead><TableHead>Location</TableHead><TableHead>Score</TableHead><TableHead>Rank</TableHead></TableRow></TableHeader>
+                               <TableHeader><TableRow>
+                                <TableHead>ID</TableHead>
+                                <TableHead>Name</TableHead>
+                                <TableHead>Qualification</TableHead>
+                                <TableHead>Location</TableHead>
+                                <TableHead>Score</TableHead>
+                                <TableHead>Rank</TableHead>
+                               </TableRow></TableHeader>
                                 <TableBody>
                                     {selectedApplicantForDisplay ? (
                                         <TableRow>
                                             <TableCell>{selectedApplicantForDisplay.applicant_id}</TableCell>
                                             <TableCell>{selectedApplicantForDisplay.applicant_name}</TableCell>
+                                            <TableCell>{selectedApplicantForDisplay.applicant_qualification}</TableCell>
                                             <TableCell>{selectedApplicantForDisplay.loc_name}</TableCell>
                                             <TableCell>{selectedApplicantForDisplay.grand_total_score}</TableCell>
                                             <TableCell>{selectedApplicantForDisplay.grand_score_rank}</TableCell>
                                         </TableRow>
                                     ) : (
-                                        <TableRow><TableCell colSpan={5} className="text-center">No applicant selected for assignment.</TableCell></TableRow>
+                                        <TableRow><TableCell colSpan={6} className="text-center">No applicant selected for assignment.</TableCell></TableRow>
                                     )}
                                 </TableBody>
                             </Table>
                         </div>
-
+                        {selectedApplicantForDisplay?.applcants_relationship && (
+                            <Card className="mt-4 bg-yellow-50 border-yellow-200">
+                                <CardHeader className="py-2">
+                                    <CardTitle className="text-sm font-semibold text-yellow-800 flex items-center gap-2">
+                                        <Users className="h-4 w-4" />
+                                        Applicant Relationship Note
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="py-2">
+                                    <p className="text-yellow-900">{selectedApplicantForDisplay.applcants_relationship}</p>
+                                </CardContent>
+                            </Card>
+                        )}
                         <div className="flex justify-start items-center mt-4 gap-2">
                             <Button variant="outline" onClick={() => handleAssignContractType('مثقفة مجتمعية')}><Users className="mr-2 h-4 w-4"/>Assign as Community Educator</Button>
                             <Button variant="outline" onClick={() => handleAssignContractType('احتياط')}><User className="mr-2 h-4 w-4"/>Assign as Spare</Button>
                             <Button variant="outline" onClick={() => handleAssignContractType('رقابة')}><Briefcase className="mr-2 h-4 w-4"/>Assign as Field Monitor</Button>
+                            <Button variant="secondary" onClick={handleSkip}><ChevronRight className="mr-2 h-4 w-4" />Skip</Button>
                         </div>
                     </CardContent>
                 </Card>
