@@ -46,6 +46,7 @@ type SelectionState = {
   isSelected: boolean;
   contractType: 'مثقفة مجتمعية' | 'رقابة' | 'احتياط';
   workingVillage: string;
+  bnfConn?: number;
 };
 
 type Hall = { hallName: string; hallNumber: number };
@@ -68,14 +69,13 @@ const ColumnFilter = ({ column, onSort }: { column: string; onSort: (column: str
   );
 };
 
-const SummaryCard = ({ icon, title, value }: { icon: React.ReactNode, title: string, value: string | number }) => (
+const SummaryCard = ({ title, value, total }: { title: string, value: string | number, total?: string | number }) => (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-sm font-medium">{title}</CardTitle>
-        {icon}
       </CardHeader>
       <CardContent>
-        <div className="text-2xl font-bold">{value}</div>
+        <div className="text-2xl font-bold">{value}{total !== undefined && <span className="text-lg text-muted-foreground">/{total}</span>}</div>
       </CardContent>
     </Card>
 );
@@ -435,12 +435,36 @@ function TrainingStatementsPageContent() {
     return allProjectEducators.find(c => c.applicant_id === currentlySelectedApplicantId);
     }, [currentlySelectedApplicantId, allProjectEducators]);
 
+    const chosenEducators = useMemo(() => Object.values(selections).filter(s => s.isSelected && s.contractType === 'مثقفة مجتمعية').length, [selections]);
+    const chosenMonitors = useMemo(() => Object.values(selections).filter(s => s.isSelected && s.contractType === 'رقابة').length, [selections]);
+    const chosenSpares = useMemo(() => Object.values(selections).filter(s => s.isSelected && s.contractType === 'احتياط').length, [selections]);
+
+    const assignedInVillage = useMemo(() => Object.values(selections).filter(s => s.isSelected && s.workingVillage === selectedVillage && s.contractType === 'مثقفة مجتمعية'), [selections, selectedVillage]);
+    const totalBnfConnected = useMemo(() => assignedInVillage.reduce((sum, s) => sum + (s.bnfConn || 0), 0), [assignedInVillage]);
+    const totalBnfForVillage = useMemo(() => villageStatsWithEdReq.find(v => v.villageName === selectedVillage)?.bnfCount || 0, [villageStatsWithEdReq, selectedVillage]);
+    
+    const currentApplicantBnfConn = useMemo(() => {
+        if (!selectedVillage) return 0;
+        const villageStat = villageStatsWithEdReq.find(v => v.villageName === selectedVillage);
+        if (!villageStat) return 0;
+
+        const bnfPerEdValue = bnfPerEd[selectedVillage] || 0;
+        if (bnfPerEdValue === 0) return 0;
+        
+        const remainingBnf = villageStat.bnfCount - totalBnfConnected;
+        return Math.max(0, Math.min(remainingBnf, bnfPerEdValue));
+
+    }, [selectedVillage, villageStatsWithEdReq, bnfPerEd, totalBnfConnected]);
+
   const handleAssignContractType = useCallback(async (type: SelectionState['contractType']) => {
     if (!currentlySelectedApplicantId || !selectedVillage) {
       toast({ title: "No applicant selected", variant: "destructive" });
       return;
     }
     setLoading(p => ({ ...p, saving: true }));
+
+    const bnfToAssign = currentApplicantBnfConn;
+
     const applicantToUpdate = {
       applicant_id: currentlySelectedApplicantId,
       contract_type: type,
@@ -452,11 +476,11 @@ function TrainingStatementsPageContent() {
       if (!res.ok) {
         throw new Error('Failed to save selection.');
       }
-      setSelections(prev => ({ ...prev, [currentlySelectedApplicantId]: { isSelected: true, contractType: type, workingVillage: selectedVillage } }));
+      setSelections(prev => ({ ...prev, [currentlySelectedApplicantId]: { isSelected: true, contractType: type, workingVillage: selectedVillage, bnfConn: type === 'مثقفة مجتمعية' ? bnfToAssign : 0 } }));
       toast({ title: "Saved", description: `Assigned ${type} to applicant ${currentlySelectedApplicantId}.` });
       
       const villageStat = villageStatsWithEdReq.find(v => v.villageName === selectedVillage);
-      const chosenCount = Object.values(selections).filter(s => s.isSelected && s.workingVillage === selectedVillage && s.contractType === 'مثقفة مجتمعية').length + 1;
+      const chosenCount = assignedInVillage.length + 1;
       
       if (villageStat && chosenCount >= villageStat.edReq) {
         const currentVillageIndex = sortedVillages.findIndex(v => v.villageName === selectedVillage);
@@ -483,7 +507,7 @@ function TrainingStatementsPageContent() {
     } finally {
       setLoading(p => ({ ...p, saving: false }));
     }
-  }, [currentlySelectedApplicantId, selectedVillage, toast, filteredCandidates, selections, villageStatsWithEdReq, sortedVillages]);
+  }, [currentlySelectedApplicantId, selectedVillage, toast, filteredCandidates, selections, villageStatsWithEdReq, sortedVillages, assignedInVillage.length, currentApplicantBnfConn]);
 
   const handleSkip = useCallback(() => {
     if (!currentlySelectedApplicantId) return;
@@ -546,10 +570,10 @@ function TrainingStatementsPageContent() {
                     </TableBody></Table></ScrollArea>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pt-4">
-                    <SummaryCard icon={<Users />} title="Required Educators" value={totalEdReq} />
-                    <SummaryCard icon={<User />} title="Required Spare" value={finalSpareReq} />
-                    <SummaryCard icon={<Briefcase />} title="Required Field Monitors" value={<Input type="number" className="h-8 w-24 bg-card text-white" value={manualMonitorsReq} onChange={(e) => setManualMonitorsReq(+e.target.value)} />} />
-                    <SummaryCard icon={<UserCheck />} title="Total Qualified" value={finalTotalQualified} />
+                    <SummaryCard title="Required Educators" value={totalEdReq} />
+                    <SummaryCard title="Required Spare" value={finalSpareReq} />
+                    <SummaryCard title="Required Field Monitors" value={<Input type="number" className="h-8 w-24 bg-card text-white" value={manualMonitorsReq} onChange={(e) => setManualMonitorsReq(+e.target.value)} />} />
+                    <SummaryCard title="Total Qualified" value={finalTotalQualified} />
                 </div>
                 </>
             )}
@@ -674,11 +698,6 @@ function TrainingStatementsPageContent() {
                         <Select onValueChange={setSelectedVillage} value={selectedVillage}><SelectTrigger className="w-full md:w-1/3"><SelectValue placeholder="Choose Village..." /></SelectTrigger>
                         <SelectContent>{sortedVillages.map((v) => (<SelectItem key={v.villageName} value={v.villageName}>{v.villageName} (Avail: {v.edCount} / Req: {v.edReq})</SelectItem>))}</SelectContent></Select>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <SummaryCard icon={<Users />} title="Available in Village" value={selectedVillageStats.available} />
-                        <SummaryCard icon={<UserCheck className="text-green-500"/>} title="Required for Village" value={selectedVillageStats.required} />
-                        <SummaryCard icon={<UserCheck className="text-blue-500"/>} title="Chosen as Educator" value={chosenInVillage} />
-                    </div>
                     <div className="relative">
                         <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                         <Input 
@@ -699,7 +718,7 @@ function TrainingStatementsPageContent() {
                     </TableRow></TableHeader>
                     <TableBody>
                         {loading.candidates ? <TableRow><TableCell colSpan={7} className="h-24 text-center"><Loader2 className="animate-spin mx-auto"/></TableCell></TableRow> : filteredCandidates.map((c) => (
-                            <TableRow key={c.applicant_id} className={cn(currentlySelectedApplicantId === c.applicant_id && "bg-blue-100 dark:bg-blue-900/30")}>
+                            <TableRow key={c.applicant_id} className={cn(currentlySelectedApplicantId === c.applicant_id && "bg-blue-100 dark:bg-blue-900/30", selections[c.applicant_id]?.isSelected && "bg-green-100 dark:bg-green-900/30")}>
                                 <TableCell>{c.applicant_id}</TableCell><TableCell>{c.applicant_name}</TableCell><TableCell>{c.applicant_qualification}</TableCell><TableCell>{c.age_per_village_ranking}</TableCell><TableCell>{c.loc_name}</TableCell><TableCell>{c.grand_total_score}</TableCell><TableCell>{c.grand_score_rank}</TableCell>
                             </TableRow>
                         ))}
@@ -707,22 +726,30 @@ function TrainingStatementsPageContent() {
                 </CardContent>
             </Card>
 
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                <SummaryCard title="Available in Village" value={selectedVillageStats.available} />
+                <SummaryCard title="Required Educators" value={selectedVillageStats.required} />
+                <SummaryCard title="Chosen Educators" value={chosenEducators} total={totalEdReq} />
+                <SummaryCard title="Chosen Monitors" value={chosenMonitors} total={manualMonitorsReq} />
+                <SummaryCard title="Chosen Spare" value={chosenSpares} total={finalSpareReq} />
+                <SummaryCard title="Beneficiaries Connected" value={totalBnfConnected.toLocaleString()} total={totalBnfForVillage.toLocaleString()} />
+            </div>
+
             {selectedVillage && (
                 <Card>
                     <CardHeader>
                         <CardTitle>Selection Summary & Actions for: {selectedVillage}</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <h4 className="font-semibold text-lg mb-2">Currently Selected Applicant</h4>
-                         <div className="border rounded-md">
+                      <h4 className="font-semibold text-lg mb-2">Applicant Details</h4>
+                        <div className="border rounded-md">
                             <Table>
                                <TableHeader><TableRow>
                                 <TableHead>ID</TableHead>
                                 <TableHead>Name</TableHead>
                                 <TableHead>Qualification</TableHead>
-                                <TableHead>Location</TableHead>
-                                <TableHead>Score</TableHead>
-                                <TableHead>Rank</TableHead>
+                                <TableHead>Working Village</TableHead>
+                                <TableHead>BNF_CONN</TableHead>
                                </TableRow></TableHeader>
                                 <TableBody>
                                     {selectedApplicantForDisplay ? (
@@ -730,12 +757,11 @@ function TrainingStatementsPageContent() {
                                             <TableCell>{selectedApplicantForDisplay.applicant_id}</TableCell>
                                             <TableCell>{selectedApplicantForDisplay.applicant_name}</TableCell>
                                             <TableCell>{selectedApplicantForDisplay.applicant_qualification}</TableCell>
-                                            <TableCell>{selectedApplicantForDisplay.loc_name}</TableCell>
-                                            <TableCell>{selectedApplicantForDisplay.grand_total_score}</TableCell>
-                                            <TableCell>{selectedApplicantForDisplay.grand_score_rank}</TableCell>
+                                            <TableCell>{selectedVillage}</TableCell>
+                                            <TableCell>{currentApplicantBnfConn}</TableCell>
                                         </TableRow>
                                     ) : (
-                                        <TableRow><TableCell colSpan={6} className="text-center">No applicant selected for assignment.</TableCell></TableRow>
+                                        <TableRow><TableCell colSpan={5} className="text-center">No applicant selected for assignment.</TableCell></TableRow>
                                     )}
                                 </TableBody>
                             </Table>
