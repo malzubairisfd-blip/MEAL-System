@@ -6,14 +6,13 @@ import Link from 'next/link';
 import * as XLSX from 'xlsx';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Upload, ArrowLeft, Save, Loader2, GitCompareArrows } from 'lucide-react';
+import { Upload, ArrowLeft, Save, Loader2, GitCompareArrows, Trash2, Plus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Plus } from 'lucide-react';
 
 interface Project {
   projectId: string;
@@ -116,7 +115,7 @@ export default function UploadCentersPage() {
     const unmappedUiColumns = useMemo(() => columns.filter(col => !Array.from(columnMapping.keys()).includes(col)), [columns, columnMapping]);
     const unmappedDbColumns = useMemo(() => {
         const mappedDbCols = new Set(columnMapping.values());
-        return DB_COLUMNS.filter(col => !mappedDbCols.has(col));
+        return DB_COLUMNS.filter(col => !mappedDbCols.has(col) && col !== 'project_id' && col !== 'project_name');
     }, [columnMapping]);
 
     const handleAddManualMapping = () => {
@@ -128,6 +127,12 @@ export default function UploadCentersPage() {
       newMapping.set(manualMapping.ui, manualMapping.db);
       setColumnMapping(newMapping);
       setManualMapping({ ui: '', db: '' });
+    };
+
+    const removeMapping = (sourceKey: string) => {
+        const newMap = new Map(columnMapping);
+        newMap.delete(sourceKey);
+        setColumnMapping(newMap);
     };
 
     const handleSave = async () => {
@@ -248,10 +253,18 @@ export default function UploadCentersPage() {
                                 <CardContent>
                                     <ScrollArea className="h-48 border rounded-md">
                                         <Table>
-                                            <TableHeader><TableRow><TableHead>Source Column</TableHead><TableHead>Destination Column</TableHead></TableRow></TableHeader>
+                                            <TableHeader><TableRow><TableHead>Source Column</TableHead><TableHead>Destination Column</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
                                             <TableBody>
                                                 {Array.from(columnMapping.entries()).map(([uiCol, dbCol]) => (
-                                                    <TableRow key={uiCol}><TableCell>{uiCol}</TableCell><TableCell>{dbCol}</TableCell></TableRow>
+                                                    <TableRow key={uiCol}>
+                                                        <TableCell>{uiCol}</TableCell>
+                                                        <TableCell>{dbCol}</TableCell>
+                                                        <TableCell className="text-right">
+                                                            <Button variant="ghost" size="icon" onClick={() => removeMapping(uiCol)}>
+                                                                <Trash2 className="h-4 w-4 text-destructive" />
+                                                            </Button>
+                                                        </TableCell>
+                                                    </TableRow>
                                                 ))}
                                             </TableBody>
                                         </Table>
