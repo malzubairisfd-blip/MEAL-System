@@ -12,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft, Save, Loader2 } from 'lucide-react';
@@ -126,7 +126,8 @@ function EditCenterPageContent() {
                     const centerToEdit = await centerRes.json();
                      reset({
                         ...centerToEdit,
-                        is_pc: String(centerToEdit.is_pc),
+                        is_pc: String(centerToEdit.is_pc ?? '0'),
+                        is_ec: String(centerToEdit.is_ec ?? '0'),
                     });
                 } else {
                      throw new Error("Center not found or failed to load.");
@@ -222,7 +223,7 @@ function EditCenterPageContent() {
     const onSubmit = async (data: FormValues) => {
         setIsSaving(true);
         try {
-             const payload = { ...data, is_pc: Number(data.is_pc), is_ec: data.is_ec === 'yes' ? 1 : 0 };
+             const payload = { ...data, is_pc: Number(data.is_pc), is_ec: Number(data.is_ec) };
             const response = await fetch('/api/education-payment-centers', {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
@@ -327,26 +328,28 @@ function EditCenterPageContent() {
                             <FormField control={control} name="is_ec" render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Is Education Center (IS_EC)?</FormLabel>
-                                    <Select onValueChange={field.onChange} value={String(field.value)}>
+                                    <Select onValueChange={field.onChange} value={String(field.value ?? '')}>
                                         <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
                                         <SelectContent>
                                             <SelectItem value="1">Yes</SelectItem>
                                             <SelectItem value="0">No</SelectItem>
                                         </SelectContent>
                                     </Select>
+                                    <FormDescription>1 = Yes, 0 = No</FormDescription>
                                     <FormMessage />
                                 </FormItem>
                             )} />
                              <FormField control={control} name="is_pc" render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Is Payment Center (IS_PC)?</FormLabel>
-                                    <Select onValueChange={field.onChange} value={String(field.value)}>
+                                    <Select onValueChange={field.onChange} value={String(field.value ?? '')}>
                                         <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
                                         <SelectContent>
                                             <SelectItem value="1">Yes</SelectItem>
                                             <SelectItem value="0">No</SelectItem>
                                         </SelectContent>
                                     </Select>
+                                    <FormDescription>1 = Yes, 0 = No</FormDescription>
                                     <FormMessage />
                                 </FormItem>
                             )} />
