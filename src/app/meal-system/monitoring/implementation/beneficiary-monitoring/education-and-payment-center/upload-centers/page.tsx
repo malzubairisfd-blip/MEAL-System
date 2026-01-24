@@ -165,13 +165,11 @@ export default function UploadCentersPage() {
 
         const payload = recordsToSave.map(row => {
             const newRecord: {[key: string]: any} = {};
-            // Process mapped columns
+            
+            // First, copy all mapped values directly.
             for (const [uiCol, dbCol] of columnMapping.entries()) {
                 const value = row[uiCol];
-                 if (dbCol === 'is_pc' || dbCol === 'is_ec') {
-                    const val = String(value ?? '').trim();
-                    newRecord[dbCol] = (val === '1' || val.toLowerCase() === 'yes' || val.toLowerCase() === 'true') ? 1 : 0;
-                } else if (value !== undefined) {
+                if (value !== undefined && value !== null) {
                     if (Array.isArray(value)) {
                         newRecord[dbCol] = value.join(', ');
                     } else {
@@ -180,13 +178,19 @@ export default function UploadCentersPage() {
                 }
             }
 
-            // Ensure is_pc and is_ec have a default value of 0 if not mapped at all
-            if (newRecord['is_pc'] === undefined) {
-                newRecord['is_pc'] = 0;
-            }
-            if (newRecord['is_ec'] === undefined) {
-                newRecord['is_ec'] = 0;
-            }
+            // Then, specifically process `is_ec` and `is_pc` for boolean conversion,
+            // ensuring a default of 0.
+            ['is_ec', 'is_pc'].forEach(key => {
+                const mappedUiCol = [...columnMapping.entries()].find(([k,v]) => v === key)?.[0];
+                const rawValue = mappedUiCol ? row[mappedUiCol] : undefined;
+                const valStr = String(rawValue ?? '').trim().toLowerCase();
+
+                if (valStr === '1' || valStr === 'yes' || valStr === 'true') {
+                    newRecord[key] = 1;
+                } else {
+                    newRecord[key] = 0;
+                }
+            });
 
             newRecord.project_id = selectedProjectId;
             newRecord.project_name = selectedProjectData.projectName;
