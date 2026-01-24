@@ -1,12 +1,12 @@
 // src/app/meal-system/monitoring/implementation/beneficiary-monitoring/education-and-payment-center/upload-centers/page.tsx
 "use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import * as XLSX from 'xlsx';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Upload, ArrowLeft, Save, Loader2, GitCompareArrows, Trash2, Plus } from 'lucide-react';
+import { Upload, ArrowLeft, Save, Loader2, GitCompareArrows, Trash2, Plus, FileDown } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
@@ -159,8 +159,8 @@ export default function UploadCentersPage() {
             for (const [uiCol, dbCol] of columnMapping.entries()) {
                 if(row[uiCol] !== undefined) {
                     if (dbCol === 'is_pc' || dbCol === 'is_ec') {
-                        const val = String(row[uiCol]).trim().toLowerCase();
-                        newRecord[dbCol] = (val === '1' || val === 'yes' || val === 'true') ? 1 : 0;
+                        const val = String(row[uiCol]).trim();
+                        newRecord[dbCol] = (val === '1') ? 1 : 0;
                     } else if (Array.isArray(row[uiCol])) {
                         newRecord[dbCol] = row[uiCol].join(', ');
                     } else {
