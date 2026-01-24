@@ -26,6 +26,8 @@ interface Educator {
   loc_name: string;
   working_village: string;
   ed_bnf_cnt: number;
+  contract_type: string;
+  ec_id: string | null;
 }
 
 interface EC {
@@ -154,7 +156,7 @@ export default function ConnectingPage() {
         }
     };
     
-    const unlinkedEducators = useMemo(() => educators.filter(e => !e.ec_id), [educators]);
+    const unlinkedEducators = useMemo(() => educators.filter(e => !e.ec_id && e.contract_type === 'مثقفة مجتمعية'), [educators]);
 
     return (
         <div className="space-y-6">
@@ -274,3 +276,4 @@ export default function ConnectingPage() {
         </div>
     );
 }
+    
