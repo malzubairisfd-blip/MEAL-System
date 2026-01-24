@@ -156,11 +156,18 @@ export default function UploadCentersPage() {
 
         const payload = recordsToSave.map(row => {
             const newRecord: {[key: string]: any} = {};
-            columnMapping.forEach((dbCol, uiCol) => {
-                if (row[uiCol] !== undefined) {
-                    newRecord[dbCol] = row[uiCol];
+            for (const [uiCol, dbCol] of columnMapping.entries()) {
+                if(row[uiCol] !== undefined) {
+                    if (dbCol === 'is_pc' || dbCol === 'is_ec') {
+                        const val = String(row[uiCol]).trim().toLowerCase();
+                        newRecord[dbCol] = (val === '1' || val === 'yes' || val === 'true') ? 1 : 0;
+                    } else if (Array.isArray(row[uiCol])) {
+                        newRecord[dbCol] = row[uiCol].join(', ');
+                    } else {
+                        newRecord[dbCol] = row[uiCol];
+                    }
                 }
-            });
+            }
             newRecord.project_id = selectedProjectId;
             newRecord.project_name = selectedProjectData.projectName;
             return newRecord;
