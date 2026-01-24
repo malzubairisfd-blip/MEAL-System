@@ -1,4 +1,3 @@
-
 // src/app/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/training/page.tsx
 "use client";
 
@@ -494,11 +493,6 @@ function TrainingStatementsPageContent() {
       ).length;
     }, [allProjectEducators, selectedVillage]);
 
-    const totalBnfConnectedInVillage = useMemo(() => {
-        return allProjectEducators
-            .filter(edu => edu.working_village === selectedVillage)
-            .reduce((sum, edu) => sum + (edu.ed_bnf_cnt || 0), 0);
-    }, [allProjectEducators, selectedVillage]);
     
     const totalBnfForVillage = useMemo(() => villageStatsWithEdReq.find(v => v.villageName === selectedVillage)?.bnfCount || 0, [villageStatsWithEdReq, selectedVillage]);
     
@@ -606,12 +600,11 @@ function TrainingStatementsPageContent() {
 
     const chosenInVillage = useMemo(() => {
         return allProjectEducators.filter(
-            (s) =>
-                s.workingVillage === selectedVillage &&
-                s.contract_type === 'مثقفة مجتمعية'
+            (edu) =>
+                edu.working_village === selectedVillage &&
+                edu.contract_type === 'مثقفة مجتمعية'
         ).length;
     }, [allProjectEducators, selectedVillage]);
-
 
   return (
     <div className="space-y-8 pb-12">
@@ -792,7 +785,7 @@ function TrainingStatementsPageContent() {
                 </CardContent>
             </Card>
             
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
                 <CompactSummaryCard title="Available in Village" value={selectedVillageStats.available} />
                 <CompactSummaryCard title="Required Educators" value={selectedVillageStats.required} />
                 <CompactSummaryCard title="Chosen Educators" value={chosenInVillage} total={selectedVillageStats.required} />
