@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, FileText, UserCheck, User, Users, Briefcase, Filter, ArrowUpAZ, ArrowDownAZ, Save, Trash2, Plus, ArrowLeft, Search, ChevronRight } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -482,9 +482,9 @@ function TrainingStatementsPageContent() {
     }, [selectedApplicantForDisplay, selections, allProjectEducators]);
 
 
-    const chosenEducators = useMemo(() => Object.values(selections).filter(s => s.isSelected && s.contractType === 'مثقفة مجتمعية').length, [selections]);
-    const chosenMonitors = useMemo(() => Object.values(selections).filter(s => s.isSelected && s.contractType === 'رقابة').length, [selections]);
-    const chosenSpares = useMemo(() => Object.values(selections).filter(s => s.isSelected && s.contractType === 'احتياط').length, [selections]);
+    const chosenEducators = useMemo(() => allProjectEducators.filter(e => e.contract_type === 'مثقفة مجتمعية').length, [allProjectEducators]);
+    const chosenMonitors = useMemo(() => allProjectEducators.filter(e => e.contract_type === 'رقابة').length, [allProjectEducators]);
+    const chosenSpares = useMemo(() => allProjectEducators.filter(e => e.contract_type === 'احتياط').length, [allProjectEducators]);
 
     const totalBnfConnectedInVillage = useMemo(() => {
         return allProjectEducators.filter(edu => edu.working_village === selectedVillage).reduce((sum, edu) => sum + (edu.ed_bnf_cnt || 0), 0);
@@ -619,7 +619,7 @@ function TrainingStatementsPageContent() {
             <CardTitle className="flex items-center gap-2">1. Training Requirements Calculation</CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
-            <Select onValueChange={(val) => router.push(`/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/training?projectId=${val}`)} value={projectId}><SelectTrigger><SelectValue placeholder="Select Project" /></SelectTrigger><SelectContent>{projects.map(p => (<SelectItem key={p.projectId} value={p.projectId}>{p.projectName}</SelectItem>))}</SelectContent></Select>
+            <Select onValueChange={(val) => { setProjectId(val); router.push(`/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/training?projectId=${val}`) }} value={projectId}><SelectTrigger><SelectValue placeholder="Select Project" /></SelectTrigger><SelectContent>{projects.map(p => (<SelectItem key={p.projectId} value={p.projectId}>{p.projectName}</SelectItem>))}</SelectContent></Select>
             {projectId && (
                 <>
                 <div className="rounded-md border">
@@ -794,7 +794,7 @@ function TrainingStatementsPageContent() {
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
                 <CompactSummaryCard title="Available in Village" value={selectedVillageStats.available} />
                 <CompactSummaryCard title="Required Educators" value={selectedVillageStats.required} />
-                <CompactSummaryCard title="Chosen Educators" value={chosenInVillage} total={selectedVillageStats.required} />
+                <CompactSummaryCard title="Chosen Educators" value={chosenEducators} total={totalEdReq} />
                 <CompactSummaryCard title="Field Monitors" value={chosenMonitors} total={manualMonitorsReq} />
                 <CompactSummaryCard title="Chosen Spares" value={chosenSpares} total={finalSpareReq} />
                 <CompactSummaryCard title="Beneficiaries Connected" value={totalBnfConnectedInVillage.toLocaleString()} total={totalBnfForVillage.toLocaleString()} />
