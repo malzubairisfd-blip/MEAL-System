@@ -13,7 +13,16 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 
 interface Project {
@@ -156,18 +165,29 @@ export default function UploadCentersPage() {
 
         const payload = recordsToSave.map(row => {
             const newRecord: {[key: string]: any} = {};
+            // Process mapped columns
             for (const [uiCol, dbCol] of columnMapping.entries()) {
-                if(row[uiCol] !== undefined) {
-                    if (dbCol === 'is_pc' || dbCol === 'is_ec') {
-                        const val = String(row[uiCol]).trim();
-                        newRecord[dbCol] = (val === '1') ? 1 : 0;
-                    } else if (Array.isArray(row[uiCol])) {
-                        newRecord[dbCol] = row[uiCol].join(', ');
+                const value = row[uiCol];
+                 if (dbCol === 'is_pc' || dbCol === 'is_ec') {
+                    const val = String(value ?? '').trim();
+                    newRecord[dbCol] = (val === '1' || val.toLowerCase() === 'yes' || val.toLowerCase() === 'true') ? 1 : 0;
+                } else if (value !== undefined) {
+                    if (Array.isArray(value)) {
+                        newRecord[dbCol] = value.join(', ');
                     } else {
-                        newRecord[dbCol] = row[uiCol];
+                        newRecord[dbCol] = value;
                     }
                 }
             }
+
+            // Ensure is_pc and is_ec have a default value of 0 if not mapped at all
+            if (newRecord['is_pc'] === undefined) {
+                newRecord['is_pc'] = 0;
+            }
+            if (newRecord['is_ec'] === undefined) {
+                newRecord['is_ec'] = 0;
+            }
+
             newRecord.project_id = selectedProjectId;
             newRecord.project_name = selectedProjectData.projectName;
             return newRecord;
