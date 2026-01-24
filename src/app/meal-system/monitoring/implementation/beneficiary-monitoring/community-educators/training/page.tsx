@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, FileText, UserCheck, User, Users, Briefcase, Filter, ArrowUpAZ, ArrowDownAZ, Save, Trash2, Plus, ArrowLeft, Search, ChevronRight } from "lucide-react";
+import { Loader2, FileText, UserCheck, User, Users, Briefcase, Filter, ArrowUpAZ, ArrowDownAZ, Save, Trash2, Plus, ArrowLeft, Search, ArrowRight } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { Label } from '@/components/ui/label';
@@ -222,17 +222,15 @@ function TrainingStatementsPageContent() {
   }, [villageStats, bnfPerEd]);
   
   const sortedVillages = useMemo(() => {
-    const allVillages = villageStatsWithEdReq;
+      const tier1 = villageStatsWithEdReq.filter(v => v.bnfCount >= 15 && v.edCount > v.edReq);
+      const tier2 = villageStatsWithEdReq.filter(v => v.bnfCount >= 15 && v.edCount === v.edReq && v.edCount > 0);
+      const tier3 = villageStatsWithEdReq.filter(v => v.bnfCount >= 15 && v.edCount > 0 && v.edCount < v.edReq);
+      const tier4 = villageStatsWithEdReq.filter(v => v.bnfCount >= 15 && v.edCount === 0);
+      const tier5 = villageStatsWithEdReq.filter(v => v.bnfCount < 15);
+      
+      tier3.sort((a,b) => (b.edReq - b.edCount) - (a.edReq - a.edCount)); 
 
-    const tier1 = allVillages.filter(v => v.bnfCount >= 15 && v.edCount > v.edReq);
-    const tier2 = allVillages.filter(v => v.bnfCount >= 15 && v.edCount === v.edReq && v.edCount > 0);
-    const tier3 = allVillages.filter(v => v.bnfCount >= 15 && v.edCount > 0 && v.edCount < v.edReq);
-    const tier4 = allVillages.filter(v => v.bnfCount >= 15 && v.edCount === 0);
-    const tier5 = allVillages.filter(v => v.bnfCount < 15);
-    
-    tier3.sort((a,b) => (b.edReq - b.edCount) - (a.edReq - a.edCount)); 
-
-    return [...tier1, ...tier2, ...tier3, ...tier4, ...tier5];
+      return [...tier1, ...tier2, ...tier3, ...tier4, ...tier5];
   }, [villageStatsWithEdReq]);
 
   const totalProjectBnf = useMemo(() => {
@@ -580,8 +578,7 @@ function TrainingStatementsPageContent() {
       if (villageStat && chosenCount >= villageStat.edReq && !nextUnassigned) {
         const currentVillageIndex = sortedVillages.findIndex(v => v.villageName === selectedVillage);
         if (currentVillageIndex < sortedVillages.length - 1) {
-          const nextVillage = sortedVillages[currentVillageIndex + 1];
-          setSelectedVillage(nextVillage.villageName);
+          setSelectedVillage(sortedVillages[currentVillageIndex + 1].villageName);
         } else {
           toast({ title: "All villages complete!" });
         }
@@ -681,6 +678,24 @@ function TrainingStatementsPageContent() {
     }
   }, [currentlySelectedApplicantId, filteredCandidates, toast, sortedVillages, selectedVillage, allProjectEducators]);
 
+    const handleNextVillage = useCallback(() => {
+        const currentIndex = sortedVillages.findIndex(v => v.villageName === selectedVillage);
+        if (currentIndex < sortedVillages.length - 1) {
+            setSelectedVillage(sortedVillages[currentIndex + 1].villageName);
+        } else {
+            toast({ title: "End of List", description: "You are at the last village." });
+        }
+    }, [sortedVillages, selectedVillage, toast]);
+
+    const handlePreviousVillage = useCallback(() => {
+        const currentIndex = sortedVillages.findIndex(v => v.villageName === selectedVillage);
+        if (currentIndex > 0) {
+            setSelectedVillage(sortedVillages[currentIndex - 1].villageName);
+        } else {
+            toast({ title: "Start of List", description: "You are at the first village." });
+        }
+    }, [sortedVillages, selectedVillage, toast]);
+
   const selectedVillageStats = useMemo(() => {
     if (!selectedVillage || !villageStatsWithEdReq) return { required: 0, available: 0 };
     const village = villageStatsWithEdReq.find(v => v.villageName === selectedVillage);
@@ -697,6 +712,27 @@ function TrainingStatementsPageContent() {
                 edu.contract_type === 'مثقفة مجتمعية'
         ).length;
     }, [allProjectEducators, selectedVillage]);
+    
+    const tier5Candidates = useMemo(() => {
+      if (!isTier5Active) return [];
+      
+      const unassignedInVillage = allProjectEducators.filter(e => 
+          e.project_id === selectedProjectId && 
+          e.contract_type === null && 
+          e.loc_name === selectedVillage
+      );
+      
+      const assignedInProject = allProjectEducators.filter(e => 
+          e.project_id === selectedProjectId && 
+          e.contract_type === 'مثقفة مجتمعية'
+      );
+      
+      const combined = [...unassignedInVillage, ...assignedInProject];
+      const unique = Array.from(new Map(combined.map(item => [item.applicant_id, item])).values());
+      
+      return unique;
+    }, [isTier5Active, allProjectEducators, selectedVillage, selectedProjectId]);
+
 
   const tier5Summary = useMemo(() => {
     if (!isTier5Active || !selectedVillage) return null;
@@ -874,14 +910,67 @@ function TrainingStatementsPageContent() {
                     <CardTitle className="flex items-center gap-2">4. Select Qualified Educators</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                    <div className="bg-muted p-4 rounded-lg border">
+                    <div className="bg-muted p-4 rounded-lg border flex justify-between items-center">
                         <Select onValueChange={setSelectedVillage} value={selectedVillage}><SelectTrigger className="w-full md:w-1/3"><SelectValue placeholder="Choose Village..." /></SelectTrigger>
                         <SelectContent>{sortedVillages.map((v) => (<SelectItem key={v.villageName} value={v.villageName}>{v.villageName} (Avail: {v.edCount} / Req: {v.edReq})</SelectItem>))}</SelectContent></Select>
+                        <div className="flex gap-2">
+                           <Button onClick={handlePreviousVillage} variant="outline" disabled={sortedVillages.findIndex(v => v.villageName === selectedVillage) === 0}>
+                                <ArrowLeft className="mr-2 h-4 w-4" /> Previous Village
+                            </Button>
+                            <Button onClick={handleNextVillage} variant="outline" disabled={sortedVillages.findIndex(v => v.villageName === selectedVillage) === sortedVillages.length - 1}>
+                                Next Village <ArrowRight className="ml-2 h-4 w-4" />
+                            </Button>
+                        </div>
                     </div>
 
                     {isTier5Active ? (
                          <div className="p-4 border rounded-md bg-amber-50 border-amber-200">
                              <h4 className="font-bold text-amber-900">Special Assignment for Small Village ({'<'}15 BNF)</h4>
+                              <Card className="mt-4">
+                                <CardHeader>
+                                    <CardTitle>Candidates for Special Assignment</CardTitle>
+                                    <CardDescription>Unassigned candidates from this village and all assigned Community Educators in the project.</CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                    <ScrollArea className="h-72 border rounded-md">
+                                        <Table>
+                                            <TableHeader>
+                                                <TableRow>
+                                                    <TableHead>ID</TableHead>
+                                                    <TableHead>Name</TableHead>
+                                                    <TableHead>Original Village</TableHead>
+                                                    <TableHead>Qualification</TableHead>
+                                                    <TableHead>Interview Score</TableHead>
+                                                    <TableHead>Grand Score</TableHead>
+                                                    <TableHead>Rank</TableHead>
+                                                    <TableHead>Assigned Village</TableHead>
+                                                    <TableHead>BNF Count</TableHead>
+                                                </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
+                                                {tier5Candidates.map(c => (
+                                                    <TableRow key={c.applicant_id}>
+                                                        <TableCell>{c.applicant_id}</TableCell>
+                                                        <TableCell>{c.applicant_name}</TableCell>
+                                                        <TableCell>{c.loc_name}</TableCell>
+                                                        <TableCell>{c.applicant_qualification}</TableCell>
+                                                        <TableCell>{c.interview_total_marks}</TableCell>
+                                                        <TableCell>{c.grand_total_score}</TableCell>
+                                                        <TableCell>{c.grand_score_rank}</TableCell>
+                                                        <TableCell>{c.working_village}</TableCell>
+                                                        <TableCell>{c.ed_bnf_cnt}</TableCell>
+                                                    </TableRow>
+                                                ))}
+                                                 {tier5Candidates.length === 0 && (
+                                                    <TableRow>
+                                                        <TableCell colSpan={9} className="text-center text-muted-foreground">No relevant candidates to display.</TableCell>
+                                                    </TableRow>
+                                                )}
+                                            </TableBody>
+                                        </Table>
+                                    </ScrollArea>
+                                </CardContent>
+                            </Card>
                              <RadioGroup value={tier5Mode} onValueChange={(v: any) => setTier5Mode(v)} className="my-4">
                                  <div className="flex items-center space-x-2">
                                      <RadioGroupItem value="add" id="r1" />
