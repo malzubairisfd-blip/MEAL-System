@@ -1,4 +1,3 @@
-
 // src/app/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/training/page.tsx
 "use client";
 
@@ -16,6 +15,8 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2, FileText, UserCheck, User, Users, Briefcase, Filter, ArrowUpAZ, ArrowDownAZ, Save, Trash2, Plus, ArrowLeft, Search, ChevronRight } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { Label } from '@/components/ui/label';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 
 // --- Types ---
 type Project = { projectId: string; projectName: string };
@@ -111,7 +112,6 @@ function TrainingStatementsPageContent() {
   const [loading, setLoading] = useState({ projects: true, stats: false, candidates: false, saving: false });
   const [validationMessage, setValidationMessage] = useState('');
 
-  const [sortedVillages, setSortedVillages] = useState<VillageRequirement[]>([]);
   const [selectedVillage, setSelectedVillage] = useState<string>("");
   
   const [candidates, setCandidates] = useState<EducatorCandidate[]>([]);
@@ -130,6 +130,13 @@ function TrainingStatementsPageContent() {
   const [hallAssignmentSearch, setHallAssignmentSearch] = useState('');
   const [currentlySelectedApplicantId, setCurrentlySelectedApplicantId] = useState<number | null>(null);
   const [relatedCounts, setRelatedCounts] = useState<{ same: number, different: number }>({ same: 0, different: 0 });
+
+  const [isMopUp, setIsMopUp] = useState(false);
+  const [isTier5Active, setIsTier5Active] = useState(false);
+  const [tier5Mode, setTier5Mode] = useState<'add' | 'replace'>('add');
+  const [tier5AddSelection, setTier5AddSelection] = useState<string>(''); // applicant_id
+  const [tier5ReplaceNewSelection, setTier5ReplaceNewSelection] = useState<string>(''); // applicant_id
+  const [tier5ReplaceOldSelection, setTier5ReplaceOldSelection] = useState<string>(''); // applicant_id
 
 
   // --- Initial Project Load ---
@@ -213,13 +220,27 @@ function TrainingStatementsPageContent() {
       };
     });
   }, [villageStats, bnfPerEd]);
+  
+  const sortedVillages = useMemo(() => {
+    const allVillages = villageStatsWithEdReq;
+
+    const tier1 = allVillages.filter(v => v.bnfCount >= 15 && v.edCount > v.edReq);
+    const tier2 = allVillages.filter(v => v.bnfCount >= 15 && v.edCount === v.edReq && v.edCount > 0);
+    const tier3 = allVillages.filter(v => v.bnfCount >= 15 && v.edCount > 0 && v.edCount < v.edReq);
+    const tier4 = allVillages.filter(v => v.bnfCount >= 15 && v.edCount === 0);
+    const tier5 = allVillages.filter(v => v.bnfCount < 15);
+    
+    tier3.sort((a,b) => (b.edReq - b.edCount) - (a.edReq - a.edCount)); 
+
+    return [...tier1, ...tier2, ...tier3, ...tier4, ...tier5];
+  }, [villageStatsWithEdReq]);
 
   const totalProjectBnf = useMemo(() => {
     return allProjectEducators.reduce((sum, edu) => sum + (edu.ed_bnf_cnt || 0), 0);
   }, [allProjectEducators]);
 
   const totalBnfConnected = useMemo(() => {
-    return allProjectEducators.reduce((sum, edu) => sum + (edu.ed_bnf_cnt || 0), 0);
+    return allProjectEducators.filter(edu => edu.contract_type === 'مثقفة مجتمعية').reduce((sum, edu) => sum + (edu.ed_bnf_cnt || 0), 0);
   }, [allProjectEducators]);
   
   const totalAvailableApplicants = useMemo(() => {
@@ -243,25 +264,10 @@ function TrainingStatementsPageContent() {
   }, [villageStatsWithEdReq, manualMonitorsReq, totalAvailableApplicants]);
 
   useEffect(() => {
-    const sorted = [...villageStatsWithEdReq].sort((a, b) => {
-        const aHasEnough = a.edCount >= a.edReq;
-        const bHasEnough = b.edCount >= b.edReq;
-        if (aHasEnough && !bHasEnough) return -1;
-        if (!aHasEnough && bHasEnough) return 1;
-        if (a.edCount < a.edReq && b.edCount < b.edReq) return b.edCount - a.edCount;
-        if (a.edCount === 0 && b.edCount > 0) return 1;
-        if (b.edCount === 0 && a.edCount > 0) return -1;
-        if (a.edCount === 0 && b.edCount === 0) {
-            if (a.bnfCount >= 15 && b.bnfCount < 15) return -1;
-            if (a.bnfCount < 15 && b.bnfCount >= 15) return 1;
-        }
-        return b.edCount - a.edCount;
-    });
-    setSortedVillages(sorted);
-    if (!selectedVillage && sorted.length > 0) {
-        setSelectedVillage(sorted[0].villageName);
+    if (!selectedVillage && sortedVillages.length > 0) {
+        setSelectedVillage(sortedVillages[0].villageName);
     }
-  }, [villageStatsWithEdReq, selectedVillage]);
+  }, [sortedVillages, selectedVillage]);
 
 
   useEffect(() => {
@@ -270,31 +276,50 @@ function TrainingStatementsPageContent() {
         return;
     }
 
-    const qualifiedForSelection = allProjectEducators.filter(e => 
-      e.training_attendance === 'حضرت التدريب' && e.contract_type === null
-    );
-
     const villageStat = villageStatsWithEdReq.find(v => v.villageName === selectedVillage);
-    const requiredForVillage = villageStat?.edReq || 0;
+    if (!villageStat) {
+        setCandidates([]);
+        return;
+    }
+
+    const tier5Active = villageStat.bnfCount < 15;
+    setIsTier5Active(tier5Active);
+
+    if (tier5Active) {
+        setCandidates([]);
+        return;
+    }
     
-    const assignedToVillage = allProjectEducators.filter(
-        edu => edu.working_village === selectedVillage && edu.contract_type === 'مثقفة مجتمعية'
+    const assignedInVillage = allProjectEducators.filter(
+        (edu) =>
+          edu.working_village === selectedVillage &&
+          edu.contract_type === 'مثقفة مجتمعية'
     ).length;
-
-    const needsMoreForVillage = assignedToVillage < requiredForVillage;
-
-    const unassignedLocalCandidates = qualifiedForSelection.filter(
-        edu => edu.loc_name === selectedVillage && !selections[edu.applicant_id]?.isSelected
+    
+    const needsMoreForVillage = assignedInVillage < villageStat.edReq;
+    
+    const qualifiedForSelection = allProjectEducators.filter(e => 
+        e.training_attendance === 'حضرت التدريب' && e.contract_type === null
     );
+
+    const localCandidates = qualifiedForSelection.filter(edu => edu.loc_name === selectedVillage);
 
     let finalCandidates: EducatorCandidate[];
-
-    if (needsMoreForVillage && unassignedLocalCandidates.length === 0) {
-        finalCandidates = qualifiedForSelection.filter(edu => !selections[edu.applicant_id]?.isSelected);
-        setValidationMessage("No more local candidates. Showing all available educators from other villages to fill the gap.");
+    
+    if (!needsMoreForVillage) {
+        finalCandidates = localCandidates;
+        setIsMopUp(false);
+        setValidationMessage("Village requirement met.");
     } else {
-        finalCandidates = qualifiedForSelection.filter(edu => edu.loc_name === selectedVillage);
-        setValidationMessage('');
+        if (localCandidates.length > 0) {
+            finalCandidates = localCandidates;
+            setIsMopUp(false);
+            setValidationMessage("");
+        } else {
+            finalCandidates = qualifiedForSelection;
+            setIsMopUp(true);
+            setValidationMessage("Mop-up mode: Showing all available unassigned candidates.");
+        }
     }
 
     let sorted = [...finalCandidates];
@@ -324,7 +349,7 @@ function TrainingStatementsPageContent() {
     }
 
     setCandidates(sorted);
-  }, [selectedVillage, allProjectEducators, villageStatsWithEdReq, selections, sortConfig]);
+  }, [selectedVillage, allProjectEducators, villageStatsWithEdReq, sortConfig]);
 
   const filteredCandidates = useMemo(() => {
       if (!qualifiedCandidatesSearch.trim()) return candidates;
@@ -343,9 +368,9 @@ function TrainingStatementsPageContent() {
         setCurrentlySelectedApplicantId(null);
         return;
     }
-    const firstUnassigned = filteredCandidates.find(c => !selections[c.applicant_id]?.isSelected);
+    const firstUnassigned = filteredCandidates.find(c => !allProjectEducators.find(e => e.applicant_id === c.applicant_id)?.contract_type);
     setCurrentlySelectedApplicantId(firstUnassigned ? firstUnassigned.applicant_id : null);
-}, [filteredCandidates, selections, loading.candidates]);
+}, [filteredCandidates, allProjectEducators, loading.candidates]);
 
   const handleLinkToHall = async () => {
       if (!selectedHall || selectedApplicantsForHall.size === 0) return toast({ title: "Incomplete", description: "Select a hall and applicants."});
@@ -486,7 +511,7 @@ function TrainingStatementsPageContent() {
     const chosenSpares = useMemo(() => allProjectEducators.filter(e => e.contract_type === 'احتياط').length, [allProjectEducators]);
 
     const totalBnfConnectedInVillage = useMemo(() => {
-        return allProjectEducators.filter(edu => edu.working_village === selectedVillage).reduce((sum, edu) => sum + (edu.ed_bnf_cnt || 0), 0);
+        return allProjectEducators.filter(edu => edu.working_village === selectedVillage && edu.contract_type === 'مثقفة مجتمعية').reduce((sum, edu) => sum + (edu.ed_bnf_cnt || 0), 0);
     }, [allProjectEducators, selectedVillage]);
 
 
@@ -537,7 +562,6 @@ function TrainingStatementsPageContent() {
       
       toast({ title: "Saved", description: `Assigned ${type} to applicant ${currentlySelectedApplicantId}.` });
       
-      // Instead of manual state update, refetch data
       await fetchProjectData();
 
       const villageStat = villageStatsWithEdReq.find(v => v.villageName === selectedVillage);
@@ -546,7 +570,7 @@ function TrainingStatementsPageContent() {
       const currentIndex = filteredCandidates.findIndex(c => c.applicant_id === currentlySelectedApplicantId);
       let nextUnassigned = null;
       for (let i = currentIndex + 1; i < filteredCandidates.length; i++) {
-        if (!selections[filteredCandidates[i].applicant_id]?.isSelected) {
+        if (!allProjectEducators.find(e => e.applicant_id === filteredCandidates[i].applicant_id)?.contract_type) {
           nextUnassigned = filteredCandidates[i];
           break;
         }
@@ -567,7 +591,69 @@ function TrainingStatementsPageContent() {
     } finally {
       setLoading(p => ({ ...p, saving: false }));
     }
-  }, [currentlySelectedApplicantId, selectedVillage, toast, filteredCandidates, selections, villageStatsWithEdReq, sortedVillages, assignedInVillage, currentApplicantBnfConn, fetchProjectData]);
+  }, [currentlySelectedApplicantId, selectedVillage, toast, filteredCandidates, villageStatsWithEdReq, sortedVillages, assignedInVillage, currentApplicantBnfConn, fetchProjectData, allProjectEducators]);
+
+  const handleTier5Assignment = async () => {
+    if (!selectedVillage) return;
+    setLoading(p => ({ ...p, saving: true }));
+
+    const villageToAdd = villageStatsWithEdReq.find(v => v.villageName === selectedVillage);
+    if (!villageToAdd) {
+        toast({title: "Error", description: "Could not find village data.", variant: "destructive"});
+        setLoading(p => ({...p, saving: false}));
+        return;
+    }
+
+    try {
+        let updates: any[] = [];
+        if (tier5Mode === 'add') {
+            const educatorToUpdate = allProjectEducators.find(e => e.applicant_id === Number(tier5AddSelection));
+            if (!educatorToUpdate) throw new Error("Selected educator to add village to not found.");
+
+            updates.push({
+                applicant_id: educatorToUpdate.applicant_id,
+                working_village: `${educatorToUpdate.working_village} + ${selectedVillage}`,
+                ed_bnf_cnt: (educatorToUpdate.ed_bnf_cnt || 0) + (villageToAdd.bnfCount || 0)
+            });
+
+        } else if (tier5Mode === 'replace') {
+            const newEducator = allProjectEducators.find(e => e.applicant_id === Number(tier5ReplaceNewSelection));
+            const replacedEducator = allProjectEducators.find(e => e.applicant_id === Number(tier5ReplaceOldSelection));
+            if (!newEducator || !replacedEducator) throw new Error("Selected candidates for replacement not found.");
+
+            updates.push({
+                applicant_id: newEducator.applicant_id,
+                contract_type: 'مثقفة مجتمعية',
+                working_village: `${replacedEducator.working_village} + ${selectedVillage}`,
+                ed_bnf_cnt: (replacedEducator.ed_bnf_cnt || 0) + (villageToAdd.bnfCount || 0)
+            });
+            updates.push({
+                applicant_id: replacedEducator.applicant_id,
+                contract_type: null,
+                ed_bnf_cnt: null
+            });
+        }
+        
+        if(updates.length === 0) throw new Error("No valid updates to perform.");
+        
+        const res = await fetch("/api/ed-selection", { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updates) });
+        if (!res.ok) throw new Error('Failed to save Tier 5 assignment.');
+        
+        toast({ title: "Assignment Successful", description: "Tier 5 assignment has been saved." });
+        await fetchProjectData();
+        const currentVillageIndex = sortedVillages.findIndex(v => v.villageName === selectedVillage);
+        if (currentVillageIndex < sortedVillages.length - 1) {
+            setSelectedVillage(sortedVillages[currentVillageIndex + 1].villageName);
+        } else {
+            toast({ title: "All villages complete!" });
+        }
+        
+    } catch (err: any) {
+        toast({ title: "Save Error", description: err.message, variant: "destructive" });
+    } finally {
+        setLoading(p => ({ ...p, saving: false }));
+    }
+  };
 
   const handleSkip = useCallback(() => {
     if (!currentlySelectedApplicantId) return;
@@ -576,7 +662,7 @@ function TrainingStatementsPageContent() {
     
     let nextUnassignedIndex = -1;
     for (let i = currentIndex + 1; i < filteredCandidates.length; i++) {
-        if (!selections[filteredCandidates[i].applicant_id]?.isSelected) {
+        if (!allProjectEducators.find(e => e.applicant_id === filteredCandidates[i].applicant_id)?.contract_type) {
             nextUnassignedIndex = i;
             break;
         }
@@ -585,7 +671,6 @@ function TrainingStatementsPageContent() {
     if (nextUnassignedIndex !== -1) {
         setCurrentlySelectedApplicantId(filteredCandidates[nextUnassignedIndex].applicant_id);
     } else {
-        // If no more in current village, move to next village
         const currentVillageIndex = sortedVillages.findIndex(v => v.villageName === selectedVillage);
         if (currentVillageIndex < sortedVillages.length - 1) {
             setSelectedVillage(sortedVillages[currentVillageIndex + 1].villageName);
@@ -594,7 +679,7 @@ function TrainingStatementsPageContent() {
             setCurrentlySelectedApplicantId(null);
         }
     }
-  }, [currentlySelectedApplicantId, filteredCandidates, selections, toast, sortedVillages, selectedVillage]);
+  }, [currentlySelectedApplicantId, filteredCandidates, toast, sortedVillages, selectedVillage, allProjectEducators]);
 
   const selectedVillageStats = useMemo(() => {
     if (!selectedVillage || !villageStatsWithEdReq) return { required: 0, available: 0 };
@@ -612,6 +697,35 @@ function TrainingStatementsPageContent() {
                 edu.contract_type === 'مثقفة مجتمعية'
         ).length;
     }, [allProjectEducators, selectedVillage]);
+
+  const tier5Summary = useMemo(() => {
+    if (!isTier5Active || !selectedVillage) return null;
+    const villageData = villageStatsWithEdReq.find(v => v.villageName === selectedVillage);
+
+    if (tier5Mode === 'add') {
+      const educator = allProjectEducators.find(e => e.applicant_id === Number(tier5AddSelection));
+      if (!educator || !villageData) return null;
+      return {
+        'Working Village': `${educator.working_village} + ${selectedVillage}`,
+        'BNF Connection': (educator.ed_bnf_cnt || 0) + (villageData.bnfCount || 0)
+      };
+    } else if (tier5Mode === 'replace') {
+      const newEdu = allProjectEducators.find(e => e.applicant_id === Number(tier5ReplaceNewSelection));
+      const oldEdu = allProjectEducators.find(e => e.applicant_id === Number(tier5ReplaceOldSelection));
+      if (!newEdu || !oldEdu || !villageData) return null;
+      return {
+        'New Applicant': newEdu.applicant_name,
+        'Replaced Applicant': oldEdu.applicant_name,
+        'New Working Village': `${oldEdu.working_village} + ${selectedVillage}`,
+        'New BNF Connection': (oldEdu.ed_bnf_cnt || 0) + (villageData.bnfCount || 0)
+      };
+    }
+    return null;
+  }, [isTier5Active, tier5Mode, tier5AddSelection, tier5ReplaceNewSelection, tier5ReplaceOldSelection, allProjectEducators, selectedVillage, villageStatsWithEdReq]);
+
+  const tier5AvailableCandidates = useMemo(() => allProjectEducators.filter(e => e.interview_attendance === 'حضرت المقابلة' && e.contract_type === null), [allProjectEducators]);
+  const tier5AssignedCandidates = useMemo(() => allProjectEducators.filter(e => e.contract_type === 'مثقفة مجتمعية'), [allProjectEducators]);
+
 
   return (
     <div className="space-y-8 pb-12">
@@ -755,7 +869,7 @@ function TrainingStatementsPageContent() {
                 </CardContent>
             </Card>
             
-            <Card>
+             <Card>
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">4. Select Qualified Educators</CardTitle>
                 </CardHeader>
@@ -764,31 +878,87 @@ function TrainingStatementsPageContent() {
                         <Select onValueChange={setSelectedVillage} value={selectedVillage}><SelectTrigger className="w-full md:w-1/3"><SelectValue placeholder="Choose Village..." /></SelectTrigger>
                         <SelectContent>{sortedVillages.map((v) => (<SelectItem key={v.villageName} value={v.villageName}>{v.villageName} (Avail: {v.edCount} / Req: {v.edReq})</SelectItem>))}</SelectContent></Select>
                     </div>
-                    <div className="relative">
-                        <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                        <Input 
-                            placeholder="Search candidates..."
-                            value={qualifiedCandidatesSearch}
-                            onChange={e => setQualifiedCandidatesSearch(e.target.value)}
-                            className="pl-10 mb-2"
-                        />
-                    </div>
-                    <div className="border rounded-md"><Table><TableHeader><TableRow>
-                        <TableHead>ID <ColumnFilter column="applicant_id" onSort={setSortConfig} /></TableHead>
-                        <TableHead>Applicant Name <ColumnFilter column="applicant_name" onSort={setSortConfig} /></TableHead>
-                        <TableHead>Qualification <ColumnFilter column="applicant_qualification" onSort={setSortConfig} /></TableHead>
-                        <TableHead>Age Rank <ColumnFilter column="age_per_village_ranking" onSort={setSortConfig} /></TableHead>
-                        <TableHead>Location <ColumnFilter column="loc_name" onSort={setSortConfig} /></TableHead>
-                        <TableHead>Total Score <ColumnFilter column="grand_total_score" onSort={setSortConfig} /></TableHead>
-                        <TableHead>Rank <ColumnFilter column="grand_score_rank" onSort={setSortConfig} /></TableHead>
-                    </TableRow></TableHeader>
-                    <TableBody>
-                        {loading.candidates ? <TableRow><TableCell colSpan={7} className="h-24 text-center"><Loader2 className="animate-spin mx-auto"/></TableCell></TableRow> : filteredCandidates.map((c) => (
-                            <TableRow key={c.applicant_id} className={cn(currentlySelectedApplicantId === c.applicant_id && "bg-blue-100 dark:bg-blue-900/30", selections[c.applicant_id]?.isSelected && "bg-green-100 dark:bg-green-900/30")}>
-                                <TableCell>{c.applicant_id}</TableCell><TableCell>{c.applicant_name}</TableCell><TableCell>{c.applicant_qualification}</TableCell><TableCell>{c.age_per_village_ranking}</TableCell><TableCell>{c.loc_name}</TableCell><TableCell>{c.grand_total_score}</TableCell><TableCell>{c.grand_score_rank}</TableCell>
-                            </TableRow>
-                        ))}
-                    </TableBody></Table></div>
+
+                    {isTier5Active ? (
+                         <div className="p-4 border rounded-md bg-amber-50 border-amber-200">
+                             <h4 className="font-bold text-amber-900">Special Assignment for Small Village ({'<'}15 BNF)</h4>
+                             <RadioGroup value={tier5Mode} onValueChange={(v: any) => setTier5Mode(v)} className="my-4">
+                                 <div className="flex items-center space-x-2">
+                                     <RadioGroupItem value="add" id="r1" />
+                                     <Label htmlFor="r1">Add working village to existing educator</Label>
+                                 </div>
+                                 <div className="flex items-center space-x-2">
+                                     <RadioGroupItem value="replace" id="r2" />
+                                     <Label htmlFor="r2">Replace assigned candidate and add working village</Label>
+                                 </div>
+                             </RadioGroup>
+
+                             {tier5Mode === 'add' && (
+                                <div className="space-y-2">
+                                    <Label>Select an already assigned Community Educator:</Label>
+                                    <Select value={tier5AddSelection} onValueChange={setTier5AddSelection}>
+                                        <SelectTrigger><SelectValue placeholder="Select Educator..."/></SelectTrigger>
+                                        <SelectContent><ScrollArea className="h-60">{tier5AssignedCandidates.map(e => <SelectItem key={e.applicant_id} value={String(e.applicant_id)}>{e.applicant_name} ({e.working_village})</SelectItem>)}</ScrollArea></SelectContent>
+                                    </Select>
+                                </div>
+                             )}
+
+                             {tier5Mode === 'replace' && (
+                                 <div className="grid grid-cols-2 gap-4">
+                                      <div className="space-y-2">
+                                         <Label>Select new, unassigned candidate:</Label>
+                                         <Select value={tier5ReplaceNewSelection} onValueChange={setTier5ReplaceNewSelection}>
+                                             <SelectTrigger><SelectValue placeholder="Select New Candidate..."/></SelectTrigger>
+                                             <SelectContent><ScrollArea className="h-60">{tier5AvailableCandidates.map(e => <SelectItem key={e.applicant_id} value={String(e.applicant_id)}>{e.applicant_name}</SelectItem>)}</ScrollArea></SelectContent>
+                                         </Select>
+                                     </div>
+                                     <div className="space-y-2">
+                                         <Label>Select assigned candidate to replace:</Label>
+                                         <Select value={tier5ReplaceOldSelection} onValueChange={setTier5ReplaceOldSelection}>
+                                             <SelectTrigger><SelectValue placeholder="Select Candidate to Replace..."/></SelectTrigger>
+                                             <SelectContent><ScrollArea className="h-60">{tier5AssignedCandidates.map(e => <SelectItem key={e.applicant_id} value={String(e.applicant_id)}>{e.applicant_name} ({e.working_village})</SelectItem>)}</ScrollArea></SelectContent>
+                                         </Select>
+                                     </div>
+                                 </div>
+                             )}
+
+                             {tier5Summary && (
+                                 <Card className="mt-4"><CardHeader><CardTitle className="text-base">Assignment Preview</CardTitle></CardHeader>
+                                 <CardContent><dl className="grid grid-cols-2 gap-1 text-sm">
+                                     {Object.entries(tier5Summary).map(([key, value]) => (<React.Fragment key={key}><dt className="font-semibold">{key}:</dt><dd>{value}</dd></React.Fragment>))}
+                                 </dl></CardContent></Card>
+                             )}
+
+                             <Button className="mt-4" onClick={handleTier5Assignment} disabled={loading.saving}>
+                                 {loading.saving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>} Assign for Small Village
+                             </Button>
+
+                         </div>
+                    ) : (
+                        <>
+                         <div className="relative">
+                            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                            <Input placeholder="Search candidates..." value={qualifiedCandidatesSearch} onChange={e => setQualifiedCandidatesSearch(e.target.value)} className="pl-10 mb-2" />
+                            {isMopUp && <div className="p-2 text-sm text-center bg-blue-100 text-blue-800 rounded-md">{validationMessage}</div>}
+                        </div>
+                        <div className="border rounded-md"><Table><TableHeader><TableRow>
+                            <TableHead>ID <ColumnFilter column="applicant_id" onSort={setSortConfig} /></TableHead>
+                            <TableHead>Applicant Name <ColumnFilter column="applicant_name" onSort={setSortConfig} /></TableHead>
+                            <TableHead>Qualification <ColumnFilter column="applicant_qualification" onSort={setSortConfig} /></TableHead>
+                            <TableHead>Age Rank <ColumnFilter column="age_per_village_ranking" onSort={setSortConfig} /></TableHead>
+                            <TableHead>Location <ColumnFilter column="loc_name" onSort={setSortConfig} /></TableHead>
+                            <TableHead>Total Score <ColumnFilter column="grand_total_score" onSort={setSortConfig} /></TableHead>
+                            <TableHead>Rank <ColumnFilter column="grand_score_rank" onSort={setSortConfig} /></TableHead>
+                        </TableRow></TableHeader>
+                        <TableBody>
+                            {loading.candidates ? <TableRow><TableCell colSpan={7} className="h-24 text-center"><Loader2 className="animate-spin mx-auto"/></TableCell></TableRow> : filteredCandidates.map((c) => (
+                                <TableRow key={c.applicant_id} className={cn(currentlySelectedApplicantId === c.applicant_id && "bg-blue-100 dark:bg-blue-900/30", allProjectEducators.find(e => e.applicant_id === c.applicant_id)?.contract_type && "bg-green-100 dark:bg-green-900/30")}>
+                                    <TableCell>{c.applicant_id}</TableCell><TableCell>{c.applicant_name}</TableCell><TableCell>{c.applicant_qualification}</TableCell><TableCell>{c.age_per_village_ranking}</TableCell><TableCell>{c.loc_name}</TableCell><TableCell>{c.grand_total_score}</TableCell><TableCell>{c.grand_score_rank}</TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody></Table></div>
+                        </>
+                    )}
                 </CardContent>
             </Card>
             
@@ -801,7 +971,7 @@ function TrainingStatementsPageContent() {
                 <CompactSummaryCard title="Beneficiaries Connected" value={totalBnfConnectedInVillage.toLocaleString()} total={totalBnfForVillage.toLocaleString()} />
             </div>
 
-            {selectedVillage && (
+            {selectedVillage && !isTier5Active && (
                 <Card>
                     <CardHeader>
                         <CardTitle>Selection Summary & Actions for: {selectedVillage}</CardTitle>
@@ -875,4 +1045,3 @@ export default function TrainingPage() {
         </Suspense>
     )
 }
-
