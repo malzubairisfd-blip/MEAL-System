@@ -1,3 +1,4 @@
+
 // src/app/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/training/page.tsx
 "use client";
 
@@ -267,30 +268,30 @@ function TrainingStatementsPageContent() {
         return;
     }
 
-    const qualifiedAndAttended = allProjectEducators.filter(e => 
-      e.interview_attendance === 'حضرت المقابلة' && 
-      (e.training_qualification === 'مؤهلة للتدريب' || e.training_qualification === null)
+    const qualifiedForSelection = allProjectEducators.filter(e => 
+      e.training_attendance === 'حضرت التدريب' && e.contract_type === null
     );
 
     const villageStat = villageStatsWithEdReq.find(v => v.villageName === selectedVillage);
     const requiredForVillage = villageStat?.edReq || 0;
-    const assignedToVillage = Object.values(selections).filter(
-        s => s.isSelected && s.workingVillage === selectedVillage && s.contractType === 'مثقفة مجتمعية'
+    
+    const assignedToVillage = allProjectEducators.filter(
+        edu => edu.working_village === selectedVillage && edu.contract_type === 'مثقفة مجتمعية'
     ).length;
 
     const needsMoreForVillage = assignedToVillage < requiredForVillage;
 
-    const unassignedLocalCandidates = qualifiedAndAttended.filter(
-        edu => edu.loc_name === selectedVillage && !selections[edu.applicant_id]?.isSelected
+    const unassignedLocalCandidates = qualifiedForSelection.filter(
+        edu => edu.loc_name === selectedVillage
     );
 
     let finalCandidates: EducatorCandidate[];
 
     if (needsMoreForVillage && unassignedLocalCandidates.length === 0) {
-        finalCandidates = qualifiedAndAttended.filter(edu => !selections[edu.applicant_id]?.isSelected);
+        finalCandidates = qualifiedForSelection.filter(edu => !selections[edu.applicant_id]?.isSelected);
         setValidationMessage("No more local candidates. Showing all available educators from other villages to fill the gap.");
     } else {
-        finalCandidates = qualifiedAndAttended.filter(edu => edu.loc_name === selectedVillage);
+        finalCandidates = qualifiedForSelection.filter(edu => edu.loc_name === selectedVillage);
         setValidationMessage('');
     }
 
@@ -602,7 +603,7 @@ function TrainingStatementsPageContent() {
             <CardTitle className="flex items-center gap-2">1. Training Requirements Calculation</CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
-            <Select onValueChange={setProjectId} value={projectId}><SelectTrigger><SelectValue placeholder="Select Project" /></SelectTrigger><SelectContent>{projects.map(p => (<SelectItem key={p.projectId} value={p.projectId}>{p.projectName}</SelectItem>))}</SelectContent></Select>
+            <Select onValueChange={(val) => {setProjectId(val); router.push(`/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/training?projectId=${val}`)}} value={projectId}><SelectTrigger><SelectValue placeholder="Select Project" /></SelectTrigger><SelectContent>{projects.map(p => (<SelectItem key={p.projectId} value={p.projectId}>{p.projectName}</SelectItem>))}</SelectContent></Select>
             {projectId && (
                 <>
                 <div className="rounded-md border">
