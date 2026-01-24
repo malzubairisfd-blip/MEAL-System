@@ -1,4 +1,3 @@
-
 // src/app/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/training/page.tsx
 "use client";
 
@@ -216,7 +215,7 @@ function TrainingStatementsPageContent() {
         return villageStatsWithEdReq.reduce((sum, v) => sum + v.bnfCount, 0);
     }, [villageStatsWithEdReq]);
 
-    const totalConnectedBnf = useMemo(() => {
+    const totalBnfConnected = useMemo(() => {
         return Object.values(selections).reduce((sum, s) => sum + (s.bnfConn || 0), 0);
     }, [selections]);
   
@@ -268,19 +267,31 @@ function TrainingStatementsPageContent() {
         return;
     }
 
-    const villageStat = villageStatsWithEdReq.find(v => v.villageName === selectedVillage);
-    const qualifiedAndAttended = allProjectEducators.filter(e => e.training_attendance === 'حضرت التدريب');
+    const qualifiedAndAttended = allProjectEducators.filter(e => 
+      e.interview_attendance === 'حضرت المقابلة' && 
+      (e.training_qualification === 'مؤهلة للتدريب' || e.training_qualification === null)
+    );
 
-    const hasInsufficientCandidates = (villageStat?.edCount || 0) < (villageStat?.edReq || 0);
+    const villageStat = villageStatsWithEdReq.find(v => v.villageName === selectedVillage);
+    const requiredForVillage = villageStat?.edReq || 0;
+    const assignedToVillage = Object.values(selections).filter(
+        s => s.isSelected && s.workingVillage === selectedVillage && s.contractType === 'مثقفة مجتمعية'
+    ).length;
+
+    const needsMoreForVillage = assignedToVillage < requiredForVillage;
+
+    const unassignedLocalCandidates = qualifiedAndAttended.filter(
+        edu => edu.loc_name === selectedVillage && !selections[edu.applicant_id]?.isSelected
+    );
 
     let finalCandidates: EducatorCandidate[];
 
-    if (hasInsufficientCandidates) {
-        const localCandidates = qualifiedAndAttended.filter(edu => edu.loc_name === selectedVillage);
-        const otherUnselectedCandidates = qualifiedAndAttended.filter(edu => edu.loc_name !== selectedVillage && !selections[edu.applicant_id]?.isSelected);
-        finalCandidates = [...localCandidates, ...otherUnselectedCandidates];
+    if (needsMoreForVillage && unassignedLocalCandidates.length === 0) {
+        finalCandidates = qualifiedAndAttended.filter(edu => !selections[edu.applicant_id]?.isSelected);
+        setValidationMessage("No more local candidates. Showing all available educators from other villages to fill the gap.");
     } else {
         finalCandidates = qualifiedAndAttended.filter(edu => edu.loc_name === selectedVillage);
+        setValidationMessage('');
     }
 
     let sorted = [...finalCandidates];
@@ -288,15 +299,23 @@ function TrainingStatementsPageContent() {
         sorted.sort((a, b) => {
             const aVal = a[sortConfig.key];
             const bVal = b[sortConfig.key];
+            
             if (aVal === null || aVal === undefined) return 1;
             if (bVal === null || bVal === undefined) return -1;
+            
             if (typeof aVal === 'number' && typeof bVal === 'number') {
                 return sortConfig.direction === 'asc' ? aVal - bVal : bVal - aVal;
             }
+
             const strA = String(aVal).toLowerCase();
             const strB = String(bVal).toLowerCase();
-            if (strA < strB) return sortConfig.direction === 'asc' ? -1 : 1;
-            if (strA > strB) return sortConfig.direction === 'asc' ? 1 : -1;
+
+            if (strA < strB) {
+              return sortConfig.direction === 'asc' ? -1 : 1;
+            }
+            if (strA > strB) {
+              return sortConfig.direction === 'asc' ? 1 : -1;
+            }
             return 0;
         });
     }
@@ -596,12 +615,13 @@ function TrainingStatementsPageContent() {
                         ))}
                     </TableBody></Table></ScrollArea>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-4 pt-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 pt-4">
                     <SummaryCard title="Required Educators" value={totalEdReq} />
                     <SummaryCard title="Required Spare" value={finalSpareReq} />
                     <SummaryCard title="Required Field Monitors" value={<Input type="number" className="h-8 w-24 bg-card text-white" value={manualMonitorsReq} onChange={(e) => setManualMonitorsReq(+e.target.value)} />} />
                     <SummaryCard title="Total Qualified" value={finalTotalQualified} />
-                    <SummaryCard title="Total Beneficiaries Connected" value={totalConnectedBnf.toLocaleString()} total={totalProjectBnf.toLocaleString()} />
+                    <SummaryCard title="Available Applicants" value={totalAvailableApplicants} />
+                    <SummaryCard title="Beneficiaries Connected" value={totalBnfConnected.toLocaleString()} total={totalProjectBnf.toLocaleString()} />
                 </div>
                 </>
             )}
@@ -816,7 +836,7 @@ function TrainingStatementsPageContent() {
                             </Card>
                         )}
                         <div className="flex justify-start items-center mt-4 gap-2">
-                            <Button variant="outline" onClick={() => handleAssignContractType('مثقفة مجتمعية')} disabled={loading.saving || !currentlySelectedApplicantId || totalBnfConnectedInVillage >= totalBnfForVillage}><Users className="mr-2 h-4 w-4"/>Assign as Community Educator</Button>
+                            <Button variant="outline" onClick={() => handleAssignContractType('مثقفة مجتمعية')} disabled={loading.saving || !currentlySelectedApplicantId || currentApplicantBnfConn <= 0}><Users className="mr-2 h-4 w-4"/>Assign as Community Educator</Button>
                             <Button variant="outline" onClick={() => handleAssignContractType('احتياط')} disabled={loading.saving || !currentlySelectedApplicantId || chosenSpares >= finalSpareReq}><User className="mr-2 h-4 w-4"/>Assign as Spare</Button>
                             <Button variant="outline" onClick={() => handleAssignContractType('رقابة')} disabled={loading.saving || !currentlySelectedApplicantId || chosenMonitors >= manualMonitorsReq}><Briefcase className="mr-2 h-4 w-4"/>Assign as Field Monitor</Button>
                             <Button variant="secondary" onClick={handleSkip}><ChevronRight className="mr-2 h-4 w-4" />Skip</Button>
