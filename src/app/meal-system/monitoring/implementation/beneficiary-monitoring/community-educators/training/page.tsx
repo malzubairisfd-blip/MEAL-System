@@ -1,3 +1,4 @@
+
 // src/app/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/training/page.tsx
 "use client";
 
@@ -100,6 +101,7 @@ function TrainingStatementsPageContent() {
   const searchParams = useSearchParams();
   const projectIdFromUrl = searchParams.get('projectId');
   const [projectId, setProjectId] = useState(projectIdFromUrl || "");
+  const router = useRouter();
   const { toast } = useToast();
 
   const [allProjectEducators, setAllProjectEducators] = useState<any[]>([]);
@@ -539,10 +541,7 @@ function TrainingStatementsPageContent() {
       setSelections(prev => ({ ...prev, [currentlySelectedApplicantId]: { isSelected: true, contractType: type, workingVillage: selectedVillage, bnfConn: type === 'مثقفة مجتمعية' ? bnfToAssign : 0 } }));
       toast({ title: "Saved", description: `Assigned ${type} to applicant ${currentlySelectedApplicantId}.` });
       
-      // Manually update the local state to reflect the change immediately
-      setAllProjectEducators(prev => prev.map(edu => 
-        edu.applicant_id === currentlySelectedApplicantId ? { ...edu, ...applicantToUpdate } : edu
-      ));
+      fetchProjectData(); // Refresh data from the source
 
       const villageStat = villageStatsWithEdReq.find(v => v.villageName === selectedVillage);
       const chosenCount = assignedInVillage + 1;
@@ -572,7 +571,7 @@ function TrainingStatementsPageContent() {
     } finally {
       setLoading(p => ({ ...p, saving: false }));
     }
-  }, [currentlySelectedApplicantId, selectedVillage, toast, filteredCandidates, selections, villageStatsWithEdReq, sortedVillages, assignedInVillage, currentApplicantBnfConn]);
+  }, [currentlySelectedApplicantId, selectedVillage, toast, filteredCandidates, selections, villageStatsWithEdReq, sortedVillages, assignedInVillage, currentApplicantBnfConn, fetchProjectData]);
 
   const handleSkip = useCallback(() => {
     if (!currentlySelectedApplicantId) return;
@@ -874,3 +873,4 @@ export default function TrainingPage() {
         </Suspense>
     )
 }
+
