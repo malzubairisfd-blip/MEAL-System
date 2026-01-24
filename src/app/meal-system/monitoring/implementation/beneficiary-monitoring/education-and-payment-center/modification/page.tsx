@@ -192,11 +192,20 @@ export default function CenterModificationPage() {
                                                     </Button>
                                                 </div>
                                             </TableCell>
-                                            {tableHeaders.map(header => (
-                                                <TableCell key={header}>
-                                                    {String((center as any)[header] ?? '')}
-                                                </TableCell>
-                                            ))}
+                                            {tableHeaders.map(header => {
+                                                const value = (center as any)[header];
+                                                let displayValue;
+                                                if (header === 'is_ec' || header === 'is_pc') {
+                                                    displayValue = value === 1 ? 'Yes' : (value === 0 ? 'No' : '');
+                                                } else {
+                                                    displayValue = String(value ?? '');
+                                                }
+                                                return (
+                                                    <TableCell key={header}>
+                                                        {displayValue}
+                                                    </TableCell>
+                                                );
+                                            })}
                                         </TableRow>
                                     ))}
                                 </TableBody>
