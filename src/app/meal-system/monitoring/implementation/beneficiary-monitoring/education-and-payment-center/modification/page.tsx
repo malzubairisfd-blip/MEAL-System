@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, Loader2, Plus, Edit, Trash2 } from 'lucide-react';
+import { ArrowLeft, Loader2, Plus, Edit, Trash2, FileDown } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import {
   AlertDialog,
@@ -19,6 +19,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { exportEpcToExcel } from '@/lib/exportEpcToExcel';
 
 interface Project {
   projectId: string;
@@ -65,6 +66,7 @@ export default function CenterModificationPage() {
     const [selectedProjectId, setSelectedProjectId] = useState('all');
     const [loading, setLoading] = useState({ projects: true, centers: false });
     const [deletingCenterId, setDeletingCenterId] = useState<string | null>(null);
+    const [isExporting, setIsExporting] = useState(false);
 
     useEffect(() => {
         const fetchProjects = async () => {
@@ -120,6 +122,23 @@ export default function CenterModificationPage() {
         }
     };
     
+    const handleExport = async () => {
+        if (centers.length === 0) {
+            toast({ title: "No data to export", variant: "destructive" });
+            return;
+        }
+        setIsExporting(true);
+        try {
+            const columns = centers.length > 0 ? Object.keys(centers[0]) : [];
+            await exportEpcToExcel(centers, columns);
+            toast({ title: "Export started", description: "Your file is being downloaded." });
+        } catch (error) {
+            toast({ title: "Export failed", variant: "destructive" });
+        } finally {
+            setIsExporting(false);
+        }
+    };
+    
     const tableHeaders = [ "id", "project_id", "project_name", "proj_no", "mud_no", "mud_name", "ozla_no", "ozla_name", "vill_no", "vill_name", "fac_id", "fac_name", "loc_id", "loc_full_name", "is_ec", "is_pc", "pc_id", "notes", "pc_name2", "is_pc2", "pc_loc2", "same_ozla", "same_ec_pc", "pc_ec_cnt", "pc_ed_cnt", "ec_ed_cnt", "pc_bnf_cnt", "ec_bnf_cnt" ];
 
 
@@ -137,6 +156,10 @@ export default function CenterModificationPage() {
                         <Link href="/meal-system/monitoring/implementation/beneficiary-monitoring/education-and-payment-center/add-center">
                             <Plus className="mr-2 h-4 w-4" /> Add New Center
                         </Link>
+                    </Button>
+                    <Button onClick={handleExport} disabled={isExporting || loading.centers}>
+                        {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
+                        Export to Excel
                     </Button>
                 </div>
             </div>
