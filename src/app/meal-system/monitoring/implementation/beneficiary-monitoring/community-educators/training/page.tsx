@@ -12,16 +12,22 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, FileText, UserCheck, User, Users, Briefcase, Filter, ArrowUpAZ, ArrowDownAZ, Save, Trash2, Plus, ArrowLeft, Search, ArrowRight } from "lucide-react";
+import { Loader2, FileText, UserCheck, User, Users, Briefcase, Filter, ArrowUpAZ, ArrowDownAZ, Save, Trash2, Plus, ArrowLeft, Search, ArrowRight, ChevronRight } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 
-// --- Types ---
-type Project = { projectId: string; projectName: string };
 
-type VillageRequirement = {
+// --- Types ---
+interface Project {
+    projectId: string;
+    projectName: string;
+
+}
+
+
+interface VillageRequirement {
   villageName: string;
   bnfCount: number;
   edCount: number;
@@ -29,7 +35,8 @@ type VillageRequirement = {
   edReq: number;
 };
 
-type EducatorCandidate = {
+interface EducatorCandidate {
+
   applicant_id: number;
   applicant_name: string;
   loc_name: string;
@@ -717,13 +724,13 @@ function TrainingStatementsPageContent() {
       if (!isTier5Active) return [];
       
       const unassignedInVillage = allProjectEducators.filter(e => 
-          e.project_id === selectedProjectId && 
+          e.project_id === projectId &&  
           e.contract_type === null && 
           e.loc_name === selectedVillage
       );
       
       const assignedInProject = allProjectEducators.filter(e => 
-          e.project_id === selectedProjectId && 
+          e.project_id === projectId && 
           e.contract_type === 'مثقفة مجتمعية'
       );
       
@@ -731,7 +738,7 @@ function TrainingStatementsPageContent() {
       const unique = Array.from(new Map(combined.map(item => [item.applicant_id, item])).values());
       
       return unique;
-    }, [isTier5Active, allProjectEducators, selectedVillage, selectedProjectId]);
+    }, [isTier5Active, allProjectEducators, selectedVillage, projectId]);
 
 
   const tier5Summary = useMemo(() => {
@@ -776,8 +783,8 @@ function TrainingStatementsPageContent() {
                 <div className="rounded-md border">
                     <Table><TableHeader><TableRow><TableHead>Village Name</TableHead><TableHead>BNF_CNT</TableHead><TableHead>BNF Per ED</TableHead><TableHead>ED_REQ</TableHead><TableHead>ED_CNT</TableHead></TableRow></TableHeader></Table>
                     <ScrollArea className="h-[250px]"><Table><TableBody>
-                        {loading.stats ? <TableRow><TableCell colSpan={5} className="h-24 text-center"><Loader2 className="animate-spin mx-auto"/></TableCell></TableRow> : villageStatsWithEdReq.map((row, i) => (
-                            <TableRow key={i}><TableCell>{row.villageName}</TableCell><TableCell>{row.bnfCount}</TableCell>
+                        {loading.stats ? <TableRow><TableCell colSpan={5} className="h-24 text-center"><Loader2 className="animate-spin mx-auto"/></TableCell></TableRow> : sortedVillages.map((row) => (
+                            <TableRow key={row.villageName}><TableCell>{row.villageName}</TableCell><TableCell>{row.bnfCount}</TableCell>
                             <TableCell><Input type="number" value={bnfPerEd[row.villageName] || ''} placeholder="0" onChange={e => setBnfPerEd(prev => ({ ...prev, [row.villageName]: +e.target.value }))} className="w-20 bg-background"/></TableCell>
                             <TableCell>{row.edReq}</TableCell><TableCell>{row.edCount}</TableCell></TableRow>
                         ))}
@@ -789,7 +796,7 @@ function TrainingStatementsPageContent() {
                     <CompactSummaryCard title="Field Monitors" value={<Input type="number" className="h-8 w-20 bg-card text-foreground text-center" value={manualMonitorsReq} onChange={(e) => setManualMonitorsReq(+e.target.value)} />} />
                     <CompactSummaryCard title="Total Qualified" value={finalTotalQualified} />
                     <CompactSummaryCard title="Available Applicants" value={totalAvailableApplicants} />
-                    <CompactSummaryCard title="BNF Connected" value={totalBnfConnected.toLocaleString()} total={totalProjectBnf.toLocaleString()} />
+                    <CompactSummaryCard title="Beneficiaries Connected" value={totalBnfConnected.toLocaleString()} total={totalProjectBnf.toLocaleString()} />
                 </div>
                 </>
             )}
@@ -913,14 +920,6 @@ function TrainingStatementsPageContent() {
                     <div className="bg-muted p-4 rounded-lg border flex justify-between items-center">
                         <Select onValueChange={setSelectedVillage} value={selectedVillage}><SelectTrigger className="w-full md:w-1/3"><SelectValue placeholder="Choose Village..." /></SelectTrigger>
                         <SelectContent>{sortedVillages.map((v) => (<SelectItem key={v.villageName} value={v.villageName}>{v.villageName} (Avail: {v.edCount} / Req: {v.edReq})</SelectItem>))}</SelectContent></Select>
-                        <div className="flex gap-2">
-                           <Button onClick={handlePreviousVillage} variant="outline" disabled={sortedVillages.findIndex(v => v.villageName === selectedVillage) === 0}>
-                                <ArrowLeft className="mr-2 h-4 w-4" /> Previous Village
-                            </Button>
-                            <Button onClick={handleNextVillage} variant="outline" disabled={sortedVillages.findIndex(v => v.villageName === selectedVillage) === sortedVillages.length - 1}>
-                                Next Village <ArrowRight className="ml-2 h-4 w-4" />
-                            </Button>
-                        </div>
                     </div>
 
                     {isTier5Active ? (
@@ -1117,6 +1116,15 @@ function TrainingStatementsPageContent() {
                             <Button variant="outline" onClick={() => handleAssignContractType('احتياط')} disabled={loading.saving || !currentlySelectedApplicantId || chosenSpares >= finalSpareReq}><User className="mr-2 h-4 w-4"/>Assign as Spare</Button>
                             <Button variant="outline" onClick={() => handleAssignContractType('رقابة')} disabled={loading.saving || !currentlySelectedApplicantId || chosenMonitors >= manualMonitorsReq}><Briefcase className="mr-2 h-4 w-4"/>Assign as Field Monitor</Button>
                             <Button variant="secondary" onClick={handleSkip}><ChevronRight className="mr-2 h-4 w-4" />Skip</Button>
+                        </div>
+
+                         <div className="flex justify-start items-center mt-4 gap-2 border-t pt-4">
+                            <Button onClick={handlePreviousVillage} variant="outline" disabled={sortedVillages.findIndex(v => v.villageName === selectedVillage) === 0}>
+                                <ArrowLeft className="mr-2 h-4 w-4" /> Previous Village
+                            </Button>
+                            <Button onClick={handleNextVillage} variant="outline" disabled={sortedVillages.findIndex(v => v.villageName === selectedVillage) === sortedVillages.length - 1}>
+                                Next Village <ArrowRight className="ml-2 h-4 w-4" />
+                            </Button>
                         </div>
                     </CardContent>
                 </Card>
