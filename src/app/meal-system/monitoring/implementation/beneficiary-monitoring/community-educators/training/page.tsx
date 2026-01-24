@@ -468,20 +468,17 @@ function TrainingStatementsPageContent() {
         if (selectedApplicantForDisplay?.applcants_relationship) {
             const msg = selectedApplicantForDisplay.applcants_relationship;
             const loc = selectedApplicantForDisplay.loc_name;
-            const chosenIds = Object.keys(selections).filter(id => selections[Number(id)].isSelected);
-
-            const relatedChosen = allProjectEducators.filter(edu =>
-                chosenIds.includes(String(edu.applicant_id)) && edu.applcants_relationship === msg
+            const chosenApplicants = allProjectEducators.filter(edu => 
+                edu.contract_type === 'مثقفة مجتمعية' || edu.contract_type === 'رقابة'
             );
-
+            const relatedChosen = chosenApplicants.filter(edu => edu.applcants_relationship === msg);
             const same = relatedChosen.filter(edu => edu.loc_name === loc).length;
             const different = relatedChosen.filter(edu => edu.loc_name !== loc).length;
-
             setRelatedCounts({ same, different });
         } else {
             setRelatedCounts({ same: 0, different: 0 });
         }
-    }, [selectedApplicantForDisplay, selections, allProjectEducators]);
+    }, [selectedApplicantForDisplay, allProjectEducators]);
 
 
     const chosenEducators = useMemo(() => allProjectEducators.filter(e => e.contract_type === 'مثقفة مجتمعية').length, [allProjectEducators]);
@@ -501,7 +498,6 @@ function TrainingStatementsPageContent() {
       ).length;
     }, [allProjectEducators, selectedVillage]);
 
-    
     const totalBnfForVillage = useMemo(() => villageStatsWithEdReq.find(v => v.villageName === selectedVillage)?.bnfCount || 0, [villageStatsWithEdReq, selectedVillage]);
     
     const currentApplicantBnfConn = useMemo(() => {
@@ -538,33 +534,33 @@ function TrainingStatementsPageContent() {
       if (!res.ok) {
         throw new Error('Failed to save selection.');
       }
-      setSelections(prev => ({ ...prev, [currentlySelectedApplicantId]: { isSelected: true, contractType: type, workingVillage: selectedVillage, bnfConn: type === 'مثقفة مجتمعية' ? bnfToAssign : 0 } }));
+      
       toast({ title: "Saved", description: `Assigned ${type} to applicant ${currentlySelectedApplicantId}.` });
       
-      fetchProjectData(); // Refresh data from the source
+      // Instead of manual state update, refetch data
+      await fetchProjectData();
 
       const villageStat = villageStatsWithEdReq.find(v => v.villageName === selectedVillage);
       const chosenCount = assignedInVillage + 1;
       
-      if (villageStat && chosenCount >= villageStat.edReq) {
+      const currentIndex = filteredCandidates.findIndex(c => c.applicant_id === currentlySelectedApplicantId);
+      let nextUnassigned = null;
+      for (let i = currentIndex + 1; i < filteredCandidates.length; i++) {
+        if (!selections[filteredCandidates[i].applicant_id]?.isSelected) {
+          nextUnassigned = filteredCandidates[i];
+          break;
+        }
+      }
+      setCurrentlySelectedApplicantId(nextUnassigned ? nextUnassigned.applicant_id : null);
+      
+      if (villageStat && chosenCount >= villageStat.edReq && !nextUnassigned) {
         const currentVillageIndex = sortedVillages.findIndex(v => v.villageName === selectedVillage);
         if (currentVillageIndex < sortedVillages.length - 1) {
           const nextVillage = sortedVillages[currentVillageIndex + 1];
           setSelectedVillage(nextVillage.villageName);
         } else {
           toast({ title: "All villages complete!" });
-          setCurrentlySelectedApplicantId(null);
         }
-      } else {
-        const currentIndex = filteredCandidates.findIndex(c => c.applicant_id === currentlySelectedApplicantId);
-        let nextUnassigned = null;
-        for (let i = currentIndex + 1; i < filteredCandidates.length; i++) {
-          if (!selections[filteredCandidates[i].applicant_id]?.isSelected) {
-            nextUnassigned = filteredCandidates[i];
-            break;
-          }
-        }
-        setCurrentlySelectedApplicantId(nextUnassigned ? nextUnassigned.applicant_id : null);
       }
     } catch (err: any) {
       toast({ title: "Save Error", description: err.message, variant: "destructive" });
@@ -589,10 +585,16 @@ function TrainingStatementsPageContent() {
     if (nextUnassignedIndex !== -1) {
         setCurrentlySelectedApplicantId(filteredCandidates[nextUnassignedIndex].applicant_id);
     } else {
-        toast({ title: "End of Village List", description: "No more unassigned candidates in this village." });
-        setCurrentlySelectedApplicantId(null);
+        // If no more in current village, move to next village
+        const currentVillageIndex = sortedVillages.findIndex(v => v.villageName === selectedVillage);
+        if (currentVillageIndex < sortedVillages.length - 1) {
+            setSelectedVillage(sortedVillages[currentVillageIndex + 1].villageName);
+        } else {
+            toast({ title: "End of All Lists", description: "All candidates in all villages have been reviewed." });
+            setCurrentlySelectedApplicantId(null);
+        }
     }
-  }, [currentlySelectedApplicantId, filteredCandidates, selections, toast]);
+  }, [currentlySelectedApplicantId, filteredCandidates, selections, toast, sortedVillages, selectedVillage]);
 
   const selectedVillageStats = useMemo(() => {
     if (!selectedVillage || !villageStatsWithEdReq) return { required: 0, available: 0 };
@@ -792,7 +794,7 @@ function TrainingStatementsPageContent() {
             
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
                 <CompactSummaryCard title="Available in Village" value={selectedVillageStats.available} />
-                <CompactSummaryCard title="Required Educators" value={selectedVillageStats.required} />
+                <CompactSummaryCard title="Required Educators" value={chosenInVillage} total={selectedVillageStats.required} />
                 <CompactSummaryCard title="Chosen Educators" value={chosenEducators} total={totalEdReq} />
                 <CompactSummaryCard title="Field Monitors" value={chosenMonitors} total={manualMonitorsReq} />
                 <CompactSummaryCard title="Chosen Spares" value={chosenSpares} total={finalSpareReq} />
