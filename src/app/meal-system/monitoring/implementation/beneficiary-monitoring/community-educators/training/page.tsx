@@ -41,6 +41,7 @@ type EducatorCandidate = {
   grand_total_score: number;
   grand_score_rank: number;
   applcants_relationship?: string;
+  [key: string]: any;
 };
 
 type SelectionState = {
@@ -81,6 +82,19 @@ const SummaryCard = ({ title, value, total }: { title: string, value: string | n
     </Card>
 );
 
+const KPICard = ({ title, value, icon }: { title: string, value: string | number, icon: React.ReactNode }) => (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-sm font-medium">{title}</CardTitle>
+        {icon}
+      </CardHeader>
+      <CardContent>
+        <div className="text-2xl font-bold">{value}</div>
+      </CardContent>
+    </Card>
+);
+
+
 function TrainingStatementsPageContent() {
   const [projects, setProjects] = useState<Project[]>([]);
   const searchParams = useSearchParams();
@@ -113,6 +127,7 @@ function TrainingStatementsPageContent() {
   const [qualifiedCandidatesSearch, setQualifiedCandidatesSearch] = useState('');
   const [hallAssignmentSearch, setHallAssignmentSearch] = useState('');
   const [currentlySelectedApplicantId, setCurrentlySelectedApplicantId] = useState<number | null>(null);
+  const [relatedCounts, setRelatedCounts] = useState<{ same: number, different: number }>({ same: 0, different: 0 });
 
 
   // --- Initial Project Load ---
@@ -196,6 +211,14 @@ function TrainingStatementsPageContent() {
       };
     });
   }, [villageStats, bnfPerEd]);
+
+    const totalProjectBnf = useMemo(() => {
+        return villageStatsWithEdReq.reduce((sum, v) => sum + v.bnfCount, 0);
+    }, [villageStatsWithEdReq]);
+
+    const totalConnectedBnf = useMemo(() => {
+        return Object.values(selections).reduce((sum, s) => sum + (s.bnfConn || 0), 0);
+    }, [selections]);
   
   const totalAvailableApplicants = useMemo(() => {
     return allProjectEducators.filter(e => e.interview_attendance === 'حضرت المقابلة' && (e.training_qualification === 'مؤهلة للتدريب' || e.training_qualification === null)).length;
@@ -240,51 +263,40 @@ function TrainingStatementsPageContent() {
 
 
   useEffect(() => {
-    if (!selectedVillage) return;
-
-    const qualifiedApplicants = allProjectEducators.filter(
-      edu => edu.training_attendance === 'حضرت التدريب'
-    );
-    
-    let villageCandidates = qualifiedApplicants.filter(edu => edu.loc_name === selectedVillage);
-    
-    const villageStat = villageStatsWithEdReq.find(v => v.villageName === selectedVillage);
-
-    const hasZeroCandidates = villageCandidates.length === 0;
-    const hasInsufficientCandidates = villageCandidates.length < (villageStat?.edReq || 0);
-
-    if (hasZeroCandidates && villageStat && villageStat.bnfCount >= 15) {
-        const otherCandidates = qualifiedApplicants.filter(edu => edu.loc_name !== selectedVillage);
-        villageCandidates = [...otherCandidates];
-    } else if (hasInsufficientCandidates) {
-        const otherCandidates = qualifiedApplicants.filter(edu => edu.loc_name !== selectedVillage);
-        villageCandidates = [...villageCandidates, ...otherCandidates];
-    } else if (hasZeroCandidates && villageStat && villageStat.bnfCount < 15) {
-        villageCandidates = [];
+    if (!selectedVillage) {
+        setCandidates([]);
+        return;
     }
-    
-    let sorted = [...villageCandidates];
+
+    const villageStat = villageStatsWithEdReq.find(v => v.villageName === selectedVillage);
+    const qualifiedAndAttended = allProjectEducators.filter(e => e.training_attendance === 'حضرت التدريب');
+
+    const hasInsufficientCandidates = (villageStat?.edCount || 0) < (villageStat?.edReq || 0);
+
+    let finalCandidates: EducatorCandidate[];
+
+    if (hasInsufficientCandidates) {
+        const localCandidates = qualifiedAndAttended.filter(edu => edu.loc_name === selectedVillage);
+        const otherUnselectedCandidates = qualifiedAndAttended.filter(edu => edu.loc_name !== selectedVillage && !selections[edu.applicant_id]?.isSelected);
+        finalCandidates = [...localCandidates, ...otherUnselectedCandidates];
+    } else {
+        finalCandidates = qualifiedAndAttended.filter(edu => edu.loc_name === selectedVillage);
+    }
+
+    let sorted = [...finalCandidates];
     if (sortConfig) {
         sorted.sort((a, b) => {
             const aVal = a[sortConfig.key];
             const bVal = b[sortConfig.key];
-
             if (aVal === null || aVal === undefined) return 1;
             if (bVal === null || bVal === undefined) return -1;
-            
             if (typeof aVal === 'number' && typeof bVal === 'number') {
                 return sortConfig.direction === 'asc' ? aVal - bVal : bVal - aVal;
             }
-
             const strA = String(aVal).toLowerCase();
             const strB = String(bVal).toLowerCase();
-
-            if (strA < strB) {
-              return sortConfig.direction === 'asc' ? -1 : 1;
-            }
-            if (strA > strB) {
-              return sortConfig.direction === 'asc' ? 1 : -1;
-            }
+            if (strA < strB) return sortConfig.direction === 'asc' ? -1 : 1;
+            if (strA > strB) return sortConfig.direction === 'asc' ? 1 : -1;
             return 0;
         });
     }
@@ -309,14 +321,8 @@ function TrainingStatementsPageContent() {
         setCurrentlySelectedApplicantId(null);
         return;
     }
-
     const firstUnassigned = filteredCandidates.find(c => !selections[c.applicant_id]?.isSelected);
-
-    if (firstUnassigned) {
-        setCurrentlySelectedApplicantId(firstUnassigned.applicant_id);
-    } else {
-        setCurrentlySelectedApplicantId(null);
-    }
+    setCurrentlySelectedApplicantId(firstUnassigned ? firstUnassigned.applicant_id : null);
 }, [filteredCandidates, selections, loading.candidates]);
 
   const handleLinkToHall = async () => {
@@ -432,16 +438,35 @@ function TrainingStatementsPageContent() {
   };
 
     const selectedApplicantForDisplay = useMemo(() => {
-    if (!currentlySelectedApplicantId) return null;
-    return allProjectEducators.find(c => c.applicant_id === currentlySelectedApplicantId);
+        if (!currentlySelectedApplicantId) return null;
+        return allProjectEducators.find(c => c.applicant_id === currentlySelectedApplicantId);
     }, [currentlySelectedApplicantId, allProjectEducators]);
+
+    useEffect(() => {
+        if (selectedApplicantForDisplay?.applcants_relationship) {
+            const msg = selectedApplicantForDisplay.applcants_relationship;
+            const loc = selectedApplicantForDisplay.loc_name;
+            const chosenIds = Object.keys(selections).filter(id => selections[Number(id)].isSelected);
+
+            const relatedChosen = allProjectEducators.filter(edu =>
+                chosenIds.includes(String(edu.applicant_id)) && edu.applcants_relationship === msg
+            );
+
+            const same = relatedChosen.filter(edu => edu.loc_name === loc).length;
+            const different = relatedChosen.filter(edu => edu.loc_name !== loc).length;
+
+            setRelatedCounts({ same, different });
+        } else {
+            setRelatedCounts({ same: 0, different: 0 });
+        }
+    }, [selectedApplicantForDisplay, selections, allProjectEducators]);
 
     const chosenEducators = useMemo(() => Object.values(selections).filter(s => s.isSelected && s.contractType === 'مثقفة مجتمعية').length, [selections]);
     const chosenMonitors = useMemo(() => Object.values(selections).filter(s => s.isSelected && s.contractType === 'رقابة').length, [selections]);
     const chosenSpares = useMemo(() => Object.values(selections).filter(s => s.isSelected && s.contractType === 'احتياط').length, [selections]);
 
     const assignedInVillage = useMemo(() => Object.values(selections).filter(s => s.isSelected && s.workingVillage === selectedVillage && s.contractType === 'مثقفة مجتمعية'), [selections, selectedVillage]);
-    const totalBnfConnected = useMemo(() => assignedInVillage.reduce((sum, s) => sum + (s.bnfConn || 0), 0), [assignedInVillage]);
+    const totalBnfConnectedInVillage = useMemo(() => assignedInVillage.reduce((sum, s) => sum + (s.bnfConn || 0), 0), [assignedInVillage]);
     const totalBnfForVillage = useMemo(() => villageStatsWithEdReq.find(v => v.villageName === selectedVillage)?.bnfCount || 0, [villageStatsWithEdReq, selectedVillage]);
     
     const currentApplicantBnfConn = useMemo(() => {
@@ -452,10 +477,10 @@ function TrainingStatementsPageContent() {
         const bnfPerEdValue = bnfPerEd[selectedVillage] || 0;
         if (bnfPerEdValue === 0) return 0;
         
-        const remainingBnf = villageStat.bnfCount - totalBnfConnected;
+        const remainingBnf = villageStat.bnfCount - totalBnfConnectedInVillage;
         return Math.max(0, Math.min(remainingBnf, bnfPerEdValue));
 
-    }, [selectedVillage, villageStatsWithEdReq, bnfPerEd, totalBnfConnected]);
+    }, [selectedVillage, villageStatsWithEdReq, bnfPerEd, totalBnfConnectedInVillage]);
 
   const handleAssignContractType = useCallback(async (type: SelectionState['contractType']) => {
     if (!currentlySelectedApplicantId || !selectedVillage) {
@@ -571,11 +596,12 @@ function TrainingStatementsPageContent() {
                         ))}
                     </TableBody></Table></ScrollArea>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pt-4">
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-4 pt-4">
                     <SummaryCard title="Required Educators" value={totalEdReq} />
                     <SummaryCard title="Required Spare" value={finalSpareReq} />
                     <SummaryCard title="Required Field Monitors" value={<Input type="number" className="h-8 w-24 bg-card text-white" value={manualMonitorsReq} onChange={(e) => setManualMonitorsReq(+e.target.value)} />} />
                     <SummaryCard title="Total Qualified" value={finalTotalQualified} />
+                    <SummaryCard title="Total Beneficiaries Connected" value={totalConnectedBnf.toLocaleString()} total={totalProjectBnf.toLocaleString()} />
                 </div>
                 </>
             )}
@@ -734,7 +760,7 @@ function TrainingStatementsPageContent() {
                 <SummaryCard title="Chosen Educators" value={chosenInVillage} total={selectedVillageStats.required} />
                 <SummaryCard title="Field Monitors" value={chosenMonitors} total={manualMonitorsReq} />
                 <SummaryCard title="Chosen Spares" value={chosenSpares} total={finalSpareReq} />
-                <SummaryCard title="Beneficiaries Connected" value={totalBnfConnected.toLocaleString()} total={totalBnfForVillage.toLocaleString()} />
+                <SummaryCard title="Beneficiaries Connected" value={totalBnfConnectedInVillage.toLocaleString()} total={totalBnfForVillage.toLocaleString()} />
             </div>
 
             {selectedVillage && (
@@ -778,15 +804,21 @@ function TrainingStatementsPageContent() {
                                         Applicant Relationship Note
                                     </CardTitle>
                                 </CardHeader>
-                                <CardContent className="py-2">
-                                    <p className="text-yellow-900">{selectedApplicantForDisplay.applcants_relationship}</p>
+                                <CardContent className="py-2 grid grid-cols-1 md:grid-cols-3 gap-4">
+                                     <p className="text-yellow-900 md:col-span-1">{selectedApplicantForDisplay.applcants_relationship}</p>
+                                     {(relatedCounts.same > 0 || relatedCounts.different > 0) && (
+                                        <>
+                                            <KPICard title="Related Chosen (Same Village)" value={relatedCounts.same} icon={<Users className="text-yellow-800"/>} />
+                                            <KPICard title="Related Chosen (Different Village)" value={relatedCounts.different} icon={<Users className="text-yellow-800"/>} />
+                                        </>
+                                     )}
                                 </CardContent>
                             </Card>
                         )}
                         <div className="flex justify-start items-center mt-4 gap-2">
-                            <Button variant="outline" onClick={() => handleAssignContractType('مثقفة مجتمعية')}><Users className="mr-2 h-4 w-4"/>Assign as Community Educator</Button>
-                            <Button variant="outline" onClick={() => handleAssignContractType('احتياط')}><User className="mr-2 h-4 w-4"/>Assign as Spare</Button>
-                            <Button variant="outline" onClick={() => handleAssignContractType('رقابة')}><Briefcase className="mr-2 h-4 w-4"/>Assign as Field Monitor</Button>
+                            <Button variant="outline" onClick={() => handleAssignContractType('مثقفة مجتمعية')} disabled={loading.saving || !currentlySelectedApplicantId || totalBnfConnectedInVillage >= totalBnfForVillage}><Users className="mr-2 h-4 w-4"/>Assign as Community Educator</Button>
+                            <Button variant="outline" onClick={() => handleAssignContractType('احتياط')} disabled={loading.saving || !currentlySelectedApplicantId || chosenSpares >= finalSpareReq}><User className="mr-2 h-4 w-4"/>Assign as Spare</Button>
+                            <Button variant="outline" onClick={() => handleAssignContractType('رقابة')} disabled={loading.saving || !currentlySelectedApplicantId || chosenMonitors >= manualMonitorsReq}><Briefcase className="mr-2 h-4 w-4"/>Assign as Field Monitor</Button>
                             <Button variant="secondary" onClick={handleSkip}><ChevronRight className="mr-2 h-4 w-4" />Skip</Button>
                         </div>
                     </CardContent>
@@ -805,5 +837,3 @@ export default function TrainingPage() {
         </Suspense>
     )
 }
-
-    
