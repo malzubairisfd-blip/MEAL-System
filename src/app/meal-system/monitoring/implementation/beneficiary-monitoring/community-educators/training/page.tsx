@@ -2,7 +2,9 @@
 // src/app/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/training/page.tsx
 "use client";
 
-import React, { useEffect, useState, useMemo, useCallback, Suspense } from "react";
+import React, { useEffect, useState, useMemo, useCallback, Suspense } from 'react';
+import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -12,8 +14,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, FileText, UserCheck, User, Users, Briefcase, Filter, ArrowUpAZ, ArrowDownAZ, Save, Trash2, Plus, ArrowLeft, Search, ChevronRight } from "lucide-react";
-import Link from "next/link";
-import { useSearchParams } from "next/navigation";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
@@ -71,13 +71,14 @@ const ColumnFilter = ({ column, onSort }: { column: string; onSort: (column: str
   );
 };
 
-const SummaryCard = ({ title, value, total }: { title: string, value: string | number, total?: string | number }) => (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">{title}</CardTitle>
+const CompactSummaryCard = ({ title, value, total, icon }: { title: string, value: React.ReactNode, total?: string | number, icon?: React.ReactNode }) => (
+    <Card className="text-center">
+      <CardHeader className="p-2 pb-0 flex-row justify-between items-center space-y-0">
+        <CardTitle className="text-xs font-semibold">{title}</CardTitle>
+        {icon}
       </CardHeader>
-      <CardContent>
-        <div className="text-2xl font-bold">{value}{total !== undefined && <span className="text-lg text-muted-foreground">/{total}</span>}</div>
+      <CardContent className="p-2">
+        <div className="text-lg font-bold">{value}{total !== undefined && <span className="text-sm text-muted-foreground">/{total}</span>}</div>
       </CardContent>
     </Card>
 );
@@ -213,12 +214,12 @@ function TrainingStatementsPageContent() {
   }, [villageStats, bnfPerEd]);
 
     const totalProjectBnf = useMemo(() => {
-        return villageStatsWithEdReq.reduce((sum, v) => sum + v.bnfCount, 0);
-    }, [villageStatsWithEdReq]);
+        return allProjectEducators.reduce((sum, edu) => sum + (edu.ed_bnf_cnt || 0), 0);
+    }, [allProjectEducators]);
 
     const totalBnfConnected = useMemo(() => {
-        return Object.values(selections).reduce((sum, s) => sum + (s.bnfConn || 0), 0);
-    }, [selections]);
+      return allProjectEducators.reduce((sum, edu) => sum + (edu.ed_bnf_cnt || 0), 0);
+    }, [allProjectEducators]);
   
   const totalAvailableApplicants = useMemo(() => {
     return allProjectEducators.filter(e => e.interview_attendance === 'حضرت المقابلة' && (e.training_qualification === 'مؤهلة للتدريب' || e.training_qualification === null)).length;
@@ -282,7 +283,7 @@ function TrainingStatementsPageContent() {
     const needsMoreForVillage = assignedToVillage < requiredForVillage;
 
     const unassignedLocalCandidates = qualifiedForSelection.filter(
-        edu => edu.loc_name === selectedVillage
+        edu => edu.loc_name === selectedVillage && !selections[edu.applicant_id]?.isSelected
     );
 
     let finalCandidates: EducatorCandidate[];
@@ -485,8 +486,20 @@ function TrainingStatementsPageContent() {
     const chosenMonitors = useMemo(() => Object.values(selections).filter(s => s.isSelected && s.contractType === 'رقابة').length, [selections]);
     const chosenSpares = useMemo(() => Object.values(selections).filter(s => s.isSelected && s.contractType === 'احتياط').length, [selections]);
 
-    const assignedInVillage = useMemo(() => Object.values(selections).filter(s => s.isSelected && s.workingVillage === selectedVillage && s.contractType === 'مثقفة مجتمعية'), [selections, selectedVillage]);
-    const totalBnfConnectedInVillage = useMemo(() => assignedInVillage.reduce((sum, s) => sum + (s.bnfConn || 0), 0), [assignedInVillage]);
+    const assignedInVillage = useMemo(() => {
+      return allProjectEducators.filter(
+        (edu) =>
+          edu.working_village === selectedVillage &&
+          edu.contract_type === 'مثقفة مجتمعية'
+      ).length;
+    }, [allProjectEducators, selectedVillage]);
+
+    const totalBnfConnectedInVillage = useMemo(() => {
+        return allProjectEducators
+            .filter(edu => edu.working_village === selectedVillage)
+            .reduce((sum, edu) => sum + (edu.ed_bnf_cnt || 0), 0);
+    }, [allProjectEducators, selectedVillage]);
+    
     const totalBnfForVillage = useMemo(() => villageStatsWithEdReq.find(v => v.villageName === selectedVillage)?.bnfCount || 0, [villageStatsWithEdReq, selectedVillage]);
     
     const currentApplicantBnfConn = useMemo(() => {
@@ -526,8 +539,13 @@ function TrainingStatementsPageContent() {
       setSelections(prev => ({ ...prev, [currentlySelectedApplicantId]: { isSelected: true, contractType: type, workingVillage: selectedVillage, bnfConn: type === 'مثقفة مجتمعية' ? bnfToAssign : 0 } }));
       toast({ title: "Saved", description: `Assigned ${type} to applicant ${currentlySelectedApplicantId}.` });
       
+      // Manually update the local state to reflect the change immediately
+      setAllProjectEducators(prev => prev.map(edu => 
+        edu.applicant_id === currentlySelectedApplicantId ? { ...edu, ...applicantToUpdate } : edu
+      ));
+
       const villageStat = villageStatsWithEdReq.find(v => v.villageName === selectedVillage);
-      const chosenCount = assignedInVillage.length + 1;
+      const chosenCount = assignedInVillage + 1;
       
       if (villageStat && chosenCount >= villageStat.edReq) {
         const currentVillageIndex = sortedVillages.findIndex(v => v.villageName === selectedVillage);
@@ -554,7 +572,7 @@ function TrainingStatementsPageContent() {
     } finally {
       setLoading(p => ({ ...p, saving: false }));
     }
-  }, [currentlySelectedApplicantId, selectedVillage, toast, filteredCandidates, selections, villageStatsWithEdReq, sortedVillages, assignedInVillage.length, currentApplicantBnfConn]);
+  }, [currentlySelectedApplicantId, selectedVillage, toast, filteredCandidates, selections, villageStatsWithEdReq, sortedVillages, assignedInVillage, currentApplicantBnfConn]);
 
   const handleSkip = useCallback(() => {
     if (!currentlySelectedApplicantId) return;
@@ -587,13 +605,12 @@ function TrainingStatementsPageContent() {
   }, [selectedVillage, villageStatsWithEdReq, allProjectEducators]);
 
     const chosenInVillage = useMemo(() => {
-        return Object.values(selections).filter(
+        return allProjectEducators.filter(
             (s) =>
-                s.isSelected &&
                 s.workingVillage === selectedVillage &&
-                s.contractType === 'مثقفة مجتمعية'
+                s.contract_type === 'مثقفة مجتمعية'
         ).length;
-    }, [selections, selectedVillage]);
+    }, [allProjectEducators, selectedVillage]);
 
 
   return (
@@ -616,13 +633,13 @@ function TrainingStatementsPageContent() {
                         ))}
                     </TableBody></Table></ScrollArea>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 pt-4">
-                    <SummaryCard title="Required Educators" value={totalEdReq} />
-                    <SummaryCard title="Required Spare" value={finalSpareReq} />
-                    <SummaryCard title="Required Field Monitors" value={<Input type="number" className="h-8 w-24 bg-card text-white" value={manualMonitorsReq} onChange={(e) => setManualMonitorsReq(+e.target.value)} />} />
-                    <SummaryCard title="Total Qualified" value={finalTotalQualified} />
-                    <SummaryCard title="Available Applicants" value={totalAvailableApplicants} />
-                    <SummaryCard title="Beneficiaries Connected" value={totalBnfConnected.toLocaleString()} total={totalProjectBnf.toLocaleString()} />
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 pt-4">
+                    <CompactSummaryCard title="Required Educators" value={totalEdReq} />
+                    <CompactSummaryCard title="Required Spare" value={finalSpareReq} />
+                    <CompactSummaryCard title="Field Monitors" value={<Input type="number" className="h-8 w-20 bg-card text-foreground text-center" value={manualMonitorsReq} onChange={(e) => setManualMonitorsReq(+e.target.value)} />} />
+                    <CompactSummaryCard title="Total Qualified" value={finalTotalQualified} />
+                    <CompactSummaryCard title="Available Applicants" value={totalAvailableApplicants} />
+                    <CompactSummaryCard title="BNF Connected" value={totalBnfConnected.toLocaleString()} total={totalProjectBnf.toLocaleString()} />
                 </div>
                 </>
             )}
@@ -774,14 +791,14 @@ function TrainingStatementsPageContent() {
                     </TableBody></Table></div>
                 </CardContent>
             </Card>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                <SummaryCard title="Available in Village" value={selectedVillageStats.available} />
-                <SummaryCard title="Required Educators" value={selectedVillageStats.required} />
-                <SummaryCard title="Chosen Educators" value={chosenInVillage} total={selectedVillageStats.required} />
-                <SummaryCard title="Field Monitors" value={chosenMonitors} total={manualMonitorsReq} />
-                <SummaryCard title="Chosen Spares" value={chosenSpares} total={finalSpareReq} />
-                <SummaryCard title="Beneficiaries Connected" value={totalBnfConnectedInVillage.toLocaleString()} total={totalBnfForVillage.toLocaleString()} />
+            
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+                <CompactSummaryCard title="Available in Village" value={selectedVillageStats.available} />
+                <CompactSummaryCard title="Required Educators" value={selectedVillageStats.required} />
+                <CompactSummaryCard title="Chosen Educators" value={chosenInVillage} total={selectedVillageStats.required} />
+                <CompactSummaryCard title="Field Monitors" value={chosenMonitors} total={manualMonitorsReq} />
+                <CompactSummaryCard title="Chosen Spares" value={chosenSpares} total={finalSpareReq} />
+                <CompactSummaryCard title="Beneficiaries Connected" value={totalBnfConnectedInVillage.toLocaleString()} total={totalBnfForVillage.toLocaleString()} />
             </div>
 
             {selectedVillage && (
