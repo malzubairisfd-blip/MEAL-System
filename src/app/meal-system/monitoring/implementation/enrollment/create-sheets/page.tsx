@@ -1,22 +1,19 @@
 // src/app/meal-system/monitoring/implementation/enrollment/create-sheets/page.tsx
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Download, Loader2, FileText } from "lucide-react";
+import { Download, Loader2, FileText, File } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
-import jsPDF from "jspdf";
-import JSZip from "jszip";
 
 interface Project {
     projectId: string;
     projectName: string;
 }
 
-// This function now creates the entire worker script as a string
 function createEnrollmentWorkerScript() {
     return `
         importScripts("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js", "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js");
@@ -24,7 +21,6 @@ function createEnrollmentWorkerScript() {
         const { jsPDF } = self.jspdf;
 
         // --- TYPES ---
-        // Duplicated here to be self-contained in the worker
         const EnrollmentData = {};
 
         // --- CONSTANTS ---
@@ -43,7 +39,7 @@ function createEnrollmentWorkerScript() {
             doc.setTextColor(0, 0, 0);
             doc.text(String(text || ""), x, y, { align, baseline: "middle" });
         }
-
+        
         function drawDottedLine(doc, x, y, w) {
             doc.setLineWidth(0.5);
             doc.setDrawColor(0);
@@ -73,46 +69,49 @@ function createEnrollmentWorkerScript() {
                 doc.circle(x, y, r);
             }
         }
-
+        
         function drawSFDLogo(doc, x, y) {
-            const boxSize = 25;
-            const gap = 2;
-            doc.setFillColor(44, 62, 80);
-            doc.rect(x, y, boxSize, boxSize, "F");
-            doc.setTextColor(255, 255, 255);
-            doc.setFontSize(18);
-            doc.setFont("Arial", "bold");
-            doc.text("S", x + boxSize/2, y + boxSize/2, { align: "center", baseline: "middle" });
+          const boxSize = 25;
+          const gap = 2;
+          doc.setFillColor(44, 62, 80);
+          doc.rect(x, y, boxSize, boxSize, "F");
+          doc.setTextColor(255, 255, 255);
+          doc.setFontSize(18);
+          doc.setFont("Arial", "bold");
+          doc.text("S", x + boxSize/2, y + boxSize/2, { align: "center", baseline: "middle" });
 
-            doc.setFillColor(44, 62, 80);
-            doc.rect(x + boxSize + gap, y, boxSize, boxSize, "F");
-            doc.text("F", x + boxSize + gap + boxSize/2, y + boxSize/2, { align: "center", baseline: "middle" });
+          doc.setFillColor(44, 62, 80);
+          doc.rect(x + boxSize + gap, y, boxSize, boxSize, "F");
+          doc.text("F", x + boxSize + gap + boxSize/2, y + boxSize/2, { align: "center", baseline: "middle" });
 
-            doc.setFillColor(44, 62, 80);
-            doc.rect(x + 2*(boxSize + gap), y, boxSize, boxSize, "F");
-            doc.text("D", x + 2*(boxSize + gap) + boxSize/2, y + boxSize/2, { align: "center", baseline: "middle" });
+          doc.setFillColor(44, 62, 80);
+          doc.rect(x + 2*(boxSize + gap), y, boxSize, boxSize, "F");
+          doc.text("D", x + 2*(boxSize + gap) + boxSize/2, y + boxSize/2, { align: "center", baseline: "middle" });
 
-            doc.setTextColor(0);
-            doc.setFont("Amiri", "bold");
-            doc.setFontSize(18);
-            doc.text("الصندوق", x + 3*(boxSize + gap) + 5, y + 5);
-            doc.text("الاجتماعي", x + 3*(boxSize + gap) + 5, y + 15);
-            doc.text("للتنمية", x + 3*(boxSize + gap) + 5, y + 25);
+          doc.setTextColor(0);
+          doc.setFont("Amiri", "bold");
+          doc.setFontSize(18);
+          doc.text("الصندوق", x + 3*(boxSize + gap) + 5, y + 5);
+          doc.text("الاجتماعي", x + 3*(boxSize + gap) + 5, y + 15);
+          doc.text("للتنمية", x + 3*(boxSize + gap) + 5, y + 25);
         }
 
         function drawEnrollmentForm(doc, data) {
             let y = MARGIN_Y;
 
+            // 1. HEADER SECTION
             drawSFDLogo(doc, MARGIN_X, y);
 
-            doc.setFillColor(184, 201, 224);
+            // Title Box - Exact position and styling
+            doc.setFillColor(184, 201, 224); // #b8c9e0
             doc.roundedRect(PAGE_W / 2 - 70, y, 140, 30, 8, 8, "F");
             doc.setLineWidth(1);
-            doc.setDrawColor(119, 138, 163);
+            doc.setDrawColor(119, 138, 163); // Border color
             doc.roundedRect(PAGE_W / 2 - 70, y, 140, 30, 8, 8);
             drawText(doc, "استمارة التحاق بمشروع التحويلات النقدية المشروطة في التغذية", PAGE_W / 2, y + 10, 14, "center", true);
             drawText(doc, \`المحافظة: \${data.governorate} المديرية: \${data.district}\`, PAGE_W / 2, y + 25, 12, "center");
 
+            // State Info - Right side
             drawText(doc, "الجمهورية اليمنية", PAGE_W - MARGIN_X, y + 5, 12, "right", true);
             drawText(doc, "رئاسة مجلس الوزراء", PAGE_W - MARGIN_X, y + 15, 12, "right", true);
             drawText(doc, "الصندوق الاجتماعي للتنمية", PAGE_W - MARGIN_X, y + 25, 12, "right", true);
@@ -123,7 +122,7 @@ function createEnrollmentWorkerScript() {
             y += 10;
 
             doc.setFillColor(COLOR_BLUE_HEADER);
-            doc.roundedRect(MARGIN_X, y, CONTENT_W, 8, 0, 5, 5, "F");
+            doc.roundedRect(MARGIN_X, y, CONTENT_W, 8, 5, 5, "F");
             doc.setTextColor(255, 255, 255);
             drawText(doc, "أولاً: بيانات المرأة المستهدفة حسب قاعدة البيانات:", PAGE_W - MARGIN_X - 2, y + 4, 11, "right", true);
             doc.setTextColor(0);
@@ -180,7 +179,7 @@ function createEnrollmentWorkerScript() {
             y += 10;
 
             doc.setFillColor(COLOR_BLUE_HEADER);
-            doc.roundedRect(MARGIN_X, y, CONTENT_W, 8, 0, 5, 5, "F");
+            doc.roundedRect(MARGIN_X, y, CONTENT_W, 8, 5, 5, "F");
             doc.setTextColor(255, 255, 255);
             drawText(doc, "ثانياً: المنافع التي ستحصل عليها المرأة المستهدفة من المشروع", PAGE_W - MARGIN_X - 2, y + 4, 11, "right", true);
             doc.setTextColor(0);
@@ -190,9 +189,9 @@ function createEnrollmentWorkerScript() {
             const splitBenefit = doc.splitTextToSize(benefitText, CONTENT_W);
             doc.text(splitBenefit, PAGE_W - MARGIN_X, y, { align: "right" });
             y += 25;
-
+            
             doc.setFillColor(COLOR_BLUE_HEADER);
-            doc.roundedRect(MARGIN_X, y, CONTENT_W, 8, 0, 5, 5, "F");
+            doc.roundedRect(MARGIN_X, y, CONTENT_W, 8, 5, 5, "F");
             doc.setTextColor(255, 255, 255);
             drawText(doc, "ثالثاً: حرمان المرأة المستهدفة من المنافع", PAGE_W - MARGIN_X - 2, y + 4, 11, "right", true);
             doc.setTextColor(0);
@@ -208,7 +207,7 @@ function createEnrollmentWorkerScript() {
             y += 25;
             
             doc.setFillColor(COLOR_BLUE_HEADER);
-            doc.roundedRect(MARGIN_X, y, CONTENT_W, 8, 0, 5, 5, "F");
+            doc.roundedRect(MARGIN_X, y, CONTENT_W, 8, 5, 5, "F");
             doc.setTextColor(255, 255, 255);
             drawText(doc, "رابعاً: توقيع أو بصمة المرأة المؤهلة بالعلم والموافقة وصحة البيانات", PAGE_W - MARGIN_X - 2, y + 4, 11, "right", true);
             doc.setTextColor(0);
@@ -228,13 +227,13 @@ function createEnrollmentWorkerScript() {
             y += 25;
             
             doc.setFillColor(COLOR_BLUE_HEADER);
-            doc.roundedRect(MARGIN_X, y, CONTENT_W, 8, 0, 5, 5, "F");
+            doc.roundedRect(MARGIN_X, y, CONTENT_W, 8, 5, 5, "F");
             doc.setTextColor(255, 255, 255);
             drawText(doc, "خامساً: في حال عدم أخذ البصمة أو التوقيع (يذكر السبب)", PAGE_W - MARGIN_X - 2, y + 4, 11, "right", true);
             doc.setTextColor(0);
             y += 12;
 
-            const reasons = ["1. انتقال دائم لمحل السكن خارج المديرية", "2. سفر مؤقت", "3. الوفاة (لا سمح الله)", "4. عدم القبول بمنافع المشروع", "5. عدم العثور على المرأة"];
+            const reasons = ["1. انتقال دائم لمحل السكن خارج المديرية", "2. سفر مؤقت", "3. الوفاة (لا سمح الله)", "4. عدم القبول بمنافع المشروع", "5. عدم العثور على المرأة", "6. أخرى (تذكر): ..............................."];
             let rX = PAGE_W - MARGIN_X;
             reasons.forEach(reason => {
                 drawText(doc, reason, rX, y, 9, "right");
@@ -242,11 +241,9 @@ function createEnrollmentWorkerScript() {
                 if (rX < MARGIN_X + 50) { y += 8; rX = PAGE_W - MARGIN_X; }
             });
             y += 8;
-            drawText(doc, "6. أخرى (تذكر): ...............................", PAGE_W - MARGIN_X, y, 9, "right");
-            y += 10;
             
             doc.setFillColor(COLOR_BLUE_HEADER);
-            doc.roundedRect(MARGIN_X, y, CONTENT_W, 8, 0, 5, 5, "F");
+            doc.roundedRect(MARGIN_X, y, CONTENT_W, 8, 5, 5, "F");
             doc.setTextColor(255, 255, 255);
             drawText(doc, "سادساً: تصحيح البيانات:", PAGE_W - MARGIN_X - 2, y + 4, 11, "right", true);
             doc.setTextColor(0);
@@ -377,7 +374,7 @@ function createEnrollmentWorkerScript() {
 export default function CreateEnrollmentSheetsPage() {
   const { toast } = useToast();
   const [projects, setProjects] = useState<Project[]>([]);
-  const [selectedProjectId, setSelectedProjectId] = useState('');
+  const [selectedProjectId, setSelectedProjectId] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("Idle");
   const [progress, setProgress] = useState(0);
@@ -440,8 +437,8 @@ export default function CreateEnrollmentSheetsPage() {
                 const a = document.createElement("a");
                 a.href = url;
                 a.download = isSample 
-                    ? `Enrollment_Sample_${selectedProjectId}.pdf` 
-                    : `Enrollment_Forms_${selectedProjectId}.zip`;
+                    ? \`Enrollment_Sample_\${selectedProjectId}.pdf\` 
+                    : \`Enrollment_Forms_\${selectedProjectId}.zip\`;
                 document.body.appendChild(a);
                 a.click();
                 a.remove();
@@ -521,7 +518,7 @@ export default function CreateEnrollmentSheetsPage() {
                     onClick={() => handleGenerate(true)}
                     disabled={loading || !selectedProjectId}
                 >
-                    <FileText className="mr-2 h-4 w-4" />
+                    <File className="mr-2 h-4 w-4" />
                     Download Sample
                 </Button>
             </div>
