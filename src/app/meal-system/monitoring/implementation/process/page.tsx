@@ -1,5 +1,3 @@
-
-// src/app/meal-system/monitoring/implementation/process/page.tsx
 "use client";
 
 import Link from "next/link";
@@ -12,7 +10,7 @@ export default function ProcessMonitoringPage() {
     {
       title: "Enrollment Management",
       description: "Manage and track beneficiary enrollment processes.",
-      href: "#",
+      href: "/meal-system/monitoring/implementation/enrollment",
       icon: <UserCheck className="h-8 w-8 text-blue-500" />,
     },
     {
