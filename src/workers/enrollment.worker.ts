@@ -90,7 +90,7 @@ export function drawEnrollmentForm(doc: jsPDF, data: EnrollmentData) {
   drawText(doc, `المديرية : ${data.district}`, PAGE_W - 80, y, 10, "right", true);
   
   drawText(doc, `رقم المستهدفة : ${data.beneficiaryId}`, MARGIN_X + 60, y, 10, "right", true);
-  drawText(doc, `رقم التلفون : ${data.phone}`, MARGIN_X + 30, y + 6, "right", 10, true);
+  drawText(doc, `رقم التلفون : ${data.phone}`, MARGIN_X + 30, y + 6, 10, "right", true);
 
   y += 12;
 
@@ -152,7 +152,7 @@ export function drawEnrollmentForm(doc: jsPDF, data: EnrollmentData) {
   y += 10;
 
   const benefitText = "تحصل كل امرأة مستهدفة استوفت المعايير (حامل أو أم لطفل أقل من خمس سنوات أو أم لطفل ذو إعاقة من 5-17 سنة) والتزمت بالشروط، على مساعدة نقدية بواقع عشرون ألف ريال شهرياً ولمدة ستة أشهر.";
-  const splitBenefit = doc.splitTextToSize(benefitText, CONTENT_W);
+  const splitBenefit = doc.splitTextToSize(benefitText, CONTENT_W - 5);
   doc.text(splitBenefit, PAGE_W - MARGIN_X, y, { align: "right" });
   y += 15;
 
