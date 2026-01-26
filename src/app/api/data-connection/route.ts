@@ -1,3 +1,4 @@
+
 // src/app/api/data-connection/route.ts
 import { NextResponse } from "next/server";
 import path from "path";
@@ -7,6 +8,7 @@ const getDataPath = () => path.join(process.cwd(), 'src', 'data');
 const getEducatorsDbPath = () => path.join(getDataPath(), 'educators.db');
 const getEcPcDbPath = () => path.join(getDataPath(), 'ec_pc.db');
 const getBnfDbPath = () => path.join(getDataPath(), 'bnf-assessed.db');
+const getProjectsDbPath = () => path.join(getDataPath(), 'projects.db');
 
 export async function POST(req: Request) {
     try {
@@ -191,8 +193,9 @@ async function balanceBnfCounts({ projectId }: { projectId: string }) {
 async function connectBnfToEd({ projectId }: { projectId: string }) {
     const edDb = new Database(getEducatorsDbPath());
     const bnfDb = new Database(getBnfDbPath());
+    const projectsDb = new Database(getProjectsDbPath());
     try {
-        const project = edDb.prepare('SELECT projectName FROM projects WHERE projectId = ?').get(projectId);
+        const project = projectsDb.prepare('SELECT projectName FROM projects WHERE projectId = ?').get(projectId);
         const projectName = project?.projectName;
         if (!projectName) throw new Error("Project name not found");
 
@@ -253,5 +256,6 @@ async function connectBnfToEd({ projectId }: { projectId: string }) {
     } finally {
         edDb.close();
         bnfDb.close();
+        projectsDb.close();
     }
 }

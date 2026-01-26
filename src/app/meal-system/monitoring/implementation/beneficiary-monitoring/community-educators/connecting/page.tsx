@@ -1,3 +1,4 @@
+
 // src/app/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/connecting/page.tsx
 "use client";
 
@@ -11,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { ArrowLeft, Loader2, Key, Link2, Users, GitBranch, Shuffle, Save, CheckCircle, Search } from "lucide-react";
 
 interface Project {
@@ -28,6 +29,7 @@ interface Educator {
   ed_bnf_cnt: number;
   contract_type: string;
   ec_id: string | null;
+  project_id: string;
 }
 
 interface EC {
@@ -159,7 +161,11 @@ export default function ConnectingPage() {
         }
     };
     
-    const unlinkedEducators = useMemo(() => educators.filter(e => !e.ec_id && e.contract_type === 'مثقفة مجتمعية'), [educators]);
+    const unlinkedEducators = useMemo(() => {
+        if (!selectedProjectId) return [];
+        return educators.filter(e => e.project_id === selectedProjectId && !e.ec_id && e.contract_type === 'مثقفة مجتمعية');
+    }, [educators, selectedProjectId]);
+
 
     const filteredUnlinkedEducators = useMemo(() => {
         const sorted = [...unlinkedEducators].sort((a, b) => (a.working_village || '').localeCompare(b.working_village || ''));
@@ -182,6 +188,11 @@ export default function ConnectingPage() {
             );
         });
     }, [unlinkedEducators, unlinkedSearch]);
+    
+    const communityEducatorsForBalancing = useMemo(() => {
+        if (!selectedProjectId) return [];
+        return educators.filter(e => e.project_id === selectedProjectId && e.contract_type === 'مثقفة مجتمعية');
+    }, [educators, selectedProjectId]);
 
     const handleSelectAllSearched = (checked: boolean | 'indeterminate') => {
         if (typeof checked !== 'boolean') return;
@@ -314,7 +325,7 @@ export default function ConnectingPage() {
                              <ScrollArea className="h-72 border rounded-md">
                                  <Table>
                                      <TableHeader><TableRow><TableHead>ED_ID</TableHead><TableHead>Applicant Name</TableHead><TableHead>Working Village</TableHead><TableHead>BNF Count</TableHead></TableRow></TableHeader>
-                                     <TableBody>{educators.filter(e => e.contract_type === 'مثقفة مجتمعية').map(edu => <TableRow key={edu.applicant_id}><TableCell>{edu.ed_id}</TableCell><TableCell>{edu.applicant_name}</TableCell><TableCell>{edu.working_village}</TableCell><TableCell>{edu.ed_bnf_cnt}</TableCell></TableRow>)}</TableBody>
+                                     <TableBody>{communityEducatorsForBalancing.map(edu => <TableRow key={edu.applicant_id}><TableCell>{edu.ed_id}</TableCell><TableCell>{edu.applicant_name}</TableCell><TableCell>{edu.working_village}</TableCell><TableCell>{edu.ed_bnf_cnt}</TableCell></TableRow>)}</TableBody>
                                  </Table>
                              </ScrollArea>
                          </CardContent>
@@ -336,4 +347,3 @@ export default function ConnectingPage() {
         </div>
     );
 }
-    
