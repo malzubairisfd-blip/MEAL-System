@@ -56,6 +56,7 @@
     "idb": "^8.0.0",
     "jspdf": "2.5.1",
     "jspdf-autotable": "3.8.2",
+    "jszip": "^3.10.1",
     "leaflet": "^1.9.4",
     "leaflet.heat": "^0.2.0",
     "leaflet.markercluster": "^1.5.3",
@@ -80,6 +81,7 @@
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.11",
     "@types/file-saver": "^2.0.7",
+    "@types/jszip": "^3.4.1",
     "@types/leaflet": "^1.9.12",
     "@types/leaflet.heat": "^0.2.4",
     "@types/leaflet.markercluster": "^1.5.4",
