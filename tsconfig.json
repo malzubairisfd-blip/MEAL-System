@@ -15,7 +15,7 @@
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "jsx": "react-jsx",
+    "jsx": "preserve",
     "incremental": true,
     "plugins": [
       {
@@ -28,7 +28,10 @@
         "src/*"
       ]
     },
-    "types": ["node", "@types/recharts"]
+    "types": [
+      "node",
+      "@types/recharts"
+    ]
   },
   "include": [
     "next-env.d.ts",

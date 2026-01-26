@@ -1,10 +1,9 @@
-// src/app/meal-system/monitoring/implementation/enrollment/create-sheets/page.tsx
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Download, Loader2, FileText, Activity } from "lucide-react";
+import { Download, Loader2, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
@@ -62,7 +61,7 @@ export default function CreateEnrollmentSheetsPage() {
               return;
             }
 
-            const worker = new Worker(new URL('@/workers/enrollment.worker.ts', import.meta.url));
+            const worker = new Worker(new URL('../../../../../../workers/enrollment.worker.ts', import.meta.url));
 
             worker.onmessage = (event) => {
                 const { type, status: workerStatus, progress: workerProgress, current, total, data, error } = event.data;
