@@ -1,4 +1,3 @@
-
 // src/app/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/connecting/page.tsx
 "use client";
 
@@ -160,6 +159,46 @@ export default function ConnectingPage() {
             setLoading(prev => ({ ...prev, action: '' }));
         }
     };
+
+    const handleConnectAndEnrich = async () => {
+        if (selectedEducatorIds.size === 0 || !selectedEc) {
+            toast({ title: "Incomplete Selection", description: "Please select educators and an education center.", variant: 'destructive' });
+            return;
+        }
+    
+        setLoading(prev => ({ ...prev, action: 'connect_and_enrich' }));
+        try {
+            // Action 1: Connect ED to EC
+            const connectRes = await fetch('/api/data-connection', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'connect-ed-to-ec', educatorIds: Array.from(selectedEducatorIds), ecFacId: selectedEc })
+            });
+            const connectResult = await connectRes.json();
+            if (!connectRes.ok) throw new Error(connectResult.details || connectResult.error || 'Failed to connect educators.');
+            toast({ title: "Step 1/2 Complete", description: connectResult.message });
+    
+            // Action 2: Enrich EC PC
+            const enrichRes = await fetch('/api/data-connection', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'enrich-ec-pc' })
+            });
+            const enrichResult = await enrichRes.json();
+            if (!enrichRes.ok) throw new Error(enrichResult.details || enrichResult.error || 'Failed to enrich center data.');
+            toast({ title: "Step 2/2 Complete", description: enrichResult.message });
+    
+            // Final success & refresh
+            toast({ title: "Success", description: "Educators connected and center data enriched." });
+            await handleProjectSelect(selectedProjectId);
+            setSelectedEducatorIds(new Set());
+    
+        } catch (error: any) {
+            toast({ title: "Action Failed", description: error.message, variant: 'destructive' });
+        } finally {
+            setLoading(prev => ({ ...prev, action: '' }));
+        }
+    };
     
     const unlinkedEducators = useMemo(() => {
         if (!selectedProjectId) return [];
@@ -295,13 +334,9 @@ export default function ConnectingPage() {
                                         <SelectContent><ScrollArea className="h-60">{educationCenters.map(ec => <SelectItem key={ec.fac_id} value={ec.fac_id}>{ec.fac_name} ({ec.fac_id})</SelectItem>)}</ScrollArea></SelectContent>
                                     </Select>
                                 </div>
-                                <Button onClick={() => handleApiAction('connect-ed-to-ec', { educatorIds: Array.from(selectedEducatorIds), ecFacId: selectedEc })} disabled={loading.action === 'connect-ed-to-ec' || selectedEducatorIds.size === 0 || !selectedEc}>
-                                     {loading.action === 'connect-ed-to-ec' ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Link2 className="mr-2 h-4 w-4" />}
-                                    Connect Selected ({selectedEducatorIds.size})
-                                </Button>
-                                 <Button onClick={() => handleApiAction('enrich-ec-pc', {})} disabled={loading.action === 'enrich-ec-pc'}>
-                                    {loading.action === 'enrich-ec-pc' ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Save className="mr-2 h-4 w-4" />}
-                                    Enrich Center Data
+                                <Button onClick={handleConnectAndEnrich} disabled={loading.action.startsWith('connect') || selectedEducatorIds.size === 0 || !selectedEc}>
+                                    {loading.action.startsWith('connect') ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Link2 className="mr-2 h-4 w-4" />}
+                                    Connect & Enrich Data ({selectedEducatorIds.size})
                                 </Button>
                             </div>
                         </CardContent>
