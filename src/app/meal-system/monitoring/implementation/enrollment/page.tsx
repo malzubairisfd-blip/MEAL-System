@@ -16,7 +16,7 @@ export default function EnrollmentManagementPage() {
     {
       title: "Creating Beneficiaries ID Cards",
       description: "Generate ID cards for registered beneficiaries.",
-      href: "#",
+      href: "/meal-system/monitoring/implementation/enrollment/create-id-cards",
       icon: <Fingerprint className="h-8 w-8 text-green-500" />,
     },
     {
