@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { ArrowLeft, Loader2, Key, Link2, Users, GitBranch, Shuffle, Save, CheckCircle } from "lucide-react";
+import { ArrowLeft, Loader2, Key, Link2, Users, GitBranch, Shuffle, Save, CheckCircle, Search } from "lucide-react";
 
 interface Project {
   projectId: string;
@@ -70,6 +70,8 @@ export default function ConnectingPage() {
     const [selectedEc, setSelectedEc] = useState('');
     
     const [connectionResult, setConnectionResult] = useState<ConnectionResult | null>(null);
+
+    const [unlinkedSearch, setUnlinkedSearch] = useState('');
 
     // Fetch projects on initial load
     useEffect(() => {
@@ -147,7 +149,8 @@ export default function ConnectingPage() {
                 setConnectionResult(result.stats);
             }
             // Refresh data after action
-            handleProjectSelect(selectedProjectId);
+            await handleProjectSelect(selectedProjectId);
+            setSelectedEducatorIds(new Set()); // Clear selection
 
         } catch (error: any) {
             toast({ title: "Action Failed", description: error.message, variant: 'destructive' });
@@ -157,6 +160,47 @@ export default function ConnectingPage() {
     };
     
     const unlinkedEducators = useMemo(() => educators.filter(e => !e.ec_id && e.contract_type === 'مثقفة مجتمعية'), [educators]);
+
+    const filteredUnlinkedEducators = useMemo(() => {
+        const sorted = [...unlinkedEducators].sort((a, b) => (a.working_village || '').localeCompare(b.working_village || ''));
+
+        if (!unlinkedSearch.trim()) {
+            return sorted;
+        }
+
+        const searchTerms = unlinkedSearch.split(',').map(term => term.trim().toLowerCase()).filter(Boolean);
+
+        if (searchTerms.length === 0) {
+            return sorted;
+        }
+
+        return sorted.filter(edu => {
+            return searchTerms.some(term => 
+                String(edu.ed_id).toLowerCase().includes(term) ||
+                edu.applicant_name.toLowerCase().includes(term) ||
+                (edu.working_village || '').toLowerCase().includes(term)
+            );
+        });
+    }, [unlinkedEducators, unlinkedSearch]);
+
+    const handleSelectAllSearched = (checked: boolean | 'indeterminate') => {
+        if (typeof checked !== 'boolean') return;
+        const searchedIds = new Set(filteredUnlinkedEducators.map(e => e.applicant_id));
+        if (checked) {
+            setSelectedEducatorIds(prev => new Set([...Array.from(prev), ...Array.from(searchedIds)]));
+        } else {
+            setSelectedEducatorIds(prev => {
+                const newSet = new Set(prev);
+                searchedIds.forEach(id => newSet.delete(id));
+                return newSet;
+            });
+        }
+    };
+
+    const isAllSearchedSelected = useMemo(() => {
+        if (filteredUnlinkedEducators.length === 0) return false;
+        return filteredUnlinkedEducators.every(edu => selectedEducatorIds.has(edu.applicant_id));
+    }, [filteredUnlinkedEducators, selectedEducatorIds]);
 
     return (
         <div className="space-y-6">
@@ -200,22 +244,38 @@ export default function ConnectingPage() {
                             <CardTitle>3. Connect Educators to Education Centers (ED to EC)</CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-4">
-                            <ScrollArea className="h-72 border rounded-md">
-                                <Table>
-                                    <TableHeader><TableRow><TableHead>Select</TableHead><TableHead>ED_ID</TableHead><TableHead>Applicant Name</TableHead><TableHead>Working Village</TableHead><TableHead>BNF Count</TableHead></TableRow></TableHeader>
-                                    <TableBody>
-                                        {unlinkedEducators.map(edu => (
-                                            <TableRow key={edu.applicant_id}>
-                                                <TableCell><Checkbox checked={selectedEducatorIds.has(edu.applicant_id)} onCheckedChange={checked => setSelectedEducatorIds(prev => { const s = new Set(prev); if(checked) s.add(edu.applicant_id); else s.delete(edu.applicant_id); return s; })} /></TableCell>
-                                                <TableCell>{edu.ed_id}</TableCell>
-                                                <TableCell>{edu.applicant_name}</TableCell>
-                                                <TableCell>{edu.working_village}</TableCell>
-                                                <TableCell>{edu.ed_bnf_cnt}</TableCell>
-                                            </TableRow>
-                                        ))}
-                                    </TableBody>
-                                </Table>
-                            </ScrollArea>
+                             <div className="space-y-2">
+                                <div className="relative">
+                                    <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                                    <Input
+                                        placeholder="Search by ED_ID, Name, or Village (use comma to separate values)"
+                                        value={unlinkedSearch}
+                                        onChange={e => setUnlinkedSearch(e.target.value)}
+                                        className="pl-10 mb-2"
+                                    />
+                                </div>
+                                <ScrollArea className="h-72 border rounded-md">
+                                    <Table>
+                                        <TableHeader><TableRow><TableHead className="w-12">
+                                            <Checkbox 
+                                                checked={isAllSearchedSelected}
+                                                onCheckedChange={handleSelectAllSearched}
+                                            />
+                                        </TableHead><TableHead>ED_ID</TableHead><TableHead>Applicant Name</TableHead><TableHead>Working Village</TableHead><TableHead>BNF Count</TableHead></TableRow></TableHeader>
+                                        <TableBody>
+                                            {filteredUnlinkedEducators.map(edu => (
+                                                <TableRow key={edu.applicant_id}>
+                                                    <TableCell><Checkbox checked={selectedEducatorIds.has(edu.applicant_id)} onCheckedChange={checked => setSelectedEducatorIds(prev => { const s = new Set(prev); if(checked) s.add(edu.applicant_id); else s.delete(edu.applicant_id); return s; })} /></TableCell>
+                                                    <TableCell>{edu.ed_id}</TableCell>
+                                                    <TableCell>{edu.applicant_name}</TableCell>
+                                                    <TableCell>{edu.working_village}</TableCell>
+                                                    <TableCell>{edu.ed_bnf_cnt}</TableCell>
+                                                </TableRow>
+                                            ))}
+                                        </TableBody>
+                                    </Table>
+                                </ScrollArea>
+                            </div>
                             <div className="flex items-end gap-4">
                                 <div className="flex-1 space-y-2">
                                     <Label>Assign to Education Center</Label>
