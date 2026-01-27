@@ -131,7 +131,7 @@ export function drawEnrollmentForm(doc: jsPDF, data: EnrollmentData) {
   // Beneficiary ID - Float right
   drawText(doc, `رقم المستهدفة: ${data.beneficiaryId}`, PAGE_W - MARGIN_X, y, 12, "right", true);
 
-  y += 5;
+  y += 7;
 
   // 2. SECTION 1: BENEFICIARY DATA (Blue Header)
   doc.setFillColor(COLOR_BLUE_HEADER);
@@ -140,7 +140,9 @@ export function drawEnrollmentForm(doc: jsPDF, data: EnrollmentData) {
   drawText(doc, "أولاً: بيانات المرأة المستهدفة حسب قاعدة البيانات:", PAGE_W - MARGIN_X - 2, y + 4, 11, "right", true);
   doc.setTextColor(0, 0, 0);
 
-  y += 12;
+  y += 5;
+
+  y += 7;
 
   // Name and Phone Row
   drawText(doc, "الاسم خماسياً:", PAGE_W - MARGIN_X, y, 11, "right", true);
@@ -153,40 +155,38 @@ export function drawEnrollmentForm(doc: jsPDF, data: EnrollmentData) {
   // Location and ID Row
   drawText(doc, `العزلة: ${data.uzla}`, PAGE_W - MARGIN_X, y, 11, "right");
   drawText(doc, `القرية/المحلة: ${data.village}/`, PAGE_W - 50, y, 11, "right");
-  drawText(doc, `نوع الهوية: ${data.idType}`, PAGE_W - 90, y, 11, "right");
-  drawText(doc, `رقمها: ${data.idNumber}`, PAGE_W - 120, y, 11, "right");
+  drawText(doc, `نوع الهوية: ${data.idType}`, PAGE_W - 100, y, 11, "right");
+  drawText(doc, `رقمها: ${data.idNumber}`, PAGE_W - 160, y, 11, "right");
 
-  y += 8;
+  y += 7;
 
   // Husband and Status Row
   drawText(doc, "اسم زوج المستهدفة:", PAGE_W - MARGIN_X, y, 11, "right", true);
   drawText(doc, data.husbandName, PAGE_W - MARGIN_X - 30, y, 11, "right", true);
   drawText(doc, `الحالة الاجتماعية: ${data.maritalStatus}`, PAGE_W - 100, y, 11, "right");
 
-  y += 8;
+  y += 7;
 
   // Qualification Row
   drawText(doc, `حالة تأهل المرأة المستهدفة: ${data.qualificationCriteria}`, PAGE_W - MARGIN_X, y, 11, "right");
-  drawText(doc, `شهر الحمل [${data.pregnancyMonth}]`, PAGE_W - 120, y, 11, "right");
+  drawText(doc, `شهر الحمل [.......]`, PAGE_W - 120, y, 11, "right");
   drawText(doc, `عدد الاطفال ذكور: ${data.childCountMale}`, PAGE_W - 150, y, 11, "right");
-  drawText(doc, `إناث: ${data.childCountFemale}`, PAGE_W - 170, y, 11, "right");
+  drawText(doc, `إناث: ${data.childCountFemale}`, PAGE_W - 185, y, 11, "right");
 
-  y += 8;
+  y += 7;
 
   // Children Names
   drawText(doc, "أسماء أطفال المستهدفة الأقل من 5 سنوات وذوي الاعاقة من 5-17 سنة:", PAGE_W - MARGIN_X, y, 11, "right");
-  y += 5;
-  drawDottedLine(doc, MARGIN_X, y, CONTENT_W);
-  drawText(doc, data.childNames, PAGE_W - MARGIN_X - 2, y, 10, "right");
+  drawText(doc, data.childNames, PAGE_W - 120, y, 10, "right");
 
-  y += 10;
+  y += 7;
 
   // Education Level with Circles
   drawText(doc, "المستوى التعليمي للمرأة المستهدفة", PAGE_W - MARGIN_X, y, 11, "right", true);
   const eduOptions = ["أساسي", "تقرأ وتكتب", "ثانوي", "جامعي", "لا تقرأ ولا تكتب"];
-  let eduX = PAGE_W - 80;
+  let eduX = PAGE_W - 65;
   for (let i = 0; i < eduOptions.length; i++) {
-    drawCircle(doc, eduX, y + 1, 5);
+    drawCircle(doc, eduX, y + 0.5, 3);
     doc.setFontSize(10);
     doc.text((i + 1).toString(), eduX, y + 1, { align: "center", baseline: "middle" });
     drawText(doc, eduOptions[i], eduX - 8, y, 10, "right");
@@ -198,7 +198,10 @@ export function drawEnrollmentForm(doc: jsPDF, data: EnrollmentData) {
     drawCircle(doc, fillX, y + 1, 4, true);
   }
 
-  y += 10;
+  y += 2;
+
+  y += 7;
+
 
   // 2. SECTION 2: BENEFITS
   doc.setFillColor(COLOR_BLUE_HEADER);
@@ -208,11 +211,10 @@ export function drawEnrollmentForm(doc: jsPDF, data: EnrollmentData) {
   doc.setTextColor(0, 0, 0);
 
   y += 12;
-  const benefitText = "تحصل كل امرأة مستهدفة استوفت المعايير (حامل أو أم لطفل أقل من خمس سنوات أو أم لطفل ذو إعاقة من 5-17 سنة) والتزمت بالشروط، على مساعدة نقدية بواقع عشرون ألف ريال يمنياً ولمدة ستة أشهر.";
-  const splitBenefit = doc.splitTextToSize(benefitText, CONTENT_W);
-  doc.text(splitBenefit, PAGE_W - MARGIN_X, y, { align: "right" });
+  drawText(doc,"تحصل كل امرأة مستهدفة استوفت المعايير (حامل أو أم لطفل أقل من خمس سنوات أو أم لطفل ذو إعاقة من 5-17 سنة)", PAGE_W - MARGIN_X, y, 11, "right");
+  drawText(doc, "والتزمت بالشروط، على مساعدة نقدية بواقع عشرون ألف ريال يمنياً ولمدة ستة أشهر.", PAGE_W - MARGIN_X, y + 5, 11, "right");
 
-  y += 25;
+  y += 8;
 
   // 3. SECTION 3: DEPRIVATION
   doc.setFillColor(COLOR_BLUE_HEADER);
@@ -234,7 +236,8 @@ export function drawEnrollmentForm(doc: jsPDF, data: EnrollmentData) {
   ruleY += 8;
   drawText(doc, rules[2], PAGE_W - MARGIN_X, ruleY, 10, "right");
   drawText(doc, rules[3], PAGE_W / 2 - 10, ruleY, 10, "right");
-  y += 25;
+
+  y += 12;
 
   // 4. SECTION 4: SIGNATURE
   doc.setFillColor(COLOR_BLUE_HEADER);
@@ -244,20 +247,20 @@ export function drawEnrollmentForm(doc: jsPDF, data: EnrollmentData) {
   doc.setTextColor(0, 0, 0);
 
   y += 12;
-  const disclaimer = "أقر أنا الموقعة أدناه بأن البيانات الواردة في الاستمارة صحيحة وأني موافقة على شروط المشروع والالتحاق به وأن رقم التلفون المدون هو ملكية خاصة لي أو لأحد أفراد الأسرة المقربين، وأنه يمكن أن أتلقى أي رسالة أو تعليمات أو رمز يخص صرف المساعدات عليه.";
-  const splitDisc = doc.splitTextToSize(disclaimer, CONTENT_W);
-  doc.text(splitDisc, PAGE_W - MARGIN_X, y, { align: "right" });
-  y += 20;
+  drawText(doc, "أقر أنا الموقعة أدناه بأن البيانات الواردة في الاستمارة صحيحة وأني موافقة على شروط المشروع والالتحاق به وأن رقم التلفون المدون هو", PAGE_W - MARGIN_X, y, 11, "right");
+  drawText(doc, "ملكية خاصة لي أو لأحد أفراد الأسرة المقربين، وأنه يمكن أن أتلقى أي رسالة أو تعليمات أو رمز يخص صرف المساعدات عليه.", PAGE_W - MARGIN_X, y + 5, 11, "right");
+
+  y += 12;
 
   // Signature area
-  drawText(doc, "اليوم: ....................................... التاريخ: / / 202", PAGE_W - MARGIN_X, y, 10, "right");
+  drawText(doc, "اليوم: ....................................... التاريخ ... / ... / ... ٢٠٢", PAGE_W - MARGIN_X - 100, y, 11, "right", true);
   y += 5;
-  drawText(doc, "اسم وتوقيع المثقفة المجتمعية المسئولة عن تعبئة البيانات", PAGE_W - MARGIN_X, y, 10, "right");
-  drawText(doc, `اسم المثقفة: ${data.educatorName}`, PAGE_W - MARGIN_X, y + 8, 11, "right");
-  drawText(doc, "التوقيع: ..........................................", PAGE_W / 2, y + 8, 10, "center");
-  drawBox(doc, PAGE_W - 70, y - 5, 50, 20);
+  drawText(doc, "اسم وتوقيع المثقفة المجتمعية المسئولة عن تعبئة البيانات", PAGE_W - MARGIN_X - 100, y, 10, "right");
+  drawText(doc, `اسم المثقفة: ${data.educatorName}`, PAGE_W - MARGIN_X - 100, y + 8, 11, "right");
+  drawText(doc, "....................................... :التوقيع", PAGE_W - MARGIN_X - 100, y + 16, 11, "right");
+  drawBox(doc, PAGE_W - 70, y - 5, 55, 20);
 
-  y += 25;
+  y += 20;
 
   // 5. SECTION 5: NON-SIGNATURE REASONS
   doc.setFillColor(COLOR_BLUE_HEADER);
@@ -268,25 +271,26 @@ export function drawEnrollmentForm(doc: jsPDF, data: EnrollmentData) {
 
   y += 12;
   const reasons = [
-    "1. انتقال دائم لمحل السكن خارج المديرية",
-    "2. سفر مؤقت",
-    "3. الوفاة (لا سمح الله)",
-    "4. عدم القبول بمنافع المشروع",
-    "5. عدم العثور على المرأة"
+    "١. انتقال دائم لمحل السكن خارج المديرية",
+    "٢. سفر مؤقت",
+    "٣. الوفاة (لا سمح الله)",
+    "٤. عدم القبول بمنافع المشروع",
+    "٥. عدم العثور على المرأة",
+    "........................... :٦. اخرى تذكر"
   ];
   let rX = PAGE_W - MARGIN_X;
   reasons.forEach(reason => {
-    drawText(doc, reason, rX, y, 9, "right");
-    rX -= 50;
-    if (rX < MARGIN_X + 50) {
+    drawText(doc, reason, rX, y, 11, "right");
+    rX -= 70;
+    if (rX < MARGIN_X ) {
       y += 8;
       rX = PAGE_W - MARGIN_X;
     }
   });
-  y += 8;
-  drawText(doc, "6. أخرى (تذكر): ...............................", PAGE_W - MARGIN_X, y, 9, "right");
 
-  y += 10;
+  y -= 7;
+
+  y += 5;
 
   // 6. SECTION 6: CORRECTIONS
   doc.setFillColor(COLOR_BLUE_HEADER);
@@ -296,29 +300,29 @@ export function drawEnrollmentForm(doc: jsPDF, data: EnrollmentData) {
   doc.setTextColor(0, 0, 0);
 
   y += 12;
-  drawText(doc, "يجب تصحيح اسم المرأة المستهدفة أو زوجها في حال كان هناك خطأ في الاسم الأول أو الاب أو الجد أو اللقب (صحح الجزء الذي فيه خطأ فقط وتترك الأسماء الصحيحة فارغة)", PAGE_W - MARGIN_X, y, 9, "right", true);
+  drawText(doc, "يجب تصحيح اسم المرأة المستهدفة أو زوجها في حال كان هناك خطأ في الاسم الأول أو الاب أو الجد أو اللقب (صحح الجزء الذي فيه خطأ فقط وتترك الأسماء الصحيحة فارغة)", PAGE_W - MARGIN_X, y, 9, "right");
   y += 10;
 
   // Correction fields
-  drawText(doc, "تصحيح الاسم الأول: ...........................", PAGE_W - MARGIN_X, y, 10, "right");
-  drawText(doc, "اسم الأب: ...........................", PAGE_W - 120, y, 10, "right");
+  drawText(doc, "........................... :تصحيح الاسم الأول", PAGE_W - MARGIN_X, y, 10, "right");
+  drawText(doc, "........................... :اسم الأب", PAGE_W - 120, y, 10, "right");
   y += 8;
-  drawText(doc, "اسم الجد: ...........................", PAGE_W - MARGIN_X, y, 10, "right");
-  drawText(doc, "الاسم الرابع: ...........................", PAGE_W - 120, y, 10, "right");
-  drawText(doc, "اللقب: ...........................", PAGE_W - 200, y, 10, "right");
+  drawText(doc, "........................... :اسم الجد", PAGE_W - MARGIN_X, y, 10, "right");
+  drawText(doc, "........................... :الاسم الرابع", PAGE_W - 100, y, 10, "right");
+  drawText(doc, "........................... :اللقب", PAGE_W - 150, y, 10, "right");
   y += 8;
-  drawText(doc, "مرجعية التصحيح التي تم بموجبها التصحيح: ...............................", PAGE_W - MARGIN_X, y, 10, "right");
-  drawText(doc, "رقم التلفون: ...............................", PAGE_W - 150, y, 10, "right");
+  drawText(doc, "........................... :مرجعية التصحيح التي تم بموجبها التصحيح", PAGE_W - MARGIN_X, y, 10, "right");
+  drawText(doc, "........................... :رقم الهاتف", PAGE_W - 150, y, 10, "right");
   y += 8;
-  drawText(doc, "تصحيح اسم زوج المستهدفة الاسم الأول: ...........................", PAGE_W - MARGIN_X, y, 10, "right");
-  drawText(doc, "اسم الأب: ...........................", PAGE_W - 120, y, 10, "right");
+  drawText(doc, "........................... :تصحيح اسم زوج المستهدفة الاسم الأول", PAGE_W - MARGIN_X, y, 10, "right");
+  drawText(doc, "........................... :اسم الأب", PAGE_W - 120, y, 10, "right");
   y += 8;
-  drawText(doc, "اسم الجد: ...........................", PAGE_W - MARGIN_X, y, 10, "right");
-  drawText(doc, "الاسم الرابع: ...........................", PAGE_W - 120, y, 10, "right");
-  drawText(doc, "اللقب: ...........................", PAGE_W - 200, y, 10, "right");
+  drawText(doc, "........................... :اسم الجد", PAGE_W - MARGIN_X, y, 10, "right");
+  drawText(doc, "........................... :الاسم الرابع", PAGE_W - 100, y, 10, "right");
+  drawText(doc, "........................... :اللقب", PAGE_W - 150, y, 10, "right");
   y += 8;
-  drawText(doc, "مرجعية التصحيح التي تم بموجبها التصحيح: ...............................", PAGE_W - MARGIN_X, y, 10, "right");
-  drawText(doc, "توقيع المثقفة على التصحيح: ...............................", PAGE_W - 150, y, 10, "right");
+  drawText(doc, "........................... :مرجعية التصحيح التي تم بموجبها التصحيح", PAGE_W - MARGIN_X, y, 10, "right");
+  drawText(doc, "........................... :توقيع المثقفة على التصحيح", PAGE_W - 150, y, 10, "right");
 
   // Footer
   doc.setFontSize(10);

@@ -70,7 +70,7 @@ export default function CreateIDCardsPage() {
                         setSheetsGenerated(current);
                         setTotalSheets(total);
                     }
-                } else if (type === 'done') {
+                } else if (type === 'done-sample' || type === 'done-all') {
                     setStatus("Download ready!");
                     const blob = new Blob([data], { type: "application/zip" });
                     const url = window.URL.createObjectURL(blob);
@@ -96,9 +96,22 @@ export default function CreateIDCardsPage() {
                  setLoading(false);
             }
             
-            const fontRes = await fetch('/fonts/Amiri-Regular.ttf');
-            const fontBuffer = await fontRes.arrayBuffer();
-            const fontBase64 = btoa(new Uint8Array(fontBuffer).reduce((data, byte) => data + String.fromCharCode(byte), ''));
+            const [fontRegularRes, fontBoldRes] = await Promise.all([
+                fetch('/fonts/Amiri-Regular.ttf'),
+                fetch('/fonts/Amiri-Bold.ttf')
+            ]);
+            
+            if (!fontRegularRes.ok || !fontBoldRes.ok) {
+              throw new Error("Failed to fetch font files.");
+            }
+    
+            const fontRegularBuffer = await fontRegularRes.arrayBuffer();
+            const fontBoldBuffer = await fontBoldRes.arrayBuffer();
+            
+            const fontBase64 = {
+              regular: btoa(new Uint8Array(fontRegularBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')),
+              bold: btoa(new Uint8Array(fontBoldBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')),
+            };
 
             setStatus("Starting generation...");
             setProgress(10);
