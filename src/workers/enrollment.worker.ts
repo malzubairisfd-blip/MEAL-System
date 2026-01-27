@@ -1,6 +1,8 @@
 // src/workers/enrollment.worker.ts
 import jsPDF from "jspdf";
+import "jspdf-autotable";
 import JSZip from "jszip";
+import { fixArabic, arabicNumber } from "@/lib/arabic-fixer";
 
 // --- TYPES ---
 
@@ -26,12 +28,13 @@ export interface EnrollmentData {
 }
 
 // --- CONSTANTS ---
-
+// Standard ID-1 Card Size (Credit Card)
 const PAGE_W = 210;
 const PAGE_H = 297;
 const MARGIN_X = 10;
-const MARGIN_Y = 10;
-const CONTENT_W = PAGE_W - (MARGIN_X * 2);
+const MARGIN_Y = 5;
+const CONTENT_W = PAGE_W - MARGIN_X * 2;
+
 
 // Colors
 const COLOR_BLUE_HEADER = "#4a6fa5"; // Exact SFD Blue from PDF
@@ -40,14 +43,12 @@ const COLOR_TEXT = "#000000";
 const COLOR_GRAY_BG = "#f2f2f2";
 
 // --- HELPERS ---
-
 function drawText(doc: jsPDF, text: string, x: number, y: number, size: number, align: "right" | "center" | "left" = "right", isBold = false) {
   doc.setFont("NotoNaskhArabic", isBold ? "bold" : "normal");
   doc.setFontSize(size);
   doc.setTextColor(0, 0, 0);
   doc.text(String(text || ""), x, y, { align, baseline: "middle" });
 }
-
 function drawDottedLine(doc: jsPDF, x: number, y: number, w: number) {
   doc.setLineWidth(0.5);
   doc.setDrawColor(0);
@@ -55,7 +56,6 @@ function drawDottedLine(doc: jsPDF, x: number, y: number, w: number) {
   doc.line(x, y, x + w, y);
   doc.setLineDash([], 0);
 }
-
 function drawBox(doc: jsPDF, x: number, y: number, w: number, h: number, fillColor?: string) {
   doc.setLineWidth(0.5);
   doc.setDrawColor(0);
@@ -66,7 +66,6 @@ function drawBox(doc: jsPDF, x: number, y: number, w: number, h: number, fillCol
     doc.rect(x, y, w, h);
   }
 }
-
 function drawCircle(doc: jsPDF, x: number, y: number, r: number, fill: boolean = false) {
   doc.setLineWidth(0.5);
   doc.setDrawColor(0);
@@ -83,23 +82,23 @@ function drawCircle(doc: jsPDF, x: number, y: number, r: number, fill: boolean =
 function drawSFDLogo(doc: jsPDF, x: number, y: number) {
   const logoX = 15;
   const logoY = 8;
-  doc.setFillColor(40, 60, 80); 
+  doc.setFillColor(40, 60, 80);
   doc.rect(logoX, logoY, 6, 15, "F");
-  
+
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(9);
   doc.setFont("helvetica", "bold");
   doc.text("S", logoX + 3, logoY + 4, { align: "center", baseline: "middle" });
   doc.text("F", logoX + 3, logoY + 8, { align: "center", baseline: "middle" });
   doc.text("D", logoX + 3, logoY + 12, { align: "center", baseline: "middle" });
-  
+
   doc.setFont("NotoNaskhArabic", "normal");
   doc.setTextColor(40, 60, 80);
   doc.setFontSize(10);
   doc.text("الصندوق", logoX + 8, logoY + 4);
   doc.text("الاجتماعي", logoX + 8, logoY + 9);
   doc.text("للتنمية", logoX + 8, logoY + 14);
-  
+
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7);
   doc.text("Social Fund for Development", logoX, logoY + 17);
@@ -115,24 +114,24 @@ export function drawEnrollmentForm(doc: jsPDF, data: EnrollmentData) {
 
   // Title Box - Exact position and styling
   doc.setFillColor(184, 201, 224); // #b8c9e0
-  doc.roundedRect(PAGE_W / 2 - 70, y, 140, 30, 8, 8, "F");
-  doc.setLineWidth(1);
+  doc.roundedRect(PAGE_W / 2 - 55, y + 1, 110, 20, 8, 8, "F");
+  doc.setLineWidth(0.5);
   doc.setDrawColor(119, 138, 163); // Border color
-  doc.roundedRect(PAGE_W / 2 - 70, y, 140, 30, 8, 8);
-  drawText(doc, "استمارة التحاق بمشروع التحويلات النقدية المشروطة في التغذية", PAGE_W / 2, y + 10, 14, "center", true);
-  drawText(doc, `المحافظة: ${data.governorate} المديرية: ${data.district}`, PAGE_W / 2, y + 25, 12, "center");
+  doc.roundedRect(PAGE_W / 2 - 55, y + 1, 110, 20, 8, 8);
+  drawText(doc, "استمارة التحاق بمشروع التحويلات النقدية المشروطة في التغذية", PAGE_W / 2, y + 10, 12, "center", true);
+  drawText(doc, `المحافظة: ${data.governorate} المديرية: ${data.district}`, PAGE_W / 2, y + 15, 12, "center");
 
   // State Info - Right side
-  drawText(doc, "الجمهورية اليمنية", PAGE_W - MARGIN_X, y + 5, 12, "right", true);
-  drawText(doc, "رئاسة مجلس الوزراء", PAGE_W - MARGIN_X, y + 15, 12, "right", true);
-  drawText(doc, "الصندوق الاجتماعي للتنمية", PAGE_W - MARGIN_X, y + 25, 12, "right", true);
+  drawText(doc, "الجمهورية اليمنية", PAGE_W - MARGIN_X, y + 5, 10, "right", true);
+  drawText(doc, "رئاسة مجلس الوزراء", PAGE_W - MARGIN_X, y + 10, 10, "right", true);
+  drawText(doc, "الصندوق الاجتماعي للتنمية", PAGE_W - MARGIN_X, y + 15, 10, "right", true);
 
-  y += 40;
+  y += 25;
 
   // Beneficiary ID - Float right
   drawText(doc, `رقم المستهدفة: ${data.beneficiaryId}`, PAGE_W - MARGIN_X, y, 12, "right", true);
 
-  y += 10;
+  y += 5;
 
   // 2. SECTION 1: BENEFICIARY DATA (Blue Header)
   doc.setFillColor(COLOR_BLUE_HEADER);
@@ -140,42 +139,37 @@ export function drawEnrollmentForm(doc: jsPDF, data: EnrollmentData) {
   doc.setTextColor(255, 255, 255);
   drawText(doc, "أولاً: بيانات المرأة المستهدفة حسب قاعدة البيانات:", PAGE_W - MARGIN_X - 2, y + 4, 11, "right", true);
   doc.setTextColor(0, 0, 0);
-  
+
   y += 12;
 
   // Name and Phone Row
-  drawText(doc, "الاسم خماسياً:", PAGE_W - MARGIN_X, y, 11, "right");
-  drawDottedLine(doc, PAGE_W - MARGIN_X - 80, y, 70);
-  drawText(doc, data.fullName, PAGE_W - MARGIN_X - 5, y, 11, "right", true);
-  drawText(doc, "رقم التلفون:", PAGE_W - 100, y, 11, "right");
-  drawDottedLine(doc, PAGE_W - 160, y, 50);
-  drawText(doc, data.phone, PAGE_W - 105, y, 11, "right", true);
+  drawText(doc, "الاسم خماسياً:", PAGE_W - MARGIN_X, y, 11, "right", true);
+  drawText(doc, data.fullName, PAGE_W - MARGIN_X - 25, y, 11, "right", true);
+  drawText(doc, "رقم التلفون:", PAGE_W - 100, y, 11, "right", true);
+  drawText(doc, data.phone, PAGE_W - 120, y, 11, "right", true);
 
   y += 8;
 
   // Location and ID Row
   drawText(doc, `العزلة: ${data.uzla}`, PAGE_W - MARGIN_X, y, 11, "right");
-  drawText(doc, `القرية/المحلة: ${data.village}/`, PAGE_W - 80, y, 11, "right");
-  drawText(doc, `نوع الهوية: ${data.idType}`, PAGE_W - 140, y, 11, "right");
-  drawDottedLine(doc, PAGE_W - 180, y, 30);
-  drawText(doc, `رقمها: ${data.idNumber}`, PAGE_W - 145, y, 11, "right");
+  drawText(doc, `القرية/المحلة: ${data.village}/`, PAGE_W - 50, y, 11, "right");
+  drawText(doc, `نوع الهوية: ${data.idType}`, PAGE_W - 90, y, 11, "right");
+  drawText(doc, `رقمها: ${data.idNumber}`, PAGE_W - 120, y, 11, "right");
 
   y += 8;
 
   // Husband and Status Row
-  drawText(doc, "اسم زوج المستهدفة:", PAGE_W - MARGIN_X, y, 11, "right");
-  drawDottedLine(doc, PAGE_W - MARGIN_X - 50, y, 40);
-  drawText(doc, data.husbandName, PAGE_W - MARGIN_X - 5, y, 11, "right", true);
-  drawDottedLine(doc, PAGE_W - 120, y, 30);
-  drawText(doc, `الحالة الاجتماعية: ${data.maritalStatus}`, PAGE_W - 80, y, 11, "right");
+  drawText(doc, "اسم زوج المستهدفة:", PAGE_W - MARGIN_X, y, 11, "right", true);
+  drawText(doc, data.husbandName, PAGE_W - MARGIN_X - 30, y, 11, "right", true);
+  drawText(doc, `الحالة الاجتماعية: ${data.maritalStatus}`, PAGE_W - 100, y, 11, "right");
 
   y += 8;
 
   // Qualification Row
   drawText(doc, `حالة تأهل المرأة المستهدفة: ${data.qualificationCriteria}`, PAGE_W - MARGIN_X, y, 11, "right");
   drawText(doc, `شهر الحمل [${data.pregnancyMonth}]`, PAGE_W - 120, y, 11, "right");
-  drawText(doc, `عدد الاطفال ذكور: ${data.childCountMale}`, PAGE_W - 180, y, 11, "right");
-  drawText(doc, `إناث: ${data.childCountFemale}`, PAGE_W - 210, y, 11, "right");
+  drawText(doc, `عدد الاطفال ذكور: ${data.childCountMale}`, PAGE_W - 150, y, 11, "right");
+  drawText(doc, `إناث: ${data.childCountFemale}`, PAGE_W - 170, y, 11, "right");
 
   y += 8;
 
@@ -194,7 +188,7 @@ export function drawEnrollmentForm(doc: jsPDF, data: EnrollmentData) {
   for (let i = 0; i < eduOptions.length; i++) {
     drawCircle(doc, eduX, y + 1, 5);
     doc.setFontSize(10);
-    doc.text((i+1).toString(), eduX, y + 1, { align: "center", baseline: "middle" });
+    doc.text((i + 1).toString(), eduX, y + 1, { align: "center", baseline: "middle" });
     drawText(doc, eduOptions[i], eduX - 8, y, 10, "right");
     eduX -= 40;
   }
@@ -206,7 +200,7 @@ export function drawEnrollmentForm(doc: jsPDF, data: EnrollmentData) {
 
   y += 10;
 
-  // 3. SECTION 2: BENEFITS
+  // 2. SECTION 2: BENEFITS
   doc.setFillColor(COLOR_BLUE_HEADER);
   doc.roundedRect(MARGIN_X, y, CONTENT_W, 8, 5, 5, "F");
   doc.setTextColor(255, 255, 255);
@@ -220,7 +214,7 @@ export function drawEnrollmentForm(doc: jsPDF, data: EnrollmentData) {
 
   y += 25;
 
-  // 4. SECTION 3: DEPRIVATION
+  // 3. SECTION 3: DEPRIVATION
   doc.setFillColor(COLOR_BLUE_HEADER);
   doc.roundedRect(MARGIN_X, y, CONTENT_W, 8, 5, 5, "F");
   doc.setTextColor(255, 255, 255);
@@ -229,10 +223,10 @@ export function drawEnrollmentForm(doc: jsPDF, data: EnrollmentData) {
 
   y += 12;
   const rules = [
-    "1. إذا انتقلت خارج منطقة المشروع",
-    "2. إذا ثبت أنها أدلت ببيانات مضللة أو قدمت وثائق مزورة",
-    "3. إذا ثبت انتحالها لشخصية امرأة أخرى",
-    "4. في حال الوفاة (لا سمح الله)"
+    "١. إذا انتقلت خارج منطقة المشروع",
+    "٢. إذا ثبت أنها أدلت ببيانات مضللة أو قدمت وثائق مزورة",
+    "٣. إذا ثبت انتحالها لشخصية امرأة أخرى",
+    "٤. في حال الوفاة (لا سمح الله)"
   ];
   let ruleY = y;
   drawText(doc, rules[0], PAGE_W - MARGIN_X, ruleY, 10, "right");
@@ -242,7 +236,7 @@ export function drawEnrollmentForm(doc: jsPDF, data: EnrollmentData) {
   drawText(doc, rules[3], PAGE_W / 2 - 10, ruleY, 10, "right");
   y += 25;
 
-  // 5. SECTION 4: SIGNATURE
+  // 4. SECTION 4: SIGNATURE
   doc.setFillColor(COLOR_BLUE_HEADER);
   doc.roundedRect(MARGIN_X, y, CONTENT_W, 8, 5, 5, "F");
   doc.setTextColor(255, 255, 255);
@@ -265,7 +259,7 @@ export function drawEnrollmentForm(doc: jsPDF, data: EnrollmentData) {
 
   y += 25;
 
-  // 6. SECTION 5: NON-SIGNATURE REASONS
+  // 5. SECTION 5: NON-SIGNATURE REASONS
   doc.setFillColor(COLOR_BLUE_HEADER);
   doc.roundedRect(MARGIN_X, y, CONTENT_W, 8, 5, 5, "F");
   doc.setTextColor(255, 255, 255);
@@ -294,7 +288,7 @@ export function drawEnrollmentForm(doc: jsPDF, data: EnrollmentData) {
 
   y += 10;
 
-  // 7. SECTION 6: CORRECTIONS
+  // 6. SECTION 6: CORRECTIONS
   doc.setFillColor(COLOR_BLUE_HEADER);
   doc.roundedRect(MARGIN_X, y, CONTENT_W, 8, 5, 5, "F");
   doc.setTextColor(255, 255, 255);
@@ -420,7 +414,7 @@ self.onmessage = async (event) => {
             educatorsProcessed++;
             postMessage({
                 type: 'progress',
-                status: `Generating PDF for ${safeName}...`,
+                status: `Generating PDFs for ${safeName}...`,
                 progress: Math.round((educatorsProcessed / totalEducators) * 100),
                 current: educatorsProcessed,
                 total: totalEducators
