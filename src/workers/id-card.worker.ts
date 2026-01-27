@@ -71,7 +71,7 @@ export function arabicNumber(num: number | string) {
 
 function drawText(doc: jsPDF, text: string, x: number, y: number, size: number, color: string, align: "left" | "center" | "right" = "right", isBold = false) {
   doc.setTextColor(color);
-  doc.setFont("Amiri", isBold ? "bold" : "normal");
+  doc.setFont("NotoNaskhArabic", isBold ? "bold" : "normal");
   doc.setFontSize(size);
   doc.text(fixArabic(String(text || '')), x, y, { align, baseline: "middle" });
 }
@@ -85,20 +85,25 @@ function drawDottedLine(doc: jsPDF, x: number, y: number, w: number) {
 }
 
 function drawSFDLogo(doc: jsPDF, x: number, y: number) {
+  const logoX = 15;
+  const logoY = 8;
   doc.setFillColor(40, 60, 80); 
-  doc.rect(x, y, 6, 15, "F");
+  doc.rect(logoX, logoY, 6, 15, "F");
+  
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(9);
   doc.setFont("helvetica", "bold");
-  doc.text("S", x + 3, y + 4, { align: "center", baseline: "middle" });
-  doc.text("F", x + 3, y + 8, { align: "center", baseline: "middle" });
-  doc.text("D", x + 3, y + 12, { align: "center", baseline: "middle" });
-  doc.setFont("Amiri", "normal");
+  doc.text("S", logoX + 3, logoY + 4, { align: "center", baseline: "middle" });
+  doc.text("F", logoX + 3, logoY + 8, { align: "center", baseline: "middle" });
+  doc.text("D", logoX + 3, logoY + 12, { align: "center", baseline: "middle" });
+  
+  doc.setFont("NotoNaskhArabic", "normal");
   doc.setTextColor(40, 60, 80);
   doc.setFontSize(10);
   doc.text(fixArabic("الصندوق"), x + 8, y + 4, {align: 'left'});
   doc.text(fixArabic("الاجتماعي"), x + 8, y + 9, {align: 'left'});
   doc.text(fixArabic("للتنمية"), x + 8, y + 14, {align: 'left'});
+  
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7);
   doc.text("Social Fund for Development", x, y + 17, {align: 'left'});
@@ -233,13 +238,13 @@ self.onmessage = async (event) => {
 
     try {
         const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: [CARD_WIDTH, CARD_HEIGHT] });
-        doc.addFileToVFS("Amiri-Regular.ttf", fontBase64.regular);
-        doc.addFont("Amiri-Regular.ttf", "Amiri", "normal");
-        doc.addFileToVFS("Amiri-Bold.ttf", fontBase64.bold);
-        doc.addFont("Amiri-Bold.ttf", "Amiri", "bold");
+        doc.addFileToVFS("NotoNaskhArabic-Regular.ttf", fontBase64.regular);
+        doc.addFont("NotoNaskhArabic-Regular.ttf", "NotoNaskhArabic", "normal");
+        doc.addFileToVFS("NotoNaskhArabic-Bold.ttf", fontBase64.bold);
+        doc.addFont("NotoNaskhArabic-Bold.ttf", "NotoNaskhArabic", "bold");
 
         if (sample) {
-            const bnf = beneficiaries[0];
+            const bnf = beneficiaries[0]; // Just use the first one for the sample
             const data: IDCardData = {
                 beneficiaryName: bnf.l_benef_name || '',
                 governorate: bnf.gov_name || '',
@@ -271,10 +276,10 @@ self.onmessage = async (event) => {
 
         for (const [educator, bnfs] of Object.entries(grouped)) {
             const educatorDoc = new jsPDF({ orientation: "landscape", unit: "mm", format: [CARD_WIDTH, CARD_HEIGHT] });
-            educatorDoc.addFileToVFS("Amiri-Regular.ttf", fontBase64.regular);
-            educatorDoc.addFont("Amiri-Regular.ttf", "Amiri", "normal");
-            educatorDoc.addFileToVFS("Amiri-Bold.ttf", fontBase64.bold);
-            educatorDoc.addFont("Amiri-Bold.ttf", "Amiri", "bold");
+            educatorDoc.addFileToVFS("NotoNaskhArabic-Regular.ttf", fontBase64.regular);
+            educatorDoc.addFont("NotoNaskhArabic-Regular.ttf", "NotoNaskhArabic", "normal");
+            educatorDoc.addFileToVFS("NotoNaskhArabic-Bold.ttf", fontBase64.bold);
+            educatorDoc.addFont("NotoNaskhArabic-Bold.ttf", "NotoNaskhArabic", "bold");
 
             bnfs.forEach((bnf, index) => {
                 if (index > 0) educatorDoc.addPage([CARD_WIDTH, CARD_HEIGHT], "landscape");

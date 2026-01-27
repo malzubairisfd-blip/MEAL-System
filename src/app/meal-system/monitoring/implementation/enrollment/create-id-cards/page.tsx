@@ -97,8 +97,8 @@ export default function CreateIDCardsPage() {
             }
             
             const [fontRegularRes, fontBoldRes] = await Promise.all([
-                fetch('/fonts/Amiri-Regular.ttf'),
-                fetch('/fonts/Amiri-Bold.ttf')
+                fetch('/fonts/NotoNaskhArabic-Regular.ttf'),
+                fetch('/fonts/NotoNaskhArabic-Bold.ttf')
             ]);
             
             if (!fontRegularRes.ok || !fontBoldRes.ok) {
