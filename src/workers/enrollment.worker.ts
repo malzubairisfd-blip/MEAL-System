@@ -1,3 +1,4 @@
+
 // src/workers/enrollment.worker.ts
 import jsPDF from "jspdf";
 import JSZip from "jszip";
@@ -6,7 +7,7 @@ import JSZip from "jszip";
 export interface EnrollmentData {
   beneficiaryId: string;
   phone: string;
-  idNumber: string;
+  idNumber: string; // Not explicitly in the box, but part of ID Type line usually
   idType: string;
   governorate: string;
   district: string;
@@ -15,11 +16,13 @@ export interface EnrollmentData {
   fullName: string;
   husbandName: string;
   maritalStatus: string;
-  qualificationCriteria: string;
+  qualificationCriteria: string; // e.g., "Mother < 5"
   childCountMale: number;
   childCountFemale: number;
   childNames: string;
   educatorName: string;
+  educationLevel: number; // 1-5 for the circles
+  pregnancyMonth: string; // For the bracket
 }
 
 // --- CONSTANTS ---
@@ -30,20 +33,30 @@ const MARGIN_Y = 10;
 const CONTENT_W = PAGE_W - (MARGIN_X * 2);
 
 // Colors
-const COLOR_BLUE_HEADER = "#2e74b5";
+const COLOR_BLUE_HEADER = "#4a6fa5"; // Exact SFD Blue from PDF
+const COLOR_TITLE_BG = "#b8c9e0"; // Title box background
 const COLOR_TEXT = "#000000";
-const COLOR_GRAY_BG = "#f0f0f0";
+const COLOR_GRAY_BG = "#f2f2f2";
 
 // --- HELPERS ---
-function drawText(doc: jsPDF, text: string, x: number, y: number, size: number, align: "right" | "center" | "left" = "right", isBold = false) {
+
+function drawText(doc: jsPDF, text: string, x: number, y: number, size: number, color: string, align: "left" | "center" | "right" = "right", isBold = false) {
+  doc.setTextColor(color);
   doc.setFont("Amiri", isBold ? "bold" : "normal");
   doc.setFontSize(size);
-  doc.setTextColor(0, 0, 0);
   doc.text(String(text || ""), x, y, { align, baseline: "middle" });
 }
 
+function drawDottedLine(doc: jsPDF, x: number, y: number, w: number) {
+  doc.setLineWidth(0.5);
+  doc.setDrawColor(0);
+  doc.setLineDash([1, 1], 0);
+  doc.line(x, y, x + w, y);
+  doc.setLineDash([], 0);
+}
+
 function drawBox(doc: jsPDF, x: number, y: number, w: number, h: number, fillColor?: string) {
-  doc.setLineWidth(0.1);
+  doc.setLineWidth(0.5);
   doc.setDrawColor(0);
   if (fillColor) {
     doc.setFillColor(fillColor);
@@ -53,213 +66,278 @@ function drawBox(doc: jsPDF, x: number, y: number, w: number, h: number, fillCol
   }
 }
 
+function drawCircle(doc: jsPDF, x: number, y: number, r: number, fill: boolean = false) {
+  doc.setLineWidth(0.5);
+  doc.setDrawColor(0);
+  if (fill) {
+    doc.setFillColor(0);
+    doc.circle(x, y, r, "FD");
+  } else {
+    doc.circle(x, y, r);
+  }
+}
+
 // --- DRAW LOGO (SFD) ---
+
 function drawSFDLogo(doc: jsPDF, x: number, y: number) {
-  doc.setFillColor(40, 100, 80);
-  doc.rect(x, y, 15, 20, "F");
+  // Exact replication of SFD logo from PDF: three squares with S F D
+  const boxSize = 25;
+  const gap = 2;
+  doc.setFillColor(44, 62, 80); // Dark blue-gray
+  doc.rect(x, y, boxSize, boxSize, "F");
   doc.setTextColor(255, 255, 255);
-  doc.setFontSize(14);
-  doc.text("SFD", x + 7.5, y + 10, { align: "center", baseline: "middle" });
-  
+  doc.setFontSize(18);
+  doc.setFont("Arial", "bold");
+  doc.text("S", x + boxSize/2, y + boxSize/2, { align: "center", baseline: "middle" });
+
+  doc.setFillColor(44, 62, 80);
+  doc.rect(x + boxSize + gap, y, boxSize, boxSize, "F");
+  doc.text("F", x + boxSize + gap + boxSize/2, y + boxSize/2, { align: "center", baseline: "middle" });
+
+  doc.setFillColor(44, 62, 80);
+  doc.rect(x + 2*(boxSize + gap), y, boxSize, boxSize, "F");
+  doc.text("D", x + 2*(boxSize + gap) + boxSize/2, y + boxSize/2, { align: "center", baseline: "middle" });
+
   doc.setTextColor(0);
-  doc.setFontSize(7);
-  doc.text("الصندوق", x + 16, y + 5);
-  doc.text("الاجتماعي", x + 16, y + 10);
-  doc.text("للتنمية", x + 16, y + 15);
-  doc.text("Social Fund for Development", x, y + 24, { align: "left" });
+  doc.setFont("Amiri", "bold");
+  doc.setFontSize(18);
+  doc.text("الصندوق", x + 3*(boxSize + gap) + 5, y + 5);
+  doc.text("الاجتماعي", x + 3*(boxSize + gap) + 5, y + 15);
+  doc.text("للتنمية", x + 3*(boxSize + gap) + 5, y + 25);
 }
 
 // --- MAIN GENERATOR ---
+
 export function drawEnrollmentForm(doc: jsPDF, data: EnrollmentData) {
   let y = MARGIN_Y;
 
   // 1. HEADER SECTION
-  drawText(doc, "الجمهورية اليمنية", PAGE_W - MARGIN_X, y + 5, 10, "right", true);
-  drawText(doc, "رئاسة مجلس الوزراء", PAGE_W - MARGIN_X, y + 10, 10, "right", true);
-  drawText(doc, "الصندوق الاجتماعي للتنمية", PAGE_W - MARGIN_X, y + 15, 10, "right", true);
-
   drawSFDLogo(doc, MARGIN_X, y);
 
-  doc.setFillColor(230, 230, 230);
-  doc.roundedRect(PAGE_W / 2 - 60, y + 20, 120, 8, 2, 2, "F");
-  drawText(doc, "استمارة التحاق بمشروع التحويلات النقدية المشروطة في التغذية", PAGE_W / 2, y + 24, 12, "center", true);
+  // Title Box - Exact position and styling
+  doc.setFillColor(184, 201, 224); // #b8c9e0
+  doc.roundedRect(PAGE_W / 2 - 70, y, 140, 30, 8, 8, "F");
+  doc.setLineWidth(1);
+  doc.setDrawColor(119, 138, 163); // Border color
+  doc.roundedRect(PAGE_W / 2 - 70, y, 140, 30, 8, 8);
+  drawText(doc, "استمارة التحاق بمشروع التحويلات النقدية المشروطة في التغذية", PAGE_W / 2, y + 10, 14, "#000000", "center", true);
+  drawText(doc, `المحافظة: ${data.governorate} المديرية: ${data.district}`, PAGE_W / 2, y + 25, 12, "#000000", "center");
 
-  y += 35;
+  // State Info - Right side
+  drawText(doc, "الجمهورية اليمنية", PAGE_W - MARGIN_X, y + 5, 12, "#000000", "right", true);
+  drawText(doc, "رئاسة مجلس الوزراء", PAGE_W - MARGIN_X, y + 15, 12, "#000000", "right", true);
+  drawText(doc, "الصندوق الاجتماعي للتنمية", PAGE_W - MARGIN_X, y + 25, 12, "#000000", "right", true);
 
-  drawText(doc, `المحافظة : ${data.governorate}`, PAGE_W - MARGIN_X, y, 10, "right", true);
-  drawText(doc, `المديرية : ${data.district}`, PAGE_W - 80, y, 10, "right", true);
-  
-  drawText(doc, `رقم المستهدفة : ${data.beneficiaryId}`, MARGIN_X + 60, y, 10, "right", true);
-  drawText(doc, `رقم التلفون : ${data.phone}`, MARGIN_X + 30, y + 6, 10, "right", true);
+  y += 40;
+
+  // Beneficiary ID - Float right
+  drawText(doc, `رقم المستهدفة: ${data.beneficiaryId}`, PAGE_W - MARGIN_X, y, 12, "#000000", "right", true);
+
+  y += 10;
+
+  // 2. SECTION 1: BENEFICIARY DATA (Blue Header)
+  doc.setFillColor(COLOR_BLUE_HEADER);
+  doc.roundedRect(MARGIN_X, y, CONTENT_W, 8, 5, 5, "F");
+  doc.setTextColor(255, 255, 255);
+  drawText(doc, "أولاً: بيانات المرأة المستهدفة حسب قاعدة البيانات:", PAGE_W - MARGIN_X - 2, y + 4, 11, "#FFFFFF", "right", true);
+  doc.setTextColor(0, 0, 0);
 
   y += 12;
 
-  doc.setFillColor(COLOR_BLUE_HEADER);
-  doc.rect(MARGIN_X, y, CONTENT_W, 7, "F");
-  doc.setTextColor(255, 255, 255);
-  drawText(doc, "أولاً : بيانات المرأة المستهدفة حسب قاعدة البيانات", PAGE_W - MARGIN_X - 2, y + 3.5, 10, "right", true);
-  doc.setTextColor(0);
+  // Name and Phone Row
+  drawText(doc, "الاسم خماسياً:", PAGE_W - MARGIN_X, y, 11, "#000000", "right");
+  drawDottedLine(doc, PAGE_W - MARGIN_X - 80, y, 70);
+  drawText(doc, data.fullName, PAGE_W - MARGIN_X - 5, y, 11, "#000000", "right", true);
+  drawText(doc, "رقم التلفون:", PAGE_W - 100, y, 11, "#000000", "right");
+  drawDottedLine(doc, PAGE_W - 160, y, 50);
+  drawText(doc, data.phone, PAGE_W - 105, y, 11, "#000000", "right", true);
 
-  y += 10;
+  y += 8;
 
-  drawText(doc, "الاسم خماسياً :", PAGE_W - MARGIN_X, y, 10, "right");
-  drawText(doc, data.fullName, PAGE_W - MARGIN_X - 25, y, 10, "right", true);
-  y += 7;
+  // Location and ID Row
+  drawText(doc, `العزلة: ${data.uzla}`, PAGE_W - MARGIN_X, y, 11, "#000000", "right");
+  drawText(doc, `القرية/المحلة: ${data.village}/`, PAGE_W - 80, y, 11, "#000000", "right");
+  drawText(doc, `نوع الهوية: ${data.idType}`, PAGE_W - 140, y, 11, "#000000", "right");
+  drawDottedLine(doc, PAGE_W - 180, y, 30);
+  drawText(doc, `رقمها: ${data.idNumber}`, PAGE_W - 145, y, 11, "#000000", "right");
 
-  drawText(doc, `العزلة : ${data.uzla}`, PAGE_W - MARGIN_X, y, 10, "right");
-  drawText(doc, `القرية / المحلة : ${data.village}`, PAGE_W - 80, y, 10, "right");
-  drawText(doc, `نوع الهوية : ${data.idType}`, PAGE_W - 130, y, 10, "right");
-  drawText(doc, `رقمها : ${data.idNumber}`, PAGE_W - 170, y, 10, "right");
-  y += 7;
+  y += 8;
 
-  drawText(doc, "اسم زوج المستهدفة :", PAGE_W - MARGIN_X, y, 10, "right");
-  drawText(doc, data.husbandName, PAGE_W - MARGIN_X - 35, y, 10, "right", true);
-  y += 7;
+  // Husband and Status Row
+  drawText(doc, "اسم زوج المستهدفة:", PAGE_W - MARGIN_X, y, 11, "#000000", "right");
+  drawDottedLine(doc, PAGE_W - MARGIN_X - 50, y, 40);
+  drawText(doc, data.husbandName, PAGE_W - MARGIN_X - 5, y, 11, "#000000", "right", true);
+  drawDottedLine(doc, PAGE_W - 120, y, 30);
+  drawText(doc, `الحالة الاجتماعية: ${data.maritalStatus}`, PAGE_W - 80, y, 11, "#000000", "right");
 
-  drawText(doc, `الحالة الاجتماعية : ${data.maritalStatus}`, PAGE_W - MARGIN_X, y, 10, "right");
-  y += 7;
-  
-  drawText(doc, "حالة تأهل المرأة المستهدفة :", PAGE_W - MARGIN_X, y, 10, "right");
-  drawText(doc, data.qualificationCriteria, PAGE_W - MARGIN_X - 45, y, 10, "right", true);
-  
-  drawText(doc, "شهر الحمل [   ]", PAGE_W - 120, y, 10, "right");
-  
-  drawText(doc, `عدد الأطفال ذكور : ${data.childCountMale}`, PAGE_W - 150, y, 10, "right");
-  drawText(doc, `إناث : ${data.childCountFemale}`, PAGE_W - 180, y, 10, "right");
-  y += 7;
+  y += 8;
 
-  drawText(doc, "أسماء أطفال المستهدفة الأقل من 5 سنوات وذوي الإعاقة من 5-17 سنة :", PAGE_W - MARGIN_X, y, 10, "right");
+  // Qualification Row
+  drawText(doc, `حالة تأهل المرأة المستهدفة: ${data.qualificationCriteria}`, PAGE_W - MARGIN_X, y, 11, "#000000", "right");
+  drawText(doc, `شهر الحمل [${data.pregnancyMonth}]`, PAGE_W - 120, y, 11, "#000000", "right");
+  drawText(doc, `عدد الاطفال ذكور: ${data.childCountMale}`, PAGE_W - 180, y, 11, "#000000", "right");
+  drawText(doc, `إناث: ${data.childCountFemale}`, PAGE_W - 210, y, 11, "#000000", "right");
+
+  y += 8;
+
+  // Children Names
+  drawText(doc, "أسماء أطفال المستهدفة الأقل من 5 سنوات وذوي الاعاقة من 5-17 سنة:", PAGE_W - MARGIN_X, y, 11, "#000000", "right");
   y += 5;
-  drawBox(doc, MARGIN_X, y, CONTENT_W, 12);
-  drawText(doc, data.childNames, PAGE_W - MARGIN_X - 2, y + 4, 9, "right");
-  y += 15;
+  drawDottedLine(doc, MARGIN_X, y, CONTENT_W);
+  drawText(doc, data.childNames, PAGE_W - MARGIN_X - 2, y, 10, "#000000", "right");
 
-  drawText(doc, "المستوى التعليمي للمرأة المستهدفة :", PAGE_W - MARGIN_X, y, 10, "right");
-  const eduOptions = ["تقرأ وتكتب", "أساسي", "ثانوي", "جامعي", "لا تقرأ ولا تكتب"];
-  let eduX = PAGE_W - 70;
-  eduOptions.forEach(opt => {
-    drawBox(doc, eduX, y - 2, 4, 4);
-    drawText(doc, opt, eduX - 2, y, 9, "right");
-    eduX -= 30;
-  });
   y += 10;
 
+  // Education Level with Circles
+  drawText(doc, "المستوى التعليمي للمرأة المستهدفة", PAGE_W - MARGIN_X, y, 11, "#000000", "right", true);
+  const eduOptions = ["أساسي", "تقرأ وتكتب", "ثانوي", "جامعي", "لا تقرأ ولا تكتب"];
+  let eduX = PAGE_W - 80;
+  for (let i = 0; i < eduOptions.length; i++) {
+    drawCircle(doc, eduX, y + 1, 5);
+    doc.setFontSize(10);
+    doc.text((i+1).toString(), eduX, y + 1, { align: "center", baseline: "middle" });
+    drawText(doc, eduOptions[i], eduX - 8, y, 10, "#000000", "right");
+    eduX -= 40;
+  }
+  if (data.educationLevel >= 1 && data.educationLevel <= 5) {
+    // Fill the selected circle
+    let fillX = PAGE_W - 80 - (data.educationLevel - 1) * 40;
+    drawCircle(doc, fillX, y + 1, 4, true);
+  }
+
+  y += 10;
+
+  // 3. SECTION 2: BENEFITS
   doc.setFillColor(COLOR_BLUE_HEADER);
-  doc.rect(MARGIN_X, y, CONTENT_W, 7, "F");
+  doc.roundedRect(MARGIN_X, y, CONTENT_W, 8, 5, 5, "F");
   doc.setTextColor(255, 255, 255);
-  drawText(doc, "ثانياً : المنافع التي ستحصل عليها المرأة المستهدفة من المشروع", PAGE_W - MARGIN_X - 2, y + 3.5, 10, "right", true);
-  doc.setTextColor(0);
-  y += 10;
+  drawText(doc, "ثانياً: المنافع التي ستحصل عليها المرأة المستهدفة من المشروع", PAGE_W - MARGIN_X - 2, y + 4, 11, "#FFFFFF", "right", true);
+  doc.setTextColor(0,0,0);
 
-  const benefitText = "تحصل كل امرأة مستهدفة استوفت المعايير (حامل أو أم لطفل أقل من خمس سنوات أو أم لطفل ذو إعاقة من 5-17 سنة) والتزمت بالشروط، على مساعدة نقدية بواقع عشرون ألف ريال شهرياً ولمدة ستة أشهر.";
-  const splitBenefit = doc.splitTextToSize(benefitText, CONTENT_W - 5);
+  y += 12;
+  const benefitText = "تحصل كل امرأة مستهدفة استوفت المعايير (حامل أو أم لطفل أقل من خمس سنوات أو أم لطفل ذو إعاقة من 5-17 سنة) والتزمت بالشروط، على مساعدة نقدية بواقع عشرون ألف ريال يمنياً ولمدة ستة أشهر.";
+  const splitBenefit = doc.splitTextToSize(benefitText, CONTENT_W);
   doc.text(splitBenefit, PAGE_W - MARGIN_X, y, { align: "right" });
-  y += 15;
 
+  y += 25;
+
+  // 4. SECTION 3: DEPRIVATION
   doc.setFillColor(COLOR_BLUE_HEADER);
-  doc.rect(MARGIN_X, y, CONTENT_W, 7, "F");
+  doc.roundedRect(MARGIN_X, y, CONTENT_W, 8, 5, 5, "F");
   doc.setTextColor(255, 255, 255);
-  drawText(doc, "ثالثاً : حرمان المرأة المستهدفة من المنافع", PAGE_W - MARGIN_X - 2, y + 3.5, 10, "right", true);
-  doc.setTextColor(0);
-  y += 10;
+  drawText(doc, "ثالثاً: حرمان المرأة المستهدفة من المنافع", PAGE_W - MARGIN_X - 2, y + 4, 11, "#FFFFFF", "right", true);
+  doc.setTextColor(0,0,0);
 
+  y += 12;
   const rules = [
     "1. إذا انتقلت خارج منطقة المشروع",
     "2. إذا ثبت أنها أدلت ببيانات مضللة أو قدمت وثائق مزورة",
     "3. إذا ثبت انتحالها لشخصية امرأة أخرى",
-    "4. عدم حصولها على بطاقة هوية شخصية",
-    "5. في حال الوفاة (لا سمح الله)"
+    "4. في حال الوفاة (لا سمح الله)"
   ];
-  
   let ruleY = y;
-  drawText(doc, rules[0], PAGE_W - MARGIN_X, ruleY, 9, "right");
-  drawText(doc, rules[1], PAGE_W / 2, ruleY, 9, "right");
-  ruleY += 6;
-  drawText(doc, rules[2], PAGE_W - MARGIN_X, ruleY, 9, "right");
-  drawText(doc, rules[3], PAGE_W / 2, ruleY, 9, "right");
-  ruleY += 6;
-  drawText(doc, rules[4], PAGE_W - MARGIN_X, ruleY, 9, "right");
-  
-  y = ruleY + 10;
+  drawText(doc, rules[0], PAGE_W - MARGIN_X, ruleY, 10, "#000000", "right");
+  drawText(doc, rules[1], PAGE_W / 2 - 10, ruleY, 10, "#000000", "right");
+  ruleY += 8;
+  drawText(doc, rules[2], PAGE_W - MARGIN_X, ruleY, 10, "#000000", "right");
+  drawText(doc, rules[3], PAGE_W / 2 - 10, ruleY, 10, "#000000", "right");
+  y += 25;
 
+  // 5. SECTION 4: SIGNATURE
   doc.setFillColor(COLOR_BLUE_HEADER);
-  doc.rect(MARGIN_X, y, CONTENT_W, 7, "F");
+  doc.roundedRect(MARGIN_X, y, CONTENT_W, 8, 5, 5, "F");
   doc.setTextColor(255, 255, 255);
-  drawText(doc, "رابعاً : توقيع أو بصمة المرأة المؤهلة بالعلم والموافقة وصحة البيانات", PAGE_W - MARGIN_X - 2, y + 3.5, 10, "right", true);
-  doc.setTextColor(0);
-  y += 10;
+  drawText(doc, "رابعاً: توقيع أو بصمة المرأة المؤهلة بالعلم والموافقة وصحة البيانات", PAGE_W - MARGIN_X - 2, y + 4, 11, "#FFFFFF", "right", true);
+  doc.setTextColor(0,0,0);
 
-  const disclaimer = "أقر أنا الموقعة أدناه بأن البيانات الواردة في الاستمارة صحيحة وأني موافقة على شروط المشروع والالتحاق به وأن رقم التلفون المدون هو ملكية خاصة لي أو لأحد أفراد الأسرة المقربين.";
+  y += 12;
+  const disclaimer = "أقر أنا الموقعة أدناه بأن البيانات الواردة في الاستمارة صحيحة وأني موافقة على شروط المشروع والالتحاق به وأن رقم التلفون المدون هو ملكية خاصة لي أو لأحد أفراد الأسرة المقربين، وأنه يمكن أن أتلقى أي رسالة أو تعليمات أو رمز يخص صرف المساعدات عليه.";
   const splitDisc = doc.splitTextToSize(disclaimer, CONTENT_W);
   doc.text(splitDisc, PAGE_W - MARGIN_X, y, { align: "right" });
-  y += 15;
-
-  drawText(doc, "البصمة / التوقيع : ............................", PAGE_W - MARGIN_X, y, 10, "right");
-  drawText(doc, "التاريخ :      /      /     202", PAGE_W / 2, y, 10, "center");
-  
-  y += 10;
-  drawBox(doc, MARGIN_X, y, CONTENT_W, 15);
-  drawText(doc, "اسم وتوقيع المثقفة المجتمعية المسئولة عن تعبئة البيانات", PAGE_W - MARGIN_X - 2, y + 4, 9, "right", true);
-  drawText(doc, `اسم المثقفة : ${data.educatorName}`, PAGE_W - MARGIN_X - 2, y + 10, 10, "right");
-  drawText(doc, "التوقيع : .....................", PAGE_W / 2, y + 10, 10, "center");
-  
   y += 20;
 
-  doc.setFillColor(COLOR_BLUE_HEADER);
-  doc.rect(MARGIN_X, y, CONTENT_W, 7, "F");
-  doc.setTextColor(255, 255, 255);
-  drawText(doc, "خامساً : في حال عدم أخذ البصمة أو التوقيع يذكر السبب", PAGE_W - MARGIN_X - 2, y + 3.5, 10, "right", true);
-  doc.setTextColor(0);
-  y += 10;
+  // Signature area
+  drawText(doc, "اليوم: ....................................... التاريخ: / / 202", PAGE_W - MARGIN_X, y, 10, "#000000", "right");
+  y += 5;
+  drawText(doc, "اسم وتوقيع المثقفة المجتمعية المسئولة عن تعبئة البيانات", PAGE_W - MARGIN_X, y, 10, "#000000", "right");
+  drawText(doc, `اسم المثقفة: ${data.educatorName}`, PAGE_W - MARGIN_X, y + 8, 11, "#000000", "right");
+  drawText(doc, "التوقيع: ..........................................", PAGE_W / 2, y + 8, 10, "#000000", "center");
+  drawBox(doc, PAGE_W - 70, y - 5, 50, 20);
 
+  y += 25;
+
+  // 6. SECTION 5: NON-SIGNATURE REASONS
+  doc.setFillColor(COLOR_BLUE_HEADER);
+  doc.roundedRect(MARGIN_X, y, CONTENT_W, 8, 5, 5, "F");
+  doc.setTextColor(255, 255, 255);
+  drawText(doc, "خامساً: في حال عدم أخذ البصمة أو التوقيع (يذكر السبب)", PAGE_W - MARGIN_X - 2, y + 4, 11, "#FFFFFF", "right", true);
+  doc.setTextColor(0,0,0);
+
+  y += 12;
   const reasons = [
-    "1. انتقال دائم خارج المديرية", "2. سفر مؤقت", "3. الوفاة (لا سمح الله)",
-    "4. عدم القبول بالمنافع", "5. عدم العثور على المرأة", "6. أخرى (تذكر) ....................."
+    "1. انتقال دائم لمحل السكن خارج المديرية",
+    "2. سفر مؤقت",
+    "3. الوفاة (لا سمح الله)",
+    "4. عدم القبول بمنافع المشروع",
+    "5. عدم العثور على المرأة"
   ];
-  
-  let rY = y;
-  drawText(doc, reasons[0], PAGE_W - MARGIN_X, rY, 8, "right");
-  drawText(doc, reasons[1], PAGE_W - 70, rY, 8, "right");
-  drawText(doc, reasons[2], PAGE_W - 130, rY, 8, "right");
-  rY += 6;
-  drawText(doc, reasons[3], PAGE_W - MARGIN_X, rY, 8, "right");
-  drawText(doc, reasons[4], PAGE_W - 70, rY, 8, "right");
-  drawText(doc, reasons[5], PAGE_W - 130, rY, 8, "right");
-  
-  y = rY + 10;
+  let rX = PAGE_W - MARGIN_X;
+  reasons.forEach(reason => {
+    drawText(doc, reason, rX, y, 9, "#000000", "right");
+    rX -= 50;
+    if (rX < MARGIN_X + 50) {
+      y += 8;
+      rX = PAGE_W - MARGIN_X;
+    }
+  });
+  y += 8;
+  drawText(doc, "6. أخرى (تذكر): ...............................", PAGE_W - MARGIN_X, y, 9, "#000000", "right");
 
-  doc.setFillColor(COLOR_BLUE_HEADER);
-  doc.rect(MARGIN_X, y, CONTENT_W, 7, "F");
-  doc.setTextColor(255, 255, 255);
-  drawText(doc, "سادساً : تصحيح البيانات", PAGE_W - MARGIN_X - 2, y + 3.5, 10, "right", true);
-  doc.setTextColor(0);
   y += 10;
 
-  drawText(doc, "يجب تصحيح اسم المرأة المستهدفة أو زوجها في حال كان هناك خطأ في الاسم الأول أو الأب أو الجد أو اللقب.", PAGE_W - MARGIN_X, y, 9, "right");
+  // 7. SECTION 6: CORRECTIONS
+  doc.setFillColor(COLOR_BLUE_HEADER);
+  doc.roundedRect(MARGIN_X, y, CONTENT_W, 8, 5, 5, "F");
+  doc.setTextColor(255, 255, 255);
+  drawText(doc, "سادساً: تصحيح البيانات:", PAGE_W - MARGIN_X - 2, y + 4, 11, "#FFFFFF", "right", true);
+  doc.setTextColor(0,0,0);
+
+  y += 12;
+  drawText(doc, "يجب تصحيح اسم المرأة المستهدفة أو زوجها في حال كان هناك خطأ في الاسم الأول أو الاب أو الجد أو اللقب (صحح الجزء الذي فيه خطأ فقط وتترك الأسماء الصحيحة فارغة)", PAGE_W - MARGIN_X, y, 9, "#000000", "right", true);
+  y += 10;
+
+  // Correction fields
+  drawText(doc, "تصحيح الاسم الأول: ...........................", PAGE_W - MARGIN_X, y, 10, "#000000", "right");
+  drawText(doc, "اسم الأب: ...........................", PAGE_W - 120, y, 10, "#000000", "right");
   y += 8;
+  drawText(doc, "اسم الجد: ...........................", PAGE_W - MARGIN_X, y, 10, "#000000", "right");
+  drawText(doc, "الاسم الرابع: ...........................", PAGE_W - 120, y, 10, "#000000", "right");
+  drawText(doc, "اللقب: ...........................", PAGE_W - 200, y, 10, "#000000", "right");
+  y += 8;
+  drawText(doc, "مرجعية التصحيح التي تم بموجبها التصحيح: ...............................", PAGE_W - MARGIN_X, y, 10, "#000000", "right");
+  drawText(doc, "رقم التلفون: ...............................", PAGE_W - 150, y, 10, "#000000", "right");
+  y += 8;
+  drawText(doc, "تصحيح اسم زوج المستهدفة الاسم الأول: ...........................", PAGE_W - MARGIN_X, y, 10, "#000000", "right");
+  drawText(doc, "اسم الأب: ...........................", PAGE_W - 120, y, 10, "#000000", "right");
+  y += 8;
+  drawText(doc, "اسم الجد: ...........................", PAGE_W - MARGIN_X, y, 10, "#000000", "right");
+  drawText(doc, "الاسم الرابع: ...........................", PAGE_W - 120, y, 10, "#000000", "right");
+  drawText(doc, "اللقب: ...........................", PAGE_W - 200, y, 10, "#000000", "right");
+  y += 8;
+  drawText(doc, "مرجعية التصحيح التي تم بموجبها التصحيح: ...............................", PAGE_W - MARGIN_X, y, 10, "#000000", "right");
+  drawText(doc, "توقيع المثقفة على التصحيح: ...............................", PAGE_W - 150, y, 10, "#000000", "right");
 
-  const corrH = 8;
-  const labels = ["تصحيح الاسم الأول", "اسم الأب", "اسم الجد", "اللقب", "رقم التلفون", "مرجعية التصحيح"];
-  
-  labels.forEach((label, idx) => {
-    const isLeft = idx % 2 !== 0;
-    const currentX = isLeft ? MARGIN_X : MARGIN_X + (CONTENT_W/2);
-    const currentY = y + (Math.floor(idx/2) * corrH);
-    drawBox(doc, currentX, currentY, CONTENT_W/2, corrH);
-    drawText(doc, label + ":", currentX + (CONTENT_W/2) - 2, currentY + (corrH/2), 9, "right");
-    doc.setLineDashPattern([1, 1], 0);
-    doc.line(currentX + 5, currentY + corrH - 2, currentX + (CONTENT_W/2) - 30, currentY + corrH - 2);
-    doc.setLineDashPattern([], 0);
-  });
-
-  y += (Math.ceil(labels.length/2) * corrH) + 5;
-  doc.setFontSize(8);
-  doc.text("يحق للصندوق الاجتماعي للتنمية مشاركة البيانات مع الجهات ذات العلاقة لأغراض التحقق والتأكد من استلام المساعدات", PAGE_W / 2, PAGE_H - 10, { align: "center" });
+  // Footer
+  doc.setFontSize(10);
+  doc.setLineWidth(1);
+  doc.line(MARGIN_X, PAGE_H - 15, PAGE_W - MARGIN_X, PAGE_H - 15);
+  drawText(doc, "1 يتم تدوين شهر الحمل لكل مستفيدة حالة تأهلها أثناء الالتحاق حامل", PAGE_W - MARGIN_X, PAGE_H - 10, "#000000", "right");
+  drawText(doc, "يحق للصندوق الاجتماعي للتنمية مشاركة البيانات مع الجهات ذات العلاقة لأغراض التحقق والتأكد من استلام المساعدات", PAGE_W / 2, PAGE_H - 5, "#000000", "center");
 }
 
 // Main worker logic
 self.onmessage = async (event) => {
-    const { beneficiaries, fontBase64 } = event.data;
+    const { beneficiaries, fontBase64, sample } = event.data;
 
     if (!beneficiaries || !fontBase64) {
         postMessage({ type: 'error', error: 'Missing beneficiaries data or font.' });
@@ -267,6 +345,30 @@ self.onmessage = async (event) => {
     }
 
     try {
+        const doc = new jsPDF({ orientation: "p", unit: "mm", format: "a4" });
+        doc.addFileToVFS("Amiri-Regular.ttf", fontBase64);
+        doc.addFont("Amiri-Regular.ttf", "Amiri", "normal");
+        doc.addFont("Amiri-Regular.ttf", "Amiri", "bold");
+
+        if (sample) {
+            const bnf = beneficiaries[0]; // Just use the first one for the sample
+            const data: EnrollmentData = {
+                beneficiaryId: String(bnf.l_id || ''), phone: String(bnf.l_phone_no || ''), idNumber: String(bnf.l_id_card_no || ''),
+                idType: String(bnf.id_card_type || ''), governorate: String(bnf.gov_name || ''), district: String(bnf.mud_name || ''),
+                uzla: String(bnf.hh_ozla_name || ''), village: String(bnf.hh_vill_name || ''), fullName: String(bnf.l_benef_name || ''),
+                husbandName: String(bnf.l_hsbnd_name || ''), maritalStatus: String(bnf.bnf_social_status || ''),
+                qualificationCriteria: String(bnf.bnf_qual_status_desc || ''),
+                childCountMale: Number(bnf.child_m_cnt) || 0, childCountFemale: Number(bnf.child_f_cnt) || 0,
+                childNames: String(bnf.l_child_list || ''), educatorName: bnf.ED_NAME || 'Unassigned',
+                educationLevel: Number(bnf.educational_level_of_the_targeted_woman) || 0,
+                pregnancyMonth: String(bnf.pregnancy_month || '')
+            };
+            drawEnrollmentForm(doc, data);
+            const pdfBuffer = doc.output("arraybuffer");
+            self.postMessage({ type: 'done-sample', data: pdfBuffer }, [pdfBuffer]);
+            return;
+        }
+        
         const grouped: Record<string, any[]> = {};
         beneficiaries.forEach((row: any) => {
             const edu = row.ED_NAME || "Unassigned_Educator";
@@ -279,13 +381,13 @@ self.onmessage = async (event) => {
         let educatorsProcessed = 0;
 
         for (const [educator, bnfs] of Object.entries(grouped)) {
-            const doc = new jsPDF({ orientation: "p", unit: "mm", format: "a4" });
-            doc.addFileToVFS("Amiri-Regular.ttf", fontBase64);
-            doc.addFont("Amiri-Regular.ttf", "Amiri", "normal");
-            doc.addFont("Amiri-Regular.ttf", "Amiri", "bold");
+            const educatorDoc = new jsPDF({ orientation: "p", unit: "mm", format: "a4" });
+            educatorDoc.addFileToVFS("Amiri-Regular.ttf", fontBase64);
+            educatorDoc.addFont("Amiri-Regular.ttf", "Amiri", "normal");
+            educatorDoc.addFont("Amiri-Regular.ttf", "Amiri", "bold");
 
             bnfs.forEach((bnf, index) => {
-                if (index > 0) doc.addPage();
+                if (index > 0) educatorDoc.addPage();
                 
                 const data: EnrollmentData = {
                   beneficiaryId: String(bnf.l_id || ''),
@@ -303,14 +405,16 @@ self.onmessage = async (event) => {
                   childCountMale: Number(bnf.child_m_cnt) || 0,
                   childCountFemale: Number(bnf.child_f_cnt) || 0,
                   childNames: String(bnf.l_child_list || ''),
-                  educatorName: educator
+                  educatorName: educator,
+                  educationLevel: Number(bnf.educational_level_of_the_targeted_woman) || 0,
+                  pregnancyMonth: String(bnf.pregnancy_month || '')
                 };
 
-                drawEnrollmentForm(doc, data);
+                drawEnrollmentForm(educatorDoc, data);
             });
 
             const safeName = educator.replace(/[^a-zA-Z0-9\u0600-\u06FF \-_]/g, "_").trim();
-            zip.file(`${safeName}_Enrollment_Forms.pdf`, doc.output("arraybuffer"));
+            zip.file(`${safeName}_Enrollment_Forms.pdf`, educatorDoc.output("arraybuffer"));
             
             educatorsProcessed++;
             postMessage({
@@ -322,12 +426,14 @@ self.onmessage = async (event) => {
             });
         }
         
-        postMessage({ type: 'progress', status: 'Zipping files...', progress: 99, current: totalEducators, total: totalEducators });
+        postMessage({ type: 'progress', status: 'Zipping files...', progress: 99 });
         const zipContent = await zip.generateAsync({ type: "arraybuffer" });
 
-        self.postMessage({ type: 'done', data: zipContent }, [zipContent]);
+        self.postMessage({ type: 'done-all', data: zipContent }, [zipContent]);
 
     } catch (error: any) {
         postMessage({ type: 'error', error: error.message });
     }
 };
+
+    
