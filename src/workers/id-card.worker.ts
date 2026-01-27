@@ -201,6 +201,7 @@ export function drawCardBack(doc: jsPDF) {
   const rules = [
     "البطاقة مخصصة لأنشطة البرنامج ولا يجوز استخدامها لأغراض أخرى",
     "أي كشط او تعديل في بيانات البطاقة يلغيها",
+    "يجب الحفاظ على هذه البطاقة وعدم مشاركتها مع الآخرين",
     "تحصل كل إمرأة امتثلت لشروط البرنامج على مبلغ 20 ألف ريال شهريا خلال مدة تنفيذ المشروع ولا يحق لها التنازل عنه للغير جزئيا أو كليا",
     "عند اجبار المستفيدة على دفع أو خصم مبلغ منها يتم ابلاغ إدارة البرنامج فورا",
     "للإبلاغ عن فقدان البطاقة أو تقديم شكوى أو استفسار يتم التواصل عبر أحد الوسائل المدونة أدناه"
@@ -224,8 +225,11 @@ export function drawCardBack(doc: jsPDF) {
   doc.setFillColor(BROWN_DARK);
   doc.rect(0, CARD_HEIGHT - 8, CARD_WIDTH, 8, "F");
   drawText(doc, "الاتصال بالرقم المجاني 8009800 أو الرقم الثابت 513821 – 01", CARD_WIDTH / 2, CARD_HEIGHT - 4, 8, "#FFFFFF", "center", true);
-}
 
+  // Bottom right triangle decoration
+  doc.setFillColor(BROWN_DARK);
+  doc.path([ {op: 'm', c: [CARD_WIDTH, CARD_HEIGHT - 10]}, {op: 'l', c: [CARD_WIDTH - 10, CARD_HEIGHT]}, {op: 'l', c: [CARD_WIDTH, CARD_HEIGHT]}, {op: 'h', c: []} ]).fill();
+}
 
 // --- WORKER LOGIC ---
 self.onmessage = async (event) => {
