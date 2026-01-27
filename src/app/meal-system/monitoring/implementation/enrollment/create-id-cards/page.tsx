@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Download, Loader2, CreditCard } from "lucide-react";
+import { Download, Loader2, CreditCard, File } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
@@ -36,7 +36,7 @@ export default function CreateIDCardsPage() {
         fetchProjects();
     }, [toast]);
 
-    const handleDownload = async () => {
+    const handleDownload = async (isSample = false) => {
         if (!selectedProjectId) {
             toast({ title: "No Project Selected", description: "Please select a project to generate cards for.", variant: "destructive" });
             return;
@@ -72,16 +72,18 @@ export default function CreateIDCardsPage() {
                     }
                 } else if (type === 'done-sample' || type === 'done-all') {
                     setStatus("Download ready!");
-                    const blob = new Blob([data], { type: "application/zip" });
+                    const blob = new Blob([data], { type: isSample ? "application/pdf" : "application/zip" });
                     const url = window.URL.createObjectURL(blob);
                     const a = document.createElement("a");
                     a.href = url;
-                    a.download = `Beneficiary_ID_Cards_${selectedProjectId}.zip`;
+                    a.download = isSample 
+                        ? `ID_Card_Sample_${selectedProjectId}.pdf`
+                        : `Beneficiary_ID_Cards_${selectedProjectId}.zip`;
                     document.body.appendChild(a);
                     a.click();
                     a.remove();
                     window.URL.revokeObjectURL(url);
-                    toast({ title: "Success", description: "ID cards ZIP file downloaded." });
+                    toast({ title: "Success", description: `File downloaded: ${a.download}` });
                     setLoading(false);
                     worker.terminate();
                 } else if (type === 'error') {
@@ -113,9 +115,20 @@ export default function CreateIDCardsPage() {
               bold: btoa(new Uint8Array(fontBoldBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')),
             };
 
+            let beneficiariesToSend = projectBeneficiaries;
+            if (isSample) {
+                if (projectBeneficiaries.length > 0) {
+                    beneficiariesToSend = [projectBeneficiaries[Math.floor(Math.random() * projectBeneficiaries.length)]];
+                } else {
+                     toast({ title: "No beneficiaries", description: "No beneficiaries available to generate a sample.", variant: "default" });
+                     setLoading(false);
+                     return;
+                }
+            }
+            
             setStatus("Starting generation...");
             setProgress(10);
-            worker.postMessage({ beneficiaries: projectBeneficiaries, fontBase64 });
+            worker.postMessage({ beneficiaries: beneficiariesToSend, fontBase64, sample: isSample });
 
         } catch (error: any) {
             toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -147,15 +160,26 @@ export default function CreateIDCardsPage() {
                         </Select>
                     </div>
 
-                    <Button
-                        size="lg"
-                        onClick={handleDownload}
-                        disabled={loading || !selectedProjectId}
-                        className="w-full"
-                    >
-                        {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
-                        {loading ? "Generating..." : "Download ID Cards (ZIP)"}
-                    </Button>
+                    <div className="flex gap-2">
+                        <Button
+                            size="lg"
+                            onClick={() => handleDownload(false)}
+                            disabled={loading || !selectedProjectId}
+                            className="w-full"
+                        >
+                            {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+                            {loading ? "Generating..." : "Download ID Cards (ZIP)"}
+                        </Button>
+                         <Button
+                            size="lg"
+                            variant="outline"
+                            onClick={() => handleDownload(true)}
+                            disabled={loading || !selectedProjectId}
+                        >
+                            <File className="mr-2 h-4 w-4" />
+                            Download Sample
+                        </Button>
+                    </div>
 
                     {loading && (
                         <div className="space-y-2">
