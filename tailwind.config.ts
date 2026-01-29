@@ -2,50 +2,40 @@ import type { Config } from "tailwindcss";
 
 const config: Config = {
   content: [
-    "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
-    "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
-    "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
+    "./app/**/*.{ts,tsx,js,jsx}",
+    "./src/components/**/*.{ts,tsx,js,jsx}",
+    "./src/**/*.{ts,tsx,js,jsx,html}",
   ],
+  darkMode: ["class", '[data-theme="dark"]'], // prefer toggling class or data-theme attr
   theme: {
     extend: {
-      fontFamily: {
-        sans: ['Inter', 'sans-serif'],
-      },
       colors: {
-        background: "hsl(var(--background))",
-        foreground: "hsl(var(--foreground))",
-        card: "hsl(var(--card))",
-        "card-foreground": "hsl(var(--card-foreground))",
-        popover: "hsl(var(--popover))",
-        "popover-foreground": "hsl(var(--popover-foreground))",
-        primary: {
-          DEFAULT: "hsl(var(--primary))",
-          foreground: "hsl(var(--primary-foreground))",
-        },
-        secondary: {
-          DEFAULT: "hsl(var(--secondary))",
-          foreground: "hsl(var(--secondary-foreground))",
-        },
-        muted: {
-          DEFAULT: "hsl(var(--muted))",
-          foreground: "hsl(var(--muted-foreground))",
-        },
-        accent: {
-          DEFAULT: "hsl(var(--accent))",
-          foreground: "hsl(var(--accent-foreground))",
-        },
-        destructive: {
-          DEFAULT: "hsl(var(--destructive))",
-          foreground: "hsl(var(--destructive-foreground))",
-        },
-        border: "hsl(var(--border))",
-        input: "hsl(var(--input))",
-        ring: "hsl(var(--ring))",
-        surface: 'hsl(var(--card))',
-        text: 'hsl(var(--foreground))',
+        primary: "var(--primary)",
+        "primary-600": "var(--primary-600)",
+        surface: "var(--surface)",
+        muted: "var(--muted)",
+        text: "var(--text)",
+        background: "var(--bg)",
+      },
+      borderRadius: {
+        lg: "var(--card-radius)",
+      },
+      boxShadow: {
+        card: "var(--card-shadow)",
+      },
+      fontFamily: {
+        sans: ["Inter", "ui-sans-serif", "system-ui"],
+        mono: ["ui-monospace", "SFMono-Regular", "Menlo"],
+      },
+      maxWidth: {
+        layout: "var(--layout-max)",
       },
     },
   },
-  plugins: [],
+  plugins: [
+    require("@tailwindcss/typography"),
+    require("@tailwindcss/forms"),
+    require("@tailwindcss/aspect-ratio"),
+  ],
 };
 export default config;
