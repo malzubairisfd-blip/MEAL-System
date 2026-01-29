@@ -36,65 +36,65 @@ A structured approach to the Monitoring and Evaluation lifecycle, broken down in
 -   **Initiation and Planning**: Tools to define the M&E purpose and scope, plan for data collection, prepare indicators, and calculate sample sizes.
 -   **Implementation Monitoring**: A suite of tools for monitoring various aspects of project implementation, including:
     -   Beneficiary Monitoring
-    -   Process & Activity Tracking
-    -   Compliance, Financial, and Organizational Monitoring
--   **Closure**: Tools to assist in the final phase of a project, including final reports and documenting lessons learned.
+        -   Process & Activity Tracking
+            -   Compliance, Financial, and Organizational Monitoring
+            -   **Closure**: Tools to assist in the final phase of a project, including final reports and documenting lessons learned.
 
-### 3. Beneficiary Data Analysis
+            ### 3. Beneficiary Data Analysis
 
-This is a highly advanced module for ensuring data quality within beneficiary lists.
+            This is a highly advanced module for ensuring data quality within beneficiary lists.
 
--   **Data Upload & Clustering**: A seamless file upload process that parses Excel files in the browser. A powerful clustering engine runs in a background Web Worker to perform fuzzy matching without freezing the UI.
--   **Column Mapping**: An intuitive interface for users to map columns from their source file to the required data fields.
--   **Rule-Based Correction**: A page for analyzing record similarities and generating new, dynamic matching rules to improve the accuracy of the clustering engine over time.
--   **Cluster Review Workflow**: A dedicated page to inspect, analyze, and make decisions on the clusters. It includes AI-generated summaries and detailed pairwise score breakdowns.
--   **Data Integrity Audit**: An automated audit engine that checks for common data issues, such as a woman registered with multiple husbands, duplicate National IDs, or other invalid relationships.
--   **Interactive Reporting**: A dynamic dashboard to visualize beneficiary data with maps, charts, and key figures based on the uploaded information.
--   **Advanced Export**: A comprehensive export feature that generates a multi-sheet Excel report containing enriched data, cluster details, audit findings, and a visual dashboard.
--   **Configurable Engine**: A settings page that allows administrators to fine-tune the clustering algorithm's thresholds, weights, and rules to optimize accuracy for different datasets.
+            -   **Data Upload & Clustering**: A seamless file upload process that parses Excel files in the browser. A powerful clustering engine runs in a background Web Worker to perform fuzzy matching without freezing the UI.
+            -   **Column Mapping**: An intuitive interface for users to map columns from their source file to the required data fields.
+            -   **Rule-Based Correction**: A page for analyzing record similarities and generating new, dynamic matching rules to improve the accuracy of the clustering engine over time.
+            -   **Cluster Review Workflow**: A dedicated page to inspect, analyze, and make decisions on the clusters. It includes AI-generated summaries and detailed pairwise score breakdowns.
+            -   **Data Integrity Audit**: An automated audit engine that checks for common data issues, such as a woman registered with multiple husbands, duplicate National IDs, or other invalid relationships.
+            -   **Interactive Reporting**: A dynamic dashboard to visualize beneficiary data with maps, charts, and key figures based on the uploaded information.
+            -   **Advanced Export**: A comprehensive export feature that generates a multi-sheet Excel report containing enriched data, cluster details, audit findings, and a visual dashboard.
+            -   **Configurable Engine**: A settings page that allows administrators to fine-tune the clustering algorithm's thresholds, weights, and rules to optimize accuracy for different datasets.
 
-## How It Works (Beneficiary Analysis Flow)
+            ## How It Works (Beneficiary Analysis Flow)
 
-1.  **Upload & Preprocess**: The user uploads an Excel file on the `/upload` page. The data is parsed and stored in the browser's `IndexedDB`.
-2.  **Cluster**: The user maps columns and starts the process. The data is sent to a Web Worker, which performs blocking, pairwise scoring, and clustering in a background thread.
-3.  **Cache**: Once the worker is finished, the results (clusters, rows, etc.) are saved back to `IndexedDB`, making them available across different pages without re-computation.
-4.  **Review, Audit, Report**: Subsequent pages (`/review`, `/audit`, `/report`) load the processed data from `IndexedDB`, allowing for a fast and seamless user experience.
+            1.  **Upload & Preprocess**: The user uploads an Excel file on the `/upload` page. The data is parsed and stored in the browser's `IndexedDB`.
+            2.  **Cluster**: The user maps columns and starts the process. The data is sent to a Web Worker, which performs blocking, pairwise scoring, and clustering in a background thread.
+            3.  **Cache**: Once the worker is finished, the results (clusters, rows, etc.) are saved back to `IndexedDB`, making them available across different pages without re-computation.
+            4.  **Review, Audit, Report**: Subsequent pages (`/review`, `/audit`, `/report`) load the processed data from `IndexedDB`, allowing for a fast and seamless user experience.
 
-## Getting Started
+            ## Getting Started
 
-To run the project locally, follow these steps:
+            To run the project locally, follow these steps:
 
-1.  **Install dependencies**:
-    ```bash
-    npm install
-    ```
+            1.  **Install dependencies**:
+                ```bash
+                    npm install
+                        ```
 
-2.  **Run the development server**:
-    ```bash
-    npm run dev
-    ```
+                        2.  **Run the development server**:
+                            ```bash
+                                npm run dev
+                                    ```
 
-The application will be available at `http://localhost:9002`.
+                                    The application will be available at `http://localhost:9002`.
 
-## Project Structure
+                                    ## Project Structure
 
-The project follows a standard Next.js App Router structure:
+                                    The project follows a standard Next.js App Router structure:
 
-```
-/src
-├── app
-│   ├── api/                      # Backend API routes for data persistence and services
-│   ├── meal-system/              # The main hub for all MEAL features
-│   ├── project/                  # Project management pages (dashboard, plan, logframe)
-│   ├── monitoring/               # M&E lifecycle pages
-│   ├── (data-analysis-pages)/    # Beneficiary upload, review, audit, etc.
-│   └── layout.tsx                # Root application layout with sidebar navigation
-├── components/
-│   ├── ui/                       # Reusable ShadCN UI components
-│   ├── (feature-components)/     # Components specific to features like Gantt, Reports, etc.
-│   └── layout-provider.tsx       # Main layout with sidebar and header
-├── data/                         # SQLite databases (.db) and seed files (.json)
-├── lib/                          # Shared libraries, types, and utility functions
-├── workers/                      # Web Worker scripts for background processing
-└── locales/                      # Translation files (en.json, ar.json)
-```
+                                    ```
+                                    /src
+                                    ├── app
+                                    │   ├── api/                      # Backend API routes for data persistence and services
+                                    │   ├── meal-system/              # The main hub for all MEAL features
+                                    │   ├── project/                  # Project management pages (dashboard, plan, logframe)
+                                    │   ├── monitoring/               # M&E lifecycle pages
+                                    │   ├── (data-analysis-pages)/    # Beneficiary upload, review, audit, etc.
+                                    │   └── layout.tsx                # Root application layout with sidebar navigation
+                                    ├── components/
+                                    │   ├── ui/                       # Reusable ShadCN UI components
+                                    │   ├── (feature-components)/     # Components specific to features like Gantt, Reports, etc.
+                                    │   └── layout-provider.tsx       # Main layout with sidebar and header
+                                    ├── data/                         # SQLite databases (.db) and seed files (.json)
+                                    ├── lib/                          # Shared libraries, types, and utility functions
+                                    ├── workers/                      # Web Worker scripts for background processing
+                                    └── locales/                      # Translation files (en.json, ar.json)
+                                    ```
