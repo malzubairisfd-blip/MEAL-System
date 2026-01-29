@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Download, Loader2, CreditCard, File } from "lucide-react";
+import { Download, Loader2, File } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
@@ -77,7 +77,7 @@ export default function CreateIDCardsPage() {
                     const a = document.createElement("a");
                     a.href = url;
                     a.download = isSample 
-                        ? `ID_Card_Sample_${selectedProjectId}.pdf`
+                        ? `Beneficiary_ID_Cards_${selectedProjectId}_Sample.pdf` 
                         : `Beneficiary_ID_Cards_${selectedProjectId}.zip`;
                     document.body.appendChild(a);
                     a.click();
@@ -142,7 +142,7 @@ export default function CreateIDCardsPage() {
                 <CardHeader>
                     <CardTitle className="text-center text-xl">Export Beneficiary ID Cards</CardTitle>
                     <CardDescription className="text-center">
-                        Generate PDF ID cards for all beneficiaries in a project, grouped by educator.
+                        Generate PDF ID cards for all beneficiaries in a project.
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">

@@ -3,173 +3,292 @@ import jsPDF from "jspdf";
 import JSZip from "jszip";
 
 // --- TYPES ---
-
 export interface IDCardData {
   beneficiaryName: string;
-  governorate: string; 
+  governorate: string;
   district: string;
   uzla: string;
   village: string;
   beneficiaryId: string;
-  cardExpiry: string;
-  educatorName?: string;
+  cardExpiry: string; // e.g. "31-1-2024"
+  educatorName?: string; // Used for grouping
 }
 
 // --- CONSTANTS ---
+// Standard ID-1 Card Size (Credit Card)
 const CARD_WIDTH = 85.6;
 const CARD_HEIGHT = 53.98;
-const PADDING = 4;
+const MARGIN = 3;
 
+// --- COLORS (Brown and Gold theme) ---
 const COLORS = {
-  DARK_BROWN: "#5F3D36",
-  LIGHT_BROWN: "#8D6E63",
-  GOLD: "#C7B27C",
-  TEXT_DARK: "#222222",
-  TEXT_GREY: "#555555",
-  PLACEHOLDER: "#ECECEC",
-  WHITE: "#FFFFFF"
+  BROWN_DARK: "#5F3D36",
+  BROWN_MEDIUM: "#A0522D",
+  BROWN_LIGHT: "#D2691E",
+  GOLD_DARK: "#D4AF37",
+  GOLD_MEDIUM: "#FFD700",
+  GOLD_LIGHT: "#F0E68C",
+  TEXT_DARK: "#000000",
+  TEXT_GRAY: "#333333",
+  RED_WARNING: "#cc0000",
+  WHITE: "#FFFFFF",
+  PLACEHOLDER: "#E0E0E0",
 };
 
 // --- HELPER: DRAW ARABIC TEXT ---
-function drawText(
-  doc: jsPDF, 
-  text: string, 
-  x: number, 
-  y: number, 
-  size: number, 
-  color: string, 
-  align: "left" | "center" | "right" = "right", 
-  isBold = false
-) {
+function drawText(doc: jsPDF, text: string, x: number, y: number, size: number, color: string, align: "left" | "center" | "right" = "right", isBold = false) {
   doc.setTextColor(color);
   doc.setFont("NotoNaskhArabic", isBold ? "bold" : "normal");
   doc.setFontSize(size);
   doc.text(String(text || ''), x, y, { align, baseline: "middle" });
 }
 
-// --- HELPER: DRAW DOTTED DATA ROW ---
-function drawDataRow(doc: jsPDF, label: string, value: string, y: number, rightX: number, valueXLimit: number) {
-    drawText(doc, label + ":", rightX, y, 8, COLORS.TEXT_DARK, "right", true);
-    drawText(doc, value, valueXLimit, y, 10, COLORS.TEXT_DARK, "right", false);
+// --- HELPER: DRAW BROWN AND GOLD DECORATIVE BORDER ---
+function drawDecorativeBorder(doc: jsPDF) {
+  doc.setDrawColor(COLORS.BROWN_DARK);
+  doc.setLineWidth(1.5);
+  doc.roundedRect(2, 2, CARD_WIDTH - 4, CARD_HEIGHT - 4, 3, 3, "S");
+  
+  doc.setDrawColor(COLORS.GOLD_DARK);
+  doc.setLineWidth(0.8);
+  doc.roundedRect(4, 4, CARD_WIDTH - 8, CARD_HEIGHT - 8, 2, 2, "S");
+  
+  const cornerSize = 6;
+  
+  doc.setFillColor(COLORS.GOLD_MEDIUM);
+  doc.rect(4, 4, cornerSize, 2, "F");
+  doc.rect(4, 4, 2, cornerSize, "F");
+  
+  doc.rect(CARD_WIDTH - 4 - cornerSize, 4, cornerSize, 2, "F");
+  doc.rect(CARD_WIDTH - 4 - 2, 4, 2, cornerSize, "F");
+  
+  doc.rect(4, CARD_HEIGHT - 4 - 2, cornerSize, 2, "F");
+  doc.rect(4, CARD_HEIGHT - 4 - cornerSize, 2, cornerSize, "F");
+  
+  doc.rect(CARD_WIDTH - 4 - cornerSize, CARD_HEIGHT - 4 - 2, cornerSize, 2, "F");
+  doc.rect(CARD_WIDTH - 4 - 2, CARD_HEIGHT - 4 - cornerSize, 2, cornerSize, "F");
+  
+  doc.setDrawColor(COLORS.GOLD_LIGHT);
+  doc.setLineWidth(0.3);
+  
+  for (let x = 10; x < CARD_WIDTH - 10; x += 4) {
+    doc.line(x, 6, x + 2, 6);
+  }
+  
+  for (let x = 10; x < CARD_WIDTH - 10; x += 4) {
+    doc.line(x, CARD_HEIGHT - 6, x + 2, CARD_HEIGHT - 6);
+  }
+}
 
-    doc.setDrawColor(COLORS.TEXT_GREY);
+// --- HELPER: DRAW GOLD "R" MARKER WITH DECORATIVE SHAPE ---
+function drawGoldRMarker(doc: jsPDF) {
+  doc.setFillColor(COLORS.GOLD_MEDIUM);
+  doc.circle(CARD_WIDTH - 8, 8, 4, "F");
+  
+  doc.setDrawColor(COLORS.BROWN_DARK);
+  doc.setLineWidth(0.5);
+  doc.circle(CARD_WIDTH - 8, 8, 4, "S");
+  
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(7);
+  doc.setFont("helvetica", "bold");
+  doc.text("R", CARD_WIDTH - 8, 8, { align: "center", baseline: "middle" });
+  
+  doc.setFont("NotoNaskhArabic", "normal");
+}
+
+// --- HELPER: DRAW GOLD "ت" MARKER WITH DECORATIVE SHAPE ---
+function drawGoldTMarker(doc: jsPDF) {
+  doc.setFillColor(COLORS.GOLD_MEDIUM);
+  doc.roundedRect(CARD_WIDTH - 12, 4, 8, 8, 1, 1, "F");
+  
+  doc.setDrawColor(COLORS.BROWN_DARK);
+  doc.setLineWidth(0.5);
+  doc.roundedRect(CARD_WIDTH - 12, 4, 8, 8, 1, 1, "S");
+  
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(7);
+  doc.setFont("NotoNaskhArabic", "bold");
+  doc.text("ت", CARD_WIDTH - 8, 8, { align: "center", baseline: "middle" });
+}
+
+// --- HELPER: DRAW BROWN HEADER BAR WITH GOLD ACCENTS ---
+function drawHeaderBar(doc: jsPDF) {
+  doc.setFillColor(COLORS.BROWN_MEDIUM);
+  doc.rect(6, 12, CARD_WIDTH - 12, 10, "F");
+  
+  doc.setDrawColor(COLORS.GOLD_MEDIUM);
+  doc.setLineWidth(0.8);
+  doc.line(6, 12, CARD_WIDTH - 6, 12);
+  doc.line(6, 22, CARD_WIDTH - 6, 22);
+  
+  doc.setFillColor(COLORS.GOLD_LIGHT);
+  for (let x = 10; x < CARD_WIDTH - 10; x += 5) {
+    doc.circle(x, 17, 0.5, "F");
+  }
+}
+
+// --- HELPER: DRAW GOLD BACKGROUND PATTERNS ---
+function drawBackgroundPatterns(doc: jsPDF) {
+  doc.setFillColor(COLORS.GOLD_LIGHT);
+  doc.setGState(new (doc as any).GState({ opacity: 0.1 }));
+  
+  for (let y = 0; y < CARD_HEIGHT; y += 8) {
+    for (let x = 0; x < CARD_WIDTH; x += 8) {
+      doc.line(x, y, x + 4, y + 4);
+    }
+  }
+  
+  doc.setGState(new (doc as any).GState({ opacity: 1.0 }));
+}
+
+// --- SIDE 1: FRONT OF CARD (With brown and gold shapes) ---
+export function drawCardFront(doc: jsPDF, data: IDCardData) {
+  doc.setFillColor(255, 255, 255);
+  doc.rect(0, 0, CARD_WIDTH, CARD_HEIGHT, "F");
+  
+  drawBackgroundPatterns(doc);
+  drawDecorativeBorder(doc);
+  drawGoldRMarker(doc);
+  drawHeaderBar(doc);
+  
+  doc.setTextColor(255, 255, 255);
+  drawText(doc, "الصندوق الاجتماعي للتنمية:  (الامانه، صنعاء، مارب، الجوف والمحويت )", 
+           CARD_WIDTH / 2, 17, 6, COLORS.WHITE, "center", true);
+  
+  drawText(doc, "برنامج التحويلات النقدية المشروطة في التغذية", 
+           CARD_WIDTH / 2, 21, 6, COLORS.WHITE, "center");
+  
+  drawText(doc, "بطاقة مستفيدة", CARD_WIDTH / 2, 30, 12, COLORS.GOLD_DARK, "center", true);
+  
+  doc.setDrawColor(COLORS.GOLD_MEDIUM);
+  doc.setLineWidth(0.5);
+  doc.line(CARD_WIDTH / 2 - 20, 33, CARD_WIDTH / 2 + 20, 33);
+  
+  doc.setFillColor(COLORS.GOLD_LIGHT);
+  doc.circle(CARD_WIDTH / 2, 38, 3, "F");
+  drawText(doc, "ا", CARD_WIDTH / 2, 38, 8, COLORS.BROWN_DARK, "center", true);
+  
+  const startY = 45;
+  const rowH = 5;
+  const labelX = CARD_WIDTH - MARGIN - 5;
+  
+  const drawField = (label: string, value: string, y: number) => {
+    drawText(doc, label + ":", labelX, y, 7, COLORS.BROWN_DARK, "right");
+    const valueXLimit = labelX - 40;
+    
+    doc.setDrawColor(COLORS.GOLD_MEDIUM);
     doc.setLineWidth(0.1);
-    doc.setLineDash([0.5, 0.5], 0);
-
-    doc.setFont("Amiri", "normal");
-    doc.setFontSize(10);
+    
+    doc.setFont("NotoNaskhArabic", "normal");
+    doc.setFontSize(7);
     const valueWidth = doc.getTextWidth(value);
     
-    doc.setFont("Amiri", "bold");
-    doc.setFontSize(8);
-    const labelWidth = doc.getTextWidth(label + ":");
-
     const lineStartX = valueXLimit - valueWidth - 2;
-    const lineEndX = rightX - labelWidth - 2;
+    const lineEndX = labelX - doc.getTextWidth(label + ":") - 2;
 
     if (lineEndX > lineStartX) {
-      doc.line(lineStartX, y + 1, lineEndX, y + 1);
+        for (let x = lineStartX; x < lineEndX; x += 1.5) {
+            doc.line(x, y + 0.5, x + 0.8, y + 0.5);
+        }
     }
-    doc.setLineDash([], 0);
-}
-
-// --- SIDE 1: FRONT OF CARD ---
-export function drawCardFront(doc: jsPDF, data: IDCardData) {
-    doc.setFillColor(COLORS.WHITE);
-    doc.rect(0, 0, CARD_WIDTH, CARD_HEIGHT, "F");
-
-    doc.setFillColor(COLORS.DARK_BROWN);
-    doc.path([
-        { op: 'm', c: [0, CARD_HEIGHT] }, { op: 'l', c: [35, CARD_HEIGHT] },
-        { op: 'c', c: [25, CARD_HEIGHT - 10, 10, CARD_HEIGHT - 25, 0, CARD_HEIGHT - 25] },
-        { op: 'h', c: [] }
-    ]).fill();
-
-    doc.setFillColor(COLORS.GOLD);
-    doc.path([
-        { op: 'm', c: [0, CARD_HEIGHT - 20] },
-        { op: 'c', c: [15, CARD_HEIGHT - 20, 30, CARD_HEIGHT - 5, 40, CARD_HEIGHT] },
-        { op: 'l', c: [0, CARD_HEIGHT] }, { op: 'h', c: [] }
-    ]).fill();
-
-    const headerX = CARD_WIDTH - 5;
-    drawText(doc, "(الصندوق الاجتماعي للتنمية): (الامانه، صنعاء، مارب، الجوف والمحويت)", headerX, 6, 6, COLORS.TEXT_DARK, "right", true);
-    drawText(doc, "برنامج التحويلات النقدية المشروطة في التغذية", headerX, 9, 6, COLORS.TEXT_DARK, "right", false);
-
-    doc.setDrawColor(COLORS.GOLD);
-    doc.setLineWidth(0.5);
-    doc.setFillColor(COLORS.WHITE);
-    doc.roundedRect(CARD_WIDTH / 2 - 12, 13, 24, 6, 0.5, 0.5, "FD");
-    drawText(doc, "بطاقة مستفيدة", CARD_WIDTH / 2, 16, 9, COLORS.TEXT_DARK, "center", true);
-
-    const startY = 24;
-    const lineHeight = 5;
-    const rightMargin = CARD_WIDTH - 5;
-    const valueColX = CARD_WIDTH - 25;
-
-    drawDataRow(doc, "الاسم", data.beneficiaryName, startY, rightMargin, valueColX);
-
-    const row2Y = startY + lineHeight;
-    drawText(doc, "القرية:", rightMargin, row2Y, 8, COLORS.TEXT_DARK, "right", true);
-    drawText(doc, data.village, rightMargin - 12, row2Y, 10, COLORS.TEXT_DARK, "right", false);
-    drawText(doc, "العزلة:", rightMargin - 35, row2Y, 8, COLORS.TEXT_DARK, "right", true);
-    drawText(doc, data.uzla, rightMargin - 45, row2Y, 10, COLORS.TEXT_DARK, "right", false);
-
-    drawDataRow(doc, "المديرية", data.district, row2Y + lineHeight, rightMargin, valueColX);
-    drawDataRow(doc, "رقم البطاقة", data.beneficiaryId, row2Y + (lineHeight * 2), rightMargin, valueColX);
-    drawDataRow(doc, "تاريخ انتهاء البطاقة", data.cardExpiry, row2Y + (lineHeight * 3), rightMargin, valueColX);
-
-    const photoX = 8, photoY = 22, photoW = 18, photoH = 20;
-    doc.setFillColor(COLORS.PLACEHOLDER);
-    doc.rect(photoX, photoY, photoW, photoH, "F");
-    drawText(doc, `2-${data.beneficiaryId}`, photoX + (photoW/2), photoY + photoH + 4, 8, COLORS.TEXT_DARK, "center", true);
-
-    drawText(doc, "1033", CARD_WIDTH - 10, CARD_HEIGHT - 4, 8, COLORS.TEXT_DARK, "right", true);
-    drawText(doc, "91", 20, CARD_HEIGHT - 4, 8, COLORS.TEXT_DARK, "left", true);
-}
-
-// --- SIDE 2: BACK OF CARD ---
-export function drawCardBack(doc: jsPDF) {
-    doc.setFillColor(COLORS.DARK_BROWN);
-    doc.rect(0, 0, CARD_WIDTH, CARD_HEIGHT, "F");
-
-    doc.setFillColor(COLORS.GOLD);
-    doc.path([
-        { op: 'm', c: [0, 0] }, { op: 'l', c: [50, 0] },
-        { op: 'c', c: [30, 15, 10, 25, 0, 30] }, { op: 'h', c: [] }
-    ]).fill();
-
-    drawText(doc, "تعليمات هامة", CARD_WIDTH - 10, 10, 12, COLORS.WHITE, "right", true);
-
-    const rules = [
-      "البطاقة مخصصة لأنشطة البرنامج ولا يجوز استخدامها لأغراض أخرى",
-      "أي كشط أو تعديل في بيانات البطاقة يلغيها",
-      "تحصل كل إمرأة امتثلت لشروط البرنامج على مبلغ 20 ألف ريال شهريا",
-      "عند اجبار المستفيدة على دفع أو خصم مبلغ منها يتم ابلاغ إدارة البرنامج",
-      "للإبلاغ عن فقدان البطاقة أو تقديم شكوى يتم التواصل عبر الوسائل أدناه"
-    ];
-    let currentY = 18; const gap = 4.5; const textX = CARD_WIDTH - 12;
-    rules.forEach((rule) => {
-        doc.setFillColor(COLORS.WHITE);
-        doc.circle(textX + 3, currentY, 0.7, "F");
-        drawText(doc, rule, textX, currentY, 6.5, COLORS.WHITE, "right", false);
-        currentY += gap;
-    });
-
-    const footerH = 8; const footerY = CARD_HEIGHT - footerH;
-    doc.setFillColor(COLORS.LIGHT_BROWN);
-    doc.rect(0, footerY, CARD_WIDTH, footerH, "F");
-    doc.setDrawColor(COLORS.GOLD);
-    doc.setLineWidth(0.5);
-    doc.line(0, footerY, CARD_WIDTH, footerY);
-    drawText(doc, "الاتصال بالرقم المجاني 8009800 أو الرقم الثابت 513821 - 01", CARD_WIDTH / 2, footerY + (footerH/2), 7, COLORS.WHITE, "center", true);
     
-    // Bottom right triangle
-    doc.setFillColor(COLORS.GOLD);
-    doc.path([ { op: 'm', c: [CARD_WIDTH, CARD_HEIGHT] }, { op: 'l', c: [CARD_WIDTH - 20, CARD_HEIGHT] }, { op: 'l', c: [CARD_WIDTH, CARD_HEIGHT - 10] }, { op: 'h', c: [] } ]).fill();
-    drawText(doc, "2-126725", CARD_WIDTH - 11.5, CARD_HEIGHT - 3, 4, COLORS.WHITE, "center", false);
+    drawText(doc, value, (lineStartX + lineEndX)/2, y, 7, COLORS.BROWN_DARK, "center", true);
+  };
+  
+  drawField("الاسم", data.beneficiaryName, startY);
+  drawField("القرية", data.village, startY + rowH);
+  drawField("العزلة", data.uzla, startY + (rowH * 2));
+  drawField("المديرية", data.district, startY + (rowH * 3));
+  drawField("رقم البطاقة", data.beneficiaryId, startY + (rowH * 4));
+  drawField("تاريخ انتهاء البطاقة", data.cardExpiry, startY + (rowH * 5));
+  
+  const bottomY = startY + (rowH * 6) + 4;
+  
+  doc.setFillColor(COLORS.GOLD_LIGHT);
+  doc.roundedRect(CARD_WIDTH - 15, bottomY - 2, 12, 6, 1, 1, "F");
+  doc.setDrawColor(COLORS.BROWN_DARK);
+  doc.roundedRect(CARD_WIDTH - 15, bottomY - 2, 12, 6, 1, 1, "S");
+  drawText(doc, data.beneficiaryId, CARD_WIDTH - 9, bottomY, 8, COLORS.BROWN_DARK, "center", true);
+  
+  doc.setFillColor(COLORS.GOLD_LIGHT);
+  doc.roundedRect(CARD_WIDTH - 30, bottomY - 2, 12, 6, 1, 1, "F");
+  doc.setDrawColor(COLORS.BROWN_DARK);
+  doc.roundedRect(CARD_WIDTH - 30, bottomY - 2, 12, 6, 1, 1, "S");
+  drawText(doc, data.cardExpiry, CARD_WIDTH - 24, bottomY, 7, COLORS.RED_WARNING, "center", true);
+  
+  drawText(doc, "91 1033", CARD_WIDTH - 45, bottomY, 7, COLORS.GOLD_DARK, "right", true);
+  drawText(doc, `2-${data.beneficiaryId}`, CARD_WIDTH - 60, bottomY, 7, COLORS.BROWN_DARK, "right", true);
+  
+  doc.setDrawColor(COLORS.GOLD_MEDIUM);
+  doc.setLineWidth(0.5);
+  doc.line(10, CARD_HEIGHT - 8, CARD_WIDTH - 10, CARD_HEIGHT - 8);
 }
 
+// --- SIDE 2: BACK OF CARD (With brown and gold shapes) ---
+export function drawCardBack(doc: jsPDF) {
+  doc.setFillColor(255, 255, 255);
+  doc.rect(0, 0, CARD_WIDTH, CARD_HEIGHT, "F");
+  
+  drawBackgroundPatterns(doc);
+  drawDecorativeBorder(doc);
+  drawGoldTMarker(doc);
+  
+  doc.setFillColor(COLORS.BROWN_MEDIUM);
+  doc.rect(6, 8, CARD_WIDTH - 12, 6, "F");
+  
+  doc.setDrawColor(COLORS.GOLD_MEDIUM);
+  doc.setLineWidth(0.5);
+  doc.rect(6, 8, CARD_WIDTH - 12, 6, "S");
+  
+  drawText(doc, "تعليمات هامة", CARD_WIDTH / 2, 11, 10, COLORS.GOLD_MEDIUM, "center", true);
+  
+  const startY = 20;
+  const step = 4.5;
+  const x = CARD_WIDTH - MARGIN - 5;
+  
+  doc.setFillColor(COLORS.GOLD_MEDIUM);
+  
+  const instructions = [
+    "• البطاقة مخصصة لأنشطة البرنامج ولا يجوز  استخدامها لأغراض أخرى",
+    "• أي كشط او تعديل في بيانات البطاقة يلغيها",
+    "• تحصل كل امرأة امتثلت لشروط  البرنامج على مبلغ  20 ألف ريال شهريا خلال مدة تنفيذ المشروع ولايحق  لها  التنازل  عنه للغير جزئيا أو كليا",
+    "• عند اجبار المستفيدة على دفع او خصم مبلغ منها  يتم ابلاغ   إدارة البرنامج  فورا",
+    "• للابلاغ  عن فقدان البطاقة أو تقديم شكوى او استفسار  يتم التواصل  عبر أحد الوسائل المذكورة أدناه"
+  ];
+  
+  instructions.forEach((instruction, i) => {
+    drawText(doc, instruction, x, startY + (i * step), 6, COLORS.BROWN_DARK, "right");
+  });
+  
+  const separatorY = startY + (instructions.length * step) + 3;
+  doc.setDrawColor(COLORS.GOLD_MEDIUM);
+  doc.setLineWidth(0.8);
+  doc.line(10, separatorY, CARD_WIDTH - 10, separatorY);
+  
+  doc.setFillColor(COLORS.GOLD_LIGHT);
+  for (let x_pos = 15; x_pos < CARD_WIDTH - 15; x_pos += 6) {
+    doc.circle(x_pos, separatorY, 0.5, "F");
+  }
+  
+  const contactY = separatorY + 8;
+  
+  doc.setFillColor(COLORS.GOLD_LIGHT);
+  doc.roundedRect(10, contactY - 3, CARD_WIDTH - 20, 8, 2, 2, "F");
+  
+  doc.setDrawColor(COLORS.BROWN_DARK);
+  doc.setLineWidth(0.5);
+  doc.roundedRect(10, contactY - 3, CARD_WIDTH - 20, 8, 2, 2, "S");
+  
+  drawText(doc, "الاتصال بالرقم  المجاني 8009800  او الرقم الثابت  513821 – 01", 
+           CARD_WIDTH / 2, contactY + 1, 8, COLORS.BROWN_DARK, "center", true);
+  
+  const cornerSize = 4;
+  doc.setFillColor(COLORS.GOLD_MEDIUM);
+  
+  doc.triangle(6, CARD_HEIGHT - 6, 6, CARD_HEIGHT - 6 - cornerSize, 6 + cornerSize, CARD_HEIGHT - 6, "F");
+  doc.triangle(CARD_WIDTH - 6, CARD_HEIGHT - 6, CARD_WIDTH - 6, CARD_HEIGHT - 6 - cornerSize, CARD_WIDTH - 6 - cornerSize, CARD_HEIGHT - 6, "F");
+}
 
 // --- WORKER LOGIC ---
 self.onmessage = async (event) => {
@@ -179,7 +298,7 @@ self.onmessage = async (event) => {
         postMessage({ type: 'error', error: 'Missing beneficiaries data or font files.' });
         return;
     }
-    
+
     try {
         if (sample) {
             const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: [CARD_WIDTH, CARD_HEIGHT] });
