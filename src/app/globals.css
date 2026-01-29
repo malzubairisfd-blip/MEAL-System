@@ -104,12 +104,22 @@ body {
    ----------------------- */
 /* Primary button (use .btn-primary on elements) */
 .btn-primary {
-  @apply inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold shadow-sm transition-colors;
+  @apply inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold shadow-sm relative overflow-hidden transition-all duration-300 active:scale-95;
   background-color: var(--primary);
   color: white;
   border: none;
 }
 .btn-primary:hover { background-color: var(--primary-600); }
+
+/* Smooth Button Transitions */
+.btn-primary::after {
+  content: '';
+  @apply absolute inset-0 bg-white/20 translate-y-full transition-transform duration-300;
+}
+
+.btn-primary:hover::after {
+  @apply translate-y-0;
+}
 
 /* Neutral button */
 .btn {
