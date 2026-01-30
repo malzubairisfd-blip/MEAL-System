@@ -186,6 +186,7 @@ export default function UploadToDbPage() {
   const [file, setFile] = useState<File | null>(null);
   const [rawRows, setRawRows] = useState<RecordRow[]>([]);
   const [columns, setColumns] = useState<string[]>([]);
+  const [idColumnForCheck, setIdColumnForCheck] = useState<string>('');
   
   const [columnMapping, setColumnMapping] = useState<Map<string, string>>(new Map());
   const [manualMapping, setManualMapping] = useState({ ui: '', db: '' });
@@ -314,23 +315,20 @@ export default function UploadToDbPage() {
   const validateAndSaveToDB = async (enrichedRecords: any[]) => {
       setLoading(prev => ({ ...prev, saving: true }));
       try {
+        if (!idColumnForCheck) {
+          toast({ title: 'Validation Error', description: 'Please select a column to use for the duplicate check.', variant: 'destructive' });
+          setLoading(prev => ({ ...prev, saving: false }));
+          return;
+        }
+
         const existingRes = await fetch('/api/bnf-assessed');
         if (!existingRes.ok) throw new Error("Could not fetch existing records from database.");
         const existingRecords = await existingRes.json();
         
-        const beneficiaryIdColumn = 'beneficiaryId';
-        const mappedBeneficiaryIdColumn = Array.from(columnMapping.entries()).find(([_, dbCol]) => dbCol === beneficiaryIdColumn)?.[0];
+        const existingIds = new Set(existingRecords.map((r: any) => String(r.beneficiaryId)));
         
-        if (!mappedBeneficiaryIdColumn) {
-          toast({ title: 'Mapping Error', description: `Please map a source column to '${beneficiaryIdColumn}' to check for duplicates.`});
-          setLoading(prev => ({ ...prev, saving: false}));
-          return;
-        }
-
-        const existingIds = new Set(existingRecords.map((r: any) => String(r[beneficiaryIdColumn])));
-        
-        const duplicates = enrichedRecords.filter(row => existingIds.has(String(row[mappedBeneficiaryIdColumn])));
-        const nonDuplicates = enrichedRecords.filter(row => !existingIds.has(String(row[mappedBeneficiaryIdColumn])));
+        const duplicates = enrichedRecords.filter(row => existingIds.has(String(row[idColumnForCheck])));
+        const nonDuplicates = enrichedRecords.filter(row => !existingIds.has(String(row[idColumnForCheck])));
         
         if (duplicates.length > 0) {
             setDuplicateDialog({ isOpen: true, duplicates, nonDuplicates });
@@ -405,8 +403,21 @@ export default function UploadToDbPage() {
         <Card>
           <CardHeader>
             <CardTitle>2. Map Columns</CardTitle>
-            <CardDescription>Match columns from your file to the database schema.</CardDescription>
-            <Button onClick={handleAutoMatch}><GitCompareArrows className="mr-2 h-4 w-4" />Auto-match Columns</Button>
+            <CardDescription>Match columns from your file to the database schema. Select the column that contains the unique Beneficiary ID for duplicate checking.</CardDescription>
+            <div className="flex flex-col md:flex-row gap-4 items-end pt-4">
+                <Button onClick={handleAutoMatch}><GitCompareArrows className="mr-2 h-4 w-4" />Auto-match Columns</Button>
+                <div className="flex-1 w-full md:w-auto">
+                    <Label htmlFor="id-check-column">Beneficiary ID Column for Duplicate Check</Label>
+                    <Select value={idColumnForCheck} onValueChange={setIdColumnForCheck}>
+                        <SelectTrigger id="id-check-column">
+                            <SelectValue placeholder="Select ID column..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {columns.map(col => <SelectItem key={col} value={col}>{col}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
+                </div>
+            </div>
           </CardHeader>
           <CardContent className="space-y-4">
              {!isMappingComplete && (
@@ -508,4 +519,3 @@ export default function UploadToDbPage() {
     </div>
   );
 }
-
