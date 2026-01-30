@@ -86,6 +86,13 @@ export default function ReviewPage() {
         if (!res.ok) throw new Error("Failed to fetch data.");
         const records: RecordRow[] = await res.json();
         
+        if (records.length === 0) {
+            toast({ title: "No Data", description: "The beneficiary database is empty. Please upload data first.", variant: "default" });
+            setAllClusters([]);
+            setLoading(false);
+            return;
+        }
+
         const recordsByCluster: Record<string, { records: RecordRow[]; reasons: Set<string>; Max_PairScore: number }> = {};
         
         records.forEach(record => {
@@ -96,7 +103,7 @@ export default function ReviewPage() {
                 }
                 recordsByCluster[clusterId].records.push(record);
                 if (record.reasons) {
-                    (record.reasons as string).split(',').forEach(r => recordsByCluster[clusterId].reasons.add(r));
+                    (String(record.reasons)).split(',').forEach(r => recordsByCluster[clusterId].reasons.add(r));
                 }
                 recordsByCluster[clusterId].Max_PairScore = Math.max(recordsByCluster[clusterId].Max_PairScore, record.Max_PairScore || 0);
             }
@@ -107,13 +114,12 @@ export default function ReviewPage() {
             records: data.records,
             reasons: Array.from(data.reasons),
             Max_PairScore: data.Max_PairScore,
-            // These will be filled from the records if available
             groupDecision: data.records[0]?.groupDecision,
             recordDecisions: data.records.reduce((acc, r) => ({...acc, [r._internalId!]: r.recordDecision}), {}),
             decisionReasons: data.records.reduce((acc, r) => ({...acc, [r._internalId!]: r.decisionReason}), {}),
-            pairScores: [], // Pairwise scores are not stored in db, would need recalculation if needed
+            pairScores: [], // Not stored in DB
             confidenceScore: data.records[0]?.confidenceScore || 0,
-        })).sort((a,b) => b.Max_PairScore - a.Max_PairScore);
+        })).filter(c => c.records.length > 1).sort((a,b) => b.Max_PairScore - a.Max_PairScore);
         
         setAllClusters(reconstructedClusters);
 

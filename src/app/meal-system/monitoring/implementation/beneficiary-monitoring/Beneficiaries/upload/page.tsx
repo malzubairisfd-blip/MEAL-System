@@ -181,7 +181,7 @@ export default function UploadToDbPage() {
   const router = useRouter();
   
   const [projects, setProjects] = useState<Project[]>([]);
-  const [selectedProjectId, setSelectedProjectId] = useState<string>('');
+  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   
   const [file, setFile] = useState<File | null>(null);
   const [rawRows, setRawRows] = useState<RecordRow[]>([]);
@@ -194,7 +194,7 @@ export default function UploadToDbPage() {
   const [loading, setLoading] = useState({ projects: true, worker: false, saving: false });
   const [progress, setProgress] = useState(0);
   
-  const [duplicateDialog, setDuplicateDialog] = useState({ isOpen: false, duplicates: [], nonDuplicates: [] });
+  const [duplicateDialog, setDuplicateDialog] = useState<{ isOpen: boolean; duplicates: any[]; nonDuplicates: any[], project: Project | null }>({ isOpen: false, duplicates: [], nonDuplicates: [], project: null });
   const [saveStats, setSaveStats] = useState({ saved: 0, skipped: 0, total: 0 });
 
   const workerRef = useRef<Worker>();
@@ -277,7 +277,7 @@ export default function UploadToDbPage() {
   };
   
   const handleProcessAndSave = () => {
-    if (!workerRef.current || !selectedProjectId) {
+    if (!workerRef.current || !selectedProject) {
       toast({ title: "Prerequisites Missing", description: "Please select a project and ensure the worker is ready.", variant: "destructive" });
       return;
     }
@@ -309,14 +309,18 @@ export default function UploadToDbPage() {
     } else if (msg.type === 'done') {
       setLoading(prev => ({...prev, worker: false}));
       const enrichedRecords = enrichRecordsWithClusterData(rawRows, msg.payload.clusters);
-      validateAndSaveToDB(enrichedRecords);
+      validateAndSaveToDB(enrichedRecords, selectedProject);
     } else if (msg.type === 'error') {
       setLoading(prev => ({...prev, worker: false}));
       toast({ title: "Clustering Error", description: msg.error, variant: 'destructive'});
     }
   };
 
-  const validateAndSaveToDB = async (enrichedRecords: any[]) => {
+  const validateAndSaveToDB = async (enrichedRecords: any[], project: Project | null) => {
+      if (!project) {
+        toast({ title: "Validation Failed", description: "No project selected.", variant: 'destructive'});
+        return;
+      }
       setLoading(prev => ({ ...prev, saving: true }));
       try {
         const existingRes = await fetch('/api/bnf-assessed');
@@ -329,10 +333,10 @@ export default function UploadToDbPage() {
         const nonDuplicates = enrichedRecords.filter(row => !existingIds.has(String(row[idColumnForCheck])));
         
         if (duplicates.length > 0) {
-            setDuplicateDialog({ isOpen: true, duplicates, nonDuplicates });
+            setDuplicateDialog({ isOpen: true, duplicates, nonDuplicates, project });
             setLoading(prev => ({...prev, saving: false}));
         } else {
-            await executeSave(enrichedRecords, true); // Overwrite if it's the first time for this project
+            await executeSave(enrichedRecords, true, project); 
         }
       } catch(e: any) {
         toast({ title: "Validation Failed", description: e.message, variant: 'destructive'});
@@ -340,16 +344,15 @@ export default function UploadToDbPage() {
       }
   };
 
-  const executeSave = async (recordsToSave: any[], isOverwrite: boolean) => {
-    setLoading(prev => ({...prev, saving: true}));
-    setDuplicateDialog({ isOpen: false, duplicates: [], nonDuplicates: [] });
-    
-    const project = projects.find(p => p.projectId === selectedProjectId);
+  const executeSave = async (recordsToSave: any[], isOverwrite: boolean, project: Project | null) => {
     if (!project) {
         toast({ title: 'Error', description: 'Selected project not found.'});
         setLoading(prev => ({ ...prev, saving: false}));
         return;
     }
+
+    setLoading(prev => ({...prev, saving: true}));
+    setDuplicateDialog({ isOpen: false, duplicates: [], nonDuplicates: [], project: null });
     
     const dataToSave = recordsToSave.map(row => {
         const newRecord: {[key: string]: any} = {};
@@ -366,7 +369,7 @@ export default function UploadToDbPage() {
         const res = await fetch(`/api/bnf-assessed?init=${isOverwrite}`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ projectName: project.projectName, results: dataToSave })
+            body: JSON.stringify({ projectId: project.projectId, projectName: project.projectName, results: dataToSave })
         });
         if(!res.ok) throw new Error('Save operation failed.');
 
@@ -380,7 +383,8 @@ export default function UploadToDbPage() {
   }
 
   const unmappedUiColumns = useMemo(() => columns.filter(col => !Array.from(columnMapping.keys()).includes(col)), [columns, columnMapping]);
-  const isMappingComplete = useMemo(() => unmappedUiColumns.length === 0, [unmappedUiColumns]);
+  const dbColumnsToMap = useMemo(() => DB_COLUMNS.filter(c => !c.includes('_id') && !c.includes('_name')), []);
+  const unmappedDbColumns = useMemo(() => dbColumnsToMap.filter(c => !Array.from(columnMapping.values()).includes(c)), [columnMapping, dbColumnsToMap]);
 
   return (
     <div className="space-y-6">
@@ -389,7 +393,10 @@ export default function UploadToDbPage() {
           <CardTitle>1. Select Project & Upload</CardTitle>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Select onValueChange={setSelectedProjectId} value={selectedProjectId} disabled={loading.projects}>
+          <Select onValueChange={(val) => {
+              const project = projects.find(p => p.projectId === val);
+              setSelectedProject(project || null);
+          }} value={selectedProject?.projectId || ''} disabled={loading.projects}>
             <SelectTrigger><SelectValue placeholder={loading.projects ? "Loading..." : "Select a project..."} /></SelectTrigger>
             <SelectContent>{projects.map(p => <SelectItem key={p.projectId} value={p.projectId}>{p.projectName}</SelectItem>)}</SelectContent>
           </Select>
@@ -418,7 +425,7 @@ export default function UploadToDbPage() {
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-             {!isMappingComplete && (
+             {unmappedUiColumns.length > 0 && (
                 <Card className="p-4 bg-muted">
                     <CardTitle className="text-md mb-2">Manual Mapping</CardTitle>
                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
@@ -433,7 +440,7 @@ export default function UploadToDbPage() {
                               <Label>Unmapped DB Column</Label>
                               <Select value={manualMapping.db} onValueChange={v => setManualMapping(m => ({ ...m, db: v}))}>
                                   <SelectTrigger><SelectValue placeholder="Select Destination..." /></SelectTrigger>
-                                  <SelectContent><ScrollArea className="h-60">{DB_COLUMNS.filter(c => !Array.from(columnMapping.values()).includes(c)).map(col => <SelectItem key={col} value={col}>{col}</SelectItem>)}</ScrollArea></SelectContent>
+                                  <SelectContent><ScrollArea className="h-60">{unmappedDbColumns.map(col => <SelectItem key={col} value={col}>{col}</SelectItem>)}</ScrollArea></SelectContent>
                               </Select>
                           </div>
                           <Button onClick={handleAddManualMapping}>Add Mapping</Button>
@@ -447,6 +454,16 @@ export default function UploadToDbPage() {
                         <Table>
                            <TableHeader><TableRow><TableHead>Source Column</TableHead><TableHead>Destination Column</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
                            <TableBody>
+                                <TableRow>
+                                    <TableCell className="font-semibold text-muted-foreground">Selected Project Name</TableCell>
+                                    <TableCell className="font-medium text-muted-foreground">project_name (auto)</TableCell>
+                                    <TableCell></TableCell>
+                                </TableRow>
+                                <TableRow>
+                                    <TableCell className="font-semibold text-muted-foreground">Selected Project ID</TableCell>
+                                    <TableCell className="font-medium text-muted-foreground">project_id (auto)</TableCell>
+                                    <TableCell></TableCell>
+                                </TableRow>
                                {Array.from(columnMapping.entries()).map(([uiCol, dbCol]) => (
                                    <TableRow key={uiCol}>
                                        <TableCell>{uiCol}</TableCell><TableCell className="font-medium">{dbCol}</TableCell>
@@ -468,7 +485,7 @@ export default function UploadToDbPage() {
           <CardDescription>This will run the clustering algorithm and then save the results to the database.</CardDescription>
         </CardHeader>
         <CardContent>
-           <Button onClick={handleProcessAndSave} disabled={loading.worker || loading.saving || !selectedProjectId || !file}>
+           <Button onClick={handleProcessAndSave} disabled={loading.worker || loading.saving || !selectedProject || !file}>
             {(loading.worker || loading.saving) && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
             {loading.worker ? 'Clustering...' : loading.saving ? 'Saving...' : 'Process and Save to DB'}
            </Button>
@@ -509,8 +526,8 @@ export default function UploadToDbPage() {
             </AlertDialogHeader>
             <AlertDialogFooter>
                 <AlertDialogCancel onClick={() => setLoading(prev => ({...prev, saving: false}))}>Cancel</AlertDialogCancel>
-                <Button variant="outline" onClick={() => executeSave(duplicateDialog.nonDuplicates, false)}>Skip Duplicates</Button>
-                <AlertDialogAction onClick={() => executeSave([...duplicateDialog.nonDuplicates, ...duplicateDialog.duplicates], false)}>Replace Existing</AlertDialogAction>
+                <Button variant="outline" onClick={() => executeSave(duplicateDialog.nonDuplicates, false, duplicateDialog.project)}>Skip Duplicates</Button>
+                <AlertDialogAction onClick={() => executeSave([...duplicateDialog.nonDuplicates, ...duplicateDialog.duplicates], true, duplicateDialog.project)}>Replace Existing</AlertDialogAction>
             </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
