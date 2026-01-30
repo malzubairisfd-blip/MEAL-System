@@ -1,3 +1,4 @@
+
 // src/app/meal-system/monitoring/implementation/beneficiary-monitoring/Beneficiaries/upload/page.tsx
 "use client";
 
@@ -182,6 +183,7 @@ export default function UploadToDbPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectSearchQuery, setProjectSearchQuery] = useState('');
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+  const selectedProjectRef = useRef<Project | null>(null);
   
   const [file, setFile] = useState<File | null>(null);
   const [rawRows, setRawRows] = useState<RecordRow[]>([]);
@@ -262,10 +264,12 @@ export default function UploadToDbPage() {
     
     if (foundProject) {
         setSelectedProject(foundProject);
+        selectedProjectRef.current = foundProject;
         toast({ title: "Project Selected", description: `Selected: ${foundProject.projectName}` });
     } else {
         toast({ title: "Project Not Found", description: "Could not find a project matching your query.", variant: "destructive" });
         setSelectedProject(null);
+        selectedProjectRef.current = null;
     }
   };
 
@@ -306,7 +310,7 @@ export default function UploadToDbPage() {
         toast({ title: "Worker not ready. Please try again in a moment.", variant: "destructive" });
         return;
     }
-    if (!selectedProject || !selectedProject.projectId || !selectedProject.projectName) {
+    if (!selectedProjectRef.current) {
       toast({ title: "Prerequisites Missing", description: "Please select a valid project.", variant: "destructive" });
       return;
     }
@@ -338,7 +342,7 @@ export default function UploadToDbPage() {
     } else if (msg.type === 'done') {
       setLoading(prev => ({...prev, worker: false}));
       const enrichedRecords = enrichRecordsWithClusterData(rawRows, msg.payload.clusters);
-      validateAndSaveToDB(enrichedRecords, selectedProject);
+      validateAndSaveToDB(enrichedRecords, selectedProjectRef.current);
     } else if (msg.type === 'error') {
       setLoading(prev => ({...prev, worker: false}));
       toast({ title: "Clustering Error", description: msg.error, variant: 'destructive'});
@@ -369,13 +373,13 @@ export default function UploadToDbPage() {
         }
       } catch(e: any) {
         toast({ title: "Validation Failed", description: e.message, variant: 'destructive'});
-        setLoading(prev => ({ ...prev, saving: false}));
+        setLoading(prev => ({...prev, saving: false}));
       }
   };
 
   const executeSave = async (recordsToSave: any[], isOverwrite: boolean, project: Project | null) => {
     if (!project) {
-        toast({ title: 'Error', description: 'Selected project not found.'});
+        toast({ title: 'Error', description: 'Selected project not found during save operation.'});
         setLoading(prev => ({ ...prev, saving: false}));
         setDuplicateDialog(d => ({ ...d, isOpen: false }));
         return;
