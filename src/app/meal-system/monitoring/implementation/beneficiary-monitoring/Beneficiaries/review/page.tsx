@@ -31,7 +31,6 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
 import { useTranslation } from "@/hooks/use-translation";
-import { loadCachedResult, cacheFinalResult } from "@/lib/cache";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Select,
@@ -63,6 +62,7 @@ type Cluster = {
   pairScores: any[];
   confidenceScore: number;
   Max_PairScore: number;
+  Generated_Cluster_ID: number;
   // Fields for review decisions
   groupDecision?: "تكرار" | "ليست تكرار";
   recordDecisions?: { [recordId: string]: string };
@@ -81,26 +81,52 @@ export default function ReviewPage() {
 
   const loadClusters = useCallback(async () => {
     setLoading(true);
-    const result = await loadCachedResult();
+    try {
+        const res = await fetch('/api/bnf-assessed');
+        if (!res.ok) throw new Error("Failed to fetch data.");
+        const records: RecordRow[] = await res.json();
+        
+        const recordsByCluster: Record<string, { records: RecordRow[]; reasons: Set<string>; Max_PairScore: number }> = {};
+        
+        records.forEach(record => {
+            const clusterId = record.Generated_Cluster_ID;
+            if (clusterId) {
+                if (!recordsByCluster[clusterId]) {
+                    recordsByCluster[clusterId] = { records: [], reasons: new Set(), Max_PairScore: 0 };
+                }
+                recordsByCluster[clusterId].records.push(record);
+                if (record.reasons) {
+                    (record.reasons as string).split(',').forEach(r => recordsByCluster[clusterId].reasons.add(r));
+                }
+                recordsByCluster[clusterId].Max_PairScore = Math.max(recordsByCluster[clusterId].Max_PairScore, record.Max_PairScore || 0);
+            }
+        });
+        
+        const reconstructedClusters: Cluster[] = Object.entries(recordsByCluster).map(([id, data]) => ({
+            Generated_Cluster_ID: Number(id),
+            records: data.records,
+            reasons: Array.from(data.reasons),
+            Max_PairScore: data.Max_PairScore,
+            // These will be filled from the records if available
+            groupDecision: data.records[0]?.groupDecision,
+            recordDecisions: data.records.reduce((acc, r) => ({...acc, [r._internalId!]: r.recordDecision}), {}),
+            decisionReasons: data.records.reduce((acc, r) => ({...acc, [r._internalId!]: r.decisionReason}), {}),
+            pairScores: [], // Pairwise scores are not stored in db, would need recalculation if needed
+            confidenceScore: data.records[0]?.confidenceScore || 0,
+        })).sort((a,b) => b.Max_PairScore - a.Max_PairScore);
+        
+        setAllClusters(reconstructedClusters);
 
-    if (result && result.clusters) {
-      const sortedClusters = [...result.clusters].sort(
-        (a, b) => (b.Max_PairScore || 0) - (a.Max_PairScore || 0)
-      );
-      setAllClusters(sortedClusters);
-      if (sortedClusters.length > 0) {
-        const firstUnreviewedIndex = sortedClusters.findIndex(c => !c.groupDecision);
-        setSelectedClusterIndex(firstUnreviewedIndex !== -1 ? firstUnreviewedIndex : 0);
-      }
-    } else {
-      toast({
-        title: t("review.toasts.noData.title"),
-        description: t("review.toasts.noData.description"),
-        variant: "destructive",
-      });
+        if (reconstructedClusters.length > 0) {
+            const firstUnreviewedIndex = reconstructedClusters.findIndex(c => !c.groupDecision);
+            setSelectedClusterIndex(firstUnreviewedIndex !== -1 ? firstUnreviewedIndex : 0);
+        }
+
+    } catch (err: any) {
+        toast({ title: "Error", description: err.message, variant: "destructive" });
     }
     setLoading(false);
-  }, [t, toast]);
+  }, [toast]);
 
   useEffect(() => {
     loadClusters();
@@ -108,14 +134,9 @@ export default function ReviewPage() {
   
   useEffect(() => {
     if (validationError) {
-        // We need to use an effect to show toast to avoid state update during render
         setTimeout(() => {
-            toast({
-                title: "خطأ في التحقق",
-                description: validationError,
-                variant: "destructive",
-            });
-            setValidationError(null); // Reset after showing
+            toast({ title: "خطأ في التحقق", description: validationError, variant: "destructive" });
+            setValidationError(null);
         }, 0);
     }
 }, [validationError, toast]);
@@ -130,7 +151,7 @@ export default function ReviewPage() {
 
   const handleUpdateClusterDecision = useCallback(
     (clusterIndex: number, updateFn: (cluster: Cluster) => Cluster) => {
-      setValidationError(null); // Clear previous validation errors on any change
+      setValidationError(null);
       setAllClusters((prev) =>
         prev.map((c, i) => (i === clusterIndex ? updateFn(c) : c))
       );
@@ -165,19 +186,43 @@ export default function ReviewPage() {
     }
     
     setIsSaving(true);
-    const currentData = await loadCachedResult();
-    const newClusters = [...allClusters];
-    await cacheFinalResult({ ...currentData, clusters: newClusters });
     
-    toast({ title: "تم الحفظ", description: `تم حفظ القرارات للمجموعة ${selectedClusterIndex + 1}.`, });
-    setIsSaving(false);
-    return true;
+    const recordsToUpdate = selectedCluster.records.map(r => ({
+        id: r.id, // THE DB ROW ID
+        groupDecision: selectedCluster.groupDecision,
+        recordDecision: selectedCluster.recordDecisions?.[r._internalId!],
+        decisionReason: selectedCluster.decisionReasons?.[r._internalId!],
+    }));
 
-  }, [selectedClusterIndex, selectedCluster, allClusters, toast]);
+    try {
+        const res = await fetch('/api/bnf-assessed', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(recordsToUpdate)
+        });
+
+        if (!res.ok) {
+            const errorData = await res.json();
+            throw new Error(errorData.error || `Failed to update decisions.`);
+        }
+        
+        toast({ title: "تم الحفظ", description: `تم حفظ القرارات للمجموعة ${selectedClusterIndex + 1}.`, });
+        setIsSaving(false);
+        return true;
+    } catch (e: any) {
+        toast({ title: "فشل الحفظ", description: e.message, variant: 'destructive'});
+        setIsSaving(false);
+        return false;
+    }
+
+  }, [selectedClusterIndex, selectedCluster, toast]);
 
  const handleSaveAndNext = useCallback(async () => {
     const success = await validateAndSave();
     if (success) {
+      // Optimistically update local state before refetching
+      handleUpdateClusterDecision(selectedClusterIndex!, (c) => c);
+
       if (selectedClusterIndex !== null && selectedClusterIndex < allClusters.length - 1) {
         setSelectedClusterIndex(selectedClusterIndex + 1);
         setActiveRecordIndex(null);
@@ -185,7 +230,7 @@ export default function ReviewPage() {
         toast({ title: "اكتملت المراجعة", description: "لقد قمت بمراجعة جميع المجموعات.", });
       }
     }
-  }, [validateAndSave, selectedClusterIndex, allClusters.length, toast]);
+  }, [validateAndSave, selectedClusterIndex, allClusters.length, toast, handleUpdateClusterDecision]);
 
   const [updateQueue, setUpdateQueue] = useState<{ recordId: string, decision: string } | null>(null);
 
