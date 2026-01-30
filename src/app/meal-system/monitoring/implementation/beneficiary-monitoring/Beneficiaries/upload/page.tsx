@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import * as XLSX from 'xlsx';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -15,7 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Database, Loader2, Save, ArrowRight, FileDown, GitCompareArrows, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Database, Loader2, Save, ArrowRight, FileDown, GitCompareArrows, Plus, Trash2, CheckCircle, Search } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -26,8 +26,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import type { RecordRow } from '@/lib/types';
-import type { AuditFinding } from "@/lib/auditEngine";
+import type { RecordRow } from "@/lib/types";
 
 interface Project {
   projectId: string;
@@ -181,6 +180,7 @@ export default function UploadToDbPage() {
   const router = useRouter();
   
   const [projects, setProjects] = useState<Project[]>([]);
+  const [projectSearchQuery, setProjectSearchQuery] = useState('');
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   
   const [file, setFile] = useState<File | null>(null);
@@ -220,7 +220,6 @@ export default function UploadToDbPage() {
     workerRef.current = new Worker(new URL('@/workers/cluster.worker.ts', import.meta.url));
     workerRef.current.onmessage = (event) => handleWorkerMessage(event.data);
     return () => workerRef.current?.terminate();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -241,6 +240,32 @@ export default function UploadToDbPage() {
             setColumns(Object.keys(rowsWithId[0] || {}));
         };
         reader.readAsBinaryString(f);
+    }
+  };
+
+  const handleProjectSearch = () => {
+    if (!projectSearchQuery) return;
+    const query = projectSearchQuery.trim().toLowerCase();
+    let foundProject: Project | null = null;
+    
+    if (/^[0-9]/.test(query)) {
+        foundProject = projects.find(p => p.projectId.toLowerCase() === query) || null;
+    } else {
+        const matches = projects.filter(p => p.projectName.toLowerCase().includes(query));
+        if (matches.length === 1) {
+            foundProject = matches[0];
+        } else if (matches.length > 1) {
+            toast({ title: "Multiple Projects Found", description: "Please provide a more specific name.", variant: "default" });
+            return;
+        }
+    }
+    
+    if (foundProject) {
+        setSelectedProject(foundProject);
+        toast({ title: "Project Selected", description: `Selected: ${foundProject.projectName}` });
+    } else {
+        toast({ title: "Project Not Found", description: "Could not find a project matching your query.", variant: "destructive" });
+        setSelectedProject(null);
     }
   };
 
@@ -293,13 +318,13 @@ export default function UploadToDbPage() {
     setProgress(0);
 
     const clusteringMapping = {
-      womanName: Array.from(columnMapping.entries()).find(([_, dbCol]) => dbCol === 'womanName')?.[0] || 'womanName',
-      husbandName: Array.from(columnMapping.entries()).find(([_, dbCol]) => dbCol === 'husbandName')?.[0] || 'husbandName',
-      nationalId: Array.from(columnMapping.entries()).find(([_, dbCol]) => dbCol === 'nationalId')?.[0] || 'nationalId',
-      phone: Array.from(columnMapping.entries()).find(([_, dbCol]) => dbCol === 'phone')?.[0] || 'phone',
-      village: Array.from(columnMapping.entries()).find(([_, dbCol]) => dbCol === 'village')?.[0] || 'village',
-      subdistrict: Array.from(columnMapping.entries()).find(([_, dbCol]) => dbCol === 'subdistrict')?.[0] || 'subdistrict',
-      children: Array.from(columnMapping.entries()).find(([_, dbCol]) => dbCol === 'children')?.[0] || 'children',
+      womanName: 'l_benef_name',
+      husbandName: 'l_hsbnd_name',
+      nationalId: 'l_id_card_no',
+      phone: 'l_phone_no',
+      children: 'l_child_list',
+      village: 'hh_vill_name',
+      subdistrict: 'hh_ozla_name',
     };
     
     workerRef.current.postMessage({ type: 'start', payload: { mapping: clusteringMapping, options: {} }});
@@ -344,7 +369,7 @@ export default function UploadToDbPage() {
         }
       } catch(e: any) {
         toast({ title: "Validation Failed", description: e.message, variant: 'destructive'});
-        setLoading(prev => ({...prev, saving: false}));
+        setLoading(prev => ({ ...prev, saving: false}));
       }
   };
 
@@ -361,13 +386,23 @@ export default function UploadToDbPage() {
     
     const dataToSave = recordsToSave.map(row => {
         const newRecord: {[key: string]: any} = {};
+
         for(const [uiCol, dbCol] of columnMapping.entries()){
-            if(row[uiCol] !== undefined) newRecord[dbCol] = row[uiCol];
+            if(row[uiCol] !== undefined) {
+                newRecord[dbCol] = Array.isArray(row[uiCol]) ? row[uiCol].join(',') : row[uiCol];
+            }
         }
-        // These are now automatically handled by the server
-        // newRecord.project_id = project.projectId;
-        // newRecord.project_name = project.projectName;
-        newRecord.internalId = row._internalId; // Keep internal ID
+        
+        for (const key in row) {
+            if (DB_COLUMNS.includes(key) && newRecord[key] === undefined) {
+                const value = row[key];
+                newRecord[key] = Array.isArray(value) ? value.join(',') : value;
+            }
+        }
+
+        newRecord.project_id = project.projectId;
+        newRecord.project_name = project.projectName;
+        newRecord.internalId = row._internalId;
         return newRecord;
     });
 
@@ -398,17 +433,35 @@ export default function UploadToDbPage() {
         <CardHeader>
           <CardTitle>1. Select Project & Upload</CardTitle>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Select onValueChange={(val) => {
-              const project = projects.find(p => p.projectId === val);
-              setSelectedProject(project || null);
-          }} value={selectedProject?.projectId || ''} disabled={loading.projects}>
-            <SelectTrigger><SelectValue placeholder={loading.projects ? "Loading..." : "Select a project..."} /></SelectTrigger>
-            <SelectContent>{projects.map(p => <SelectItem key={p.projectId} value={p.projectId}>{p.projectName}</SelectItem>)}</SelectContent>
-          </Select>
-          <Input id="file-upload" type="file" onChange={handleFileChange} accept=".xlsx,.xls,.csv" />
+        <CardContent className="space-y-4">
+            <div className="flex items-end gap-2">
+                <div className="flex-1">
+                    <Label htmlFor="project-search">Search by Project ID or Name</Label>
+                    <Input id="project-search" value={projectSearchQuery} onChange={e => setProjectSearchQuery(e.target.value)} placeholder="Starts with number for ID, letters for name..." />
+                </div>
+                <Button onClick={handleProjectSearch} disabled={loading.projects}>
+                    {loading.projects ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Search className="mr-2 h-4 w-4" />}
+                    Find Project
+                </Button>
+            </div>
+            <Input id="file-upload" type="file" onChange={handleFileChange} accept=".xlsx,.xls,.csv" />
         </CardContent>
       </Card>
+      
+       {selectedProject && (
+        <Card className="bg-green-100 dark:bg-green-900/30 border-green-500">
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-green-700 dark:text-green-300">
+                    <CheckCircle className="h-6 w-6"/> Project Selected
+                </CardTitle>
+                <CardDescription className="text-green-600 dark:text-green-400">The following project is mapped and ready for data upload.</CardDescription>
+            </CardHeader>
+            <CardContent className="font-mono text-sm">
+                <div><strong>ID:</strong> {selectedProject.projectId}</div>
+                <div><strong>Name:</strong> {selectedProject.projectName}</div>
+            </CardContent>
+        </Card>
+    )}
       
       {columns.length > 0 && (
         <Card>
