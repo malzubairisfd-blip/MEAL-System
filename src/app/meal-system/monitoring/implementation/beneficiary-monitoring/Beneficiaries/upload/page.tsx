@@ -281,6 +281,10 @@ export default function UploadToDbPage() {
       toast({ title: "Prerequisites Missing", description: "Please select a project and ensure the worker is ready.", variant: "destructive" });
       return;
     }
+    if (!idColumnForCheck) {
+        toast({ title: 'Validation Error', description: 'Please select a column to use for the duplicate check.', variant: 'destructive' });
+        return;
+    }
     setLoading(prev => ({...prev, worker: true}));
     setProgress(0);
 
@@ -315,12 +319,6 @@ export default function UploadToDbPage() {
   const validateAndSaveToDB = async (enrichedRecords: any[]) => {
       setLoading(prev => ({ ...prev, saving: true }));
       try {
-        if (!idColumnForCheck) {
-          toast({ title: 'Validation Error', description: 'Please select a column to use for the duplicate check.', variant: 'destructive' });
-          setLoading(prev => ({ ...prev, saving: false }));
-          return;
-        }
-
         const existingRes = await fetch('/api/bnf-assessed');
         if (!existingRes.ok) throw new Error("Could not fetch existing records from database.");
         const existingRecords = await existingRes.json();
