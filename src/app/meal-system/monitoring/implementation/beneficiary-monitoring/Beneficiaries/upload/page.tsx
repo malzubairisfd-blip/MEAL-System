@@ -277,8 +277,12 @@ export default function UploadToDbPage() {
   };
   
   const handleProcessAndSave = () => {
-    if (!workerRef.current || !selectedProject) {
-      toast({ title: "Prerequisites Missing", description: "Please select a project and ensure the worker is ready.", variant: "destructive" });
+    if (!workerRef.current) {
+        toast({ title: "Worker not ready. Please try again in a moment.", variant: "destructive" });
+        return;
+    }
+    if (!selectedProject || !selectedProject.projectId || !selectedProject.projectName) {
+      toast({ title: "Prerequisites Missing", description: "Please select a valid project.", variant: "destructive" });
       return;
     }
     if (!idColumnForCheck) {
@@ -348,6 +352,7 @@ export default function UploadToDbPage() {
     if (!project) {
         toast({ title: 'Error', description: 'Selected project not found.'});
         setLoading(prev => ({ ...prev, saving: false}));
+        setDuplicateDialog(d => ({ ...d, isOpen: false }));
         return;
     }
 
@@ -359,8 +364,9 @@ export default function UploadToDbPage() {
         for(const [uiCol, dbCol] of columnMapping.entries()){
             if(row[uiCol] !== undefined) newRecord[dbCol] = row[uiCol];
         }
-        newRecord.project_id = project.projectId;
-        newRecord.project_name = project.projectName;
+        // These are now automatically handled by the server
+        // newRecord.project_id = project.projectId;
+        // newRecord.project_name = project.projectName;
         newRecord.internalId = row._internalId; // Keep internal ID
         return newRecord;
     });
