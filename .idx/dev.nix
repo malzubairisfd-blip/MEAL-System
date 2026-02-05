@@ -8,6 +8,11 @@
     pkgs.nodejs_20
     pkgs.zulu
   ];
+  idx.extensions = [
+      "saoudrizwan.claude-dev"      # This is Cline
+        "usernamehw.errorlens"        # Error Lens for visibility
+          "SonarSource.sonarlint-vscode" # Bug detection
+  ];
   # Sets environment variables in the workspace
   env = {};
   # This adds a file watcher to startup the firebase emulators. The emulators will only start if
