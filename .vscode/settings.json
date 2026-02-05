@@ -1,0 +1,4 @@
+{
+    "editor.experimental.treeSitterTelemetry": true,
+    "sonarlint.disableTelemetry": true
+}

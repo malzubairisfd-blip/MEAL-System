@@ -1,0 +1,12 @@
+# Focus the AI's "cleverness" only on source logic
+node_modules/
+.git/
+.next/
+dist/
+build/
+*.log
+public/assets/
+# Exclude large binary files that waste token space
+*.png
+*.jpg
+*.svg
