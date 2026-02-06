@@ -11,7 +11,7 @@ const getDbPath = () => path.join(getDataPath(), 'bnf-assessed.db');
 const DB_COLUMNS = [
     "id", "project_id", "project_name", "Generated_Cluster_ID", "Size", "Flag", "Max_PairScore", 
     "pairScore", "nameScore", "husbandScore", "childrenScore", "idScore", "phoneScore", 
-    "locationScore", "groupDecision", "recordDecision", "decisionReason", "s", "cluster_id", 
+    "locationScore", "groupDecision", "recordDecisions", "decisionReasons", "s", "cluster_id", 
     "dup_cluster_id2", "eq_clusters", "dup_flag2", "new_dup_flag1", "dup_flag", "cluster_size", 
     "dup_cluster_size", "match_probability", "match_weight", "l_id", "l_benef_name", "l_hsbnd_name", 
     "l_child_list", "l_phone_no", "l_id_card_no", "l_age_years", "l_mud_id", "gv_bnf_name", 
@@ -150,7 +150,7 @@ function initializeDatabase(recreate: boolean = false) {
 
     const createTableStmt = `
         CREATE TABLE IF NOT EXISTS assessed_data (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id INTEGER PRIMARY KEY,
     project_id TEXT,
     project_name TEXT,
     Generated_Cluster_ID TEXT,
@@ -165,8 +165,8 @@ function initializeDatabase(recreate: boolean = false) {
     phoneScore REAL,
     locationScore REAL,
     groupDecision TEXT,
-    recordDecision TEXT,
-    decisionReason TEXT,
+    recordDecisions TEXT,
+    decisionReasons TEXT,
     s TEXT,
     cluster_id TEXT,
     dup_cluster_id2 TEXT,

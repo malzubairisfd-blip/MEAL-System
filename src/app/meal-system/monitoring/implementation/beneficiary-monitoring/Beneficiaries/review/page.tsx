@@ -115,8 +115,8 @@ export default function ReviewPage() {
             reasons: Array.from(data.reasons),
             Max_PairScore: data.Max_PairScore,
             groupDecision: data.records[0]?.groupDecision,
-            recordDecisions: data.records.reduce((acc, r) => ({...acc, [r._internalId!]: r.recordDecision}), {}),
-            decisionReasons: data.records.reduce((acc, r) => ({...acc, [r._internalId!]: r.decisionReason}), {}),
+            recordDecisions: data.records.reduce((acc, r) => ({...acc, [r._internalId!]: r.recordDecisions}), {}),
+            decisionReasons: data.records.reduce((acc, r) => ({...acc, [r._internalId!]: r.decisionReasons}), {}),
             pairScores: [], // Not stored in DB
             confidenceScore: data.records[0]?.confidenceScore || 0,
         })).filter(c => c.records.length > 1).sort((a,b) => b.Max_PairScore - a.Max_PairScore);
@@ -196,8 +196,8 @@ export default function ReviewPage() {
     const recordsToUpdate = selectedCluster.records.map(r => ({
         id: r.id, // THE DB ROW ID
         groupDecision: selectedCluster.groupDecision,
-        recordDecision: selectedCluster.recordDecisions?.[r._internalId!],
-        decisionReason: selectedCluster.decisionReasons?.[r._internalId!],
+        recordDecisions: selectedCluster.recordDecisions?.[r._internalId!],
+        decisionReasons: selectedCluster.decisionReasons?.[r._internalId!],
     }));
 
     try {
