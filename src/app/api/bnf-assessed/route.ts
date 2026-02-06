@@ -278,3 +278,75 @@ export async function GET(req: Request) {
         return NextResponse.json({ error: "Failed to fetch assessed data.", details: error.message }, { status: 500 });
     }
 }
+
+export async function PUT(req: Request) {
+    try {
+        const recordsToUpdate = await req.json();
+        if (!Array.isArray(recordsToUpdate) || recordsToUpdate.length === 0) {
+            return NextResponse.json({ error: "Invalid payload. Expected an array of records to update." }, { status: 400 });
+        }
+        
+        const db = new Database(getDbPath());
+
+        const updateRecord = (record: any) => {
+            if (!record.id) return; 
+            
+            const columnsToUpdate = Object.keys(record).filter(col => DB_COLUMNS.includes(col) && col !== 'id');
+            if (columnsToUpdate.length === 0) return;
+
+            const setClause = columnsToUpdate.map(col => `${col} = ?`).join(', ');
+            const values = columnsToUpdate.map(col => record[col]);
+            values.push(record.id);
+
+            const stmt = db.prepare(`UPDATE assessed_data SET ${setClause} WHERE id = ?`);
+            stmt.run(...values);
+        };
+        
+        const updateMany = db.transaction((records) => {
+            for (const record of records) {
+                updateRecord(record);
+            }
+        });
+
+        updateMany(recordsToUpdate);
+        db.close();
+
+        return NextResponse.json({ message: `${recordsToUpdate.length} beneficiary records updated successfully.` });
+
+    } catch (error: any) {
+        console.error("[BNF_ASSESSED_PUT_API_ERROR]", error);
+        return NextResponse.json({ error: "Failed to update beneficiary data.", details: error.message }, { status: 500 });
+    }
+}
+
+export async function DELETE(req: Request) {
+    try {
+        const { ids } = await req.json();
+        if (!Array.isArray(ids) || ids.length === 0) {
+            return NextResponse.json({ error: "Invalid payload. Expected an array of record IDs to delete." }, { status: 400 });
+        }
+        
+        const db = new Database(getDbPath());
+        
+        const placeholders = ids.map(() => '?').join(',');
+        const stmt = db.prepare(`DELETE FROM assessed_data WHERE id IN (${placeholders})`);
+        
+        const transaction = db.transaction((idArray) => {
+            const info = stmt.run(...idArray);
+            return info.changes;
+        });
+
+        const changes = transaction(ids);
+        db.close();
+
+        if (changes === 0) {
+            return NextResponse.json({ message: "No matching records found to delete." }, { status: 404 });
+        }
+
+        return NextResponse.json({ message: `${changes} records deleted successfully.` });
+
+    } catch (error: any) {
+        console.error("[BNF_ASSESSED_DELETE_API_ERROR]", error);
+        return NextResponse.json({ error: "Failed to delete records.", details: error.message }, { status: 500 });
+    }
+}
