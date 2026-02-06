@@ -1,4 +1,3 @@
-
 // src/app/api/bnf-assessed/route.ts
 import { NextResponse } from "next/server";
 import fs from "fs/promises";
@@ -163,7 +162,7 @@ function initializeDatabase(recreate: boolean = false) {
 
 export async function POST(req: Request) {
     const body = await req.json();
-    const { action, projectId, records, uniqueIdCol, uniqueIds, mode, uniqueIdDbCol } = body;
+    const { action, projectId, records, uniqueIdCol, uniqueIds, mode, uniqueIdDbCol, columnName, columnType } = body;
 
     try {
         await fs.mkdir(getDataPath(), { recursive: true });
@@ -174,8 +173,8 @@ export async function POST(req: Request) {
             }
             try {
                 const db = new Database(getDbPath(), { fileMustExist: true });
-                 // Ensure uniqueIdCol is a valid column to prevent SQL injection.
-                if (!DB_COLUMNS.includes(uniqueIdCol)) {
+                const tableCols = db.prepare('PRAGMA table_info(assessed_data)').all().map((c: any) => c.name);
+                if (!tableCols.includes(uniqueIdCol)) {
                     db.close();
                     return NextResponse.json({ error: `Invalid unique ID column: ${uniqueIdCol}` }, { status: 400 });
                 }
@@ -191,14 +190,37 @@ export async function POST(req: Request) {
                 }
                 throw error;
             }
-        }
+        } else if (action === 'add_column') {
+            if (!columnName || !columnType) {
+                return NextResponse.json({ error: "Missing columnName or columnType" }, { status: 400 });
+            }
 
-        if (action === 'save') {
+            const sanitizedColumnName = columnName.replace(/[^a-zA-Z0-9_]/g, '');
+            if (sanitizedColumnName !== columnName || sanitizedColumnName.length === 0) {
+                return NextResponse.json({ error: "Invalid column name. Only alphanumeric characters and underscores are allowed." }, { status: 400 });
+            }
+
+            const allowedTypes = ['TEXT', 'INTEGER', 'REAL'];
+            if (!allowedTypes.includes(columnType.toUpperCase())) {
+                return NextResponse.json({ error: `Invalid column type. Must be one of: ${allowedTypes.join(', ')}` }, { status: 400 });
+            }
+
+            const db = new Database(getDbPath());
+            try {
+                db.exec(`ALTER TABLE assessed_data ADD COLUMN "${sanitizedColumnName}" ${columnType.toUpperCase()}`);
+                db.close();
+                return NextResponse.json({ message: `Column '${sanitizedColumnName}' added successfully.` });
+            } catch (dbError: any) {
+                db.close();
+                return NextResponse.json({ error: `Database error: ${dbError.message}` }, { status: 500 });
+            }
+        } else if (action === 'save') {
              if (!projectId || !Array.isArray(records) || !mode) {
                 return NextResponse.json({ error: "Missing parameters for save action" }, { status: 400 });
              }
 
              const db = initializeDatabase();
+             const tableCols = db.prepare('PRAGMA table_info(assessed_data)').all().map((c: any) => c.name);
 
              if (mode === 'replace') {
                  const deleteStmt = db.prepare('DELETE FROM assessed_data WHERE project_id = ?');
@@ -206,7 +228,7 @@ export async function POST(req: Request) {
              }
              
              const columnsInPayload = Object.keys(records[0] || {});
-             const insertColumns = columnsInPayload.filter(col => DB_COLUMNS.includes(col) && col !== 'id');
+             const insertColumns = columnsInPayload.filter(col => tableCols.includes(col) && col !== 'id');
 
              if (insertColumns.length === 0) {
                  db.close();
@@ -248,12 +270,8 @@ export async function POST(req: Request) {
              return NextResponse.json({ message: "Data saved successfully.", saved: recordsToInsert.length, skipped: records.length - recordsToInsert.length, total: records.length });
         }
 
-        // Default GET to fetch all records
-        const db = new Database(getDbPath(), { fileMustExist: true });
-        const stmt = db.prepare('SELECT * FROM assessed_data');
-        const allRecords = stmt.all();
-        db.close();
-        return NextResponse.json(allRecords);
+        // Default behavior for other POSTs (if any) or fall through
+        return NextResponse.json({ error: "Invalid action specified." }, { status: 400 });
 
 
     } catch (error: any) {
@@ -287,11 +305,12 @@ export async function PUT(req: Request) {
         }
         
         const db = new Database(getDbPath());
+        const tableCols = db.prepare('PRAGMA table_info(assessed_data)').all().map((c: any) => c.name);
 
         const updateRecord = (record: any) => {
             if (!record.id) return; 
             
-            const columnsToUpdate = Object.keys(record).filter(col => DB_COLUMNS.includes(col) && col !== 'id');
+            const columnsToUpdate = Object.keys(record).filter(col => tableCols.includes(col) && col !== 'id');
             if (columnsToUpdate.length === 0) return;
 
             const setClause = columnsToUpdate.map(col => `${col} = ?`).join(', ');

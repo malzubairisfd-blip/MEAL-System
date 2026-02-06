@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Search, ArrowLeft, Users, FileDown, Filter, ArrowUpAZ, ArrowDownAZ, Trash2, Edit, Database, Link2 } from "lucide-react";
+import { Loader2, Search, ArrowLeft, Users, FileDown, Filter, ArrowUpAZ, ArrowDownAZ, Trash2, Edit, Database, Link2, Plus } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -18,6 +18,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from '@/components/ui/input';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 
 import { useToast } from "@/hooks/use-toast";
 import { exportBnfToExcel } from "@/lib/exportBnfToExcel";
@@ -227,6 +229,9 @@ export default function BeneficiaryDatabasePage() {
   const [deletingRecord, setDeletingRecord] = useState<BnfRecord | null>(null);
   const [editingRecord, setEditingRecord] = useState<BnfRecord | null>(null);
 
+  const [newColumnName, setNewColumnName] = useState('');
+  const [newColumnType, setNewColumnType] = useState('TEXT');
+  const [isAddingColumn, setIsAddingColumn] = useState(false);
 
   const itemsPerPage = 20;
   const { toast } = useToast();
@@ -251,6 +256,35 @@ export default function BeneficiaryDatabasePage() {
   useEffect(() => {
     fetchRecords();
   }, [fetchRecords]);
+
+  const handleCreateColumn = async () => {
+      if (!newColumnName) {
+          toast({ title: 'Error', description: 'Column name cannot be empty.', variant: 'destructive' });
+          return;
+      }
+      setIsAddingColumn(true);
+      try {
+          const res = await fetch('/api/bnf-assessed', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                  action: 'add_column',
+                  columnName: newColumnName,
+                  columnType: newColumnType,
+              }),
+          });
+          const result = await res.json();
+          if (!res.ok) throw new Error(result.error || 'Failed to add column.');
+          
+          toast({ title: 'Success', description: result.message });
+          setNewColumnName('');
+          await fetchRecords(); // Refresh data to show new column
+      } catch (err: any) {
+          toast({ title: 'Error', description: err.message, variant: 'destructive' });
+      } finally {
+          setIsAddingColumn(false);
+      }
+  };
 
   const handleUpdateRecord = async (updatedData: BnfRecord) => {
     setIsUpdating(true);
@@ -439,6 +473,35 @@ export default function BeneficiaryDatabasePage() {
 
       <Card>
         <CardHeader>
+            <CardTitle>Manage Schema</CardTitle>
+            <CardDescription>Add new columns to the `assessed_data` table.</CardDescription>
+        </CardHeader>
+        <CardContent className="flex items-end gap-4">
+            <div className="flex-1 space-y-2">
+                <Label htmlFor="new-column-name">New Column Name</Label>
+                <Input id="new-column-name" value={newColumnName} onChange={e => setNewColumnName(e.target.value)} placeholder="e.g., notes_v2" />
+            </div>
+            <div className="flex-1 space-y-2">
+                <Label htmlFor="new-column-type">Column Type</Label>
+                <Select value={newColumnType} onValueChange={setNewColumnType}>
+                    <SelectTrigger id="new-column-type"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="TEXT">Text</SelectItem>
+                        <SelectItem value="INTEGER">Integer</SelectItem>
+                        <SelectItem value="REAL">Number (Real)</SelectItem>
+                    </SelectContent>
+                </Select>
+            </div>
+            <Button onClick={handleCreateColumn} disabled={isAddingColumn}>
+                {isAddingColumn ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Plus className="mr-2 h-4 w-4" />}
+                Add Column
+            </Button>
+        </CardContent>
+      </Card>
+
+
+      <Card>
+        <CardHeader>
           <CardTitle>Beneficiary Records</CardTitle>
           <CardDescription>
             Displaying {paginatedRecords.length} of {filteredRecords.length} records.
@@ -546,4 +609,3 @@ export default function BeneficiaryDatabasePage() {
     </div>
   );
 }
-
