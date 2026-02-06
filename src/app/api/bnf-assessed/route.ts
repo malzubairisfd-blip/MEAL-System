@@ -94,35 +94,22 @@ export async function POST(req: Request) {
              const db = initializeDatabase();
              const tableCols = db.prepare('PRAGMA table_info(assessed_data)').all().map((c: any) => c.name);
 
-             if (mode === 'replace') {
-                 const deleteStmt = db.prepare('DELETE FROM assessed_data WHERE project_id = ?');
-                 deleteStmt.run(projectId);
-             }
-             
-             const columnsInPayload = Object.keys(records[0] || {});
-             const insertColumns = columnsInPayload.filter(col => tableCols.includes(col) && col !== 'id');
-
-             if (insertColumns.length === 0) {
-                 db.close();
-                 return NextResponse.json({ message: "No valid columns to insert." }, { status: 400 });
-             }
-             
-             const columnsString = insertColumns.join(', ');
-             const placeholders = insertColumns.map(() => '?').join(', ');
-             const insert = db.prepare(`INSERT INTO assessed_data (${columnsString}) VALUES (${placeholders})`);
-             
-             const insertMany = db.transaction((recordsToInsert) => {
-                 for (const record of recordsToInsert) {
-                     const values = insertColumns.map(col => record[col] ?? null);
-                     insert.run(...values);
-                 }
-             });
-
             let recordsToInsert = records;
             let skippedCount = 0;
 
-            if (mode === 'skip') {
-                if (!uniqueIdDbCol || !DB_COLUMNS.includes(uniqueIdDbCol)) {
+            if (mode === 'replace') {
+                if (!uniqueIdDbCol) {
+                    db.close();
+                    return NextResponse.json({ error: "uniqueIdDbCol is required for replace mode" }, { status: 400 });
+                }
+                const idsToDelete = records.map(r => r[uniqueIdDbCol]).filter(Boolean);
+                if (idsToDelete.length > 0) {
+                    const placeholders = idsToDelete.map(() => '?').join(',');
+                    const deleteStmt = db.prepare(`DELETE FROM assessed_data WHERE project_id = ? AND ${uniqueIdDbCol} IN (${placeholders})`);
+                    deleteStmt.run(projectId, ...idsToDelete);
+                }
+            } else if (mode === 'skip') {
+                if (!uniqueIdDbCol) {
                     db.close();
                     return NextResponse.json({ error: "Invalid unique ID column for skip mode" }, { status: 400 });
                 }
@@ -135,9 +122,25 @@ export async function POST(req: Request) {
                     // Ignore if table doesn't exist yet, just insert all.
                  }
             }
+             
+             const columnsInPayload = Object.keys(records[0] || {});
+             const insertColumns = columnsInPayload.filter(col => tableCols.includes(col) && col !== 'id');
 
-            if (recordsToInsert.length > 0) {
-                insertMany(recordsToInsert);
+             if (insertColumns.length > 0) {
+                 const columnsString = insertColumns.join(', ');
+                 const placeholders = insertColumns.map(() => '?').join(', ');
+                 const insert = db.prepare(`INSERT INTO assessed_data (${columnsString}) VALUES (${placeholders})`);
+                 
+                 const insertMany = db.transaction((recs) => {
+                     for (const record of recs) {
+                         const values = insertColumns.map(col => record[col] ?? null);
+                         insert.run(...values);
+                     }
+                 });
+
+                if (recordsToInsert.length > 0) {
+                    insertMany(recordsToInsert);
+                }
             }
              
              db.close();

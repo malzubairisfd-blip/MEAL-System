@@ -491,8 +491,8 @@ export default function UploadPage() {
                             confidenceScore: cluster.confidenceScore,
                             reasons: (cluster.reasons || []).join(','),
                             groupDecision: cluster.groupDecision,
-                            recordDecisions: cluster.recordDecisions?.[record._internalId!],
-                            decisionReasons: cluster.decisionReasons?.[record._internalId!],
+                            recordDecision: cluster.recordDecisions?.[record._internalId!],
+                            decisionReason: cluster.decisionReasons?.[record._internalId!],
                         });
                     });
                 });
@@ -557,6 +557,7 @@ export default function UploadPage() {
                 if (count > 0) {
                     setDuplicateInfo({ isOpen: true, count, records: recordsToProcess });
                 } else {
+                    // No duplicates, so we can just proceed with a standard "replace" which in this case is just an insert
                     await handleSaveToDatabase('replace'); 
                 }
             } else { 
@@ -835,13 +836,13 @@ export default function UploadPage() {
               <AlertDialogHeader>
                   <AlertDialogTitle>Existing Records Found</AlertDialogTitle>
                   <AlertDialogDescription>
-                    Found {duplicateInfo.count} records in your upload that already exist in the database for this project (based on the unique ID). This means {duplicateInfo.count} of your {duplicateInfo.records.length} records are duplicates. How would you like to proceed?
+                    Found {duplicateInfo.count} / {duplicateInfo.records.length} records in your file that already exist in the database for this project. How would you like to proceed?
                   </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
                   <AlertDialogCancel onClick={() => setIsSaving(false)}>Cancel</AlertDialogCancel>
-                  <Button variant="outline" onClick={() => handleSaveToDatabase('skip')}>Skip Existing ({duplicateInfo.count})</Button>
-                  <AlertDialogAction onClick={() => handleSaveToDatabase('replace')}>Replace Project Data</AlertDialogAction>
+                  <Button variant="outline" onClick={() => handleSaveToDatabase('skip')}>Skip Duplicates ({duplicateInfo.count})</Button>
+                  <AlertDialogAction onClick={() => handleSaveToDatabase('replace')}>Overwrite Duplicates ({duplicateInfo.count})</AlertDialogAction>
               </AlertDialogFooter>
           </AlertDialogContent>
       </AlertDialog>
