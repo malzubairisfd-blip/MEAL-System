@@ -179,7 +179,17 @@ export default function UploadPage() {
   
   const isDbMappingReady = useMemo(() => uniqueIdMapping.fileCol && uniqueIdMapping.dbCol, [uniqueIdMapping]);
   
-  const unmappedUiColumns = useMemo(() => columns.filter(c => !Array.from(dbColumnMapping.keys()).includes(c) && c !== uniqueIdMapping.fileCol), [columns, dbColumnMapping, uniqueIdMapping.fileCol]);
+  const unmappedUiColumns = useMemo(() => {
+    const cachedData = rawRowsRef.current.length > 0 ? {rows: rawRowsRef.current, clusters: clusters} : null;
+    if (!cachedData) return columns.filter(c => !Array.from(dbColumnMapping.keys()).includes(c) && c !== uniqueIdMapping.fileCol);
+
+    const clusterRecordKeys = cachedData.clusters?.[0]?.records?.[0] ? Object.keys(cachedData.clusters[0].records[0]) : [];
+    const clusterTopLevelKeys = cachedData.clusters?.[0] ? Object.keys(cachedData.clusters[0]) : [];
+    const availableColumns = [...new Set([...columns, ...clusterTopLevelKeys, ...clusterRecordKeys])];
+      
+    return availableColumns.filter(c => !Array.from(dbColumnMapping.keys()).includes(c) && c !== uniqueIdMapping.fileCol && !c.startsWith('_'));
+  }, [columns, clusters, dbColumnMapping, uniqueIdMapping.fileCol]);
+  
   const unmappedDbColumns = useMemo(() => {
       const used = new Set([...dbColumnMapping.values(), uniqueIdMapping.dbCol]);
       return DB_COLUMNS.filter(c => !used.has(c));
@@ -233,8 +243,7 @@ export default function UploadPage() {
                     const enrichedClusters = msg.enrichedClusters;
                     setClusters(enrichedClusters);
                     setWorkerStatus("caching"); setProgressInfo({ status: "caching", progress: 99 });
-                    const currentData = await loadCachedResult();
-                    await cacheFinalResult({ ...currentData, clusters: enrichedClusters, rows: currentData?.rows ?? rawRowsRef.current, originalHeaders: currentData?.originalHeaders ?? columns, });
+                    await cacheFinalResult({ clusters: enrichedClusters });
                     setWorkerStatus("done"); setProgressInfo({ status: "done", progress: 100 });
                     toast({ title: t("upload.toasts.clusteringComplete.title"), description: t("upload.toasts.clusteringComplete.description", { count: enrichedClusters.length, }), });
                 } catch (error: any) {
@@ -525,6 +534,9 @@ export default function UploadPage() {
                         newRecord[key] = record[key];
                     }
                 }
+                
+                // Add the full original row data as a JSON string
+                newRecord['data'] = JSON.stringify(record);
 
                 return newRecord;
             });
@@ -533,6 +545,9 @@ export default function UploadPage() {
                 setSaveStatus('checking_duplicates');
                 setSaveProgress(25);
                 const uniqueIds = recordsToProcess.map(r => r[uniqueIdMapping.dbCol]).filter(Boolean);
+                if (uniqueIds.length === 0) {
+                  throw new Error("Cannot check for duplicates because the selected unique ID column is empty for all records.");
+                }
                 const res = await fetch('/api/bnf-assessed', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -634,7 +649,7 @@ export default function UploadPage() {
                   <Card key={field}>
                     <CardHeader className="p-4 flex flex-row items-center justify-between">
                         <div className="flex items-center gap-2">
-                            {mapping[field as keyof Mapping] ? ( <CheckCircle className="h-5 w-5 text-green-500" /> ) : ( <XCircle className="h-5 w-5 text-red-500" /> )}
+                            {mapping[field as keyof Mapping] ? ( <CheckCircle className="h-5 w-5 text-green-500" /> ) : ( REQUIRED_MAPPING_FIELDS.includes(field as any) ? <XCircle className="h-5 w-5 text-red-500" /> : <CheckCircle className="h-5 w-5 text-muted-foreground" /> )}
                             <Label htmlFor={String(field)} className="capitalize font-semibold text-base"> {t(`upload.mappingFields.${String(field)}`)} {REQUIRED_MAPPING_FIELDS.includes(field as any) && ( <span className="text-destructive">*</span> )} </Label>
                         </div>
                     </CardHeader>
@@ -801,7 +816,7 @@ export default function UploadPage() {
                             {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <ArrowUp className="mr-2 h-4 w-4"/>}
                             Save to bnf-assessed.db
                         </Button>
-                        {isSaving && <div className="w-full"><Progress value={saveProgress} /><p className="text-sm text-center mt-1 text-muted-foreground">{saveStatus}</p></div>}
+                        {isSaving && <div className="w-full"><Progress value={saveProgress} /><p className="text-sm text-center mt-1 text-muted-foreground">{saveStatus} {Math.round(saveProgress)}% {saveStats.total > 0 && `(${saveStats.saved.toLocaleString()}/${saveStats.total.toLocaleString()})`}</p></div>}
                     </div>
                      {saveStatus === 'done' && (
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -819,7 +834,9 @@ export default function UploadPage() {
           <AlertDialogContent>
               <AlertDialogHeader>
                   <AlertDialogTitle>Existing Records Found</AlertDialogTitle>
-                  <AlertDialogDescription>Found {duplicateInfo.count} records in the database for this project that match the unique ID you selected. How would you like to proceed?</AlertDialogDescription>
+                  <AlertDialogDescription>
+                    Found {duplicateInfo.count} records in your upload that already exist in the database for this project (based on the unique ID). This means {duplicateInfo.count} of your {duplicateInfo.records.length} records are duplicates. How would you like to proceed?
+                  </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
                   <AlertDialogCancel onClick={() => setIsSaving(false)}>Cancel</AlertDialogCancel>
@@ -832,4 +849,3 @@ export default function UploadPage() {
     </div>
   );
 }
-
