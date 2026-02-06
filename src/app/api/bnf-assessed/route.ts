@@ -10,7 +10,7 @@ const getDbPath = () => path.join(getDataPath(), 'bnf-assessed.db');
 const DB_COLUMNS = [
     "id", "project_id", "project_name", "Generated_Cluster_ID", "Size", "Flag", "Max_PairScore", 
     "pairScore", "nameScore", "husbandScore", "childrenScore", "idScore", "phoneScore", 
-    "locationScore", "groupDecision", "recordDecision", "decisionReason", "s", "cluster_id", 
+    "locationScore", "groupDecision", "recordDecisions", "decisionReasons", "s", "cluster_id", 
     "dup_cluster_id2", "eq_clusters", "dup_flag2", "new_dup_flag1", "dup_flag", "cluster_size", 
     "dup_cluster_size", "match_probability", "match_weight", "l_id", "l_benef_name", "l_hsbnd_name", 
     "l_child_list", "l_phone_no", "l_id_card_no", "l_age_years", "l_mud_id", "gv_bnf_name", 
@@ -136,31 +136,37 @@ const DB_COLUMNS = [
     "data"
 ];
 
-function initializeDatabase(recreate: boolean = false) {
-    const db = new Database(getDbPath());
+function initializeDatabase(db: Database, recreate: boolean = false) {
     if (recreate) {
         db.exec('DROP TABLE IF EXISTS assessed_data');
     }
 
     const columnsWithTypes = DB_COLUMNS.map(col => {
-        if (col === 'id') return `${col} INTEGER PRIMARY KEY AUTOINCREMENT`;
-        if (['INTEGER', 'Size', 'cluster_size', 'dup_cluster_size', 'l_age_years', 'gv_age_years', 'r_age_years', 'lr_age_diff', 'dup_cluster_size_2', 'age_years', 'hh_uuid_dup_cnt', 'child_cnt', 'child_m_cnt', 'child_f_cnt', 'bnf_idx', 'hh_qual_women_cnt', 'bnf_child_cnt', 'bnf_child_m_cnt', 'bnf_child_f_cnt', 'common_child_cnt', 'c_proj2_cnt', 'c_mud2_cnt', 'c_id_proj2_cnt', 'c_id_mud2_cnt', 'nationalId', 'phone', 'TOTAL_CHILD_COUNT', 'MALE_CHILD_COUNT', 'FEMALE_CHILD_COUNT', 'AGE_YEARS_2', 'pregnancy_month'].includes(col)) return `${col} INTEGER`;
-        if (['REAL', 'Max_PairScore', 'pairScore', 'nameScore', 'husbandScore', 'childrenScore', 'idScore', 'phoneScore', 'locationScore', 'match_probability', 'match_weight', 'lr_benef_name_jw_sim', 'lr_husband_name_jw_sim', 'lr_benef_name_jaccard', 'lr_husband_name_jaccard', 'lr_id_card_dist', 'lr_child_jaccard', 'dup_cluster_score', 'cluster_min_score', 'cluster_max_score', 'cluster_score', 'relation_score', 'c_max_weight', 'c_min_weight', 'c_id_max_weight', 'c_id_min_weight', 'c_max_pct', 'c_min_pct', 'c_id_max_pct', 'c_id_min_pct', 'c_min_proj', 'c_max_proj', 'c_id_min_proj', 'c_id_max_proj', 'avgPairScore', 'avgFirstNameScore', 'avgFamilyNameScore', 'avgAdvancedNameScore', 'avgTokenReorderScore', 'confidenceScore', 'avgWomanNameScore', 'avgHusbandNameScore', 'avgFinalScore'].includes(col)) return `${col} REAL`;
-        if (col === 'data') return `${col} JSON`;
-        return `${col} TEXT`;
+        const cleanedCol = `\`${col}\``;
+        if (col === 'id') return `${cleanedCol} INTEGER PRIMARY KEY AUTOINCREMENT`;
+        const colUpper = col.toUpperCase();
+        if (colUpper.includes('SIZE') || colUpper.includes('CNT') || colUpper.includes('YEAR') || colUpper.includes('AGE') || colUpper.includes('IDX') || colUpper.endsWith('_NO') || colUpper.endsWith('ID')) {
+             if (col === 'phone' || col === 'nationalId' || col === 'bnf_id_card_no') return `${cleanedCol} TEXT`;
+             return `${cleanedCol} INTEGER`;
+        }
+        if (colUpper.includes('SCORE') || colUpper.includes('AVG') || colUpper.includes('SIM') || colUpper.includes('JACCARD') || colUpper.includes('DIST') || colUpper.includes('PROBABILITY') || colUpper.includes('WEIGHT') || colUpper.includes('PCT') ) {
+             return `${cleanedCol} REAL`;
+        }
+        if (col === 'data') return `${cleanedCol} JSON`;
+        return `${cleanedCol} TEXT`;
     }).join(',\n    ');
 
     const createTableStmt = `CREATE TABLE IF NOT EXISTS assessed_data (${columnsWithTypes});`;
     db.exec(createTableStmt);
-    
-    return db;
 }
 
-
 export async function POST(req: Request) {
+    let db: Database.Database | undefined;
     try {
         await fs.mkdir(getDataPath(), { recursive: true });
-        const db = initializeDatabase(false);
+        db = new Database(getDbPath());
+        initializeDatabase(db, false);
+        
         const body = await req.json();
         const { action, ...payload } = body;
 
@@ -168,18 +174,15 @@ export async function POST(req: Request) {
             case 'check_duplicates': {
                 const { uniqueIdCol, uniqueIds } = payload;
                 if (!uniqueIdCol || !Array.isArray(uniqueIds) || uniqueIds.length === 0) {
-                    db.close();
                     return NextResponse.json({ count: 0 });
                 }
                 
                 try {
                     const placeholders = uniqueIds.map(() => '?').join(',');
-                    const stmt = db.prepare(`SELECT COUNT(DISTINCT ${uniqueIdCol}) as count FROM assessed_data WHERE ${uniqueIdCol} IN (${placeholders})`);
+                    const stmt = db.prepare(`SELECT COUNT(DISTINCT \`${uniqueIdCol}\`) as count FROM assessed_data WHERE \`${uniqueIdCol}\` IN (${placeholders})`);
                     const result = stmt.get(...uniqueIds);
-                    db.close();
                     return NextResponse.json({ count: result.count });
                 } catch (dbError: any) {
-                    db.close();
                     if (dbError.code === 'SQLITE_ERROR' && (dbError.message.includes('no such table') || dbError.message.includes('no such column'))) {
                        return NextResponse.json({ count: 0 });
                     }
@@ -190,94 +193,96 @@ export async function POST(req: Request) {
             case 'save': {
                 const { records, mode, uniqueIdDbCol } = payload;
                 if (!records || records.length === 0) {
-                    db.close();
                     return NextResponse.json({ saved: 0, skipped: 0, message: "No records to save." });
                 }
-
-                // Deduplicate incoming records, keeping the last one for each unique ID.
-                const uniqueRecordsMap = new Map();
-                records.forEach((record: any) => {
-                    const uniqueId = record[uniqueIdDbCol];
-                    if (uniqueId) {
-                        uniqueRecordsMap.set(String(uniqueId), record);
-                    }
-                });
-                const uniqueRecords = Array.from(uniqueRecordsMap.values());
-                const uniqueIds = Array.from(uniqueRecordsMap.keys());
-                
-                let savedCount = 0;
-                let skippedCount = 0;
-                
-                const columnsInPayload = Object.keys(records[0] || {});
-                const insertColumns = columnsInPayload.filter(col => DB_COLUMNS.includes(col));
-                
-                if (insertColumns.length === 0) {
-                     db.close();
-                     return NextResponse.json({ message: "No valid columns to insert." }, { status: 400 });
+                 if (!uniqueIdDbCol || !DB_COLUMNS.includes(uniqueIdDbCol)) {
+                    throw new Error(`Invalid unique ID column specified: ${uniqueIdDbCol}`);
                 }
 
-                const colsString = insertColumns.join(', ');
+                const columnsInPayload = Object.keys(records[0] || {});
+                const insertColumns = columnsInPayload.filter(col => DB_COLUMNS.includes(col));
+                if (insertColumns.length === 0) {
+                    return NextResponse.json({ message: "No valid columns to insert." }, { status: 400 });
+                }
+                
+                const colsString = insertColumns.map(c => `\`${c}\``).join(', ');
                 const placeholders = insertColumns.map(() => '?').join(', ');
                 const insertStmt = db.prepare(`INSERT INTO assessed_data (${colsString}) VALUES (${placeholders})`);
 
-                if (mode === 'replace') {
-                    db.transaction(() => {
-                        if (uniqueIds.length > 0) {
-                            const deletePlaceholders = uniqueIds.map(() => '?').join(',');
-                            db.prepare(`DELETE FROM assessed_data WHERE ${uniqueIdDbCol} IN (${deletePlaceholders})`).run(...uniqueIds);
+                let savedCount = 0;
+                let skippedCount = 0;
+
+                const transaction = db.transaction(() => {
+                    const uniqueIdsInChunk = [...new Set(records.map((r: any) => r[uniqueIdDbCol]).filter(Boolean).map(String))];
+
+                    if (mode === 'replace') {
+                        if (uniqueIdsInChunk.length > 0) {
+                            const deletePlaceholders = uniqueIdsInChunk.map(() => '?').join(',');
+                            db.prepare(`DELETE FROM assessed_data WHERE \`${uniqueIdDbCol}\` IN (${deletePlaceholders})`).run(...uniqueIdsInChunk);
                         }
-                        for (const record of uniqueRecords) {
-                            const values = insertColumns.map(col => record[col] ?? null);
-                            insertStmt.run(...values);
-                            savedCount++;
-                        }
-                    })();
-                } else { // 'skip' mode
-                    const existingIds = new Set();
-                    if (uniqueIds.length > 0) {
-                        const selectPlaceholders = uniqueIds.map(() => '?').join(',');
-                        const existingRows = db.prepare(`SELECT DISTINCT ${uniqueIdDbCol} FROM assessed_data WHERE ${uniqueIdDbCol} IN (${selectPlaceholders})`).all(...uniqueIds);
-                        existingRows.forEach((row: any) => existingIds.add(String(row[uniqueIdDbCol])));
                     }
 
-                    db.transaction(() => {
-                        for (const record of uniqueRecords) {
-                            const recordId = String(record[uniqueIdDbCol]);
-                            if (recordId && existingIds.has(recordId)) {
-                                skippedCount++;
-                            } else {
-                                const values = insertColumns.map(col => record[col] ?? null);
-                                insertStmt.run(...values);
-                                savedCount++;
-                            }
+                    const existingIdsInDb = new Set<string>();
+                    if (mode === 'skip' && uniqueIdsInChunk.length > 0) {
+                        const selectPlaceholders = uniqueIdsInChunk.map(() => '?').join(',');
+                        const existingRows = db.prepare(`SELECT DISTINCT \`${uniqueIdDbCol}\` FROM assessed_data WHERE \`${uniqueIdDbCol}\` IN (${selectPlaceholders})`).all(...uniqueIdsInChunk);
+                        existingRows.forEach((row: any) => existingIdsInDb.add(String(row[uniqueIdDbCol])));
+                    }
+                    
+                    const processedInThisBatch = new Set<string>();
+
+                    for (const record of records) {
+                        const uniqueId = record[uniqueIdDbCol];
+                        if (!uniqueId) {
+                            skippedCount++; 
+                            continue;
                         }
-                    })();
-                }
-                
-                db.close();
+                        const idStr = String(uniqueId);
+                        
+                        if (processedInThisBatch.has(idStr)) {
+                            skippedCount++;
+                            continue;
+                        }
+
+                        if (mode === 'skip' && existingIdsInDb.has(idStr)) {
+                            skippedCount++;
+                            continue;
+                        }
+                        
+                        const values = insertColumns.map(col => record[col] ?? null);
+                        insertStmt.run(...values);
+                        processedInThisBatch.add(idStr);
+                        savedCount++;
+                    }
+                });
+
+                transaction();
                 return NextResponse.json({ saved: savedCount, skipped: skippedCount, message: `Saved ${savedCount}, skipped ${skippedCount} duplicates.` });
             }
             
             default:
-                db.close();
                 return NextResponse.json({ error: 'Invalid action provided.' }, { status: 400 });
         }
     } catch (error: any) {
         console.error("[BNF_ASSESSED_API_ERROR]", error);
         return NextResponse.json({ error: "Failed to process request.", details: error.message }, { status: 500 });
+    } finally {
+        if (db) {
+            db.close();
+        }
     }
 }
 
+
 export async function GET(req: Request) {
+    let db;
     try {
         await fs.mkdir(getDataPath(), { recursive: true });
-        const db = new Database(getDbPath(), { fileMustExist: true });
+        db = new Database(getDbPath(), { fileMustExist: true });
         
         const stmt = db.prepare('SELECT * FROM assessed_data');
         const rows = stmt.all();
         
-        db.close();
-
         return NextResponse.json(rows);
 
     } catch (error: any) {
@@ -286,17 +291,20 @@ export async function GET(req: Request) {
         }
         console.error("[BNF_ASSESSED_API_GET_ERROR]", error);
         return NextResponse.json({ error: "Failed to fetch assessed data.", details: error.message }, { status: 500 });
+    } finally {
+        if (db) db.close();
     }
 }
 
 export async function PUT(req: Request) {
+     let db;
     try {
         const recordsToUpdate = await req.json();
         if (!Array.isArray(recordsToUpdate) || recordsToUpdate.length === 0) {
             return NextResponse.json({ error: "Invalid payload. Expected an array of records to update." }, { status: 400 });
         }
         
-        const db = new Database(getDbPath());
+        db = new Database(getDbPath());
 
         const updateRecord = (record: any) => {
             if (!record.id) return; 
@@ -304,7 +312,7 @@ export async function PUT(req: Request) {
             const columnsToUpdate = Object.keys(record).filter(col => DB_COLUMNS.includes(col) && col !== 'id');
             if (columnsToUpdate.length === 0) return;
 
-            const setClause = columnsToUpdate.map(col => `${col} = ?`).join(', ');
+            const setClause = columnsToUpdate.map(col => `\`${col}\` = ?`).join(', ');
             const values = columnsToUpdate.map(col => record[col]);
             values.push(record.id);
 
@@ -319,35 +327,38 @@ export async function PUT(req: Request) {
         });
 
         updateMany(recordsToUpdate);
-        db.close();
-
+        
         return NextResponse.json({ message: `${recordsToUpdate.length} beneficiary records updated successfully.` });
 
     } catch (error: any) {
         console.error("[BNF_ASSESSED_PUT_API_ERROR]", error);
         return NextResponse.json({ error: "Failed to update beneficiary data.", details: error.message }, { status: 500 });
+    } finally {
+        if (db) db.close();
     }
 }
 
 export async function DELETE(req: Request) {
+    let db;
     try {
         const { ids } = await req.json();
         if (!Array.isArray(ids) || ids.length === 0) {
             return NextResponse.json({ error: "Invalid payload. Expected an array of 'ids' to delete." }, { status: 400 });
         }
         
-        const db = new Database(getDbPath());
+        db = new Database(getDbPath());
 
         const placeholders = ids.map(() => '?').join(',');
         const stmt = db.prepare(`DELETE FROM assessed_data WHERE id IN (${placeholders})`);
         
         const info = stmt.run(...ids);
-        db.close();
 
         return NextResponse.json({ message: `${info.changes} records deleted successfully.` });
 
     } catch (error: any) {
         console.error("[BNF_ASSESSED_DELETE_API_ERROR]", error);
         return NextResponse.json({ error: "Failed to delete beneficiary data.", details: error.message }, { status: 500 });
+    } finally {
+         if (db) db.close();
     }
 }

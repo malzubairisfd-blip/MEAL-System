@@ -858,9 +858,14 @@ export default function UploadPage() {
                         uniqueIdDbCol: uniqueIdMapping.dbCol
                     })
                 });
+
+                if (res.status === 204 || !res.headers.get('content-type')?.includes('application/json')) {
+                    throw new Error("Received an empty or non-JSON response from the server.");
+                }
+
                 if (!res.ok) {
-                    const errorData = await res.json();
-                    throw new Error(errorData.error || `Error saving batch starting at index ${i}`);
+                    const errorData = await res.json().catch(() => ({ error: "Failed to parse error response." }));
+                    throw new Error(errorData.details || errorData.error || `Error saving batch starting at index ${i}`);
                 }
                 const result = await res.json();
                 savedCount += result.saved || 0;
@@ -1270,7 +1275,7 @@ export default function UploadPage() {
           <AlertDialogContent>
               <AlertDialogHeader>
                   <AlertDialogTitle>Existing Records Found</AlertDialogTitle>
-                  <AlertDialogDescription className="text-base">
+                  <AlertDialogDescription>
                     Found <span className="font-bold text-destructive">{duplicateInfo.count} / {duplicateInfo.totalInFile}</span> records in your file that share a Unique ID with records already in the database.
                     <br/><br/>
                     Choose 'Overwrite' to replace only the existing records in the database with their updated versions from your file. New records will still be added.
