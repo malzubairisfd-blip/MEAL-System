@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -30,8 +30,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { useTranslation } from "@/hooks/use-translation";
 import { loadCachedResult } from "@/lib/cache";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { FormItem, FormControl } from '@/components/ui/form';
 
-const MonacoEditor = dynamic(() => import('@monaco-editor/react'), { ssr: false });
+const MonacoEditor = dynamic(() => import('@monaco-editor/react'), { ssr: false, loading: () => <div className="flex h-full w-full items-center justify-center bg-editor-loading-background"><p>Loading Editor...</p></div> });
 
 type Settings = any;
 type SavedProgressFile = {
@@ -70,6 +72,7 @@ const FileEditor = () => {
     const [isCreatingNew, setIsCreatingNew] = useState(false);
     
     const { toast } = useToast();
+    const editorRef = useRef<any>(null);
 
     const flattenFolders = (nodes: any[], pathPrefix = ''): any[] => {
         let folderList: any[] = [];
@@ -118,6 +121,9 @@ const FileEditor = () => {
         const res = await api({ action: 'read', filePath: path });
         if(res.content !== undefined){
             setCode(res.content);
+            if (action === 'edit' || action === 'empty') {
+                setTimeout(() => editorRef.current?.setValue(res.content || ""), 0);
+            }
         }
     };
     
@@ -129,6 +135,9 @@ const FileEditor = () => {
     const handleEmpty = () => {
       if(!selectedFile) return toast({ title: "No file selected", variant: "destructive" });
       setCode('');
+      if (editorRef.current) {
+        editorRef.current.setValue('');
+      }
       setAction('empty');
     };
 
@@ -141,24 +150,33 @@ const FileEditor = () => {
     };
     
     const handleSave = async () => {
+        const content = editorRef.current?.getValue() || "";
         let finalAction = action;
         let filePath = selectedFile;
-        let fileContent = code;
+        let fileContent = content;
 
         if (action === 'delete' && isCreatingNew) {
             finalAction = 'createFile';
             filePath = selectedFolder;
-            fileContent = code;
+        } else if (action === 'empty') {
+            finalAction = 'save';
+            filePath = selectedFile;
+            fileContent = content;
         }
 
         if(!finalAction || !filePath) return toast({ title: "No action to perform", variant: "destructive" });
         
-        const payload = {
+        const payload:any = {
             action: finalAction === 'createFile' ? 'createFile' : 'save',
-            filePath: filePath,
             content: fileContent,
-            name: newFileName,
         };
+
+        if (finalAction === 'createFile') {
+            payload.filePath = filePath; // parent folder path
+            payload.name = newFileName;
+        } else {
+            payload.filePath = filePath; // file path
+        }
         
         await api(payload);
         toast({ title: "Success!", description: `File ${newFileName || selectedFile} has been saved.` });
@@ -170,6 +188,48 @@ const FileEditor = () => {
         setNewFileName('');
     };
 
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        if (!selectedFile) {
+            toast({
+                title: "No Destination File Selected",
+                description: "Please select a file from the dropdown to overwrite its content.",
+                variant: "destructive",
+            });
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+            const content = event.target?.result as string;
+            
+            try {
+                await api({ action: "save", filePath: selectedFile, content });
+                toast({
+                    title: "File Content Replaced",
+                    description: `Content of "${file.name}" has been saved to "${selectedFile}".`,
+                });
+                loadFileContent(selectedFile);
+            } catch (err: any) {
+                toast({
+                    title: "Save Failed",
+                    description: err.message,
+                    variant: "destructive",
+                });
+            }
+        };
+        reader.onerror = (err) => {
+            toast({
+                title: "File Read Error",
+                description: "Could not read the uploaded file.",
+                variant: "destructive",
+            });
+        };
+        reader.readAsText(file);
+    };
+
     return (
         <Card>
             <CardHeader>
@@ -178,14 +238,23 @@ const FileEditor = () => {
             </CardHeader>
             <CardContent className="space-y-4">
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <Select onValueChange={handleFolderChange} value={selectedFolder}>
-                        <SelectTrigger><SelectValue placeholder="Select a folder..." /></SelectTrigger>
-                        <SelectContent>
-                            <ScrollArea className="h-72">
-                                {folders.map(f => <SelectItem key={f.path} value={f.path}>{f.name}</SelectItem>)}
-                            </ScrollArea>
-                        </SelectContent>
-                    </Select>
+                    <Card>
+                        <CardHeader className='pb-2'><CardTitle className="text-base">Select Folder</CardTitle></CardHeader>
+                        <CardContent>
+                           <ScrollArea className="h-40 border rounded-md">
+                            <RadioGroup onValueChange={handleFolderChange} value={selectedFolder} className="p-4">
+                                {folders.map(f => (
+                                    <FormItem key={f.path} className="flex items-center space-x-2">
+                                        <FormControl>
+                                            <RadioGroupItem value={f.path} id={f.path} />
+                                        </FormControl>
+                                        <Label htmlFor={f.path} className="font-normal">{f.name}</Label>
+                                    </FormItem>
+                                ))}
+                            </RadioGroup>
+                           </ScrollArea>
+                        </CardContent>
+                    </Card>
                      <Select onValueChange={loadFileContent} value={selectedFile} disabled={!selectedFolder}>
                         <SelectTrigger><SelectValue placeholder="Select a file..." /></SelectTrigger>
                         <SelectContent>
@@ -198,6 +267,24 @@ const FileEditor = () => {
                     <Button onClick={handleEdit} variant="outline" disabled={!selectedFile}>Edit File</Button>
                     <Button onClick={handleDelete} variant="destructive" disabled={!selectedFile}>Delete File</Button>
                 </div>
+                
+                 <Card>
+                    <CardHeader>
+                        <CardTitle>Upload and Replace File Content</CardTitle>
+                        <CardDescription>Upload a file to replace the content of the selected file above. This action is immediate and will save automatically.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="flex flex-col items-center justify-center w-full">
+                            <Label htmlFor="file-upload" className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer hover:bg-muted">
+                                <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                                    <Upload className="w-10 h-10 mb-3 text-muted-foreground" />
+                                    <p className="mb-2 text-sm text-muted-foreground"><span className="font-semibold">Click to upload</span> or drag and drop</p>
+                                </div>
+                                <Input id="file-upload" type="file" className="hidden" onChange={handleFileUpload} />
+                            </Label>
+                        </div>
+                    </CardContent>
+                </Card>
 
                 {(action === 'edit' || action === 'empty') && (
                     <div className="space-y-4">
@@ -205,8 +292,10 @@ const FileEditor = () => {
                             <MonacoEditor
                                 language={selectedFile.endsWith('.tsx') || selectedFile.endsWith('.ts') ? 'typescript' : 'javascript'}
                                 theme="vs-dark"
-                                value={code}
-                                onChange={(value) => setCode(value || '')}
+                                defaultValue={code}
+                                onMount={(editor, monaco) => {
+                                    editorRef.current = editor;
+                                }}
                             />
                         </div>
                         <Button onClick={handleSave}>Save Changes</Button>
@@ -227,8 +316,8 @@ const FileEditor = () => {
                                     <MonacoEditor
                                         language={newFileName.endsWith('.tsx') || newFileName.endsWith('.ts') ? 'typescript' : 'javascript'}
                                         theme="vs-dark"
-                                        value={code}
-                                        onChange={(value) => setCode(value || '')}
+                                        defaultValue=""
+                                        onMount={(editor) => { editorRef.current = editor; }}
                                     />
                                 </div>
                                 <Button onClick={handleSave}>Save New File</Button>
