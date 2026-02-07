@@ -2,13 +2,14 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from 'react';
+import dynamic from 'next/dynamic';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Trash2, ArrowLeft, Save, RotateCcw, Upload, Download, TestTube2, Search } from 'lucide-react';
+import { Loader2, Trash2, ArrowLeft, Save, RotateCcw, Upload, Download, TestTube2, Search, Minus, Plus } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -29,166 +30,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useTranslation } from "@/hooks/use-translation";
 import { loadCachedResult } from "@/lib/cache";
 
-interface DataItem {
-  id: string;
-  name: string;
-  [key: string]: any;
-}
-
-const DataManagementPanel = ({ title, description, idKey, nameKey, apiEndpoint }: { title: string, description: string, idKey: string, nameKey: string, apiEndpoint: string }) => {
-    const { toast } = useToast();
-    const [items, setItems] = useState<DataItem[]>([]);
-    const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
-    const [loading, setLoading] = useState(true);
-    const [isDeleting, setIsDeleting] = useState(false);
-    const [isAlertOpen, setIsAlertOpen] = useState(false);
-
-    const fetchData = useCallback(async () => {
-        setLoading(true);
-        try {
-            const res = await fetch(apiEndpoint);
-            if (!res.ok) throw new Error(`Failed to fetch ${title}`);
-            const data = await res.json();
-            setItems(Array.isArray(data) ? data.map((item: any) => ({
-                id: item[idKey],
-                name: item[nameKey] || item[idKey], // fallback to id if nameKey is not present
-                ...item
-            })) : []);
-        } catch (error: any) {
-            toast({ title: "Error", description: error.message, variant: "destructive" });
-        } finally {
-            setLoading(false);
-        }
-    }, [apiEndpoint, idKey, nameKey, title, toast]);
-
-    useEffect(() => {
-        fetchData();
-    }, [fetchData]);
-
-    const handleSelect = (id: string, checked: boolean | 'indeterminate') => {
-        if (typeof checked !== 'boolean') return;
-        setSelectedItems(prev => {
-            const newSet = new Set(prev);
-            if (checked) {
-                newSet.add(id);
-            } else {
-                newSet.delete(id);
-            }
-            return newSet;
-        });
-    };
-
-    const handleSelectAll = (checked: boolean | 'indeterminate') => {
-        if (typeof checked !== 'boolean') return;
-        if (checked) {
-            setSelectedItems(new Set(items.map(item => item.id)));
-        } else {
-            setSelectedItems(new Set());
-        }
-    };
-
-    const handleDelete = async () => {
-        setIsDeleting(true);
-        try {
-            const res = await fetch(apiEndpoint, {
-                method: 'DELETE',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ [idKey + 's']: Array.from(selectedItems) }),
-            });
-            const result = await res.json();
-            if (!res.ok) throw new Error(result.error || `Failed to delete ${title}`);
-            
-            toast({ title: "Success", description: result.message });
-            setSelectedItems(new Set());
-            fetchData(); // Refresh data
-        } catch (error: any) {
-            toast({ title: "Error", description: error.message, variant: "destructive" });
-        } finally {
-            setIsDeleting(false);
-            setIsAlertOpen(false);
-        }
-    };
-
-    const isAllSelected = selectedItems.size > 0 && selectedItems.size === items.length;
-    const isSomeSelected = selectedItems.size > 0 && selectedItems.size < items.length;
-
-    return (
-        <Card>
-            <CardHeader>
-                <CardTitle>{title}</CardTitle>
-                <CardDescription>{description}</CardDescription>
-            </CardHeader>
-            <CardContent>
-                <div className="flex justify-end mb-4">
-                    <Button
-                        variant="destructive"
-                        disabled={selectedItems.size === 0 || isDeleting}
-                        onClick={() => setIsAlertOpen(true)}
-                    >
-                        {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
-                        Delete Selected ({selectedItems.size})
-                    </Button>
-                </div>
-                <ScrollArea className="h-72 border rounded-md">
-                    {loading ? (
-                        <div className="flex items-center justify-center h-full">
-                            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                        </div>
-                    ) : items.length === 0 ? (
-                        <div className="flex items-center justify-center h-full text-muted-foreground">
-                            No {title} found.
-                        </div>
-                    ) : (
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead className="w-[50px]">
-                                        <Checkbox
-                                            checked={isAllSelected || (isSomeSelected ? "indeterminate" : false)}
-                                            onCheckedChange={handleSelectAll}
-                                        />
-                                    </TableHead>
-                                    <TableHead>ID</TableHead>
-                                    <TableHead>Name / Identifier</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {items.map(item => (
-                                    <TableRow key={item.id}>
-                                        <TableCell>
-                                            <Checkbox
-                                                checked={selectedItems.has(item.id)}
-                                                onCheckedChange={(checked) => handleSelect(item.id, checked)}
-                                            />
-                                        </TableCell>
-                                        <TableCell>{item.id}</TableCell>
-                                        <TableCell>{item.name}</TableCell>
-                                    </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
-                    )}
-                </ScrollArea>
-            </CardContent>
-            <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            This action cannot be undone. This will permanently delete the selected {selectedItems.size} {title.toLowerCase()}.
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleDelete} disabled={isDeleting}>
-                            {isDeleting ? 'Deleting...' : 'Continue'}
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
-        </Card>
-    );
-};
+const MonacoEditor = dynamic(() => import('@monaco-editor/react'), { ssr: false });
 
 type Settings = any;
 type SavedProgressFile = {
@@ -206,6 +48,198 @@ type AutoRule = {
 };
 
 const PROGRESS_KEY_PREFIX = "progress-";
+
+// API utility
+async function api(body: any) {
+    return fetch("/api/file-manager", {
+        method: "POST",
+        body: JSON.stringify(body),
+    }).then((r) => r.json());
+}
+
+const FileEditor = () => {
+    const [tree, setTree] = useState<any[]>([]);
+    const [folders, setFolders] = useState<any[]>([]);
+    const [selectedFolder, setSelectedFolder] = useState('');
+    const [files, setFiles] = useState<any[]>([]);
+    const [selectedFile, setSelectedFile] = useState('');
+    const [code, setCode] = useState('');
+    const [action, setAction] = useState<'edit' | 'empty' | 'delete' | null>(null);
+    const [newFileName, setNewFileName] = useState('');
+    const [isCreatingNew, setIsCreatingNew] = useState(false);
+    
+    const { toast } = useToast();
+
+    const flattenFolders = (nodes: any[], pathPrefix = ''): any[] => {
+        let folderList: any[] = [];
+        nodes.forEach(node => {
+            if (node.type === 'folder') {
+                const currentPath = node.path;
+                folderList.push({ name: currentPath, path: currentPath });
+                if (node.children) {
+                    folderList = folderList.concat(flattenFolders(node.children, currentPath));
+                }
+            }
+        });
+        return folderList;
+    };
+
+    useEffect(() => {
+        api({ action: "tree" }).then(data => {
+            setTree(data);
+            setFolders(flattenFolders(data));
+        });
+    }, []);
+
+    const handleFolderChange = (path: string) => {
+        setSelectedFolder(path);
+        setSelectedFile('');
+        setCode('');
+        setAction(null);
+        
+        const findFolder = (nodes: any[]): any => {
+            for (const node of nodes) {
+                if (node.path === path) return node;
+                if (node.children) {
+                    const found = findFolder(node.children);
+                    if (found) return found;
+                }
+            }
+            return null;
+        };
+        const folder = findFolder(tree);
+        setFiles(folder ? folder.children.filter((c: any) => c.type === 'file') : []);
+    };
+    
+    const loadFileContent = async (path: string) => {
+        if (!path) return;
+        setSelectedFile(path);
+        const res = await api({ action: 'read', filePath: path });
+        if(res.content !== undefined){
+            setCode(res.content);
+        }
+    };
+    
+    const handleEdit = () => {
+      if(!selectedFile) return toast({ title: "No file selected", variant: "destructive" });
+      setAction('edit');
+    };
+
+    const handleEmpty = () => {
+      if(!selectedFile) return toast({ title: "No file selected", variant: "destructive" });
+      setCode('');
+      setAction('empty');
+    };
+
+    const handleDelete = async () => {
+      if(!selectedFile) return toast({ title: "No file selected", variant: "destructive" });
+      await api({ action: 'delete', filePath: selectedFile });
+      toast({ title: 'File Deleted' });
+      handleFolderChange(selectedFolder); // Refresh file list
+      setAction('delete');
+    };
+    
+    const handleSave = async () => {
+        let finalAction = action;
+        let filePath = selectedFile;
+        let fileContent = code;
+
+        if (action === 'delete' && isCreatingNew) {
+            finalAction = 'createFile';
+            filePath = selectedFolder;
+            fileContent = code;
+        }
+
+        if(!finalAction || !filePath) return toast({ title: "No action to perform", variant: "destructive" });
+        
+        const payload = {
+            action: finalAction === 'createFile' ? 'createFile' : 'save',
+            filePath: filePath,
+            content: fileContent,
+            name: newFileName,
+        };
+        
+        await api(payload);
+        toast({ title: "Success!", description: `File ${newFileName || selectedFile} has been saved.` });
+        if(finalAction === 'createFile') {
+            handleFolderChange(selectedFolder);
+        }
+        setAction(null);
+        setIsCreatingNew(false);
+        setNewFileName('');
+    };
+
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle>File Editor</CardTitle>
+                <CardDescription>Browse, view, and edit project files directly.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <Select onValueChange={handleFolderChange} value={selectedFolder}>
+                        <SelectTrigger><SelectValue placeholder="Select a folder..." /></SelectTrigger>
+                        <SelectContent>
+                            <ScrollArea className="h-72">
+                                {folders.map(f => <SelectItem key={f.path} value={f.path}>{f.name}</SelectItem>)}
+                            </ScrollArea>
+                        </SelectContent>
+                    </Select>
+                     <Select onValueChange={loadFileContent} value={selectedFile} disabled={!selectedFolder}>
+                        <SelectTrigger><SelectValue placeholder="Select a file..." /></SelectTrigger>
+                        <SelectContent>
+                           {files.map(f => <SelectItem key={f.path} value={f.path}>{f.name}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
+                 </div>
+                 <div className="flex gap-2">
+                    <Button onClick={handleEmpty} variant="outline" disabled={!selectedFile}>Empty File</Button>
+                    <Button onClick={handleEdit} variant="outline" disabled={!selectedFile}>Edit File</Button>
+                    <Button onClick={handleDelete} variant="destructive" disabled={!selectedFile}>Delete File</Button>
+                </div>
+
+                {(action === 'edit' || action === 'empty') && (
+                    <div className="space-y-4">
+                        <div className="h-96 w-full border rounded-md">
+                            <MonacoEditor
+                                language={selectedFile.endsWith('.tsx') || selectedFile.endsWith('.ts') ? 'typescript' : 'javascript'}
+                                theme="vs-dark"
+                                value={code}
+                                onChange={(value) => setCode(value || '')}
+                            />
+                        </div>
+                        <Button onClick={handleSave}>Save Changes</Button>
+                    </div>
+                )}
+
+                {action === 'delete' && (
+                    <div className="space-y-4 p-4 border rounded-md bg-muted/50">
+                        <p>Do you want to add a new file to this folder?</p>
+                        <div className="flex gap-4">
+                            <Button onClick={() => setIsCreatingNew(true)}>Yes</Button>
+                            <Button onClick={() => setAction(null)} variant="secondary">No</Button>
+                        </div>
+                        {isCreatingNew && (
+                            <div className="space-y-4 pt-4">
+                                <Input placeholder="New file name (e.g., my-file.ts)" value={newFileName} onChange={(e) => setNewFileName(e.target.value)} />
+                                <div className="h-96 w-full border rounded-md">
+                                    <MonacoEditor
+                                        language={newFileName.endsWith('.tsx') || newFileName.endsWith('.ts') ? 'typescript' : 'javascript'}
+                                        theme="vs-dark"
+                                        value={code}
+                                        onChange={(value) => setCode(value || '')}
+                                    />
+                                </div>
+                                <Button onClick={handleSave}>Save New File</Button>
+                            </div>
+                        )}
+                    </div>
+                )}
+            </CardContent>
+        </Card>
+    );
+};
+
 
 export default function MealSettingsPage() {
     const { t } = useTranslation();
@@ -584,6 +618,10 @@ export default function MealSettingsPage() {
                             <div className="grid grid-cols-12 items-center gap-4">
                             <Label htmlFor="minPair" className="col-span-12 sm:col-span-3 flex items-center">{t('settings.thresholds.minPair')}: <b className="mx-1">{settings.thresholds.minPair}</b></Label>
                             <Slider dir="ltr" id="minPair" min={0} max={1} step={0.01} value={[settings.thresholds.minPair]} onValueChange={(v)=>update("thresholds.minPair", v[0])} className="col-span-12 sm:col-span-6" />
+                            <div className="col-span-12 sm:col-span-3 flex items-center gap-1 justify-end">
+                                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleNumericChange('thresholds.minPair', -0.01)}><Minus className="h-4 w-4" /></Button>
+                                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleNumericChange('thresholds.minPair', 0.01)}><Plus className="h-4 w-4" /></Button>
+                            </div>
                             </div>
                             <p className="text-xs text-muted-foreground mt-1 pl-1">{t('settings.thresholds.minPairDescription')}</p>
                         </div>
@@ -591,6 +629,10 @@ export default function MealSettingsPage() {
                             <div className="grid grid-cols-12 items-center gap-4">
                             <Label htmlFor="minInternal" className="col-span-12 sm:col-span-3 flex items-center">{t('settings.thresholds.minInternal')}: <b className="mx-1">{settings.thresholds.minInternal}</b></Label>
                             <Slider dir="ltr" id="minInternal" min={0} max={1} step={0.01} value={[settings.thresholds.minInternal]} onValueChange={(v)=>update("thresholds.minInternal", v[0])} className="col-span-12 sm:col-span-6" />
+                            <div className="col-span-12 sm:col-span-3 flex items-center gap-1 justify-end">
+                                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleNumericChange('thresholds.minInternal', -0.01)}><Minus className="h-4 w-4" /></Button>
+                                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleNumericChange('thresholds.minInternal', 0.01)}><Plus className="h-4 w-4" /></Button>
+                            </div>
                             </div>
                             <p className="text-xs text-muted-foreground mt-1 pl-1">{t('settings.thresholds.minInternalDescription')}</p>
                         </div>
@@ -610,7 +652,9 @@ export default function MealSettingsPage() {
                                 <Label htmlFor={`fsw-${k}`} className="capitalize flex items-center">{t(`settings.weights.${k}`)}</Label>
                             </div>
                             <div className="flex items-center gap-2">
+                                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleWeightChange(k, -0.01)}><Minus className="h-4 w-4" /></Button>
                                 <Input type="number" step="0.01" value={v || ''} onChange={(e)=>update(`finalScoreWeights.${k}`, parseFloat(e.target.value) || 0)} className="w-24 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"/>
+                                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleWeightChange(k, 0.01)}><Plus className="h-4 w-4" /></Button>
                             </div>
                                 <Slider dir="ltr" id={`fsw-${k}`} min={0} max={1} step={0.01} value={[v]} onValueChange={(val)=>update(`finalScoreWeights.${k}`, val[0])} />
                                 <p className="text-xs text-muted-foreground mt-1">{t(`settings.weights.${k}Description`)}</p>
@@ -632,75 +676,7 @@ export default function MealSettingsPage() {
                         ))}
                         </CardContent>
                     </Card>
-                </section>
-                <aside className="space-y-6">
-                    <Card>
-                        <CardHeader><CardTitle>{t('settings.testScoring.title')}</CardTitle></CardHeader>
-                        <CardContent className="space-y-4">
-                            <div className="space-y-2 p-3 border rounded-md">
-                                <h4 className="font-medium">{t('settings.testScoring.recordA')}</h4>
-                                <Label>{t('settings.fieldNames.womanName')}</Label>
-                                <Input value={testA.womanName} onChange={e=>setTestA({...testA, womanName: e.target.value})}/>
-                                <Label>{t('settings.fieldNames.husbandName')}</Label>
-                                <Input value={testA.husbandName} onChange={e=>setTestA({...testA, husbandName: e.target.value})}/>
-                                <Label>{t('settings.fieldNames.nationalId')}</Label>
-                                <Input value={testA.nationalId} onChange={e=>setTestA({...testA, nationalId: e.target.value})}/>
-                                <Label>{t('settings.fieldNames.phone')}</Label>
-                                <Input value={testA.phone} onChange={e=>setTestA({...testA, phone: e.target.value})}/>
-                            </div>
-                            <div className="space-y-2 p-3 border rounded-md">
-                                <h4 className="font-medium">{t('settings.testScoring.recordB')}</h4>
-                                <Label>{t('settings.fieldNames.womanName')}</Label>
-                                <Input value={testB.womanName} onChange={e=>setTestB({...testB, womanName: e.target.value})}/>
-                                <Label>{t('settings.fieldNames.husbandName')}</Label>
-                                <Input value={testB.husbandName} onChange={e=>setTestB({...testB, husbandName: e.target.value})}/>
-                                <Label>{t('settings.fieldNames.nationalId')}</Label>
-                                <Input value={testB.nationalId} onChange={e=>setTestB({...testB, nationalId: e.target.value})}/>
-                                <Label>{t('settings.fieldNames.phone')}</Label>
-                                <Input value={testB.phone} onChange={e=>setTestB({...testB, phone: e.target.value})}/>
-                            </div>
-                            <div className="flex gap-2">
-                                <Button onClick={runTestScoring}><TestTube2 className="mr-2" />{t('settings.testScoring.runTest')}</Button>
-                                <Button onClick={() => { setTestA({womanName:"",husbandName:"",nationalId:"",phone:""}); setTestB({womanName:"",husbandName:"",nationalId:"",phone:""}); setLastResult(null); }} variant="outline">{t('settings.testScoring.clear')}</Button>
-                            </div>
-                            {lastResult && (
-                                <div className="mt-3 bg-muted p-3 rounded-lg">
-                                <div className="font-bold text-lg">Source: {lastResult.source}</div>
-                                {lastResult.score !== undefined && lastResult.score !== null ? (
-                                    <>
-                                    <div className="font-bold text-lg">{t('settings.testScoring.score')}: {lastResult.score.toFixed(4)}</div>
-                                    <div className="text-sm mt-2">{t('settings.testScoring.compareToMinPair')}: <b>{settings.thresholds.minPair}</b></div>
-                                    </>
-                                ) : <div className="font-bold text-lg">No Match</div> }
-                                <details className="mt-2 text-sm">
-                                    <summary className="cursor-pointer font-medium">{t('settings.testScoring.viewBreakdown')}</summary>
-                                    <pre className="text-xs mt-2 bg-background p-2 rounded">{JSON.stringify(lastResult.breakdown, null, 2)}</pre>
-                                </details>
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
-                    <DataManagementPanel
-                        title="Projects"
-                        description="Manage all created projects. Deleting a project will also delete its associated logframe and project plan."
-                        idKey="projectId"
-                        nameKey="projectName"
-                        apiEndpoint="/api/projects"
-                    />
-                    <DataManagementPanel
-                        title="Project Plans"
-                        description="Manage project plans (Gantt charts). Each plan is linked to a project."
-                        idKey="projectId"
-                        nameKey="projectId"
-                        apiEndpoint="/api/project-plan"
-                    />
-                    <DataManagementPanel
-                        title="Logical Frameworks"
-                        description="Manage logical frameworks. Each logframe is linked to a project."
-                        idKey="projectId"
-                        nameKey="projectId"
-                        apiEndpoint="/api/logframe"
-                    />
+
                     <Card>
                         <CardHeader>
                         <div className="flex justify-between items-center">
@@ -745,10 +721,147 @@ export default function MealSettingsPage() {
                             </div>
                             </ScrollArea>
                         ) : (
-                            <p className="text-sm text-muted-foreground text-center py-8">No rules have been learned yet. Use the "Data Correction" feature to teach the system.</p>
+                            <p className="text-sm text-muted-foreground text-center py-8">No rules have been learned yet. Use the "Data Correction" feature on the Upload page to teach the system.</p>
                         )}
                         </CardContent>
                     </Card>
+                    <FileEditor />
+                </section>
+
+                <aside className="space-y-6">
+                    <Card>
+                        <CardHeader><CardTitle>{t('settings.testScoring.title')}</CardTitle></CardHeader>
+                        <CardContent className="space-y-4">
+                        <div className="space-y-2 p-3 border rounded-md">
+                            <h4 className="font-medium">{t('settings.testScoring.recordA')}</h4>
+                            <Label>{t('settings.fieldNames.womanName')}</Label>
+                            <Input value={testA.womanName} onChange={e=>setTestA({...testA, womanName: e.target.value})}/>
+                            <Label>{t('settings.fieldNames.husbandName')}</Label>
+                            <Input value={testA.husbandName} onChange={e=>setTestA({...testA, husbandName: e.target.value})}/>
+                            <Label>{t('settings.fieldNames.nationalId')}</Label>
+                            <Input value={testA.nationalId} onChange={e=>setTestA({...testA, nationalId: e.target.value})}/>
+                            <Label>{t('settings.fieldNames.phone')}</Label>
+                            <Input value={testA.phone} onChange={e=>setTestA({...testA, phone: e.target.value})}/>
+                        </div>
+
+                        <div className="space-y-2 p-3 border rounded-md">
+                            <h4 className="font-medium">{t('settings.testScoring.recordB')}</h4>
+                            <Label>{t('settings.fieldNames.womanName')}</Label>
+                            <Input value={testB.womanName} onChange={e=>setTestB({...testB, womanName: e.target.value})}/>
+                            <Label>{t('settings.fieldNames.husbandName')}</Label>
+                            <Input value={testB.husbandName} onChange={e=>setTestB({...testB, husbandName: e.target.value})}/>
+                            <Label>{t('settings.fieldNames.nationalId')}</Label>
+                            <Input value={testB.nationalId} onChange={e=>setTestB({...testB, nationalId: e.target.value})}/>
+                            <Label>{t('settings.fieldNames.phone')}</Label>
+                            <Input value={testB.phone} onChange={e=>setTestB({...testB, phone: e.target.value})}/>
+                        </div>
+
+                        <div className="flex gap-2">
+                            <Button onClick={runTestScoring}>{t('settings.testScoring.runTest')}</Button>
+                            <Button onClick={() => { setTestA({womanName:"",husbandName:"",nationalId:"",phone:""}); setTestB({womanName:"",husbandName:"",nationalId:"",phone:""}); setLastResult(null); }} variant="outline">{t('settings.testScoring.clear')}</Button>
+                        </div>
+
+                        {lastResult && (
+                            <div className="mt-3 bg-muted p-3 rounded-lg">
+                            <div className="font-bold text-lg">Source: {lastResult.source}</div>
+                            {lastResult.score !== undefined && lastResult.score !== null ? (
+                                <>
+                                <div className="font-bold text-lg">{t('settings.testScoring.score')}: {lastResult.score.toFixed(4)}</div>
+                                <div className="text-sm mt-2">{t('settings.testScoring.compareToMinPair')}: <b>{settings.thresholds.minPair}</b></div>
+                                </>
+                            ) : <div className="font-bold text-lg">No Match</div> }
+                            <details className="mt-2 text-sm">
+                                <summary className="cursor-pointer font-medium">{t('settings.testScoring.viewBreakdown')}</summary>
+                                <pre className="text-xs mt-2 bg-background p-2 rounded">{JSON.stringify(lastResult.breakdown, null, 2)}</pre>
+                            </details>
+                            </div>
+                        )}
+                        </CardContent>
+                    </Card>
+                    
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Manage Saved Progress</CardTitle>
+                            <CardDescription>Manage or delete saved clustering progress files to free up space or remove old data.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            {savedProgressFiles.length === 0 ? (
+                                <p className="text-sm text-muted-foreground text-center py-4">No saved progress found.</p>
+                            ) : (
+                                <>
+                                    <div className="flex justify-end gap-2 mb-4">
+                                        <Button variant="outline" size="sm" onClick={handleDeleteAll}>
+                                            <Trash2 className="mr-2 h-4 w-4" />
+                                            Delete All
+                                        </Button>
+                                        <Button variant="destructive" size="sm" onClick={handleDeleteSelected} disabled={selectedFiles.length === 0}>
+                                            <Trash2 className="mr-2 h-4 w-4" />
+                                            Delete Selected ({selectedFiles.length})
+                                        </Button>
+                                    </div>
+                                    <ScrollArea className="h-48 rounded-md border">
+                                        <div className="p-4 space-y-2">
+                                            {savedProgressFiles.map((file) => (
+                                                <div key={file.key} className="flex items-center justify-between p-2 rounded-md hover:bg-muted">
+                                                    <div className="flex items-center gap-3">
+                                                        <Checkbox
+                                                            id={file.key}
+                                                            checked={selectedFiles.includes(file.key)}
+                                                            onCheckedChange={(checked) => handleSelectFile(file.key, checked)}
+                                                        />
+                                                        <div className="grid gap-0.5">
+                                                            <label htmlFor={file.key} className="text-sm font-medium leading-none truncate max-w-[200px]" title={file.name}>
+                                                                {file.name}
+                                                            </label>
+                                                            <p className="text-xs text-muted-foreground">
+                                                                {file.size} - {file.date}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </ScrollArea>
+                                </>
+                            )}
+                        </CardContent>
+                    </Card>
+
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>{t('settings.cache.title')}</CardTitle>
+                            <CardDescription>{t('settings.cache.description')}</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="flex flex-col gap-2">
+                                <Button onClick={loadCache} disabled={cacheLoading}>
+                                    {cacheLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                    {t('settings.cache.button')}
+                                </Button>
+                                {rawCachedDataObject && (
+                                    <div className="relative">
+                                        <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                                        <Input
+                                            type="text"
+                                            placeholder="Search cached data..."
+                                            className="pl-10"
+                                            value={cacheSearchQuery}
+                                            onChange={(e) => setCacheSearchQuery(e.target.value)}
+                                        />
+                                    </div>
+                                )}
+                            </div>
+                            {rawCachedDataObject && (
+                                <Textarea
+                                    readOnly
+                                    className="mt-4 h-64 font-mono text-xs"
+                                    value={filteredCachedDataString}
+                                    placeholder={t('settings.cache.loading')}
+                                />
+                            )}
+                        </CardContent>
+                    </Card>
+
                 </aside>
             </main>
         </div>
