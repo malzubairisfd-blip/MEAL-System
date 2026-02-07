@@ -16,7 +16,8 @@
     "meLifecycle": "M&E Lifecycle",
     "logframe": "Logical Framework",
     "prepareIndicators": "Prepare Indicators",
-    "indicatorTracking": "Indicator Tracking"
+    "indicatorTracking": "Indicator Tracking",
+    "fileEditor": "File Editor"
   },
   "header": {
     "dashboard": "Dashboard",

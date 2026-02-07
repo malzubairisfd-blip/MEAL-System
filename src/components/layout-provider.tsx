@@ -21,6 +21,7 @@ import {
   Sheet,
   ChevronDown,
   Users,
+  FileEdit,
 } from "lucide-react";
 import { useTranslation } from "@/hooks/use-translation";
 import { useLanguage } from "@/context/language-context";
@@ -179,7 +180,7 @@ export function LayoutProvider({ children, year }: { children: React.ReactNode, 
   ];
 
   let pageTitle = "Dashboard";
-  const allLinks = [...mealSystemLinks, ...beneficiaryAnalysisLinks, { href: "/", labelKey: "sidebar.dashboard", icon: <Home/> }, { href: "/meal-system/settings", labelKey: "sidebar.settings", icon: <Settings/> }];
+  const allLinks = [...mealSystemLinks, ...beneficiaryAnalysisLinks, { href: "/", labelKey: "sidebar.dashboard", icon: <Home/> }, { href: "/meal-system/settings", labelKey: "sidebar.settings", icon: <Settings/> }, { href: "/file-editor", labelKey: "sidebar.fileEditor", icon: <FileEdit /> }];
   const activeLink = allLinks.find(l => l.href !== "/" && pathname.startsWith(l.href));
   
   if (activeLink) {
@@ -232,6 +233,7 @@ export function LayoutProvider({ children, year }: { children: React.ReactNode, 
                     t={t}
                 />
                 <NavLink href="/meal-system/settings" icon={<Settings />} label={t("sidebar.settings")} isActive={pathname === "/meal-system/settings"} isCollapsed={isCollapsed} />
+                <NavLink href="/file-editor" icon={<FileEdit />} label={t("sidebar.fileEditor")} isActive={pathname === "/file-editor"} isCollapsed={isCollapsed} />
                 <NavLink href="/style-guide" icon={<Palette />} label={t("sidebar.styleGuide")} isActive={pathname === "/style-guide"} isCollapsed={isCollapsed} />
             </>
           )}

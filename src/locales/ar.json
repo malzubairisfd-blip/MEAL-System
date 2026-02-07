@@ -16,7 +16,8 @@
     "meLifecycle": "دورة حياة M&E",
     "logframe": "الإطار المنطقي",
     "prepareIndicators": "إعداد المؤشرات",
-    "indicatorTracking": "تتبع المؤشرات"
+    "indicatorTracking": "تتبع المؤشرات",
+    "fileEditor": "محرر الملفات"
   },
   "header": {
     "dashboard": "لوحة التحكم",
@@ -431,7 +432,7 @@
     }
   },
   "settings": {
-    "title": "التجميع - إعدادات المسؤول (v5)",
+    "title": "التجميع — إعدادات المسؤول (v5)",
     "description": "قم بضبط محرك التجميع v5 والأوزان والقواعد.",
     "buttons": {
       "goToUpload": "الذهاب إلى الرفع",
