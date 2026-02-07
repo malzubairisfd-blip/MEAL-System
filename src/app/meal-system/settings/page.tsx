@@ -1,4 +1,4 @@
-// src/app/meal-system/settings/page.tsx
+
 "use client";
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -29,6 +29,7 @@ import { Slider } from "@/components/ui/slider";
 import { Textarea } from "@/components/ui/textarea";
 import { useTranslation } from "@/hooks/use-translation";
 import { loadCachedResult } from "@/lib/cache";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const MonacoEditor = dynamic(() => import('@monaco-editor/react'), { ssr: false });
 
@@ -790,7 +791,7 @@ export default function MealSettingsPage() {
                             ) : (
                                 <>
                                     <div className="flex justify-end gap-2 mb-4">
-                                        <Button variant="outline" size="sm" onClick={handleDeleteAll}>
+                                         <Button variant="outline" size="sm" onClick={handleDeleteAll}>
                                             <Trash2 className="mr-2 h-4 w-4" />
                                             Delete All
                                         </Button>
