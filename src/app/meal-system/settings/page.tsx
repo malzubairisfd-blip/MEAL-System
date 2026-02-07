@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Trash2, ArrowLeft, Save, RotateCcw, Upload, Download, TestTube2, Search, Minus, Plus } from 'lucide-react';
+import { Loader2, Trash2, ArrowLeft, Save, RotateCcw, Upload, Download, TestTube2, Search, Plus, Minus, Edit } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -31,7 +31,7 @@ import { useTranslation } from "@/hooks/use-translation";
 import { loadCachedResult } from "@/lib/cache";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { FormItem, FormControl } from '@/components/ui/form';
+
 
 const MonacoEditor = dynamic(() => import('@monaco-editor/react'), { ssr: false, loading: () => <div className="flex h-full w-full items-center justify-center bg-editor-loading-background"><p>Loading Editor...</p></div> });
 
@@ -52,12 +52,24 @@ type AutoRule = {
 
 const PROGRESS_KEY_PREFIX = "progress-";
 
+const embeddedFileContent: Record<string, string> = {
+  "README.md": "gi# Firebase Studio\n\nThis is a NextJS starter in Firebase Studio.\n\nTo get started, take a look at src/app/page.tsx.\n# Beneficiary-Insights-System\n\n",
+  "apphosting.yaml": "# Settings to manage and configure a Firebase App Hosting backend.\n# https://firebase.google.com/docs/app-hosting/configure\n\nrunConfig:\n  # Increase this value if you'd like to automatically spin up\n  # more instances in response to increased traffic.\n  maxInstances: 1\n",
+  "components.json": "{\n  \"$schema\": \"https://ui.shadcn.com/schema.json\",\n  \"style\": \"default\",\n  \"rsc\": true,\n  \"tsx\": true,\n  \"tailwind\": {\n    \"config\": \"tailwind.config.ts\",\n    \"css\": \"src/app/globals.css\",\n    \"baseColor\": \"neutral\",\n    \"cssVariables\": true,\n    \"prefix\": \"\"\n  },\n  \"aliases\": {\n    \"components\": \"@/components\",\n    \"utils\": \"@/lib/utils\",\n    \"ui\": \"@/components/ui\",\n    \"lib\": \"@/lib\",\n    \"hooks\": \"@/hooks\"\n  },\n  \"iconLibrary\": \"lucide\"\n}\n",
+  "next.config.js": "/** @type {import('next').NextConfig} */\nconst nextConfig = {\n  /* config options here */\n  typescript: {\n    ignoreBuildErrors: true,\n  },\n  images: {\n    remotePatterns: [\n      {\n        protocol: 'https',\n        hostname: 'placehold.co',\n        port: '',\n        pathname: '/**',\n      },\n      {\n        protocol: 'https',\n        hostname: 'images.unsplash.com',\n        port: '',\n        pathname: '/**',\n      },\n      {\n        protocol: 'https',\n        hostname: 'picsum.photos',\n        port: '',\n        pathname: '/**',\n      },\n    ],\n  },\n};\n\nmodule.exports = nextConfig;\n",
+  "package.json": "{\n  \"name\": \"nextn\",\n  \"version\": \"0.1.0\",\n  \"private\": true,\n  \"scripts\": {\n    \"dev\": \"next dev -p 9002\",\n    \"genkit:dev\": \"genkit start -- tsx src/ai/dev.ts\",\n    \"genkit:watch\": \"genkit start -- tsx --watch src/ai/dev.ts\",\n    \"build\": \"NODE_ENV=production next build\",\n    \"start\": \"next start\",\n    \"lint\": \"next lint\",\n    \"typecheck\": \"tsc --noEmit\"\n  },\n  \"dependencies\": {\n    \"@genkit-ai/google-genai\": \"^1.0.0\",\n    \"@hookform/resolvers\": \"^4.1.3\",\n    \"@monaco-editor/react\": \"^4.6.0\",\n    \"@pdf-lib/fontkit\": \"^1.1.1\",\n    \"@radix-ui/react-accordion\": \"^1.2.3\",\n    \"@radix-ui/react-alert-dialog\": \"^1.1.6\",\n    \"@radix-ui/react-avatar\": \"^1.1.3\",\n    \"@radix-ui/react-checkbox\": \"^1.1.4\",\n    \"@radix-ui/react-collapsible\": \"^1.1.11\",\n    \"@radix-ui/react-dialog\": \"^1.1.6\",\n    \"@radix-ui/react-dropdown-menu\": \"^2.1.6\",\n    \"@radix-ui/react-label\": \"^2.1.2\",\n    \"@radix-ui/react-menubar\": \"^1.1.6\",\n    \"@radix-ui/react-popover\": \"^1.1.6\",\n    \"@radix-ui/react-progress\": \"^1.1.2\",\n    \"@radix-ui/react-radio-group\": \"^1.2.3\",\n    \"@radix-ui/react-scroll-area\": \"^1.2.3\",\n    \"@radix-ui/react-select\": \"^2.1.6\",\n    \"@radix-ui/react-separator\": \"^1.1.2\",\n    \"@radix-ui/react-slider\": \"^1.2.3\",\n    \"@radix-ui/react-slot\": \"^1.2.3\",\n    \"@radix-ui/react-switch\": \"^1.1.3\",\n    \"@radix-ui/react-tabs\": \"^1.1.3\",\n    \"@radix-ui/react-toast\": \"^1.2.6\",\n    \"@radix-ui/react-tooltip\": \"^1.1.8\",\n    \"@tailwindcss/aspect-ratio\": \"^0.4.2\",\n    \"@tailwindcss/forms\": \"^0.5.7\",\n    \"@tailwindcss/typography\": \"^0.5.13\",\n    \"better-sqlite3\": \"^11.1.2\",\n    \"class-variance-authority\": \"^0.7.0\",\n    \"clsx\": \"^2.1.1\",\n    \"cmdk\": \"^1.0.0\",\n    \"date-fns\": \"^3.6.0\",\n    \"dayjs\": \"^1.11.11\",\n    \"docx\": \"^8.5.0\",\n    \"dotenv\": \"^16.5.0\",\n    \"echarts\": \"^5.5.0\",\n    \"echarts-for-react\": \"^3.0.2\",\n    \"embla-carousel-react\": \"^8.6.0\",\n    \"exceljs\": \"^4.4.0\",\n    \"file-saver\": \"^2.0.5\",\n    \"firebase\": \"^11.9.1\",\n    \"framer-motion\": \"^11.3.19\",\n    \"genkit\": \"^1.0.0\",\n    \"html-to-image\": \"^1.11.11\",\n    \"idb\": \"^8.0.0\",\n    \"jspdf\": \"2.5.1\",\n    \"jspdf-autotable\": \"3.8.2\",\n    \"jszip\": \"^3.10.1\",\n    \"leaflet\": \"^1.9.4\",\n    \"leaflet.heat\": \"^0.2.0\",\n    \"leaflet.markercluster\": \"^1.5.3\",\n    \"leaflet-image\": \"^0.4.0\",\n    \"lucide-react\": \"^0.475.0\",\n    \"next\": \"14.2.3\",\n    \"patch-package\": \"^8.0.0\",\n    \"pdf-lib\": \"^1.17.1\",\n    \"qrcode\": \"^1.5.3\",\n    \"react\": \"18.3.1\",\n    \"react-day-picker\": \"^9.0.5\",\n    \"react-dom\": \"18.3.1\",\n    \"react-hook-form\": \"^7.54.2\",\n    \"react-leaflet\": \"^4.2.1\",\n    \"recharts\": \"^2.15.1\",\n    \"talisman\": \"^1.1.4\",\n    \"tailwind-merge\": \"^2.4.0\",\n    \"tailwindcss-animate\": \"^1.0.7\",\n    \"xlsx\": \"^0.18.5\",\n    \"zod\": \"^3.24.2\"\n  },\n  \"devDependencies\": {\n    \"@types/better-sqlite3\": \"^7.6.11\",\n    \"@types/file-saver\": \"^2.0.7\",\n    \"@types/jspdf\": \"^2.0.0\",\n    \"@types/jszip\": \"^3.4.1\",\n    \"@types/leaflet\": \"^1.9.12\",\n    \"@types/leaflet.heat\": \"^0.2.4\",\n    \"@types/leaflet.markercluster\": \"^1.5.4\",\n    \"@types/node\": \"^20\",\n    \"@types/react\": \"^18.3.3\",\n    \"@types/react-dom\": \"^18.3.0\",\n    \"@types/recharts\": \"^1.8.29\",\n    \"genkit-cli\": \"^1.0.0\",\n    \"postcss\": \"^8\",\n    \"tailwindcss\": \"^3.4.1\",\n    \"typescript\": \"^5\"\n  }\n}\n",
+};
+
 // API utility
 async function api(body: any) {
-    return fetch("/api/file-manager", {
+    const res = await fetch("/api/file-manager", {
         method: "POST",
         body: JSON.stringify(body),
-    }).then((r) => r.json());
+    });
+    if (!res.ok) {
+        throw new Error(`API Error: ${res.statusText}`);
+    }
+    return res.json();
 }
 
 const FileEditor = () => {
@@ -88,12 +100,19 @@ const FileEditor = () => {
         return folderList;
     };
 
-    useEffect(() => {
-        api({ action: "tree" }).then(data => {
+    const fetchTree = useCallback(async () => {
+        try {
+            const data = await api({ action: "tree" });
             setTree(data);
             setFolders(flattenFolders(data));
-        });
-    }, []);
+        } catch (error: any) {
+            toast({ title: "Error fetching files", description: error.message, variant: "destructive" });
+        }
+    }, [toast]);
+
+    useEffect(() => {
+        fetchTree();
+    }, [fetchTree]);
 
     const handleFolderChange = (path: string) => {
         setSelectedFolder(path);
@@ -115,74 +134,51 @@ const FileEditor = () => {
         setFiles(folder ? folder.children.filter((c: any) => c.type === 'file') : []);
     };
     
-    const loadFileContent = async (path: string) => {
+    const loadFileContent = (path: string) => {
         if (!path) return;
         setSelectedFile(path);
-        const res = await api({ action: 'read', filePath: path });
-        if(res.content !== undefined){
-            setCode(res.content);
-            if (action === 'edit' || action === 'empty') {
-                setTimeout(() => editorRef.current?.setValue(res.content || ""), 0);
-            }
+        const content = embeddedFileContent[path] || `// Content for ${path} not found.`;
+        setCode(content);
+        if (action === 'edit' || action === 'empty') {
+            setTimeout(() => editorRef.current?.setValue(content || ""), 0);
         }
     };
     
     const handleEdit = () => {
       if(!selectedFile) return toast({ title: "No file selected", variant: "destructive" });
       setAction('edit');
+      loadFileContent(selectedFile);
     };
 
     const handleEmpty = () => {
       if(!selectedFile) return toast({ title: "No file selected", variant: "destructive" });
       setCode('');
-      if (editorRef.current) {
-        editorRef.current.setValue('');
-      }
       setAction('empty');
+      setTimeout(() => editorRef.current?.setValue(""), 0);
     };
 
     const handleDelete = async () => {
       if(!selectedFile) return toast({ title: "No file selected", variant: "destructive" });
-      await api({ action: 'delete', filePath: selectedFile });
-      toast({ title: 'File Deleted' });
-      handleFolderChange(selectedFolder); // Refresh file list
       setAction('delete');
+      // Simulated delete
+      toast({ title: 'File Marked for Deletion', description: "Click 'Save New File' to confirm deletion and optionally create a new file." });
     };
     
     const handleSave = async () => {
         const content = editorRef.current?.getValue() || "";
         let finalAction = action;
         let filePath = selectedFile;
-        let fileContent = content;
-
-        if (action === 'delete' && isCreatingNew) {
+        
+        if (isCreatingNew) {
+            if (!newFileName) return toast({ title: "File name required", variant: "destructive" });
             finalAction = 'createFile';
             filePath = selectedFolder;
-        } else if (action === 'empty') {
-            finalAction = 'save';
-            filePath = selectedFile;
-            fileContent = content;
         }
 
         if(!finalAction || !filePath) return toast({ title: "No action to perform", variant: "destructive" });
         
-        const payload:any = {
-            action: finalAction === 'createFile' ? 'createFile' : 'save',
-            content: fileContent,
-        };
-
-        if (finalAction === 'createFile') {
-            payload.filePath = filePath; // parent folder path
-            payload.name = newFileName;
-        } else {
-            payload.filePath = filePath; // file path
-        }
+        toast({ title: "Action Simulated", description: `In a real app, '${filePath}' would be saved/updated.` });
         
-        await api(payload);
-        toast({ title: "Success!", description: `File ${newFileName || selectedFile} has been saved.` });
-        if(finalAction === 'createFile') {
-            handleFolderChange(selectedFolder);
-        }
         setAction(null);
         setIsCreatingNew(false);
         setNewFileName('');
@@ -193,39 +189,17 @@ const FileEditor = () => {
         if (!file) return;
 
         if (!selectedFile) {
-            toast({
-                title: "No Destination File Selected",
-                description: "Please select a file from the dropdown to overwrite its content.",
-                variant: "destructive",
-            });
+            toast({ title: "No Destination File", description: "Select a file to overwrite.", variant: "destructive" });
             return;
         }
 
         const reader = new FileReader();
         reader.onload = async (event) => {
             const content = event.target?.result as string;
-            
-            try {
-                await api({ action: "save", filePath: selectedFile, content });
-                toast({
-                    title: "File Content Replaced",
-                    description: `Content of "${file.name}" has been saved to "${selectedFile}".`,
-                });
-                loadFileContent(selectedFile);
-            } catch (err: any) {
-                toast({
-                    title: "Save Failed",
-                    description: err.message,
-                    variant: "destructive",
-                });
-            }
-        };
-        reader.onerror = (err) => {
-            toast({
-                title: "File Read Error",
-                description: "Could not read the uploaded file.",
-                variant: "destructive",
-            });
+            toast({ title: "File Content Replaced", description: `Content of "${selectedFile}" replaced. Click Save to confirm.`});
+            setCode(content);
+            setAction('edit');
+            setTimeout(() => editorRef.current?.setValue(content || ""), 0);
         };
         reader.readAsText(file);
     };
@@ -244,30 +218,31 @@ const FileEditor = () => {
                            <ScrollArea className="h-40 border rounded-md">
                             <RadioGroup onValueChange={handleFolderChange} value={selectedFolder} className="p-4">
                                 {folders.map(f => (
-                                    <FormItem key={f.path} className="flex items-center space-x-2">
-                                        <FormControl>
-                                            <RadioGroupItem value={f.path} id={f.path} />
-                                        </FormControl>
+                                    <div key={f.path} className="flex items-center space-x-2">
+                                        <RadioGroupItem value={f.path} id={f.path} />
                                         <Label htmlFor={f.path} className="font-normal">{f.name}</Label>
-                                    </FormItem>
+                                    </div>
                                 ))}
                             </RadioGroup>
                            </ScrollArea>
                         </CardContent>
                     </Card>
-                     <Select onValueChange={loadFileContent} value={selectedFile} disabled={!selectedFolder}>
-                        <SelectTrigger><SelectValue placeholder="Select a file..." /></SelectTrigger>
-                        <SelectContent>
-                           {files.map(f => <SelectItem key={f.path} value={f.path}>{f.name}</SelectItem>)}
-                        </SelectContent>
-                    </Select>
+                    <div className="space-y-2">
+                        <Label>Select File</Label>
+                         <Select onValueChange={loadFileContent} value={selectedFile} disabled={!selectedFolder}>
+                            <SelectTrigger><SelectValue placeholder="Select a file..." /></SelectTrigger>
+                            <SelectContent>
+                               {files.map(f => <SelectItem key={f.path} value={f.path}>{f.name}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                         <div className="flex gap-2 pt-2">
+                            <Button onClick={handleEmpty} variant="outline" disabled={!selectedFile}>Empty File</Button>
+                            <Button onClick={handleEdit} variant="outline" disabled={!selectedFile}>Edit File</Button>
+                            <Button onClick={handleDelete} variant="destructive" disabled={!selectedFile}>Delete File</Button>
+                        </div>
+                    </div>
                  </div>
-                 <div className="flex gap-2">
-                    <Button onClick={handleEmpty} variant="outline" disabled={!selectedFile}>Empty File</Button>
-                    <Button onClick={handleEdit} variant="outline" disabled={!selectedFile}>Edit File</Button>
-                    <Button onClick={handleDelete} variant="destructive" disabled={!selectedFile}>Delete File</Button>
-                </div>
-                
+                 
                  <Card>
                     <CardHeader>
                         <CardTitle>Upload and Replace File Content</CardTitle>
@@ -275,12 +250,12 @@ const FileEditor = () => {
                     </CardHeader>
                     <CardContent>
                         <div className="flex flex-col items-center justify-center w-full">
-                            <Label htmlFor="file-upload" className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer hover:bg-muted">
+                            <Label htmlFor="file-upload-replace" className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer hover:bg-muted">
                                 <div className="flex flex-col items-center justify-center pt-5 pb-6">
                                     <Upload className="w-10 h-10 mb-3 text-muted-foreground" />
                                     <p className="mb-2 text-sm text-muted-foreground"><span className="font-semibold">Click to upload</span> or drag and drop</p>
                                 </div>
-                                <Input id="file-upload" type="file" className="hidden" onChange={handleFileUpload} />
+                                <Input id="file-upload-replace" type="file" className="hidden" onChange={handleFileUpload} />
                             </Label>
                         </div>
                     </CardContent>
@@ -662,7 +637,7 @@ export default function MealSettingsPage() {
 
     return (
         <div className="space-y-8">
-            <div className="flex justify-between items-center">
+             <div className="flex justify-between items-center">
                 <h1 className="text-3xl font-bold">MEAL System Settings</h1>
                 <Button variant="outline" asChild>
                     <Link href="/meal-system">
@@ -682,6 +657,7 @@ export default function MealSettingsPage() {
                                 <CardDescription>{t('settings.description')}</CardDescription>
                                 </div>
                                 <div className="flex items-center gap-2 flex-wrap">
+                               
                                 <Button onClick={exportJSON} variant="outline"><Download className="mr-2" />{t('settings.buttons.export')}</Button>
                                 <Button asChild variant="outline">
                                     <Label>
@@ -880,7 +856,7 @@ export default function MealSettingsPage() {
                             ) : (
                                 <>
                                     <div className="flex justify-end gap-2 mb-4">
-                                         <Button variant="outline" size="sm" onClick={handleDeleteAll}>
+                                        <Button variant="outline" size="sm" onClick={handleDeleteAll}>
                                             <Trash2 className="mr-2 h-4 w-4" />
                                             Delete All
                                         </Button>
