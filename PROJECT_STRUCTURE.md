@@ -1,97 +1,109 @@
 # Project Structure
 
-This document outlines the high-level architecture of the application, showing how the main files and folders are organized within the `src/app` directory.
+This document outlines the high-level architecture of the application, showing how the main files and folders are organized.
+
+## Root Directory
+
+- `.env`: Environment variables.
+- `apphosting.yaml`: Firebase App Hosting configuration.
+- `next.config.js`: Next.js configuration.
+- `package.json`: Project dependencies and scripts.
+- `tailwind.config.ts`: Tailwind CSS configuration.
+- `tsconfig.json`: TypeScript configuration for the Next.js app.
+- `components.json`: ShadCN UI configuration.
+- `idx.ts`: Placeholder/Index file.
+- `README.md`, `BUILD_INSTRUCTIONS.md`: Project documentation.
+- `.vscode/`: VS Code specific settings.
+
+---
+
+## `src` Directory
+
+This is the main application source code folder.
 
 ```
-/src/app
-├── (main pages)
-│   ├── page.tsx                # Main application homepage (Dashboard).
-│   ├── layout.tsx              # Root application layout.
-│   ├── globals.css             # Global styles for the application.
-│   ├── style-guide/page.tsx    # Page to display UI theme options.
+/src
+├── ai/                              # Genkit AI flows and configuration.
+│   ├── flows/describe-cluster-flow.ts
+│   └── genkit.ts
 │
-├── api/                      # Backend API routes (server-side logic)
-│   ├── ai/
-│   │   └── describe-cluster/route.ts
-│   ├── indicator-tracking/route.ts
-│   ├── logframe/route.ts
-│   ├── monitoring-indicators/route.ts
-│   ├── monitoring-plan/route.ts
-│   ├── project-plan/route.ts
-│   ├── projects/route.ts
-│   ├── purpose-and-scope/route.ts
-│   ├── rules/route.ts
-│   ├── sampling-plan/route.ts
-│   └── settings/route.ts
+├── app/                             # Next.js App Router: contains all pages and API routes.
+│   ├── api/                         # Backend API routes (server-side logic).
+│   │   ├── ai/
+│   │   ├── bnf-assessed/
+│   │   ├── data-connection/
+│   │   ├── ed-selection/
+│   │   ├── education-payment-centers/
+│   │   ├── educators/
+│   │   ├── file-manager/
+│   │   ├── indicator-tracking/
+│   │   ├── interviews/
+│   │   ├── locations/
+│   │   ├── logframe/
+│   │   ├── monitoring-indicators/
+│   │   ├── monitoring-plan/
+│   │   ├── pdf-templates/
+│   │   ├── project-plan/
+│   │   ├── projects/
+│   │   ├── purpose-and-scope/
+│   │   ├── rules/
+│   │   ├── sampling-plan/
+│   │   ├── settings/
+│   │   ├── training/
+│   │   └── trainings/
+│   │
+│   ├── meal-system/                 # Main hub for all MEAL features.
+│   │   ├── monitoring/
+│   │   │   ├── initiation-and-planning/
+│   │   │   └── implementation/
+│   │   ├── project/
+│   │   └── ... (other MEAL pages)
+│   │
+│   ├── file-editor/page.tsx         # Utility page for direct file editing.
+│   ├── style-guide/page.tsx         # UI theme selection page.
+│   ├── page.tsx                     # Main application homepage (Dashboard).
+│   ├── layout.tsx                   # Root application layout.
+│   └── globals.css                  # Global styles.
 │
-├── (beneficiary data analysis)
-│   ├── upload/page.tsx         # Main page for uploading data and starting the clustering process.
-│   ├── review/page.tsx         # Frontend for the Cluster Review page with new decision workflow.
-│   ├── correction/page.tsx     # Frontend for the Rule Learning/Correction page.
-│   ├── audit/page.tsx          # Frontend for the Audit page.
-│   ├── report/page.tsx         # Interactive dashboard for visualizing beneficiary data.
-│   ├── export/page.tsx         # Frontend for the Export page.
-│   └── settings/page.tsx       # Frontend for the algorithm and system Settings page.
+├── components/                      # Reusable React components.
+│   ├── cards/
+│   ├── charts/
+│   ├── dashboard/
+│   ├── gantt/
+│   ├── itt/
+│   ├── layout/
+│   ├── report/
+│   ├── tables/
+│   └── ui/                          # ShadCN UI components (Button, Card, Input, etc.).
 │
-├── meal-system/              # Main hub for all MEAL features.
-│   ├── page.tsx
-│   ├── settings/page.tsx
-│   ├── analysis/page.tsx
-│   ├── compliant/page.tsx
-│   ├── evaluation/page.tsx
-│   ├── indicator/page.tsx
-│   ├── reporting/page.tsx
-│   └── risk/page.tsx
+├── context/                         # React context providers.
+│   └── language-context.tsx
 │
-├── project/                  # Pages for project management (dashboard, details, gantt plan).
-│   ├── page.tsx
-│   ├── add/page.tsx
-│   ├── add-task/page.tsx
-│   ├── dashboard/page.tsx
-│   ├── details/page.tsx
-│   ├── edit-task/page.tsx
-│   └── plan/page.tsx
+├── data/                            # Seed data for local SQLite databases.
+│   └── *.json
 │
-├── logframe/                 # Pages for creating and viewing Logical Frameworks.
-│   ├── page.tsx
-│   ├── add/page.tsx
-│   └── edit/page.tsx
+├── hooks/                           # Custom React hooks.
+│   ├── use-itt-data.ts
+│   ├── use-mobile.tsx
+│   ├── use-toast.ts
+│   └── use-translation.ts
 │
-└── monitoring/               # Pages for the M&E lifecycle.
-    ├── page.tsx
-    ├── closure/page.tsx
-    ├── implementation/
-    │   ├── page.tsx
-    │   ├── beneficiary/page.tsx
-    │   ├── compliance/page.tsx
-    │   ├── context/page.tsx
-    │   ├── financial/page.tsx
-    │   ├── organizational/page.tsx
-    │   ├── process/page.tsx
-    │   └── results/page.tsx
-    └── initiation-and-planning/
-        ├── page.tsx
-        ├── budget/page.tsx
-        ├── data-analysis/page.tsx
-        ├── hr/page.tsx
-        ├── reporting/page.tsx
-        ├── data-collection/
-        │   ├── page.tsx
-        │   ├── itt/
-        │   │   ├── page.tsx
-        │   │   └── edit/page.tsx
-        │   ├── data-types/page.tsx
-        │   ├── secondary-data/page.tsx
-        │   ├── staff-criteria/page.tsx
-        │   └── surveys/page.tsx
-        ├── me-plan-table/
-        │   ├── page.tsx
-        │   └── add/page.tsx
-        ├── prepare-indicators/
-        │   ├── page.tsx
-        │   └── add/page.tsx
-        ├── purpose-and-scope/
-        │   ├── page.tsx
-        │   └── add/page.tsx
-        └── sampling-calculator/page.tsx
+├── lib/                             # Utility functions, helpers, and core logic.
+│   ├── *.ts
+│
+├── locales/                         # Internationalization (i18n) files.
+│   ├── en.json
+│   └── ar.json
+│
+├── styles/                          # Additional CSS files.
+│   └── dashboard.css
+│
+├── theme/                           # Theme configuration files.
+│   └── *.ts
+│
+├── types/                           # TypeScript type definitions.
+│   └── *.ts
+│
+└── workers/                         # Web Workers for background processing.
+    └── *.worker.ts
 ```
