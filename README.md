@@ -1,4 +1,4 @@
-3gi# Firebase Studio
+31gi# Firebase Studio
 
 This is a NextJS starter in Firebase Studio.
 

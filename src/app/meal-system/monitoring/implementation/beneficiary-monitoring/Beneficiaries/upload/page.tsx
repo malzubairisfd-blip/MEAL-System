@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -50,6 +51,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import type { RecordRow } from "@/lib/types";
+import { Input } from "@/components/ui/input";
 
 type Mapping = {
   womanName: string;
@@ -66,6 +68,55 @@ type Project = {
   projectId: string;
   projectName: string;
 };
+
+const DB_COLUMNS = [
+    "id", "project_id", "project_name", "internalId", "data", "Generated_Cluster_ID", "Size", "Flag",
+    "Max_PairScore", "pairScore", "nameScore", "husbandScore", "childrenScore", "idScore", "phoneScore",
+    "locationScore", "groupDecision", "recordDecisions", "decisionReasons", "confidenceScore", "reasons",
+    "pre_classified_result", "group_analysis", "avgPairScore", "avgFirstNameScore", "avgFamilyNameScore",
+    "avgAdvancedNameScore", "avgTokenReorderScore", "avgWomanNameScore", "avgHusbandNameScore", "avgFinalScore",
+    "womanName", "husbandName", "nationalId", "phone", "village", "subdistrict", "children", "beneficiaryId",
+    "womanName_normalized", "husbandName_normalized", "children_normalized", "subdistrict_normalized", "village_normalized",
+    "parts", "husbandParts", "s", "cluster_id", "dup_cluster_id2", "eq_clusters", "dup_flag2", "new_dup_flag1",
+    "dup_flag", "cluster_size", "dup_cluster_size", "match_probability", "match_weight", "l_id",
+    "l_benef_name", "l_hsbnd_name", "l_child_list", "l_phone_no", "l_id_card_no", "l_age_years",
+    "l_mud_id", "gv_bnf_name", "gv_hsbnd_name", "gv_bnf_hsbnd_name", "gv_n_child_list", "gv_id_card_no",
+    "gv_phone_no", "gv_age_years", "r_id", "r_benef_name", "r_husband_name", "r_child_list",
+    "r_phone_no", "r_id_card_no", "r_age_years", "r_mud_id", "lr_eq_mud", "lr_eq_phone",
+    "lr_age_diff", "lr_benef_name_jw_sim", "lr_husband_name_jw_sim", "lr_benef_name_jaccard",
+    "lr_husband_name_jaccard", "lr_id_card_dist", "lr_child_jaccard", "dup_cluster_size_2",
+    "dup_cluster_id", "dup_cluster_flag", "record_id", "benef_name", "husband_name", "child_list_str",
+    "phone_no", "bnf_id_card_no", "age_years", "gov_name", "mud_name", "hh_ozla_name",
+    "hh_vill_name", "dup_cluster_score", "hh_uuid_dup_cnt", "hh_uuid_rn", "hh_team_name", "hh_srvyr_name",
+    "hh_srvyr_phone_no", "hh_mahlah", "hh_address", "hh_name", "hh_gender", "hh_is_swf",
+    "hh_is_dislocated", "hh_is_dislocated_guest", "child_cnt", "child_m_cnt", "child_f_cnt",
+    "bnf_id", "srvy_hh_id", "bnf_idx", "id_card_type", "bnf_relation", "bnf_relation_label",
+    "bnf_relation_code", "n_child_list_str", "hh_deviceid", "hh_vill_id", "gov_no", "mud_no",
+    "hh_ozla_no", "hh_srvyr_id", "hh_srvyr_team_id", "paper_form_date", "paper_form_no",
+    "hh_qual_women_cnt", "bnf_child_cnt", "bnf_child_m_cnt", "bnf_child_f_cnt",
+    "bnf_social_status", "bnf_qual_status", "bnf_qual_status_desc", "bnf_qual_is_preg",
+    "bnf_qual_is_mother5", "bnf_qual_is_mother_handicaped", "bnf_is_handicaped",
+    "bnf_is_dislocated", "hh_phone_no", "bnf_phone_no", "hh_is_new_instance", "hh_uuid",
+    "hh_submission_time", "hh_submitted_by", "n_hh_name", "child_list2", "child_list_long",
+    "bnf_1name", "bnf_2name", "bnf_3name", "bnf_4name", "bnf_5name", "hsbnd_1name", "hsbnd_2name",
+    "hsbnd_3name", "hsbnd_4name", "hsbnd_5name", "proj_no", "id_card_no", "loc_id", "status",
+    "notes", "flag_2", "cluster_min_score", "cluster_max_score", "cluster_score", "bnf_relations",
+    "hsbnd_relations", "common_child", "common_child_cnt", "relation_score", "same_mud",
+    "same_proj", "office_no", "ser", "benef_id", "is_active", "benef_class_desc",
+    "term_reason", "is_dup_cluster", "dup_woman_id", "dup_benef_id", "reg_form_date",
+    "old_bnf_name", "old_hsbnd_name", "curr_benef_name", "curr_husband_name", "calc_bnf_1name",
+    "calc_bnf_2name", "calc_bnf_3name", "calc_bnf_4name", "calc_bnf_5name", "calc_hsbnd_1name",
+    "calc_hsbnd_2name", "calc_hsbnd_3name", "calc_hsbnd_4name", "calc_hsbnd_5name", "cbnf_name",
+    "chsbnd_name", "n_child_list", "b_1name", "b_2name", "b_3name", "b_4name", "b_5name", "h_1name",
+    "h_2name", "h_3name", "h_4name", "h_5name", "child_list", "bnf_name_2", "hsbnd_name_2", "bnf_name2",
+    "bnf_name2b", "bnf_name2c", "bnf_name3", "bnf_name3b", "bnf_name3c", "bnf_name3d",
+    "bnf_name4", "bnf_name4c", "bnf_name4b", "bnf_f_name4", "bnf_f_name3", "bnf_f_name3c",
+    "bnf_name_list", "hsbnd_name_list", "dup_cluster_id2_2", "c_max_weight", "c_min_weight",
+    "c_id_max_weight", "c_id_min_weight", "c_max_pct", "c_min_pct", "c_id_max_pct", "c_id_min_pct",
+    "c_min_proj", "c_max_proj", "c_proj2_cnt", "c_mud2_cnt", "c_id_min_proj", "c_id_max_proj",
+    "c_id_proj2_cnt", "c_id_mud2_cnt"
+];
+
 
 const MAPPING_FIELDS: (keyof Mapping)[] = [
   "womanName",
@@ -90,8 +141,6 @@ const REQUIRED_MAPPING_FIELDS: (keyof Mapping)[] = [
 
 const LOCAL_STORAGE_KEY_PREFIX = "beneficiary-mapping-";
 const CHUNK_SIZE = 5000;
-
-// FIXED: Reduced to 50 to prevent "Save Failed" / "Too many variables" error in SQLite
 const DB_SAVE_CHUNK_SIZE = 10000;
 
 type WorkerProgress = {
@@ -128,265 +177,6 @@ const SummaryCard = ({
     </CardContent>
   </Card>
 );
-
-// FIXED: Removed duplicate "hsbnd_name4c" to prevent "Encountered two children with the same key" error
-const DB_COLUMNS = [
-  "id",
-  "project_id",
-  "project_name",
-  "internalId",
-  "data",
-  "Generated_Cluster_ID",
-  "Size",
-  "Flag",
-  "Max_PairScore",
-  "pairScore",
-  "nameScore",
-  "husbandScore",
-  "childrenScore",
-  "idScore",
-  "phoneScore",
-  "locationScore",
-  "groupDecision",
-  "recordDecisions",
-  "decisionReasons",
-  "confidenceScore",
-  "reasons",
-  "pre_classified_result",
-  "group_analysis",
-  "avgPairScore",
-  "avgFirstNameScore",
-  "avgFamilyNameScore",
-  "avgAdvancedNameScore",
-  "avgTokenReorderScore",
-  "avgWomanNameScore",
-  "avgHusbandNameScore",
-  "avgFinalScore",
-  "womanName",
-  "husbandName",
-  "nationalId",
-  "phone",
-  "village",
-  "subdistrict",
-  "children",
-  "beneficiaryId",
-  "womanName_normalized",
-  "husbandName_normalized",
-  "children_normalized",
-  "subdistrict_normalized",
-  "village_normalized",
-  "parts",
-  "husbandParts",
-  "s",
-  "cluster_id",
-  "dup_cluster_id2",
-  "eq_clusters",
-  "dup_flag2",
-  "new_dup_flag1",
-  "dup_flag",
-  "cluster_size",
-  "dup_cluster_size",
-  "match_probability",
-  "match_weight",
-  "l_id",
-  "l_benef_name",
-  "l_hsbnd_name",
-  "l_child_list",
-  "l_phone_no",
-  "l_id_card_no",
-  "l_age_years",
-  "l_mud_id",
-  "gv_bnf_name",
-  "gv_hsbnd_name",
-  "gv_bnf_hsbnd_name",
-  "gv_n_child_list",
-  "gv_id_card_no",
-  "gv_phone_no",
-  "gv_age_years",
-  "r_id",
-  "r_benef_name",
-  "r_husband_name",
-  "r_child_list",
-  "r_phone_no",
-  "r_id_card_no",
-  "r_age_years",
-  "r_mud_id",
-  "lr_eq_mud",
-  "lr_eq_phone",
-  "lr_age_diff",
-  "lr_benef_name_jw_sim",
-  "lr_husband_name_jw_sim",
-  "lr_benef_name_jaccard",
-  "lr_husband_name_jaccard",
-  "lr_id_card_dist",
-  "lr_child_jaccard",
-  "dup_cluster_size_2",
-  "dup_cluster_id",
-  "dup_cluster_flag",
-  "record_id",
-  "benef_name",
-  "husband_name",
-  "child_list_str",
-  "phone_no",
-  "bnf_id_card_no",
-  "age_years",
-  "gov_name",
-  "mud_name",
-  "hh_ozla_name",
-  "hh_vill_name",
-  "dup_cluster_score",
-  "hh_uuid_dup_cnt",
-  "hh_uuid_rn",
-  "hh_team_name",
-  "hh_srvyr_name",
-  "hh_srvyr_phone_no",
-  "hh_mahlah",
-  "hh_address",
-  "hh_name",
-  "hh_gender",
-  "hh_is_swf",
-  "hh_is_dislocated",
-  "hh_is_dislocated_guest",
-  "child_cnt",
-  "child_m_cnt",
-  "child_f_cnt",
-  "bnf_id",
-  "srvy_hh_id",
-  "bnf_idx",
-  "id_card_type",
-  "bnf_relation",
-  "bnf_relation_label",
-  "bnf_relation_code",
-  "n_child_list_str",
-  "hh_deviceid",
-  "hh_vill_id",
-  "gov_no",
-  "mud_no",
-  "hh_ozla_no",
-  "hh_srvyr_id",
-  "hh_srvyr_team_id",
-  "paper_form_date",
-  "paper_form_no",
-  "hh_qual_women_cnt",
-  "bnf_child_cnt",
-  "bnf_child_m_cnt",
-  "bnf_child_f_cnt",
-  "bnf_social_status",
-  "bnf_qual_status",
-  "bnf_qual_status_desc",
-  "bnf_qual_is_preg",
-  "bnf_qual_is_mother5",
-  "bnf_qual_is_mother_handicaped",
-  "bnf_is_handicaped",
-  "bnf_is_dislocated",
-  "hh_phone_no",
-  "bnf_phone_no",
-  "hh_is_new_instance",
-  "hh_uuid",
-  "hh_submission_time",
-  "hh_submitted_by",
-  "n_hh_name",
-  "child_list2",
-  "child_list_long",
-  "bnf_1name",
-  "bnf_2name",
-  "bnf_3name",
-  "bnf_4name",
-  "bnf_5name",
-  "hsbnd_1name",
-  "hsbnd_2name",
-  "hsbnd_3name",
-  "hsbnd_4name",
-  "hsbnd_5name",
-  "proj_no",
-  "id_card_no",
-  "loc_id",
-  "status",
-  "notes",
-  "flag_2",
-  "cluster_min_score",
-  "cluster_max_score",
-  "cluster_score",
-  "bnf_relations",
-  "hsbnd_relations",
-  "common_child",
-  "common_child_cnt",
-  "relation_score",
-  "same_mud",
-  "same_proj",
-  "office_no",
-  "ser",
-  "benef_id",
-  "is_active",
-  "benef_class_desc",
-  "term_reason",
-  "is_dup_cluster",
-  "dup_woman_id",
-  "dup_benef_id",
-  "reg_form_date",
-  "old_bnf_name",
-  "old_hsbnd_name",
-  "curr_benef_name",
-  "curr_husband_name",
-  "calc_bnf_1name",
-  "calc_bnf_2name",
-  "calc_bnf_3name",
-  "calc_bnf_4name",
-  "calc_bnf_5name",
-  "calc_hsbnd_1name",
-  "calc_hsbnd_2name",
-  "calc_hsbnd_3name",
-  "calc_hsbnd_4name",
-  "calc_hsbnd_5name",
-  "cbnf_name",
-  "chsbnd_name",
-  "n_child_list",
-  "b_1name",
-  "b_2name",
-  "b_3name",
-  "b_4name",
-  "b_5name",
-  "h_1name",
-  "h_2name",
-  "h_3name",
-  "h_4name",
-  "h_5name",
-  "child_list",
-  "bnf_name_2",
-  "hsbnd_name_2",
-  "bnf_name2",
-  "bnf_name2b",
-  "bnf_name2c",
-  "bnf_name3",
-  "bnf_name3b",
-  "bnf_name3c",
-  "bnf_name3d",
-  "bnf_name4",
-  "bnf_name4c",
-  "bnf_name4b",
-  "bnf_f_name4",
-  "bnf_f_name3",
-  "bnf_f_name3c",
-  "bnf_name_list",
-  "hsbnd_name_list",
-  "dup_cluster_id2_2",
-  "c_max_weight",
-  "c_min_weight",
-  "c_id_max_weight",
-  "c_id_min_weight",
-  "c_max_pct",
-  "c_min_pct",
-  "c_id_max_pct",
-  "c_id_min_pct",
-  "c_min_proj",
-  "c_max_proj",
-  "c_proj2_cnt",
-  "c_mud2_cnt",
-  "c_id_min_proj",
-  "c_id_max_proj",
-  "c_id_proj2_cnt",
-  "c_id_mud2_cnt",
-];
 
 const parseJsonResponse = async (res: Response) => {
   const text = await res.text();
@@ -456,6 +246,12 @@ export default function UploadPage() {
   const notifiedAboutSaveRef = useRef(false);
   const progressInfoRef = useRef(progressInfo);
   progressInfoRef.current = progressInfo;
+  const pendingRecordsRef = useRef<any[]>([]);
+  const duplicateInfoRef = useRef(duplicateInfo);
+
+  useEffect(() => {
+    duplicateInfoRef.current = duplicateInfo;
+  }, [duplicateInfo]);
 
   const isMappingComplete = useMemo(
     () => REQUIRED_MAPPING_FIELDS.every((field) => Boolean(mapping[field])),
@@ -495,6 +291,7 @@ export default function UploadPage() {
     setFile(null);
     setColumns([]);
     rawRowsRef.current = [];
+    pendingRecordsRef.current = [];
     setClusters([]);
     setWorkerStatus("idle");
     setProgressInfo({ status: "idle", progress: 0 });
@@ -545,8 +342,7 @@ export default function UploadPage() {
         const rawClusters = msg.payload?.clusters ?? [];
         toast({
           title: "Calculating Scores",
-          description:
-            "Clustering complete. Now calculating detailed similarity scores.",
+          description: "Clustering complete. Now calculating detailed similarity scores.",
         });
         setWorkerStatus("calculating_scores");
         setProgressInfo({ status: "calculating_scores", progress: 96 });
@@ -874,17 +670,28 @@ export default function UploadPage() {
     setDbColumnMapping(newMap);
   };
 
-  const executeBatchSave = async (records: any[], mode: "skip" | "replace") => {
-    // If user clicked Skip and ALL records are duplicates, just cancel saving effectively.
-    if (mode === "skip" && duplicateInfo.count === duplicateInfo.totalInFile) {
-        setDuplicateInfo((prev) => ({ ...prev, isOpen: false }));
-        toast({
-            title: "Saving Cancelled",
-            description: "All records were duplicates and have been skipped.",
-        });
-        return;
+  const executeBatchSave = async (mode: "skip" | "replace", recordsOverride?: any[]) => {
+    const records = recordsOverride?.length ? recordsOverride : pendingRecordsRef.current;
+    if (!records.length) {
+      toast({
+        title: "No records to save",
+        description: "There are no processed records available to send to the server.",
+        variant: "destructive",
+      });
+      return;
     }
-
+    if (
+      mode === "skip" &&
+      duplicateInfoRef.current.count > 0 &&
+      duplicateInfoRef.current.count === duplicateInfoRef.current.totalInFile
+    ) {
+      setDuplicateInfo((prev) => ({ ...prev, isOpen: false }));
+      toast({
+        title: "Saving Cancelled",
+        description: "All records were duplicates and have been skipped.",
+      });
+      return;
+    }
     setDuplicateInfo((prev) => ({ ...prev, isOpen: false }));
     setIsSaving(true);
     setSaveStatus("saving");
@@ -923,6 +730,7 @@ export default function UploadPage() {
       toast({ title: "Save Failed", description: error.message, variant: "destructive" });
     } finally {
       setIsSaving(false);
+      pendingRecordsRef.current = [];
     }
   };
 
@@ -1030,6 +838,7 @@ export default function UploadPage() {
         return newRecord;
       });
 
+      pendingRecordsRef.current = recordsToProcess;
       setSaveStatus("checking_duplicates");
       const uniqueIds = recordsToProcess.map((r) => r[uniqueIdMapping.dbCol]).filter(Boolean);
       if (!uniqueIds.length) throw new Error("Unique ID column is empty in all records.");
@@ -1054,7 +863,7 @@ export default function UploadPage() {
         });
         setIsSaving(false);
       } else {
-        await executeBatchSave(recordsToProcess, "replace");
+        await executeBatchSave("replace");
       }
     } catch (error: any) {
       setSaveStatus("error");
@@ -1065,7 +874,7 @@ export default function UploadPage() {
       });
       setIsSaving(false);
     }
-  }, [selectedProjectId, uniqueIdMapping, dbColumnMapping, toast, projects]);
+  }, [selectedProjectId, uniqueIdMapping, dbColumnMapping, toast]);
 
   const isProcessing = workerStatus !== "idle" && workerStatus !== "done" && workerStatus !== "error";
 
@@ -1146,7 +955,7 @@ export default function UploadPage() {
           )}
         </CardContent>
       </Card>
-
+      
       {columns.length > 0 && (
         <Collapsible open={isMappingOpen} onOpenChange={setIsMappingOpen} asChild>
           <Card>
@@ -1567,10 +1376,10 @@ export default function UploadPage() {
               Cancel Saving
             </AlertDialogCancel>
             <div className="flex gap-2">
-              <Button variant="outline" onClick={() => executeBatchSave(duplicateInfo.records, "skip")}>
+              <Button variant="outline" onClick={() => executeBatchSave("skip")}>
                 Skip Duplicates
               </Button>
-              <Button onClick={() => executeBatchSave(duplicateInfo.records, "replace")}>
+              <Button onClick={() => executeBatchSave("replace")}>
                 Replace Records
               </Button>
             </div>

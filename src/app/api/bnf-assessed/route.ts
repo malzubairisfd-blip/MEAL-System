@@ -6,7 +6,6 @@ import Database from "better-sqlite3";
 const getDataPath = () => path.join(process.cwd(), "src/data");
 const getDbPath = () => path.join(getDataPath(), "bnf-assessed.db");
 
-// FIXED: Removed duplicate "hsbnd_name4c" to prevent key collisions
 const DB_COLUMNS = [
   "id",
   "project_id",
@@ -288,11 +287,7 @@ function initializeDatabase() {
     ) {
       return `${colName} REAL`;
     }
-    if (
-      upperCaseCol.includes("SIZE") ||
-      upperCaseCol.includes("INTEGER") ||
-      upperCaseCol.includes("CNT")
-    ) {
+    if (upperCaseCol.includes("SIZE") || upperCaseCol.includes("INTEGER") || upperCaseCol.includes("CNT")) {
       return `${colName} INTEGER`;
     }
     return `${colName} TEXT`;
@@ -300,6 +295,8 @@ function initializeDatabase() {
   db.exec(`CREATE TABLE IF NOT EXISTS assessed_data (${columnsDef.join(", ")});`);
   return db;
 }
+
+const sanitizeColumn = (col?: string) => (col ? col.replace(/[^a-zA-Z0-9_]/g, "") : "");
 
 export async function POST(req: Request) {
   try {
@@ -325,7 +322,8 @@ export async function POST(req: Request) {
       try {
         db = new Database(getDbPath(), { fileMustExist: true });
         const tableCols = db.prepare("PRAGMA table_info(assessed_data)").all().map((c: any) => c.name);
-        if (!tableCols.includes(uniqueIdCol)) {
+        const sanitizedColumn = sanitizeColumn(uniqueIdCol);
+        if (!tableCols.includes(sanitizedColumn)) {
           return NextResponse.json({ error: `Invalid column ${uniqueIdCol}` }, { status: 400 });
         }
         const chunks = chunkArray(uniqueIds, 900);
@@ -334,7 +332,7 @@ export async function POST(req: Request) {
           if (!chunk.length) continue;
           const placeholders = chunk.map(() => "?").join(",");
           const stmt = db.prepare(
-            `SELECT COUNT(*) as count FROM assessed_data WHERE project_id = ? AND ${uniqueIdCol} IN (${placeholders})`
+            `SELECT COUNT(*) as count FROM assessed_data WHERE project_id = ? AND ${sanitizedColumn} IN (${placeholders})`
           );
           const result: any = stmt.get(projectId, ...chunk);
           totalCount += result.count;
@@ -350,23 +348,14 @@ export async function POST(req: Request) {
 
     if (action === "add_column") {
       if (!columnName || !columnType) {
-        return NextResponse.json(
-          { error: "Missing columnName or columnType" },
-          { status: 400 }
-        );
+        return NextResponse.json({ error: "Missing columnName or columnType" }, { status: 400 });
       }
       const sanitizedColumnName = columnName.replace(/[^a-zA-Z0-9_]/g, "");
       if (!sanitizedColumnName) {
-        return NextResponse.json(
-          { error: "Invalid column name" },
-          { status: 400 }
-        );
+        return NextResponse.json({ error: "Invalid column name" }, { status: 400 });
       }
       if (!["TEXT", "INTEGER", "REAL", "JSON"].includes(columnType.toUpperCase())) {
-        return NextResponse.json(
-          { error: "Invalid column type" },
-          { status: 400 }
-        );
+        return NextResponse.json({ error: "Invalid column type" }, { status: 400 });
       }
       const db = new Database(getDbPath());
       try {
@@ -384,52 +373,48 @@ export async function POST(req: Request) {
       const db = initializeDatabase();
       try {
         const tableCols = db.prepare("PRAGMA table_info(assessed_data)").all().map((c: any) => c.name);
+        const sanitizedUniqueIdDbCol = sanitizeColumn(uniqueIdDbCol);
+        if (!sanitizedUniqueIdDbCol || !tableCols.includes(sanitizedUniqueIdDbCol)) {
+          return NextResponse.json({ error: "Invalid unique ID column" }, { status: 400 });
+        }
         let recordsToInsert = records;
         let skippedCount = 0;
+        let insertedCount = 0;
 
-        // Transactional processing to ensure "Delete -> Save" happens atomically
         const transaction = db.transaction(() => {
           if (mode === "replace") {
-            if (!uniqueIdDbCol) throw new Error("uniqueIdDbCol required for replace mode");
-
-            // 1. Identify IDs to delete
-            const idsToDelete = records.map((r) => r[uniqueIdDbCol]).filter(Boolean);
-
+            const idsToDelete = records
+              .map((r) => r[sanitizedUniqueIdDbCol])
+              .filter(Boolean);
             if (idsToDelete.length > 0) {
               const deleteChunks = chunkArray(idsToDelete, 900);
               for (const chunk of deleteChunks) {
                 const placeholders = chunk.map(() => "?").join(",");
-                // 2. Delete old records
                 db.prepare(
-                  `DELETE FROM assessed_data WHERE project_id = ? AND ${uniqueIdDbCol} IN (${placeholders})`
+                  `DELETE FROM assessed_data WHERE project_id = ? AND ${sanitizedUniqueIdDbCol} IN (${placeholders})`
                 ).run(projectId, ...chunk);
               }
             }
           } else if (mode === "skip") {
-            if (!uniqueIdDbCol) throw new Error("uniqueIdDbCol required for skip mode");
-
-            const batchIds = records.map((r) => r[uniqueIdDbCol]).filter(Boolean);
+            const batchIds = records
+              .map((r) => r[sanitizedUniqueIdDbCol])
+              .filter(Boolean);
             const existingIds = new Set<string>();
-
-            // 1. Check existing records
             const checkChunks = chunkArray(batchIds, 900);
             for (const chunk of checkChunks) {
               if (!chunk.length) continue;
               const placeholders = chunk.map(() => "?").join(",");
               const rows: any = db
                 .prepare(
-                  `SELECT ${uniqueIdDbCol} FROM assessed_data WHERE project_id = ? AND ${uniqueIdDbCol} IN (${placeholders})`
+                  `SELECT ${sanitizedUniqueIdDbCol} FROM assessed_data WHERE project_id = ? AND ${sanitizedUniqueIdDbCol} IN (${placeholders})`
                 )
                 .all(projectId, ...chunk);
-              rows.forEach((row: any) => existingIds.add(String(row[uniqueIdDbCol])));
+              rows.forEach((row: any) => existingIds.add(String(row[sanitizedUniqueIdDbCol])));
             }
-
-            // 2. Filter out existing (cancel the skipped ones)
-            recordsToInsert = records.filter((r: any) => !existingIds.has(String(r[uniqueIdDbCol])));
+            recordsToInsert = records.filter((r: any) => !existingIds.has(String(r[sanitizedUniqueIdDbCol])));
             skippedCount = records.length - recordsToInsert.length;
           }
 
-          // 3. Save new records (if any)
           if (recordsToInsert.length > 0) {
             const insertCols = Object.keys(recordsToInsert[0]).filter(
               (col) => tableCols.includes(col) && col !== "id"
@@ -441,6 +426,7 @@ export async function POST(req: Request) {
               );
               for (const record of recordsToInsert) {
                 insert.run(...insertCols.map((col) => record[col] ?? null));
+                insertedCount += 1;
               }
             }
           }
@@ -449,7 +435,7 @@ export async function POST(req: Request) {
         transaction();
 
         return NextResponse.json({
-          saved: recordsToInsert.length,
+          saved: insertedCount,
           skipped: skippedCount,
           total: records.length,
         });
