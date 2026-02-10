@@ -90,6 +90,56 @@ const LOCAL_STORAGE_KEY_PREFIX = "beneficiary-mapping-";
 const CHUNK_SIZE = 5000;
 const DB_SAVE_CHUNK_SIZE = 1000;
 
+const DB_COLUMNS = [
+    "id",
+    "project_id",
+    "project_name",
+    "internalId",
+    "data",
+    "Generated_Cluster_ID",
+    "Size",
+    "Flag",
+    "Max_PairScore",
+    "pairScore",
+    "nameScore",
+    "husbandScore",
+    "childrenScore",
+    "idScore",
+    "phoneScore",
+    "locationScore",
+    "groupDecision",
+    "recordDecisions",
+    "decisionReasons",
+    "confidenceScore",
+    "reasons",
+    "pre_classified_result",
+    "group_analysis",
+    "avgPairScore",
+    "avgFirstNameScore",
+    "avgFamilyNameScore",
+    "avgAdvancedNameScore",
+    "avgTokenReorderScore",
+    "avgWomanNameScore",
+    "avgHusbandNameScore",
+    "avgFinalScore",
+    "womanName",
+    "husbandName",
+    "nationalId",
+    "phone",
+    "village",
+    "subdistrict",
+    "children",
+    "beneficiaryId",
+    "womanName_normalized",
+    "husbandName_normalized",
+    "children_normalized",
+    "subdistrict_normalized",
+    "village_normalized",
+    "parts",
+    "husbandParts"
+  ];
+  
+
 type WorkerProgress = {
   status: string;
   progress: number;
@@ -737,7 +787,6 @@ export default function UploadPage() {
         if (record.hasOwnProperty(uniqueIdMapping.fileCol)) {
           newRecord[uniqueIdMapping.dbCol] = record[uniqueIdMapping.fileCol];
         } else {
-            // Ensure the unique ID column is present even if null/undefined in the source row
              newRecord[uniqueIdMapping.dbCol] = null;
         }
 
@@ -748,10 +797,12 @@ export default function UploadPage() {
 
         // Add all other enriched data that matches DB columns
         Object.keys(record).forEach(key => {
-          if (originalHeaders.includes(key) && !newRecord.hasOwnProperty(key)) {
-            newRecord[key] = record[key];
-          }
+            // Check if the key is a valid DB column and hasn't been added yet
+            if (DB_COLUMNS.includes(key) && !newRecord.hasOwnProperty(key)) {
+                newRecord[key] = record[key];
+            }
         });
+
 
         newRecord["data"] = JSON.stringify(record);
         return newRecord;
@@ -1298,4 +1349,3 @@ export default function UploadPage() {
     </div>
   );
 }
-
