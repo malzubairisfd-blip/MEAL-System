@@ -385,9 +385,7 @@ export async function POST(req: Request) {
           return NextResponse.json({ error: "Invalid unique ID DB column" }, { status: 400 });
         }
         
-        // Ensure the unique ID column has an index for performance
         db.exec(`CREATE INDEX IF NOT EXISTS idx_${sanitizedUniqueIdDbCol} ON assessed_data (${sanitizedUniqueIdDbCol});`);
-
 
         let savedCount = 0;
         let skippedCount = 0;
@@ -420,11 +418,10 @@ export async function POST(req: Request) {
                  skippedCount++;
                  continue;
              }
+             const existing = checkStmt.get(projectId, uniqueValue);
 
              if (mode === 'replace') {
-                const existing = checkStmt.get(projectId, uniqueValue);
                 if (existing) {
-                    // UPDATE
                     const updateValues: {[key:string]: any} = {};
                      allColumns.forEach(col => {
                         updateValues[col] = record[col] !== undefined ? record[col] : null;
@@ -432,13 +429,11 @@ export async function POST(req: Request) {
                     updateStmt?.run(updateValues);
                     updatedCount++;
                 } else {
-                    // INSERT
                     const insertValues = allColumns.map((col) => (record[col] !== undefined ? record[col] : null));
                     insertStmt?.run(...insertValues);
                     savedCount++;
                 }
              } else { // mode === 'skip'
-                const existing = checkStmt.get(projectId, uniqueValue);
                 if (!existing) {
                    const values = allColumns.map((col) => (record[col] !== undefined ? record[col] : null));
                    insertStmt?.run(...values);
@@ -472,31 +467,27 @@ export async function POST(req: Request) {
       try {
         const tableCols = db.prepare("PRAGMA table_info(assessed_data)").all().map((c: any) => c.name);
 
-        const updateStmt = (record: any) => {
-            const colsToUpdate = Object.keys(record).filter(col => tableCols.includes(col) && col !== 'id' && col !== 'internalId' && col !== 'project_id');
-            if(colsToUpdate.length === 0) return null;
-            
-            return db.prepare(
-                `UPDATE assessed_data SET ${colsToUpdate.map(col => `${col} = @${col}`).join(", ")} WHERE project_id = @project_id AND internalId = @internalId`
-              );
-        }
-
         let updatedCount = 0;
-        const transaction = db.transaction(() => {
-          for (const record of records) {
+        const transaction = db.transaction((recordsToUpdate) => {
+          for (const record of recordsToUpdate) {
             if(!record.internalId) continue;
             
-            const stmt = updateStmt(record);
-            if(stmt) {
-                const info = stmt.run({ ...record, project_id: projectId });
-                if (info.changes > 0) {
-                    updatedCount++;
-                }
+            const colsToUpdate = Object.keys(record).filter(col => tableCols.includes(col) && col !== 'id' && col !== 'internalId' && col !== 'project_id');
+            if(colsToUpdate.length === 0) continue;
+            
+            const setClause = colsToUpdate.map(col => `${col} = @${col}`).join(", ");
+            const stmt = db.prepare(
+                `UPDATE assessed_data SET ${setClause} WHERE project_id = @project_id AND internalId = @internalId`
+              );
+            
+            const info = stmt.run({ ...record, project_id: projectId });
+            if (info.changes > 0) {
+                updatedCount++;
             }
           }
         });
         
-        transaction();
+        transaction(records);
         
         return NextResponse.json({ updated: updatedCount });
 

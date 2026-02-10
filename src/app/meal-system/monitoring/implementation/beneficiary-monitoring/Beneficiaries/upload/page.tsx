@@ -52,6 +52,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import type { RecordRow } from "@/lib/types";
 import { Input } from "@/components/ui/input";
+import { getDecisionAndNote } from "@/lib/arabicClusterSummary";
 
 
 type Mapping = {
@@ -91,53 +92,39 @@ const CHUNK_SIZE = 5000;
 const DB_SAVE_CHUNK_SIZE = 1000;
 
 const DB_COLUMNS = [
-    "id",
-    "project_id",
-    "project_name",
-    "internalId",
-    "data",
-    "Generated_Cluster_ID",
-    "Size",
-    "Flag",
-    "Max_PairScore",
-    "pairScore",
-    "nameScore",
-    "husbandScore",
-    "childrenScore",
-    "idScore",
-    "phoneScore",
-    "locationScore",
-    "groupDecision",
-    "recordDecisions",
-    "decisionReasons",
-    "confidenceScore",
-    "reasons",
-    "pre_classified_result",
-    "group_analysis",
-    "avgPairScore",
-    "avgFirstNameScore",
-    "avgFamilyNameScore",
-    "avgAdvancedNameScore",
-    "avgTokenReorderScore",
-    "avgWomanNameScore",
-    "avgHusbandNameScore",
-    "avgFinalScore",
-    "womanName",
-    "husbandName",
-    "nationalId",
-    "phone",
-    "village",
-    "subdistrict",
-    "children",
-    "beneficiaryId",
-    "womanName_normalized",
-    "husbandName_normalized",
-    "children_normalized",
-    "subdistrict_normalized",
-    "village_normalized",
-    "parts",
-    "husbandParts"
-  ];
+    "id", "project_id", "project_name", "internalId", "data", "Generated_Cluster_ID", "Size", "Flag", "Max_PairScore", 
+    "pairScore", "nameScore", "husbandScore", "childrenScore", "idScore", "phoneScore", "locationScore", "groupDecision", 
+    "recordDecisions", "decisionReasons", "confidenceScore", "reasons", "pre_classified_result", "group_analysis", 
+    "avgPairScore", "avgFirstNameScore", "avgFamilyNameScore", "avgAdvancedNameScore", "avgTokenReorderScore", 
+    "avgWomanNameScore", "avgHusbandNameScore", "avgFinalScore", "womanName", "husbandName", "nationalId", "phone", 
+    "village", "subdistrict", "children", "beneficiaryId", "womanName_normalized", "husbandName_normalized", "children_normalized", 
+    "subdistrict_normalized", "village_normalized", "parts", "husbandParts"
+];
+
+const defaultOptions = {
+    thresholds: {
+      minPair: 0.62,
+      minInternal: 0.54,
+      blockChunkSize: 3000
+    },
+    finalScoreWeights: {
+      firstNameScore: 0.15,
+      familyNameScore: 0.25,
+      advancedNameScore: 0.12,
+      tokenReorderScore: 0.10,
+      husbandScore: 0.12,
+      idScore: 0.08,
+      phoneScore: 0.05,
+      childrenScore: 0.04,
+      locationScore: 0.04
+    },
+    rules: {
+      enableNameRootEngine: true,
+      enableTribalLineage: true,
+      enableMaternalLineage: true,
+      enablePolygamyRules: true
+    }
+  };
   
 
 type WorkerProgress = {
@@ -194,17 +181,6 @@ const apiRequest = async (url: string, options: RequestInit) => {
   }
 };
 
-function getDecisionAndNote(confidenceScore: number) {
-  let decision = "إحتمالية تكرار";
-  if (confidenceScore >= 85) {
-    decision = "تكرار مؤكد";
-  } else if (confidenceScore >= 70) {
-    decision = "اشتباه تكرار مؤكد";
-  } else if (confidenceScore >= 60) {
-    decision = "اشتباه تكرار";
-  }
-  return { decision };
-}
 
 export default function UploadPage() {
   const { t, isLoading: isTranslationLoading } = useTranslation();
@@ -275,10 +251,9 @@ export default function UploadPage() {
 
   const unmappedDbColumns = useMemo(() => {
     const usedDbCols = new Set([...dbColumnMapping.values(), uniqueIdMapping.dbCol]);
-    return originalHeaders.filter((c) => !usedDbCols.has(c));
-  }, [originalHeaders, dbColumnMapping, uniqueIdMapping.dbCol]);
+    return DB_COLUMNS.filter((c) => !usedDbCols.has(c));
+  }, [dbColumnMapping, uniqueIdMapping.dbCol]);
   
-  // Reset state when new file is uploaded
   const resetAll = useCallback(() => {
     setFile(null);
     setColumns([]);
@@ -290,8 +265,6 @@ export default function UploadPage() {
     setTimeInfo({ elapsed: 0 });
     setIsDataCached(false);
     notifiedAboutSaveRef.current = false;
-    // Don't reset project selection
-    // setSelectedProjectId("");
     setDbColumnMapping(new Map());
     setUniqueIdMapping({ fileCol: "", dbCol: "" });
     setIsSaving(false);
@@ -625,7 +598,7 @@ export default function UploadPage() {
     const newMapping = new Map<string, string>();
     const usedDbCols = new Set<string>();
     columns.forEach((uiCol) => {
-      const matchedDbCol = originalHeaders.find(
+      const matchedDbCol = DB_COLUMNS.find(
         (dbCol) =>
           dbCol.toLowerCase().replace(/_/g, "") ===
             uiCol.toLowerCase().replace(/_/g, "").replace(/\s/g, "") &&
@@ -641,7 +614,7 @@ export default function UploadPage() {
       title: "Auto-match Complete",
       description: `Automatically matched ${newMapping.size} columns.`,
     });
-  }, [columns, originalHeaders, toast]);
+  }, [columns, toast]);
 
   const handleAddDbMapping = () => {
     if (manualDbMapping.ui && manualDbMapping.db) {
@@ -664,13 +637,11 @@ export default function UploadPage() {
       throw new Error("Invalid cache: missing rows or clusters.");
     }
     
-    // Create a map for quick lookup of a record's cluster and its specific scored data
     const recordInfoMap = new Map<string, any>();
     clusters.forEach((cluster: any) => {
       const { decision: pre_classified_result } = getDecisionAndNote(cluster.confidenceScore || 0);
 
       cluster.records.forEach((record: RecordRow) => {
-        // Store a combination of cluster-wide info and record-specific info
         recordInfoMap.set(record._internalId!, {
           clusterInfo: {
             Generated_Cluster_ID: cluster.Generated_Cluster_ID,
@@ -684,7 +655,7 @@ export default function UploadPage() {
             avgHusbandNameScore: cluster.avgHusbandNameScore,
             avgFinalScore: cluster.avgFinalScore,
           },
-          scoredRecordData: record, // This contains the record-specific scores like avgPairScore
+          scoredRecordData: record,
         });
       });
     });
@@ -692,22 +663,20 @@ export default function UploadPage() {
     const enrichedRecords = allRecords.map((record: RecordRow) => {
       const info = recordInfoMap.get(record._internalId!);
       if (!info) {
-        return record; // Return original record if not in any cluster
+        return { ...record, data: JSON.stringify(record) };
       }
 
-      // Merge original record, the specific scored data, and the cluster-wide data
-      const finalRecord = {
-        ...record, // original data from file
-        ...info.scoredRecordData, // record-specific scores
-        ...info.clusterInfo, // cluster-wide scores and info
+      const finalRecord:any = {
+        ...record,
+        ...info.scoredRecordData,
+        ...info.clusterInfo,
       };
       
-      // Ensure complex fields are stringified for the database
-      finalRecord.parts = typeof finalRecord.parts === 'object' ? JSON.stringify(finalRecord.parts) : finalRecord.parts;
-      finalRecord.husbandParts = typeof finalRecord.husbandParts === 'object' ? JSON.stringify(finalRecord.husbandParts) : finalRecord.husbandParts;
-      finalRecord.children_normalized = typeof finalRecord.children_normalized === 'object' ? JSON.stringify(finalRecord.children_normalized) : finalRecord.children_normalized;
-      finalRecord.children = typeof finalRecord.children === 'object' ? JSON.stringify(finalRecord.children) : finalRecord.children;
-
+      finalRecord.parts = JSON.stringify(finalRecord.parts || []);
+      finalRecord.husbandParts = JSON.stringify(finalRecord.husbandParts || []);
+      finalRecord.children_normalized = JSON.stringify(finalRecord.children_normalized || []);
+      finalRecord.children = JSON.stringify(finalRecord.children || []);
+      finalRecord.data = JSON.stringify(record); // a copy of the original
 
       return finalRecord;
     });
@@ -715,144 +684,128 @@ export default function UploadPage() {
     return { enrichedRecords, clusters };
   }, []);
 
-  const executeBatchSave = useCallback(async (mode: "skip" | "replace", recordsToSave: any[]) => {
-    if (recordsToSave.length === 0) {
-      toast({ title: "No records to process for this action." });
-      if (mode === 'skip' && duplicateInfoRef.current.count > 0) {
-        setSaveStats({ saved: 0, skipped: duplicateInfoRef.current.totalInFile, updated: 0, total: duplicateInfoRef.current.totalInFile });
-        setSaveStatus("done");
-      }
-      return;
-    }
-    
-    setIsSaving(true);
-    setSaveStatus("saving");
-    setSaveProgress(0);
+  const executeSaveAndEnrich = useCallback(async (mode: "skip" | "replace", rawRecords: any[]) => {
     setDuplicateInfo(prev => ({...prev, isOpen: false}));
-
-    let totalSaved = 0;
-    let totalSkipped = (mode === 'skip') ? duplicateInfoRef.current.count : 0;
-    let totalUpdated = 0;
-    const totalToProcess = recordsToSave.length;
+    setIsSaving(true);
 
     try {
-      for (let i = 0; i < totalToProcess; i += DB_SAVE_CHUNK_SIZE) {
-        const chunk = recordsToSave.slice(i, i + DB_SAVE_CHUNK_SIZE);
-        const result = await apiRequest("/api/bnf-assessed", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: "save",
-            projectId: selectedProjectId,
-            records: chunk,
-            mode: mode,
-            uniqueIdDbCol: uniqueIdMapping.dbCol,
-          }),
+        setSaveStatus("saving_raw");
+        setSaveProgress(0);
+        let totalSaved = 0;
+        let totalSkipped = 0;
+        let totalUpdated = 0;
+        const totalToProcess = rawRecords.length;
+
+        for (let i = 0; i < totalToProcess; i += DB_SAVE_CHUNK_SIZE) {
+            const chunk = rawRecords.slice(i, i + DB_SAVE_CHUNK_SIZE);
+            const result = await apiRequest("/api/bnf-assessed", {
+              method: "POST",
+              body: JSON.stringify({ action: "save", projectId: selectedProjectId, records: chunk, mode: mode, uniqueIdDbCol: uniqueIdMapping.dbCol })
+            });
+            totalSaved += result.saved || 0;
+            totalSkipped += result.skipped || 0;
+            totalUpdated += result.updated || 0;
+            setSaveProgress(((i + chunk.length) / totalToProcess) * 50);
+        }
+        toast({ title: "Raw Data Saved", description: `${totalSaved} new, ${totalUpdated} updated, ${totalSkipped} skipped.` });
+
+        setSaveStatus("saving_enriched");
+        const cachedData = await loadCachedResult();
+        if (!cachedData) throw new Error("Could not load cached data for enrichment.");
+        const { enrichedRecords } = enrichData(cachedData);
+        
+        const enrichedPayload = enrichedRecords.map(record => {
+            const enrichment: Record<string, any> = { internalId: record._internalId! };
+            DB_COLUMNS.forEach(key => {
+                if (record.hasOwnProperty(key) && key !== 'id' && key !== 'internalId' && key !== 'project_id') {
+                    enrichment[key] = record[key];
+                }
+            });
+            return enrichment;
         });
+
+        const totalToEnrich = enrichedPayload.length;
+        for (let i = 0; i < totalToEnrich; i += DB_SAVE_CHUNK_SIZE) {
+            const chunk = enrichedPayload.slice(i, i + DB_SAVE_CHUNK_SIZE);
+            await apiRequest("/api/bnf-assessed", {
+              method: "POST",
+              body: JSON.stringify({ action: "update", projectId: selectedProjectId, records: chunk })
+            });
+            setSaveProgress(50 + ((i + chunk.length) / totalToEnrich) * 50);
+        }
         
-        totalSaved += result.saved || 0;
-        totalSkipped += result.skipped || 0;
-        totalUpdated += result.updated || 0;
-        
+        setSaveStatus("done");
         setSaveStats({ saved: totalSaved, skipped: totalSkipped, updated: totalUpdated, total: rawRowsRef.current.length });
-        setSaveProgress(((i + chunk.length) / totalToProcess) * 100);
-      }
-      setSaveStatus("done");
-      toast({
-        title: "Save Complete!",
-        description: `Successfully processed ${totalToProcess} records.`,
-      });
+        toast({ title: "Save Complete!", description: `Successfully processed ${totalToProcess} records and enriched them.` });
+
     } catch (error: any) {
-      setSaveStatus("error");
-      toast({ title: "Save Failed", description: error.message, variant: "destructive" });
+        setSaveStatus("error");
+        toast({ title: "Save Process Failed", description: error.message, variant: "destructive" });
     } finally {
-      setIsSaving(false);
+        setIsSaving(false);
     }
-  }, [selectedProjectId, uniqueIdMapping.dbCol, toast]);
+}, [selectedProjectId, uniqueIdMapping.dbCol, enrichData, toast]);
+
 
   const handleSaveToDatabase = useCallback(async () => {
     if (!selectedProjectId || !uniqueIdMapping.fileCol || !uniqueIdMapping.dbCol) {
-      toast({
-        title: "Incomplete Setup",
-        description: "Select a project and map the unique ID column before saving.",
-        variant: "destructive",
-      });
+      toast({ title: "Incomplete Setup", description: "Select a project and map the unique ID column.", variant: "destructive" });
       return;
     }
     setIsSaving(true);
     setSaveStatus("preparing");
-    setSaveProgress(0);
 
     try {
-      const cachedData = await loadCachedResult();
-      if (!cachedData) throw new Error("Could not load processed data from cache.");
-
-      const { enrichedRecords } = enrichData(cachedData);
-      
-      const recordsToProcess = enrichedRecords.map((record) => {
-        const newRecord: Record<string, any> = { project_id: selectedProjectId, internalId: record._internalId };
-        
-        // Map the selected unique ID
-        if (record.hasOwnProperty(uniqueIdMapping.fileCol)) {
-          newRecord[uniqueIdMapping.dbCol] = record[uniqueIdMapping.fileCol];
-        } else {
-             newRecord[uniqueIdMapping.dbCol] = null;
-        }
-
-        // Map all other explicitly defined mappings
-        for (const [uiCol, dbCol] of dbColumnMapping.entries()) {
-          if (record.hasOwnProperty(uiCol)) newRecord[dbCol] = record[uiCol];
-        }
-
-        // Add all other enriched data that matches DB columns
-        Object.keys(record).forEach(key => {
-            // Check if the key is a valid DB column and hasn't been added yet
-            if (DB_COLUMNS.includes(key) && !newRecord.hasOwnProperty(key)) {
-                newRecord[key] = record[key];
+        const recordsToProcess = rawRowsRef.current.map((record) => {
+            const newRecord: Record<string, any> = { project_id: selectedProjectId, internalId: record._internalId };
+            
+            // Map main unique ID
+            if (record.hasOwnProperty(uniqueIdMapping.fileCol)) {
+              newRecord[uniqueIdMapping.dbCol] = record[uniqueIdMapping.fileCol];
+            } else {
+                 newRecord[uniqueIdMapping.dbCol] = null;
             }
+
+            // Map all other explicitly defined mappings
+            for (const [uiCol, dbCol] of dbColumnMapping.entries()) {
+              if (record.hasOwnProperty(uiCol)) newRecord[dbCol] = record[uiCol];
+            }
+
+            // Also include all mapped fields from the main section
+            MAPPING_FIELDS.forEach(field => {
+                const mappedCol = mapping[field as keyof Mapping];
+                if(mappedCol && record.hasOwnProperty(mappedCol)) {
+                    newRecord[field] = record[mappedCol];
+                }
+            })
+
+            newRecord["data"] = JSON.stringify(record);
+
+            return newRecord;
         });
 
+        setSaveStatus("checking_duplicates");
+        const uniqueIds = recordsToProcess.map((r) => r[uniqueIdMapping.dbCol]).filter(Boolean);
+        if (!uniqueIds.length) throw new Error("Unique ID column is empty in all records.");
 
-        newRecord["data"] = JSON.stringify(record);
-        return newRecord;
-      });
-
-      setSaveStatus("checking_duplicates");
-      const uniqueIds = recordsToProcess.map((r) => r[uniqueIdMapping.dbCol]).filter(Boolean);
-      if (!uniqueIds.length) throw new Error("Unique ID column is empty in all records.");
-
-      const dupResult = await apiRequest("/api/bnf-assessed", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "check_duplicates",
-          projectId: selectedProjectId,
-          uniqueIdCol: uniqueIdMapping.dbCol,
-          uniqueIds,
-        }),
-      });
-
-      if (dupResult.count > 0) {
-        setDuplicateInfo({
-          isOpen: true,
-          count: dupResult.count,
-          totalInFile: recordsToProcess.length,
-          records: recordsToProcess,
+        const dupResult = await apiRequest("/api/bnf-assessed", {
+            method: "POST",
+            body: JSON.stringify({ action: "check_duplicates", projectId: selectedProjectId, uniqueIdCol: uniqueIdMapping.dbCol, uniqueIds })
         });
-        setIsSaving(false);
-      } else {
-        await executeBatchSave("skip", recordsToProcess);
-      }
+
+        if (dupResult.count > 0) {
+            setDuplicateInfo({ isOpen: true, count: dupResult.count, totalInFile: rawRowsRef.current.length, records: recordsToProcess });
+            setIsSaving(false);
+        } else {
+            await executeSaveAndEnrich("skip", recordsToProcess);
+        }
+
     } catch (error: any) {
-      setSaveStatus("error");
-      toast({
-        title: "Preparation Failed",
-        description: error.message,
-        variant: "destructive",
-      });
-      setIsSaving(false);
+        setSaveStatus("error");
+        toast({ title: "Preparation Failed", description: error.message, variant: "destructive" });
+        setIsSaving(false);
     }
-  }, [selectedProjectId, uniqueIdMapping, dbColumnMapping, toast, enrichData, originalHeaders, executeBatchSave]);
+  }, [selectedProjectId, uniqueIdMapping, dbColumnMapping, mapping, toast, executeSaveAndEnrich]);
 
   const isProcessing = workerStatus !== "idle" && workerStatus !== "done" && workerStatus !== "error";
 
@@ -1199,7 +1152,7 @@ export default function UploadPage() {
                           <SelectValue placeholder="Select DB column..." />
                         </SelectTrigger>
                         <SelectContent>
-                          {originalHeaders.map((c) => (
+                          {DB_COLUMNS.map((c) => (
                             <SelectItem key={c} value={c}>
                               {c}
                             </SelectItem>
@@ -1299,9 +1252,10 @@ export default function UploadPage() {
                   <div className="w-full">
                     <Progress value={saveProgress} />
                     <p className="text-sm text-center mt-1 text-muted-foreground">
-                      {saveStatus === "checking_duplicates"
-                        ? "Checking for existing records..."
-                        : saveStatus === 'saving' ? `Saving data...` : 'Preparing...'}
+                      {saveStatus === "checking_duplicates" ? "Checking for existing records..."
+                        : saveStatus === 'saving_raw' ? 'Saving raw data...'
+                        : saveStatus === 'saving_enriched' ? 'Saving enriched data...'
+                        : 'Preparing...'}
                       {saveStats.total > 0 && ` (Saved: ${saveStats.saved}, Skipped: ${saveStats.skipped}, Updated: ${saveStats.updated})`}
                     </p>
                   </div>
@@ -1345,10 +1299,10 @@ export default function UploadPage() {
               Cancel Saving
             </AlertDialogCancel>
             <div className="flex gap-2">
-              <Button variant="outline" onClick={() => executeBatchSave("skip", duplicateInfo.records)}>
+              <Button variant="outline" onClick={() => executeSaveAndEnrich("skip", duplicateInfo.records)}>
                 Skip Duplicates & Insert New
               </Button>
-              <Button onClick={() => executeBatchSave("replace", duplicateInfo.records)}>
+              <Button onClick={() => executeSaveAndEnrich("replace", duplicateInfo.records)}>
                 Update Existing & Insert New
               </Button>
             </div>
