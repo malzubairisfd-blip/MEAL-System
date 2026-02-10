@@ -218,9 +218,31 @@ export default function UploadPage() {
   const isDbMappingReady = useMemo(() => uniqueIdMapping.fileCol && uniqueIdMapping.dbCol, [uniqueIdMapping]);
   
   const unmappedUiColumns = useMemo(() => {
+    const cachedData =
+      rawRowsRef.current.length > 0
+        ? { rows: rawRowsRef.current, clusters: clusters }
+        : null;
+
+    if (!cachedData || !cachedData.clusters || cachedData.clusters.length === 0) {
+        const usedCols = new Set([...Array.from(dbColumnMapping.keys()), uniqueIdMapping.fileCol]);
+        return columns.filter(c => !usedCols.has(c));
+    }
+
+    const clusterRecordKeys = cachedData.clusters?.[0]?.records?.[0]
+      ? Object.keys(cachedData.clusters[0].records[0])
+      : [];
+    const clusterTopLevelKeys = cachedData.clusters?.[0] ? Object.keys(cachedData.clusters[0]) : [];
+      
+    const availableColumns = [...new Set([...columns, ...clusterTopLevelKeys, ...clusterRecordKeys])];
+    
     const usedCols = new Set([...Array.from(dbColumnMapping.keys()), uniqueIdMapping.fileCol]);
-    return columns.filter(c => !usedCols.has(c));
-  }, [columns, dbColumnMapping, uniqueIdMapping.fileCol]);
+
+    return availableColumns.filter(
+      (c) =>
+        !usedCols.has(c) &&
+        !c.startsWith("_")
+    );
+  }, [columns, clusters, dbColumnMapping, uniqueIdMapping.fileCol]);
 
   const unmappedDbColumns = useMemo(() => {
     const usedDbCols = new Set([...dbColumnMapping.values(), uniqueIdMapping.dbCol]);
