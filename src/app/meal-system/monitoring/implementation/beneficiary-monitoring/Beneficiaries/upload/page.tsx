@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -90,16 +89,6 @@ const REQUIRED_MAPPING_FIELDS: (keyof Mapping)[] = [
 const LOCAL_STORAGE_KEY_PREFIX = "beneficiary-mapping-";
 const CHUNK_SIZE = 5000;
 const DB_SAVE_CHUNK_SIZE = 1000;
-
-const DB_COLUMNS = [
-    "id", "project_id", "project_name", "internalId", "data", "Generated_Cluster_ID", "Size", "Flag", "Max_PairScore", 
-    "pairScore", "nameScore", "husbandScore", "childrenScore", "idScore", "phoneScore", "locationScore", "groupDecision", 
-    "recordDecisions", "decisionReasons", "confidenceScore", "reasons", "pre_classified_result", "group_analysis", 
-    "avgPairScore", "avgFirstNameScore", "avgFamilyNameScore", "avgAdvancedNameScore", "avgTokenReorderScore", 
-    "avgWomanNameScore", "avgHusbandNameScore", "avgFinalScore", "womanName", "husbandName", "nationalId", "phone", 
-    "village", "subdistrict", "children", "beneficiaryId", "womanName_normalized", "husbandName_normalized", "children_normalized", 
-    "subdistrict_normalized", "village_normalized", "parts", "husbandParts"
-];
 
 const defaultOptions = {
     thresholds: {
@@ -210,6 +199,8 @@ export default function UploadPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loadingProjects, setLoadingProjects] = useState(true);
   const [selectedProjectId, setSelectedProjectId] = useState("");
+  const [dbColumns, setDbColumns] = useState<string[]>([]);
+  const [loadingDbSchema, setLoadingDbSchema] = useState(true);
   const [dbColumnMapping, setDbColumnMapping] = useState<Map<string, string>>(new Map());
   const [uniqueIdMapping, setUniqueIdMapping] = useState({ fileCol: "", dbCol: "" });
   const [manualDbMapping, setManualDbMapping] = useState({ ui: "", db: "" });
@@ -251,8 +242,8 @@ export default function UploadPage() {
 
   const unmappedDbColumns = useMemo(() => {
     const usedDbCols = new Set([...dbColumnMapping.values(), uniqueIdMapping.dbCol]);
-    return DB_COLUMNS.filter((c) => !usedDbCols.has(c));
-  }, [dbColumnMapping, uniqueIdMapping.dbCol]);
+    return dbColumns.filter((c) => !usedDbCols.has(c));
+  }, [dbColumns, dbColumnMapping, uniqueIdMapping.dbCol]);
   
   const resetAll = useCallback(() => {
     setFile(null);
@@ -274,6 +265,33 @@ export default function UploadPage() {
     setSaveStats({ saved: 0, skipped: 0, updated: 0, total: 0 });
     if (timerRef.current) clearInterval(timerRef.current);
   }, []);
+
+  useEffect(() => {
+    const fetchDbSchema = async () => {
+      setLoadingDbSchema(true);
+      try {
+        const data = await apiRequest("/api/bnf-assessed", {
+          method: "POST",
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: "get_schema" })
+        });
+        if (data.columns && Array.isArray(data.columns)) {
+          setDbColumns(data.columns);
+        } else {
+          throw new Error("Invalid schema response from API.");
+        }
+      } catch (error: any) {
+        toast({
+          title: "Could not load database schema",
+          description: error.message,
+          variant: "destructive",
+        });
+      } finally {
+        setLoadingDbSchema(false);
+      }
+    };
+    fetchDbSchema();
+  }, [toast]);
 
   useEffect(() => {
     registerServiceWorker();
@@ -598,7 +616,7 @@ export default function UploadPage() {
     const newMapping = new Map<string, string>();
     const usedDbCols = new Set<string>();
     columns.forEach((uiCol) => {
-      const matchedDbCol = DB_COLUMNS.find(
+      const matchedDbCol = dbColumns.find(
         (dbCol) =>
           dbCol.toLowerCase().replace(/_/g, "") ===
             uiCol.toLowerCase().replace(/_/g, "").replace(/\s/g, "") &&
@@ -614,7 +632,7 @@ export default function UploadPage() {
       title: "Auto-match Complete",
       description: `Automatically matched ${newMapping.size} columns.`,
     });
-  }, [columns, toast]);
+  }, [columns, dbColumns, toast]);
 
   const handleAddDbMapping = () => {
     if (manualDbMapping.ui && manualDbMapping.db) {
@@ -700,6 +718,7 @@ const executeSaveAndEnrich = useCallback(async (mode: "skip" | "replace", rawRec
             const chunk = rawRecords.slice(i, i + DB_SAVE_CHUNK_SIZE);
             const result = await apiRequest("/api/bnf-assessed", {
               method: "POST",
+              headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ action: "save", projectId: selectedProjectId, records: chunk, mode: mode, uniqueIdDbCol: uniqueIdMapping.dbCol })
             });
             totalSaved += result.saved || 0;
@@ -716,8 +735,8 @@ const executeSaveAndEnrich = useCallback(async (mode: "skip" | "replace", rawRec
         
         const enrichedPayload = enrichedRecords.map(record => {
             const enrichment: Record<string, any> = { internalId: record.internalId! };
-            DB_COLUMNS.forEach(key => {
-                if (record.hasOwnProperty(key) && key !== 'id' && key !== 'internalId' && key !== 'project_id') {
+            dbColumns.forEach(key => {
+                if (record.hasOwnProperty(key) && key !== 'id' && key !== 'internalId' && key !== 'project_id' && key !== 'data') {
                     enrichment[key] = record[key];
                 }
             });
@@ -729,6 +748,7 @@ const executeSaveAndEnrich = useCallback(async (mode: "skip" | "replace", rawRec
             const chunk = enrichedPayload.slice(i, i + DB_SAVE_CHUNK_SIZE);
             await apiRequest("/api/bnf-assessed", {
               method: "POST",
+              headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ action: "update", projectId: selectedProjectId, records: chunk })
             });
             setSaveProgress(50 + ((i + chunk.length) / totalToEnrich) * 50);
@@ -744,7 +764,7 @@ const executeSaveAndEnrich = useCallback(async (mode: "skip" | "replace", rawRec
     } finally {
         setIsSaving(false);
     }
-}, [selectedProjectId, uniqueIdMapping.dbCol, enrichData, toast]);
+}, [selectedProjectId, uniqueIdMapping.dbCol, enrichData, toast, dbColumns]);
 
 
   const handleSaveToDatabase = useCallback(async () => {
@@ -790,6 +810,7 @@ const executeSaveAndEnrich = useCallback(async (mode: "skip" | "replace", rawRec
 
         const dupResult = await apiRequest("/api/bnf-assessed", {
             method: "POST",
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action: "check_duplicates", projectId: selectedProjectId, uniqueIdCol: uniqueIdMapping.dbCol, uniqueIds })
         });
 
@@ -1147,12 +1168,13 @@ const executeSaveAndEnrich = useCallback(async (mode: "skip" | "replace", rawRec
                       <Select
                         value={uniqueIdMapping.dbCol}
                         onValueChange={(v) => setUniqueIdMapping((p) => ({ ...p, dbCol: v }))}
+                        disabled={loadingDbSchema}
                       >
                         <SelectTrigger>
-                          <SelectValue placeholder="Select DB column..." />
+                          <SelectValue placeholder={loadingDbSchema ? "Loading schema..." : "Select DB column..."} />
                         </SelectTrigger>
                         <SelectContent>
-                          {DB_COLUMNS.map((c) => (
+                          {dbColumns.map((c) => (
                             <SelectItem key={c} value={c}>
                               {c}
                             </SelectItem>
@@ -1181,9 +1203,9 @@ const executeSaveAndEnrich = useCallback(async (mode: "skip" | "replace", rawRec
                     </div>
                     <div className="space-y-2">
                       <Label>Other Columns (in Database)</Label>
-                      <Select value={manualDbMapping.db} onValueChange={(v) => setManualDbMapping((m) => ({ ...m, db: v }))}>
+                      <Select value={manualDbMapping.db} onValueChange={(v) => setManualDbMapping((m) => ({ ...m, db: v }))} disabled={loadingDbSchema}>
                         <SelectTrigger>
-                          <SelectValue placeholder="Select destination..." />
+                          <SelectValue placeholder={loadingDbSchema ? "Loading schema..." : "Select destination..."} />
                         </SelectTrigger>
                         <SelectContent>
                           <ScrollArea className="h-60">
