@@ -105,7 +105,7 @@ export default function ReviewPage() {
                 if (record.reasons) {
                     (String(record.reasons)).split(',').forEach(r => recordsByCluster[clusterId].reasons.add(r));
                 }
-                recordsByCluster[clusterId].Max_PairScore = Math.max(recordsByCluster[clusterId].Max_PairScore, record.Max_PairScore || 0);
+                recordsByCluster[clusterId].Max_PairScore = Math.max(recordsByCluster[clusterId].Max_PairScore || 0, record.Max_PairScore || 0);
             }
         });
         
@@ -115,8 +115,8 @@ export default function ReviewPage() {
             reasons: Array.from(data.reasons),
             Max_PairScore: data.Max_PairScore,
             groupDecision: data.records[0]?.groupDecision,
-            recordDecisions: data.records.reduce((acc, r) => ({...acc, [r._internalId!]: r.recordDecisions}), {}),
-            decisionReasons: data.records.reduce((acc, r) => ({...acc, [r._internalId!]: r.decisionReasons}), {}),
+            recordDecisions: data.records.reduce((acc, r) => ({...acc, [r.internalId!]: r.recordDecisions}), {}),
+            decisionReasons: data.records.reduce((acc, r) => ({...acc, [r.internalId!]: r.decisionReasons}), {}),
             pairScores: [], // Not stored in DB
             confidenceScore: data.records[0]?.confidenceScore || 0,
         })).filter(c => c.records.length > 1).sort((a,b) => b.Max_PairScore - a.Max_PairScore);
@@ -184,7 +184,7 @@ export default function ReviewPage() {
       }
       
       for(const record of selectedCluster.records) {
-        if (recordDecisions[record._internalId!] === 'مستبعدة' && !selectedCluster.decisionReasons?.[record._internalId!]) {
+        if (recordDecisions[record.internalId!] === 'مستبعدة' && !selectedCluster.decisionReasons?.[record.internalId!]) {
             setValidationError(`يجب تحديد سبب استبعاد للسجل: ${record.womanName}`);
             return false;
         }
@@ -196,8 +196,8 @@ export default function ReviewPage() {
     const recordsToUpdate = selectedCluster.records.map(r => ({
         id: r.id, // THE DB ROW ID
         groupDecision: selectedCluster.groupDecision,
-        recordDecisions: selectedCluster.recordDecisions?.[r._internalId!],
-        decisionReasons: selectedCluster.decisionReasons?.[r._internalId!],
+        recordDecisions: selectedCluster.recordDecisions?.[r.internalId!],
+        decisionReasons: selectedCluster.decisionReasons?.[r.internalId!],
     }));
 
     try {
@@ -250,21 +250,21 @@ export default function ReviewPage() {
           let newDecisions = { ...(currentCluster.recordDecisions || {}), [recordId]: decision };
           const newReasons: { [key: string]: string } = {};
       
-          const keptRecord = currentCluster.records.find(r => newDecisions[r._internalId!] === "تبقى");
-          const verifyRecords = currentCluster.records.filter(r => newDecisions[r._internalId!] === "تحقق");
+          const keptRecord = currentCluster.records.find(r => newDecisions[r.internalId!] === "تبقى");
+          const verifyRecords = currentCluster.records.filter(r => newDecisions[r.internalId!] === "تحقق");
       
           currentCluster.records.forEach(record => {
-            const currentDecision = newDecisions[record._internalId!];
+            const currentDecision = newDecisions[record.internalId!];
             if (currentDecision === "مكررة") {
               const targetRecord = keptRecord || verifyRecords[0];
               if (targetRecord) {
-                newReasons[record._internalId!] = `مستفيدة مكررة مع ${targetRecord.beneficiaryId} - ${targetRecord.womanName || ""}`;
+                newReasons[record.internalId!] = `مستفيدة مكررة مع ${targetRecord.beneficiaryId} - ${targetRecord.womanName || ""}`;
               }
             } else if (currentDecision === "تحقق") {
-              const otherVerify = verifyRecords.find(r => r._internalId !== record._internalId);
-              const target = otherVerify || keptRecord || currentCluster.records.find(r => newDecisions[r._internalId!] === "ليست تكرار") || currentCluster.records.find(r => newDecisions[r._internalId!] === "مكررة");
+              const otherVerify = verifyRecords.find(r => r.internalId !== record.internalId);
+              const target = otherVerify || keptRecord || currentCluster.records.find(r => newDecisions[r.internalId!] === "ليست تكرار") || currentCluster.records.find(r => newDecisions[r.internalId!] === "مكررة");
               if (target) {
-                newReasons[record._internalId!] = `اشتباه تكرار مع ${target.beneficiaryId} - ${target.womanName || ""}`;
+                newReasons[record.internalId!] = `اشتباه تكرار مع ${target.beneficiaryId} - ${target.womanName || ""}`;
               }
             }
           });
@@ -278,7 +278,7 @@ export default function ReviewPage() {
         if (decision !== 'مستبعدة' && reviewedCount === totalRecords) {
            setTimeout(() => handleSaveAndNext(), 100);
         } else {
-             const currentIndex = selectedCluster?.records.findIndex(r => r._internalId === recordId) ?? -1;
+             const currentIndex = selectedCluster?.records.findIndex(r => r.internalId === recordId) ?? -1;
              if (decision !== 'مستبعدة' && currentIndex !== -1 && currentIndex < totalRecords - 1) {
                 setActiveRecordIndex(currentIndex + 1);
              }
@@ -315,7 +315,7 @@ export default function ReviewPage() {
       
       // Auto-advance logic
       const totalRecords = selectedCluster?.records.length ?? 0;
-      const currentIndex = selectedCluster?.records.findIndex(r => r._internalId === recordId) ?? -1;
+      const currentIndex = selectedCluster?.records.findIndex(r => r.internalId === recordId) ?? -1;
 
       if (currentIndex === totalRecords - 1) {
           // Last record, save and move to next cluster
@@ -437,10 +437,10 @@ export default function ReviewPage() {
                      <div><strong>قرارات السجلات:</strong>
                        <ul className="list-disc pl-5">
                         {selectedCluster.records.map(r => (
-                            <li key={r._internalId}>
+                            <li key={r.internalId}>
                                 <span className="font-semibold">{r.womanName}:</span> 
-                                <span className="ml-2">{selectedCluster.recordDecisions?.[r._internalId!] || 'لم يحدد'}</span>
-                                {selectedCluster.decisionReasons?.[r._internalId!] && <span className="text-xs text-muted-foreground ml-2">({selectedCluster.decisionReasons[r._internalId!]})</span>}
+                                <span className="ml-2">{selectedCluster.recordDecisions?.[r.internalId!] || 'لم يحدد'}</span>
+                                {selectedCluster.decisionReasons?.[r.internalId!] && <span className="text-xs text-muted-foreground ml-2">({selectedCluster.decisionReasons[r.internalId!]})</span>}
                             </li>
                         ))}
                        </ul>
@@ -579,9 +579,9 @@ const SmartphoneScreen = ({
           <TableBody>
             {cluster.records.map((record, index) => {
               const isActive = index === activeRecordIndex;
-              const decision = cluster.recordDecisions?.[record._internalId!];
+              const decision = cluster.recordDecisions?.[record.internalId!];
               return (
-                <TableRow key={record._internalId} className={cn(isActive && "bg-blue-100 dark:bg-blue-900/30")}>
+                <TableRow key={record.internalId} className={cn(isActive && "bg-blue-100 dark:bg-blue-900/30")}>
                   <TableCell>{record.womanName}</TableCell>
                   <TableCell>{record.husbandName}</TableCell>
                   <TableCell>{record.nationalId}</TableCell>
@@ -624,12 +624,12 @@ const SmartphoneScreen = ({
                                 key={opt.value}
                                 icon={opt.icon}
                                 label={opt.label}
-                                onClick={() => onRecordDecisionChange(activeRecord._internalId!, opt.value)}
-                                isActive={cluster.recordDecisions?.[activeRecord._internalId!] === opt.value}
+                                onClick={() => onRecordDecisionChange(activeRecord.internalId!, opt.value)}
+                                isActive={cluster.recordDecisions?.[activeRecord.internalId!] === opt.value}
                             />
                         ))}
                     </div>
-                    {cluster.recordDecisions?.[activeRecord._internalId!] === 'مستبعدة' && (
+                    {cluster.recordDecisions?.[activeRecord.internalId!] === 'مستبعدة' && (
                         <div className="mt-4">
                              <Label className="text-sm font-semibold mb-2 block">سبب الاستبعاد</Label>
                              <div className="flex flex-wrap items-center gap-2">
@@ -638,8 +638,8 @@ const SmartphoneScreen = ({
                                         key={opt.value}
                                         icon={opt.icon}
                                         label={opt.label}
-                                        onClick={() => onExclusionReasonChange(activeRecord._internalId!, opt.value)}
-                                        isActive={cluster.decisionReasons?.[activeRecord._internalId!] === opt.value}
+                                        onClick={() => onExclusionReasonChange(activeRecord.internalId!, opt.value)}
+                                        isActive={cluster.decisionReasons?.[activeRecord.internalId!] === opt.value}
                                     />
                                 ))}
                              </div>
