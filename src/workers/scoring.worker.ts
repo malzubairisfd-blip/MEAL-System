@@ -146,14 +146,14 @@ function arabicConfidenceLabel(percent: number): string {
 --------------------------------------------------------- */
 
 function calculateClusterConfidence(
-  pairScores: PairScore[],
+  pairScore: PairScore[],
   clusterSize: number
 ): ClusterConfidenceResult {
 
   // ---- Collect Scores ----
-  const womanScores = pairScores.map(p => p.womanScore);
-  const husbandScores = pairScores.map(p => p.husbandScore);
-  const totalScores = pairScores.map(p => p.totalAvg);
+  const womanScores = pairScore.map(p => p.womanScore);
+  const husbandScores = pairScore.map(p => p.husbandScore);
+  const totalScores = pairScore.map(p => p.totalAvg);
 
   // ---- Averages ----
   const avgWomanScore = mean(womanScores);
@@ -222,7 +222,7 @@ self.onmessage = (event) => {
         return {
           ...cluster,
           records,
-          pairScores: [],
+          pairScore: [],
           confidenceScore: 0,
           avgWomanNameScore: 0,
           avgHusbandNameScore: 0,
@@ -232,7 +232,7 @@ self.onmessage = (event) => {
         };
       }
       
-      const pairScores: PairScore[] = [];
+      const pairScore: PairScore[] = [];
       let maxPairScore = 0;
       for (let i = 0; i < records.length; i++) {
         for (let j = i + 1; j < records.length; j++) {
@@ -241,7 +241,7 @@ self.onmessage = (event) => {
               maxPairScore = result.score;
             }
             const nameAvgs = totalAverageNameScore(records[i], records[j]);
-            pairScores.push({
+            pairScore.push({
                 aId: records[i]._internalId,
                 bId: records[j]._internalId,
                 womanScore: nameAvgs.womanAvg,
@@ -254,10 +254,10 @@ self.onmessage = (event) => {
         }
       }
 
-      const confidenceResult = calculateClusterConfidence(pairScores, records.length);
+      const confidenceResult = calculateClusterConfidence(pairScore, records.length);
       
       const recordsWithAvgScores = records.map(record => {
-        const relatedPairs = pairScores.filter((p: any) => p.aId === record._internalId || p.bId === record._internalId);
+        const relatedPairs = pairScore.filter((p: any) => p.aId === record._internalId || p.bId === record._internalId);
         
         const safeAvg = (arr: (number | null | undefined)[]) => {
             const valid = arr.filter(v => typeof v === 'number' && isFinite(v)) as number[];
@@ -277,7 +277,7 @@ self.onmessage = (event) => {
       return {
         ...cluster,
         records: recordsWithAvgScores,
-        pairScores: pairScores,
+        pairScore: pairScore,
         confidenceScore: confidenceResult.confidencePercent,
         avgWomanNameScore: confidenceResult.avgWomanScore,
         avgHusbandNameScore: confidenceResult.avgHusbandScore,
