@@ -218,33 +218,9 @@ export default function UploadPage() {
   const isDbMappingReady = useMemo(() => uniqueIdMapping.fileCol && uniqueIdMapping.dbCol, [uniqueIdMapping]);
   
   const unmappedUiColumns = useMemo(() => {
-    const cachedData =
-      rawRowsRef.current.length > 0
-        ? { rows: rawRowsRef.current, clusters: clusters }
-        : null;
-
-    if (!cachedData || !cachedData.clusters || cachedData.clusters.length === 0) {
-        const usedCols = new Set([...Array.from(dbColumnMapping.keys()), uniqueIdMapping.fileCol]);
-        return columns.filter(c => !usedCols.has(c));
-    }
-
-    const clusterRecordKeys = cachedData.clusters?.[0]?.records?.[0]
-      ? Object.keys(cachedData.clusters[0].records[0])
-      : [];
-    const clusterTopLevelKeys = cachedData.clusters?.[0]
-      ? Object.keys(cachedData.clusters[0])
-      : [];
-      
-    const availableColumns = [...new Set([...columns, ...clusterTopLevelKeys, ...clusterRecordKeys])];
-    
     const usedCols = new Set([...Array.from(dbColumnMapping.keys()), uniqueIdMapping.fileCol]);
-
-    return availableColumns.filter(
-      (c) =>
-        !usedCols.has(c) &&
-        !c.startsWith("_")
-    );
-  }, [columns, clusters, dbColumnMapping, uniqueIdMapping.fileCol]);
+    return columns.filter(c => !usedCols.has(c));
+  }, [columns, dbColumnMapping, uniqueIdMapping.fileCol]);
 
   const unmappedDbColumns = useMemo(() => {
     const usedDbCols = new Set([...dbColumnMapping.values(), uniqueIdMapping.dbCol]);
@@ -619,9 +595,28 @@ export default function UploadPage() {
   }, [workerStatus, toast]);
 
   const handleAutoMatch = useCallback(async () => {
+    const cachedData =
+      rawRowsRef.current.length > 0
+        ? { rows: rawRowsRef.current, clusters: clusters }
+        : null;
+
+    let availableSourceColumns = [...columns];
+    if (cachedData && cachedData.clusters && cachedData.clusters.length > 0) {
+        const clusterRecordKeys = cachedData.clusters?.[0]?.records?.[0]
+          ? Object.keys(cachedData.clusters[0].records[0])
+          : [];
+        const clusterTopLevelKeys = cachedData.clusters?.[0]
+          ? Object.keys(cachedData.clusters[0])
+          : [];
+        
+        const generatedKeys = [...clusterTopLevelKeys, ...clusterRecordKeys].filter(key => !key.startsWith('_') && !['records', 'pairScores'].includes(key));
+        availableSourceColumns = [...new Set([...columns, ...generatedKeys])];
+    }
+    
     const newMapping = new Map<string, string>();
     const usedDbCols = new Set<string>();
-    columns.forEach((uiCol) => {
+    
+    availableSourceColumns.forEach((uiCol) => {
       const matchedDbCol = dbColumns.find(
         (dbCol) =>
           dbCol.toLowerCase().replace(/_/g, "") ===
@@ -633,12 +628,13 @@ export default function UploadPage() {
         usedDbCols.add(matchedDbCol);
       }
     });
+
     setDbColumnMapping(newMapping);
     toast({
       title: "Auto-match Complete",
       description: `Automatically matched ${newMapping.size} columns.`,
     });
-  }, [columns, dbColumns, toast]);
+  }, [columns, clusters, dbColumns, toast]);
 
   const handleAddDbMapping = () => {
     if (manualDbMapping.ui && manualDbMapping.db) {
