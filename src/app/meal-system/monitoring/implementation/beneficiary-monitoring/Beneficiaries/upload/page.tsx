@@ -244,6 +244,7 @@ export default function UploadPage() {
     );
   }, [columns, clusters, dbColumnMapping, uniqueIdMapping.fileCol]);
 
+
   const unmappedDbColumns = useMemo(() => {
     const usedDbCols = new Set([...dbColumnMapping.values(), uniqueIdMapping.dbCol]);
     return dbColumns.filter((c) => !usedDbCols.has(c));
@@ -631,7 +632,7 @@ export default function UploadPage() {
           ? Object.keys(cachedData.clusters[0])
           : [];
         
-        const generatedKeys = [...clusterTopLevelKeys, ...clusterRecordKeys].filter(key => !key.startsWith('_') && !['records', 'pairScores'].includes(key));
+        const generatedKeys = [...clusterTopLevelKeys, ...clusterRecordKeys].filter(key => !key.startsWith('_') && !['records', 'pairScore'].includes(key));
         availableSourceColumns = [...new Set([...columns, ...generatedKeys])];
     }
     
@@ -748,6 +749,7 @@ const executeSaveAndEnrich = useCallback(async (mode: "skip" | "replace", rawRec
             totalSaved += result.saved || 0;
             totalSkipped += result.skipped || 0;
             totalUpdated += result.updated || 0;
+            setSaveStats({ saved: totalSaved, skipped: totalSkipped, updated: totalUpdated, total: totalToProcess });
             setSaveProgress(((i + chunk.length) / totalToProcess) * 50);
         }
         toast({ title: "Raw Data Saved", description: `${totalSaved} new, ${totalUpdated} updated, ${totalSkipped} skipped.` });
@@ -758,9 +760,9 @@ const executeSaveAndEnrich = useCallback(async (mode: "skip" | "replace", rawRec
         const { enrichedRecords } = enrichData(cachedData);
         
         const enrichedPayload = enrichedRecords.map(record => {
-            const enrichment: Record<string, any> = { internalId: record.internalId! };
+            const enrichment: Record<string, any> = { _internalId: record._internalId! };
             dbColumns.forEach(key => {
-                if (record.hasOwnProperty(key) && key !== 'internalId') {
+                if (record.hasOwnProperty(key) && key !== '_internalId') {
                     enrichment[key] = record[key];
                 }
             });
@@ -807,7 +809,7 @@ const executeSaveAndEnrich = useCallback(async (mode: "skip" | "replace", rawRec
     try {
         const recordsToProcess = rawRowsRef.current.map((record) => {
             const newRecord: Record<string, any> = { 
-                internalId: record._internalId,
+                _internalId: record._internalId,
                 project_id: selectedProjectId,
                 project_name: selectedProjectData.projectName,
             };
@@ -1308,10 +1310,10 @@ const executeSaveAndEnrich = useCallback(async (mode: "skip" | "replace", rawRec
                     <Progress value={saveProgress} />
                     <p className="text-sm text-center mt-1 text-muted-foreground">
                       {saveStatus === "checking_duplicates" ? "Checking for existing records..."
-                        : saveStatus === 'saving_raw' ? 'Saving raw data...'
-                        : saveStatus === 'saving_enriched' ? 'Saving enriched data...'
+                        : saveStatus === 'saving_raw' ? `Saving raw data... ${Math.round(saveProgress)}%`
+                        : saveStatus === 'saving_enriched' ? `Saving enriched data... ${Math.round(saveProgress)}%`
                         : 'Preparing...'}
-                      {saveStats.total > 0 && ` (Saved: ${saveStats.saved}, Skipped: ${saveStats.skipped}, Updated: ${saveStats.updated})`}
+                      {` (Saved: ${saveStats.saved}, Skipped: ${saveStats.skipped}, Updated: ${saveStats.updated})`}
                     </p>
                   </div>
                 )}
