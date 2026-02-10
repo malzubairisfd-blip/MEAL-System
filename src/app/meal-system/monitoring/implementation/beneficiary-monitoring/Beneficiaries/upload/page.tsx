@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -84,36 +85,17 @@ const MAPPING_FIELDS: (keyof Mapping)[] = [
 const REQUIRED_MAPPING_FIELDS: (keyof Mapping)[] = [
   "womanName",
   "husbandName",
+  "nationalId",
+  "phone",
+  "village",
+  "subdistrict",
+  "children",
+  "beneficiaryId",
 ];
 
 const LOCAL_STORAGE_KEY_PREFIX = "beneficiary-mapping-";
 const CHUNK_SIZE = 5000;
 const DB_SAVE_CHUNK_SIZE = 1000;
-
-const defaultOptions = {
-    thresholds: {
-      minPair: 0.62,
-      minInternal: 0.54,
-      blockChunkSize: 3000
-    },
-    finalScoreWeights: {
-      firstNameScore: 0.15,
-      familyNameScore: 0.25,
-      advancedNameScore: 0.12,
-      tokenReorderScore: 0.10,
-      husbandScore: 0.12,
-      idScore: 0.08,
-      phoneScore: 0.05,
-      childrenScore: 0.04,
-      locationScore: 0.04
-    },
-    rules: {
-      enableNameRootEngine: true,
-      enableTribalLineage: true,
-      enableMaternalLineage: true,
-      enablePolygamyRules: true
-    }
-  };
   
 
 type WorkerProgress = {
@@ -236,9 +218,33 @@ export default function UploadPage() {
   const isDbMappingReady = useMemo(() => uniqueIdMapping.fileCol && uniqueIdMapping.dbCol, [uniqueIdMapping]);
   
   const unmappedUiColumns = useMemo(() => {
+    const cachedData =
+      rawRowsRef.current.length > 0
+        ? { rows: rawRowsRef.current, clusters: clusters }
+        : null;
+
+    if (!cachedData || !cachedData.clusters || cachedData.clusters.length === 0) {
+        const usedCols = new Set([...Array.from(dbColumnMapping.keys()), uniqueIdMapping.fileCol]);
+        return columns.filter(c => !usedCols.has(c));
+    }
+
+    const clusterRecordKeys = cachedData.clusters?.[0]?.records?.[0]
+      ? Object.keys(cachedData.clusters[0].records[0])
+      : [];
+    const clusterTopLevelKeys = cachedData.clusters?.[0]
+      ? Object.keys(cachedData.clusters[0])
+      : [];
+      
+    const availableColumns = [...new Set([...columns, ...clusterTopLevelKeys, ...clusterRecordKeys])];
+    
     const usedCols = new Set([...Array.from(dbColumnMapping.keys()), uniqueIdMapping.fileCol]);
-    return columns.filter(c => !usedCols.has(c));
-  }, [columns, dbColumnMapping, uniqueIdMapping.fileCol]);
+
+    return availableColumns.filter(
+      (c) =>
+        !usedCols.has(c) &&
+        !c.startsWith("_")
+    );
+  }, [columns, clusters, dbColumnMapping, uniqueIdMapping.fileCol]);
 
   const unmappedDbColumns = useMemo(() => {
     const usedDbCols = new Set([...dbColumnMapping.values(), uniqueIdMapping.dbCol]);

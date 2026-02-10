@@ -1,4 +1,5 @@
 
+// src/app/api/bnf-assessed/route.ts
 import { NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
@@ -7,20 +8,64 @@ import Database from "better-sqlite3";
 const getDataPath = () => path.join(process.cwd(), "src/data");
 const getDbPath = () => path.join(getDataPath(), "bnf-assessed.db");
 
-const DB_COLUMNS_FOR_CREATION = [
-  "id INTEGER PRIMARY KEY AUTOINCREMENT", "project_id TEXT", "project_name TEXT", "internalId TEXT", "data JSON",
-  "Generated_Cluster_ID TEXT", "Size REAL", "Flag TEXT", "Max_PairScore REAL", "pairScore REAL",
-  "nameScore REAL", "husbandScore REAL", "childrenScore REAL", "idScore REAL", "phoneScore REAL",
-  "locationScore REAL", "groupDecision TEXT", "recordDecisions TEXT", "decisionReasons TEXT",
-  "confidenceScore REAL", "reasons TEXT", "pre_classified_result TEXT", "group_analysis TEXT",
-  "avgPairScore REAL", "avgFirstNameScore REAL", "avgFamilyNameScore REAL", "avgAdvancedNameScore REAL",
-  "avgTokenReorderScore REAL", "avgWomanNameScore REAL", "avgHusbandNameScore REAL", "avgFinalScore REAL",
-  "womanName TEXT", "husbandName TEXT", "nationalId TEXT", "phone TEXT", "village TEXT", "subdistrict TEXT",
-  "children TEXT", "beneficiaryId TEXT", "womanName_normalized TEXT", "husbandName_normalized TEXT",
-  "children_normalized TEXT", "subdistrict_normalized TEXT", "village_normalized TEXT", "parts TEXT", "husbandParts TEXT",
-  // Many other columns follow...
-].join(", ");
+const DB_COLUMNS = [
+    "id", "project_id", "project_name", "internalId", "data", "Generated_Cluster_ID", "Size", "Flag", "Max_PairScore", 
+    "pairScore", "nameScore", "husbandScore", "childrenScore", "idScore", "phoneScore", "locationScore", "groupDecision", 
+    "recordDecisions", "decisionReasons", "confidenceScore", "reasons", "pre_classified_result", "group_analysis", 
+    "avgPairScore", "avgFirstNameScore", "avgFamilyNameScore", "avgAdvancedNameScore", "avgTokenReorderScore", 
+    "avgWomanNameScore", "avgHusbandNameScore", "avgFinalScore", "womanName", "husbandName", "nationalId", "phone", 
+    "village", "subdistrict", "children", "beneficiaryId", "womanName_normalized", "husbandName_normalized", "children_normalized", 
+    "subdistrict_normalized", "village_normalized", "parts", "husbandParts"
+];
 
+const DB_COLUMNS_FOR_CREATION = `
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id TEXT,
+    project_name TEXT,
+    internalId TEXT,
+    data JSON,
+    Generated_Cluster_ID INTEGER,
+    Size INTEGER,
+    Flag TEXT,
+    Max_PairScore REAL,
+    pairScore REAL,
+    nameScore REAL,
+    husbandScore REAL,
+    childrenScore REAL,
+    idScore REAL,
+    phoneScore REAL,
+    locationScore REAL,
+    groupDecision TEXT,
+    recordDecisions TEXT,
+    decisionReasons TEXT,
+    confidenceScore REAL,
+    reasons TEXT,
+    pre_classified_result TEXT,
+    group_analysis TEXT,
+    avgPairScore REAL,
+    avgFirstNameScore REAL,
+    avgFamilyNameScore REAL,
+    avgAdvancedNameScore REAL,
+    avgTokenReorderScore REAL,
+    avgWomanNameScore REAL,
+    avgHusbandNameScore REAL,
+    avgFinalScore REAL,
+    womanName TEXT,
+    husbandName TEXT,
+    nationalId TEXT,
+    phone TEXT,
+    village TEXT,
+    subdistrict TEXT,
+    children TEXT,
+    beneficiaryId TEXT,
+    womanName_normalized TEXT,
+    husbandName_normalized TEXT,
+    children_normalized TEXT,
+    subdistrict_normalized TEXT,
+    village_normalized TEXT,
+    parts TEXT,
+    husbandParts TEXT
+`;
 
 const chunkArray = <T>(arr: T[], size: number): T[][] => {
   const chunks: T[][] = [];
