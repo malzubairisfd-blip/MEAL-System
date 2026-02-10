@@ -758,7 +758,7 @@ const executeSaveAndEnrich = useCallback(async (mode: "skip" | "replace", rawRec
         const { enrichedRecords } = enrichData(cachedData);
         
         const enrichedPayload = enrichedRecords.map(record => {
-            const enrichment: Record<string, any> = { internalId: record._internalId! };
+            const enrichment: Record<string, any> = { internalId: record.internalId! };
             dbColumns.forEach(key => {
                 if (record.hasOwnProperty(key) && key !== 'internalId') {
                     enrichment[key] = record[key];
@@ -796,12 +796,21 @@ const executeSaveAndEnrich = useCallback(async (mode: "skip" | "replace", rawRec
       toast({ title: "Incomplete Setup", description: "Select a project and map the unique ID column.", variant: "destructive" });
       return;
     }
+    const selectedProjectData = projects.find(p => p.projectId === selectedProjectId);
+    if (!selectedProjectData) {
+        toast({ title: "Project data not found.", description: "Please re-select the project.", variant: "destructive" });
+        return;
+    }
     setIsSaving(true);
     setSaveStatus("preparing");
 
     try {
         const recordsToProcess = rawRowsRef.current.map((record) => {
-            const newRecord: Record<string, any> = { project_id: selectedProjectId, internalId: record._internalId };
+            const newRecord: Record<string, any> = { 
+                internalId: record._internalId,
+                project_id: selectedProjectId,
+                project_name: selectedProjectData.projectName,
+            };
             
             // Map main unique ID
             if (record.hasOwnProperty(uniqueIdMapping.fileCol)) {
@@ -850,7 +859,7 @@ const executeSaveAndEnrich = useCallback(async (mode: "skip" | "replace", rawRec
         toast({ title: "Preparation Failed", description: error.message, variant: "destructive" });
         setIsSaving(false);
     }
-  }, [selectedProjectId, uniqueIdMapping, dbColumnMapping, mapping, toast, executeSaveAndEnrich]);
+  }, [selectedProjectId, uniqueIdMapping, dbColumnMapping, mapping, toast, executeSaveAndEnrich, projects]);
 
   const isProcessing = workerStatus !== "idle" && workerStatus !== "done" && workerStatus !== "error";
 
