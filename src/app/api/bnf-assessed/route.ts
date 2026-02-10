@@ -1,3 +1,4 @@
+
 import { NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
@@ -290,9 +291,14 @@ function initializeDatabase() {
     if (upperCaseCol.includes("SIZE") || upperCaseCol.includes("INTEGER") || upperCaseCol.includes("CNT")) {
       return `${colName} INTEGER`;
     }
+    if (colName === "internalId") {
+        return "internalId TEXT";
+    }
     return `${colName} TEXT`;
   });
   db.exec(`CREATE TABLE IF NOT EXISTS assessed_data (${columnsDef.join(", ")});`);
+  // Add a unique index on internalId and project_id for performance and integrity
+  db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_project_internal ON assessed_data (project_id, internalId);`);
   return db;
 }
 
@@ -367,82 +373,138 @@ export async function POST(req: Request) {
     }
 
     if (action === "save") {
-      if (!projectId || !Array.isArray(records) || !mode) {
+      if (!projectId || !Array.isArray(records) || !mode || !uniqueIdDbCol) {
         return NextResponse.json({ error: "Missing parameters" }, { status: 400 });
       }
       const db = initializeDatabase();
       try {
         const tableCols = db.prepare("PRAGMA table_info(assessed_data)").all().map((c: any) => c.name);
         const sanitizedUniqueIdDbCol = sanitizeColumn(uniqueIdDbCol);
+
         if (!sanitizedUniqueIdDbCol || !tableCols.includes(sanitizedUniqueIdDbCol)) {
-          return NextResponse.json({ error: "Invalid unique ID column" }, { status: 400 });
+          return NextResponse.json({ error: "Invalid unique ID DB column" }, { status: 400 });
         }
-        let recordsToInsert = records;
+        
+        // Ensure the unique ID column has an index for performance
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_${sanitizedUniqueIdDbCol} ON assessed_data (${sanitizedUniqueIdDbCol});`);
+
+
+        let savedCount = 0;
         let skippedCount = 0;
-        let insertedCount = 0;
+        let updatedCount = 0;
+        
+        const allColumns = Array.from(
+          new Set(records.flatMap((record: any) => Object.keys(record)))
+        ).filter((col) => tableCols.includes(col) && col !== "id");
+
+        const insertStmt =
+          allColumns.length > 0
+            ? db.prepare(
+                `INSERT INTO assessed_data (${allColumns.join(", ")}) VALUES (${allColumns.map(() => "?").join(", ")})`
+              )
+            : null;
+
+        const updateStmt =
+          allColumns.length > 0
+            ? db.prepare(
+                `UPDATE assessed_data SET ${allColumns.filter(c => c !== sanitizedUniqueIdDbCol && c !== 'project_id').map((col) => `${col} = @${col}`).join(", ")} WHERE project_id = @project_id AND ${sanitizedUniqueIdDbCol} = @${sanitizedUniqueIdDbCol}`
+              )
+            : null;
+            
+        const checkStmt = db.prepare(`SELECT id FROM assessed_data WHERE project_id = ? AND ${sanitizedUniqueIdDbCol} = ?`);
 
         const transaction = db.transaction(() => {
-          if (mode === "replace") {
-            const idsToDelete = records
-              .map((r) => r[sanitizedUniqueIdDbCol])
-              .filter(Boolean);
-            if (idsToDelete.length > 0) {
-              const deleteChunks = chunkArray(idsToDelete, 900);
-              for (const chunk of deleteChunks) {
-                const placeholders = chunk.map(() => "?").join(",");
-                db.prepare(
-                  `DELETE FROM assessed_data WHERE project_id = ? AND ${sanitizedUniqueIdDbCol} IN (${placeholders})`
-                ).run(projectId, ...chunk);
-              }
-            }
-          } else if (mode === "skip") {
-            const batchIds = records
-              .map((r) => r[sanitizedUniqueIdDbCol])
-              .filter(Boolean);
-            const existingIds = new Set<string>();
-            const checkChunks = chunkArray(batchIds, 900);
-            for (const chunk of checkChunks) {
-              if (!chunk.length) continue;
-              const placeholders = chunk.map(() => "?").join(",");
-              const rows: any = db
-                .prepare(
-                  `SELECT ${sanitizedUniqueIdDbCol} FROM assessed_data WHERE project_id = ? AND ${sanitizedUniqueIdDbCol} IN (${placeholders})`
-                )
-                .all(projectId, ...chunk);
-              rows.forEach((row: any) => existingIds.add(String(row[sanitizedUniqueIdDbCol])));
-            }
-            recordsToInsert = records.filter((r: any) => !existingIds.has(String(r[sanitizedUniqueIdDbCol])));
-            skippedCount = records.length - recordsToInsert.length;
-          }
+          for (const record of records) {
+             const uniqueValue = record[sanitizedUniqueIdDbCol];
+             if (!uniqueValue) {
+                 skippedCount++;
+                 continue;
+             }
 
-          if (recordsToInsert.length > 0) {
-            const insertCols = Object.keys(recordsToInsert[0]).filter(
-              (col) => tableCols.includes(col) && col !== "id"
-            );
-            if (insertCols.length > 0) {
-              const placeholders = insertCols.map(() => "?").join(", ");
-              const insert = db.prepare(
-                `INSERT INTO assessed_data (${insertCols.join(", ")}) VALUES (${placeholders})`
-              );
-              for (const record of recordsToInsert) {
-                insert.run(...insertCols.map((col) => record[col] ?? null));
-                insertedCount += 1;
-              }
-            }
+             if (mode === 'replace') {
+                const existing = checkStmt.get(projectId, uniqueValue);
+                if (existing) {
+                    // UPDATE
+                    const updateValues: {[key:string]: any} = {};
+                     allColumns.forEach(col => {
+                        updateValues[col] = record[col] !== undefined ? record[col] : null;
+                    });
+                    updateStmt?.run(updateValues);
+                    updatedCount++;
+                } else {
+                    // INSERT
+                    const insertValues = allColumns.map((col) => (record[col] !== undefined ? record[col] : null));
+                    insertStmt?.run(...insertValues);
+                    savedCount++;
+                }
+             } else { // mode === 'skip'
+                const existing = checkStmt.get(projectId, uniqueValue);
+                if (!existing) {
+                   const values = allColumns.map((col) => (record[col] !== undefined ? record[col] : null));
+                   insertStmt?.run(...values);
+                   savedCount++;
+                } else {
+                   skippedCount++;
+                }
+             }
           }
         });
 
         transaction();
 
         return NextResponse.json({
-          saved: insertedCount,
+          saved: savedCount,
           skipped: skippedCount,
+          updated: updatedCount,
           total: records.length,
+          mode: mode,
         });
       } finally {
         db.close();
       }
     }
+    
+     if (action === "update") {
+      if (!projectId || !Array.isArray(records)) {
+        return NextResponse.json({ error: "Missing parameters for update" }, { status: 400 });
+      }
+      const db = initializeDatabase();
+      try {
+        const tableCols = db.prepare("PRAGMA table_info(assessed_data)").all().map((c: any) => c.name);
+
+        const updateStmt = (record: any) => {
+            const colsToUpdate = Object.keys(record).filter(col => tableCols.includes(col) && col !== 'id' && col !== 'internalId' && col !== 'project_id');
+            if(colsToUpdate.length === 0) return null;
+            
+            return db.prepare(
+                `UPDATE assessed_data SET ${colsToUpdate.map(col => `${col} = @${col}`).join(", ")} WHERE project_id = @project_id AND internalId = @internalId`
+              );
+        }
+
+        let updatedCount = 0;
+        const transaction = db.transaction(() => {
+          for (const record of records) {
+            if(!record.internalId) continue;
+            
+            const stmt = updateStmt(record);
+            if(stmt) {
+                const info = stmt.run({ ...record, project_id: projectId });
+                if (info.changes > 0) {
+                    updatedCount++;
+                }
+            }
+          }
+        });
+        
+        transaction();
+        
+        return NextResponse.json({ updated: updatedCount });
+
+      } finally {
+        db.close();
+      }
+    }
+
 
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });
   } catch (error: any) {

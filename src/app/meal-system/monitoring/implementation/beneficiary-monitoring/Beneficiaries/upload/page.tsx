@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -50,6 +51,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import type { RecordRow } from "@/lib/types";
+import { Input } from "@/components/ui/input";
+
 
 type Mapping = {
   womanName: string;
@@ -81,16 +84,11 @@ const MAPPING_FIELDS: (keyof Mapping)[] = [
 const REQUIRED_MAPPING_FIELDS: (keyof Mapping)[] = [
   "womanName",
   "husbandName",
-  "nationalId",
-  "phone",
-  "village",
-  "subdistrict",
-  "children",
 ];
 
 const LOCAL_STORAGE_KEY_PREFIX = "beneficiary-mapping-";
 const CHUNK_SIZE = 5000;
-const DB_SAVE_CHUNK_SIZE = 10000;
+const DB_SAVE_CHUNK_SIZE = 1000;
 
 type WorkerProgress = {
   status: string;
@@ -127,281 +125,23 @@ const SummaryCard = ({
   </Card>
 );
 
-const DB_COLUMNS = [
-  "id",
-  "project_id",
-  "project_name",
-  "internalId",
-  "data",
-  "Generated_Cluster_ID",
-  "Size",
-  "Flag",
-  "Max_PairScore",
-  "pairScore",
-  "nameScore",
-  "husbandScore",
-  "childrenScore",
-  "idScore",
-  "phoneScore",
-  "locationScore",
-  "groupDecision",
-  "recordDecisions",
-  "decisionReasons",
-  "confidenceScore",
-  "reasons",
-  "pre_classified_result",
-  "group_analysis",
-  "avgPairScore",
-  "avgFirstNameScore",
-  "avgFamilyNameScore",
-  "avgAdvancedNameScore",
-  "avgTokenReorderScore",
-  "avgWomanNameScore",
-  "avgHusbandNameScore",
-  "avgFinalScore",
-  "womanName",
-  "husbandName",
-  "nationalId",
-  "phone",
-  "village",
-  "subdistrict",
-  "children",
-  "beneficiaryId",
-  "womanName_normalized",
-  "husbandName_normalized",
-  "children_normalized",
-  "subdistrict_normalized",
-  "village_normalized",
-  "parts",
-  "husbandParts",
-  "s",
-  "cluster_id",
-  "dup_cluster_id2",
-  "eq_clusters",
-  "dup_flag2",
-  "new_dup_flag1",
-  "dup_flag",
-  "cluster_size",
-  "dup_cluster_size",
-  "match_probability",
-  "match_weight",
-  "l_id",
-  "l_benef_name",
-  "l_hsbnd_name",
-  "l_child_list",
-  "l_phone_no",
-  "l_id_card_no",
-  "l_age_years",
-  "l_mud_id",
-  "gv_bnf_name",
-  "gv_hsbnd_name",
-  "gv_bnf_hsbnd_name",
-  "gv_n_child_list",
-  "gv_id_card_no",
-  "gv_phone_no",
-  "gv_age_years",
-  "r_id",
-  "r_benef_name",
-  "r_husband_name",
-  "r_child_list",
-  "r_phone_no",
-  "r_id_card_no",
-  "r_age_years",
-  "r_mud_id",
-  "lr_eq_mud",
-  "lr_eq_phone",
-  "lr_age_diff",
-  "lr_benef_name_jw_sim",
-  "lr_husband_name_jw_sim",
-  "lr_benef_name_jaccard",
-  "lr_husband_name_jaccard",
-  "lr_id_card_dist",
-  "lr_child_jaccard",
-  "dup_cluster_size_2",
-  "dup_cluster_id",
-  "dup_cluster_flag",
-  "record_id",
-  "benef_name",
-  "husband_name",
-  "child_list_str",
-  "phone_no",
-  "bnf_id_card_no",
-  "age_years",
-  "gov_name",
-  "mud_name",
-  "hh_ozla_name",
-  "hh_vill_name",
-  "dup_cluster_score",
-  "hh_uuid_dup_cnt",
-  "hh_uuid_rn",
-  "hh_team_name",
-  "hh_srvyr_name",
-  "hh_srvyr_phone_no",
-  "hh_mahlah",
-  "hh_address",
-  "hh_name",
-  "hh_gender",
-  "hh_is_swf",
-  "hh_is_dislocated",
-  "hh_is_dislocated_guest",
-  "child_cnt",
-  "child_m_cnt",
-  "child_f_cnt",
-  "bnf_id",
-  "srvy_hh_id",
-  "bnf_idx",
-  "id_card_type",
-  "bnf_relation",
-  "bnf_relation_label",
-  "bnf_relation_code",
-  "n_child_list_str",
-  "hh_deviceid",
-  "hh_vill_id",
-  "gov_no",
-  "mud_no",
-  "hh_ozla_no",
-  "hh_srvyr_id",
-  "hh_srvyr_team_id",
-  "paper_form_date",
-  "paper_form_no",
-  "hh_qual_women_cnt",
-  "bnf_child_cnt",
-  "bnf_child_m_cnt",
-  "bnf_child_f_cnt",
-  "bnf_social_status",
-  "bnf_qual_status",
-  "bnf_qual_status_desc",
-  "bnf_qual_is_preg",
-  "bnf_qual_is_mother5",
-  "bnf_qual_is_mother_handicaped",
-  "bnf_is_handicaped",
-  "bnf_is_dislocated",
-  "hh_phone_no",
-  "bnf_phone_no",
-  "hh_is_new_instance",
-  "hh_uuid",
-  "hh_submission_time",
-  "hh_submitted_by",
-  "n_hh_name",
-  "child_list2",
-  "child_list_long",
-  "bnf_1name",
-  "bnf_2name",
-  "bnf_3name",
-  "bnf_4name",
-  "bnf_5name",
-  "hsbnd_1name",
-  "hsbnd_2name",
-  "hsbnd_3name",
-  "hsbnd_4name",
-  "hsbnd_5name",
-  "proj_no",
-  "id_card_no",
-  "loc_id",
-  "status",
-  "notes",
-  "flag_2",
-  "cluster_min_score",
-  "cluster_max_score",
-  "cluster_score",
-  "bnf_relations",
-  "hsbnd_relations",
-  "common_child",
-  "common_child_cnt",
-  "relation_score",
-  "same_mud",
-  "same_proj",
-  "office_no",
-  "ser",
-  "benef_id",
-  "is_active",
-  "benef_class_desc",
-  "term_reason",
-  "is_dup_cluster",
-  "dup_woman_id",
-  "dup_benef_id",
-  "reg_form_date",
-  "old_bnf_name",
-  "old_hsbnd_name",
-  "curr_benef_name",
-  "curr_husband_name",
-  "calc_bnf_1name",
-  "calc_bnf_2name",
-  "calc_bnf_3name",
-  "calc_bnf_4name",
-  "calc_bnf_5name",
-  "calc_hsbnd_1name",
-  "calc_hsbnd_2name",
-  "calc_hsbnd_3name",
-  "calc_hsbnd_4name",
-  "calc_hsbnd_5name",
-  "cbnf_name",
-  "chsbnd_name",
-  "n_child_list",
-  "b_1name",
-  "b_2name",
-  "b_3name",
-  "b_4name",
-  "b_5name",
-  "h_1name",
-  "h_2name",
-  "h_3name",
-  "h_4name",
-  "h_5name",
-  "child_list",
-  "bnf_name_2",
-  "hsbnd_name_2",
-  "bnf_name2",
-  "bnf_name2b",
-  "bnf_name2c",
-  "bnf_name3",
-  "bnf_name3b",
-  "bnf_name3c",
-  "bnf_name3d",
-  "bnf_name4",
-  "bnf_name4c",
-  "bnf_name4b",
-  "bnf_f_name4",
-  "bnf_f_name3",
-  "bnf_f_name3c",
-  "bnf_name_list",
-  "hsbnd_name_list",
-  "dup_cluster_id2_2",
-  "c_max_weight",
-  "c_min_weight",
-  "c_id_max_weight",
-  "c_id_min_weight",
-  "c_max_pct",
-  "c_min_pct",
-  "c_id_max_pct",
-  "c_id_min_pct",
-  "c_min_proj",
-  "c_max_proj",
-  "c_proj2_cnt",
-  "c_mud2_cnt",
-  "c_id_min_proj",
-  "c_id_max_proj",
-  "c_id_proj2_cnt",
-  "c_id_mud2_cnt",
-];
-
-const parseJsonResponse = async (res: Response) => {
-  const text = await res.text();
-  if (!text) return {};
-  try {
-    return JSON.parse(text);
-  } catch {
-    throw new Error(`The server returned an unexpected response (status ${res.status}).`);
-  }
-};
-
 const apiRequest = async (url: string, options: RequestInit) => {
   const res = await fetch(url, options);
-  const data = await parseJsonResponse(res);
-  if (!res.ok) {
-    throw new Error(data.error || data.details || `Request failed with status ${res.status}`);
+  const text = await res.text();
+  if (!text) {
+      if(!res.ok) throw new Error(`Request failed with status ${res.status}`);
+      return {};
+  };
+  try {
+    const data = JSON.parse(text);
+    if (!res.ok) {
+      throw new Error(data.error || data.details || `Request failed with status ${res.status}`);
+    }
+    return data;
+  } catch (e) {
+    console.error("Failed to parse API response:", text);
+    throw new Error(`The server returned an unexpected response (status ${res.status}).`);
   }
-  return data;
 };
 
 export default function UploadPage() {
@@ -410,6 +150,7 @@ export default function UploadPage() {
   const router = useRouter();
 
   const [columns, setColumns] = useState<string[]>([]);
+  const [originalHeaders, setOriginalHeaders] = useState<string[]>([]);
   const [file, setFile] = useState<File | null>(null);
   const [mapping, setMapping] = useState<Mapping>({
     womanName: "",
@@ -443,7 +184,7 @@ export default function UploadPage() {
     totalInFile: number;
     records: any[];
   }>({ isOpen: false, count: 0, totalInFile: 0, records: [] });
-  const [saveStats, setSaveStats] = useState({ saved: 0, skipped: 0, total: 0 });
+  const [saveStats, setSaveStats] = useState({ saved: 0, skipped: 0, updated: 0, total: 0 });
 
   const rawRowsRef = useRef<any[]>([]);
   const clusterWorkerRef = useRef<Worker | null>(null);
@@ -453,9 +194,8 @@ export default function UploadPage() {
   const notifiedAboutSaveRef = useRef(false);
   const progressInfoRef = useRef(progressInfo);
   progressInfoRef.current = progressInfo;
-  const pendingRecordsRef = useRef<any[]>([]);
+  
   const duplicateInfoRef = useRef(duplicateInfo);
-
   useEffect(() => {
     duplicateInfoRef.current = duplicateInfo;
   }, [duplicateInfo]);
@@ -465,40 +205,22 @@ export default function UploadPage() {
     [mapping]
   );
   const isDbMappingReady = useMemo(() => uniqueIdMapping.fileCol && uniqueIdMapping.dbCol, [uniqueIdMapping]);
-
+  
   const unmappedUiColumns = useMemo(() => {
-    const cachedData =
-      rawRowsRef.current.length > 0
-        ? { rows: rawRowsRef.current, clusters: clusters }
-        : null;
-    if (!cachedData)
-      return columns.filter(
-        (c) => !Array.from(dbColumnMapping.keys()).includes(c) && c !== uniqueIdMapping.fileCol
-      );
-
-    const clusterRecordKeys = cachedData.clusters?.[0]?.records?.[0]
-      ? Object.keys(cachedData.clusters[0].records[0])
-      : [];
-    const clusterTopLevelKeys = cachedData.clusters?.[0] ? Object.keys(cachedData.clusters[0]) : [];
-    const availableColumns = [...new Set([...columns, ...clusterTopLevelKeys, ...clusterRecordKeys])];
-    return availableColumns.filter(
-      (c) =>
-        !Array.from(dbColumnMapping.keys()).includes(c) &&
-        c !== uniqueIdMapping.fileCol &&
-        !c.startsWith("_")
-    );
-  }, [columns, clusters, dbColumnMapping, uniqueIdMapping.fileCol]);
+    const usedCols = new Set([...Array.from(dbColumnMapping.keys()), uniqueIdMapping.fileCol]);
+    return columns.filter(c => !usedCols.has(c));
+  }, [columns, dbColumnMapping, uniqueIdMapping.fileCol]);
 
   const unmappedDbColumns = useMemo(() => {
-    const used = new Set([...dbColumnMapping.values(), uniqueIdMapping.dbCol]);
-    return DB_COLUMNS.filter((c) => !used.has(c));
-  }, [dbColumnMapping, uniqueIdMapping.dbCol]);
-
+    const usedDbCols = new Set([...dbColumnMapping.values(), uniqueIdMapping.dbCol]);
+    return originalHeaders.filter((c) => !usedDbCols.has(c));
+  }, [originalHeaders, dbColumnMapping, uniqueIdMapping.dbCol]);
+  
+  // Reset state when new file is uploaded
   const resetAll = useCallback(() => {
     setFile(null);
     setColumns([]);
     rawRowsRef.current = [];
-    pendingRecordsRef.current = [];
     setClusters([]);
     setWorkerStatus("idle");
     setProgressInfo({ status: "idle", progress: 0 });
@@ -506,14 +228,15 @@ export default function UploadPage() {
     setTimeInfo({ elapsed: 0 });
     setIsDataCached(false);
     notifiedAboutSaveRef.current = false;
-    setSelectedProjectId("");
+    // Don't reset project selection
+    // setSelectedProjectId("");
     setDbColumnMapping(new Map());
     setUniqueIdMapping({ fileCol: "", dbCol: "" });
     setIsSaving(false);
     setSaveStatus("idle");
     setSaveProgress(0);
     setDuplicateInfo({ isOpen: false, count: 0, totalInFile: 0, records: [] });
-    setSaveStats({ saved: 0, skipped: 0, total: 0 });
+    setSaveStats({ saved: 0, skipped: 0, updated: 0, total: 0 });
     if (timerRef.current) clearInterval(timerRef.current);
   }, []);
 
@@ -624,7 +347,7 @@ export default function UploadPage() {
 
   useEffect(() => {
     if (isMappingComplete && columns.length) {
-      const key = `${LOCAL_STORAGE_KEY_PREFIX}${columns.join(",")}`;
+      const key = `${LOCAL_STORAGE_KEY_PREFIX}${originalHeaders.join(",")}`;
       localStorage.setItem(key, JSON.stringify(mapping));
       if (!notifiedAboutSaveRef.current) {
         toast({
@@ -634,7 +357,7 @@ export default function UploadPage() {
         notifiedAboutSaveRef.current = true;
       }
     }
-  }, [columns, isMappingComplete, mapping, toast]);
+  }, [columns, originalHeaders, isMappingComplete, mapping, toast]);
 
   useEffect(() => {
     if (workerStatus !== "idle" && workerStatus !== "done" && workerStatus !== "error" && startTimeRef.current) {
@@ -682,6 +405,7 @@ export default function UploadPage() {
           const sheet = workbook.Sheets[workbook.SheetNames[0]];
           const json = XLSX.utils.sheet_to_json<any>(sheet, { defval: "" });
           const detectedColumns = Object.keys(json[0] || {});
+          setOriginalHeaders(detectedColumns);
           const rowsWithId = json.map((row, index) => ({
             ...row,
             _internalId: `row_${Date.now()}_${index}`,
@@ -801,6 +525,7 @@ export default function UploadPage() {
       case "blocking":
       case "building-edges":
       case "merging-edges":
+      case "re-clustering":
       case "annotating":
       case "calculating_scores":
       case "rules_loaded":
@@ -835,16 +560,10 @@ export default function UploadPage() {
   }, [workerStatus, toast]);
 
   const handleAutoMatch = useCallback(async () => {
-    const cachedData = await loadCachedResult();
-    const clusterRecords = cachedData?.clusters?.[0]?.records?.[0]
-      ? Object.keys(cachedData.clusters[0].records[0])
-      : [];
-    const clusterTopLevel = cachedData?.clusters?.[0] ? Object.keys(cachedData.clusters[0]) : [];
-    const availableColumns = [...new Set([...columns, ...clusterTopLevel, ...clusterRecords])];
     const newMapping = new Map<string, string>();
     const usedDbCols = new Set<string>();
-    availableColumns.forEach((uiCol) => {
-      const matchedDbCol = DB_COLUMNS.find(
+    columns.forEach((uiCol) => {
+      const matchedDbCol = originalHeaders.find(
         (dbCol) =>
           dbCol.toLowerCase().replace(/_/g, "") ===
             uiCol.toLowerCase().replace(/_/g, "").replace(/\s/g, "") &&
@@ -860,7 +579,7 @@ export default function UploadPage() {
       title: "Auto-match Complete",
       description: `Automatically matched ${newMapping.size} columns.`,
     });
-  }, [columns, toast]);
+  }, [columns, originalHeaders, toast]);
 
   const handleAddDbMapping = () => {
     if (manualDbMapping.ui && manualDbMapping.db) {
@@ -876,41 +595,90 @@ export default function UploadPage() {
     newMap.delete(key);
     setDbColumnMapping(newMap);
   };
+  
+  const enrichData = useCallback((data: any) => {
+    const { rows: allRecords, clusters } = data;
+    if (!allRecords || !clusters) throw new Error("Invalid cache: missing rows or clusters.");
+    const recordMap = new Map<string, any>();
+    clusters.forEach((cluster: any) => {
+      (cluster.records || []).forEach((record: RecordRow) => {
+        const clusterData = {
+          Generated_Cluster_ID: cluster.Generated_Cluster_ID,
+          Size: (cluster.records || []).length,
+          Flag: "Review",
+          Max_PairScore: cluster.Max_PairScore,
+          confidenceScore: cluster.confidenceScore,
+          reasons: Array.isArray(cluster.reasons) ? cluster.reasons.join(",") : cluster.reasons,
+          groupDecision: cluster.groupDecision,
+          pre_classified_result: cluster.pre_classified_result,
+          group_analysis:
+            typeof cluster.group_analysis === "object"
+              ? JSON.stringify(cluster.group_analysis)
+              : cluster.group_analysis,
+          avgPairScore: cluster.avgPairScore,
+          avgFirstNameScore: cluster.avgFirstNameScore,
+          avgFamilyNameScore: cluster.avgFamilyNameScore,
+          avgAdvancedNameScore: cluster.avgAdvancedNameScore,
+          avgTokenReorderScore: cluster.avgTokenReorderScore,
+          avgWomanNameScore: cluster.avgWomanNameScore,
+          avgHusbandNameScore: cluster.avgHusbandNameScore,
+          avgFinalScore: cluster.avgFinalScore,
+        };
+        const recordSpecificData = {
+          pairScore: record.pairScore,
+          nameScore: record.nameScore,
+          husbandScore: record.husbandScore,
+          childrenScore: record.childrenScore,
+          idScore: record.idScore,
+          phoneScore: record.phoneScore,
+          locationScore: record.locationScore,
+          recordDecisions: cluster.recordDecisions?.[record._internalId!],
+          decisionReasons: cluster.decisionReasons?.[record._internalId!],
+          womanName_normalized: record.womanName_normalized,
+          husbandName_normalized: record.husbandName_normalized,
+          children_normalized: record.children_normalized,
+          subdistrict_normalized: record.subdistrict_normalized,
+          village_normalized: record.village_normalized,
+          parts: typeof record.parts === "object" ? JSON.stringify(record.parts) : record.parts,
+          husbandParts:
+            typeof record.husbandParts === "object"
+              ? JSON.stringify(record.husbandParts)
+              : record.husbandParts,
+        };
+        recordMap.set(record._internalId!, { ...clusterData, ...recordSpecificData });
+      });
+    });
+    return {
+      enrichedRecords: allRecords.map((record: RecordRow) => {
+        const enrichedData = recordMap.get(record._internalId!) || {};
+        return { ...record, ...enrichedData };
+      }),
+    };
+  }, []);
 
-  const executeBatchSave = async (mode: "skip" | "replace", recordsOverride?: any[]) => {
-    const records = recordsOverride?.length ? recordsOverride : pendingRecordsRef.current;
-    if (!records.length) {
-      toast({
-        title: "No records to save",
-        description: "There are no processed records available to send to the server.",
-        variant: "destructive",
-      });
+  const executeBatchSave = useCallback(async (mode: "skip" | "replace", recordsToSave: any[]) => {
+    if (recordsToSave.length === 0) {
+      toast({ title: "No records to process for this action." });
+      if (mode === 'skip' && duplicateInfoRef.current.count > 0) {
+        setSaveStats({ saved: 0, skipped: duplicateInfoRef.current.totalInFile, updated: 0, total: duplicateInfoRef.current.totalInFile });
+        setSaveStatus("done");
+      }
       return;
     }
-    if (
-      mode === "skip" &&
-      duplicateInfoRef.current.count > 0 &&
-      duplicateInfoRef.current.count === duplicateInfoRef.current.totalInFile
-    ) {
-      setDuplicateInfo((prev) => ({ ...prev, isOpen: false }));
-      toast({
-        title: "Saving Cancelled",
-        description: "All records were duplicates and have been skipped.",
-      });
-      return;
-    }
-    setDuplicateInfo((prev) => ({ ...prev, isOpen: false }));
+    
     setIsSaving(true);
     setSaveStatus("saving");
     setSaveProgress(0);
-    let savedCount = 0;
-    let skippedCount = 0;
-    const total = records.length;
-    setSaveStats({ saved: 0, skipped: 0, total });
+    setDuplicateInfo(prev => ({...prev, isOpen: false}));
+
+    let totalSaved = 0;
+    let totalSkipped = (mode === 'skip') ? duplicateInfoRef.current.count : 0;
+    let totalUpdated = 0;
+    const totalToProcess = recordsToSave.length;
 
     try {
-      for (let i = 0; i < total; i += DB_SAVE_CHUNK_SIZE) {
-        const chunk = records.slice(i, i + DB_SAVE_CHUNK_SIZE);
+      for (let i = 0; i < totalToProcess; i += DB_SAVE_CHUNK_SIZE) {
+        const chunk = recordsToSave.slice(i, i + DB_SAVE_CHUNK_SIZE);
         const result = await apiRequest("/api/bnf-assessed", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -918,28 +686,30 @@ export default function UploadPage() {
             action: "save",
             projectId: selectedProjectId,
             records: chunk,
-            mode,
+            mode: mode,
             uniqueIdDbCol: uniqueIdMapping.dbCol,
           }),
         });
-        savedCount += result.saved || 0;
-        skippedCount += result.skipped || 0;
-        setSaveStats({ saved: savedCount, skipped: skippedCount, total });
-        setSaveProgress(((i + chunk.length) / total) * 100);
+        
+        totalSaved += result.saved || 0;
+        totalSkipped += result.skipped || 0;
+        totalUpdated += result.updated || 0;
+        
+        setSaveStats({ saved: totalSaved, skipped: totalSkipped, updated: totalUpdated, total: rawRowsRef.current.length });
+        setSaveProgress(((i + chunk.length) / totalToProcess) * 100);
       }
       setSaveStatus("done");
       toast({
         title: "Save Complete!",
-        description: `Successfully processed ${total} records.`,
+        description: `Successfully processed ${totalToProcess} records.`,
       });
     } catch (error: any) {
       setSaveStatus("error");
       toast({ title: "Save Failed", description: error.message, variant: "destructive" });
     } finally {
       setIsSaving(false);
-      pendingRecordsRef.current = [];
     }
-  };
+  }, [selectedProjectId, uniqueIdMapping.dbCol, toast]);
 
   const handleSaveToDatabase = useCallback(async () => {
     if (!selectedProjectId || !uniqueIdMapping.fileCol || !uniqueIdMapping.dbCol) {
@@ -958,94 +728,35 @@ export default function UploadPage() {
       const cachedData = await loadCachedResult();
       if (!cachedData) throw new Error("Could not load processed data from cache.");
 
-      const enrichData = (data: any) => {
-        const { rows: allRecords, clusters } = data;
-        if (!allRecords || !clusters) throw new Error("Invalid cache: missing rows or clusters.");
-        const recordMap = new Map<string, any>();
-        clusters.forEach((cluster: any) => {
-          (cluster.records || []).forEach((record: RecordRow) => {
-            const clusterData = {
-              Generated_Cluster_ID: cluster.Generated_Cluster_ID,
-              Size: (cluster.records || []).length,
-              Flag: "Review",
-              Max_PairScore: cluster.Max_PairScore,
-              confidenceScore: cluster.confidenceScore,
-              reasons: Array.isArray(cluster.reasons) ? cluster.reasons.join(",") : cluster.reasons,
-              groupDecision: cluster.groupDecision,
-              pre_classified_result: cluster.pre_classified_result,
-              group_analysis:
-                typeof cluster.group_analysis === "object"
-                  ? JSON.stringify(cluster.group_analysis)
-                  : cluster.group_analysis,
-              avgPairScore: cluster.avgPairScore,
-              avgFirstNameScore: cluster.avgFirstNameScore,
-              avgFamilyNameScore: cluster.avgFamilyNameScore,
-              avgAdvancedNameScore: cluster.avgAdvancedNameScore,
-              avgTokenReorderScore: cluster.avgTokenReorderScore,
-              avgWomanNameScore: cluster.avgWomanNameScore,
-              avgHusbandNameScore: cluster.avgHusbandNameScore,
-              avgFinalScore: cluster.avgFinalScore,
-            };
-            const recordSpecificData = {
-              pairScore: record.pairScore,
-              nameScore: record.nameScore,
-              husbandScore: record.husbandScore,
-              childrenScore: record.childrenScore,
-              idScore: record.idScore,
-              phoneScore: record.phoneScore,
-              locationScore: record.locationScore,
-              recordDecisions: cluster.recordDecisions?.[record._internalId!],
-              decisionReasons: cluster.decisionReasons?.[record._internalId!],
-              womanName_normalized: record.womanName_normalized,
-              husbandName_normalized: record.husbandName_normalized,
-              children_normalized: record.children_normalized,
-              subdistrict_normalized: record.subdistrict_normalized,
-              village_normalized: record.village_normalized,
-              parts: typeof record.parts === "object" ? JSON.stringify(record.parts) : record.parts,
-              husbandParts:
-                typeof record.husbandParts === "object"
-                  ? JSON.stringify(record.husbandParts)
-                  : record.husbandParts,
-              womanName: record.womanName,
-              husbandName: record.husbandName,
-              nationalId: record.nationalId,
-              phone: record.phone,
-              village: record.village,
-              subdistrict: record.subdistrict,
-              children: record.children,
-              beneficiaryId: record.beneficiaryId,
-            };
-            recordMap.set(record._internalId!, { ...clusterData, ...recordSpecificData });
-          });
-        });
-        return {
-          enrichedRecords: allRecords.map((record: RecordRow) => {
-            const enrichedData = recordMap.get(record._internalId!) || {};
-            return { ...record, ...enrichedData, internalId: record._internalId };
-          }),
-        };
-      };
-
       const { enrichedRecords } = enrichData(cachedData);
-
+      
       const recordsToProcess = enrichedRecords.map((record) => {
-        const newRecord: Record<string, any> = { project_id: selectedProjectId };
+        const newRecord: Record<string, any> = { project_id: selectedProjectId, internalId: record._internalId };
+        
+        // Map the selected unique ID
         if (record.hasOwnProperty(uniqueIdMapping.fileCol)) {
           newRecord[uniqueIdMapping.dbCol] = record[uniqueIdMapping.fileCol];
+        } else {
+            // Ensure the unique ID column is present even if null/undefined in the source row
+             newRecord[uniqueIdMapping.dbCol] = null;
         }
+
+        // Map all other explicitly defined mappings
         for (const [uiCol, dbCol] of dbColumnMapping.entries()) {
           if (record.hasOwnProperty(uiCol)) newRecord[dbCol] = record[uiCol];
         }
-        DB_COLUMNS.forEach((key) => {
-          if (record[key] !== undefined && newRecord[key] === undefined) {
+
+        // Add all other enriched data that matches DB columns
+        Object.keys(record).forEach(key => {
+          if (originalHeaders.includes(key) && !newRecord.hasOwnProperty(key)) {
             newRecord[key] = record[key];
           }
         });
+
         newRecord["data"] = JSON.stringify(record);
         return newRecord;
       });
 
-      pendingRecordsRef.current = recordsToProcess;
       setSaveStatus("checking_duplicates");
       const uniqueIds = recordsToProcess.map((r) => r[uniqueIdMapping.dbCol]).filter(Boolean);
       if (!uniqueIds.length) throw new Error("Unique ID column is empty in all records.");
@@ -1070,7 +781,7 @@ export default function UploadPage() {
         });
         setIsSaving(false);
       } else {
-        await executeBatchSave("replace");
+        await executeBatchSave("skip", recordsToProcess);
       }
     } catch (error: any) {
       setSaveStatus("error");
@@ -1081,13 +792,13 @@ export default function UploadPage() {
       });
       setIsSaving(false);
     }
-  }, [selectedProjectId, uniqueIdMapping, dbColumnMapping, toast, projects]);
+  }, [selectedProjectId, uniqueIdMapping, dbColumnMapping, toast, enrichData, originalHeaders, executeBatchSave]);
 
   const isProcessing = workerStatus !== "idle" && workerStatus !== "done" && workerStatus !== "error";
 
   return (
     <div className="space-y-6">
-      <Card>
+       <Card>
         <CardHeader className="flex flex-row items-start justify-between">
           <div>
             <CardTitle>
@@ -1162,7 +873,7 @@ export default function UploadPage() {
           )}
         </CardContent>
       </Card>
-      
+
       {columns.length > 0 && (
         <Collapsible open={isMappingOpen} onOpenChange={setIsMappingOpen} asChild>
           <Card>
@@ -1428,7 +1139,7 @@ export default function UploadPage() {
                           <SelectValue placeholder="Select DB column..." />
                         </SelectTrigger>
                         <SelectContent>
-                          {DB_COLUMNS.map((c) => (
+                          {originalHeaders.map((c) => (
                             <SelectItem key={c} value={c}>
                               {c}
                             </SelectItem>
@@ -1440,10 +1151,7 @@ export default function UploadPage() {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
                     <div className="space-y-2">
                       <Label>Other Columns (from File)</Label>
-                      <Select
-                        value={manualDbMapping.ui}
-                        onValueChange={(v) => setManualDbMapping((m) => ({ ...m, ui: v }))}
-                      >
+                      <Select value={manualDbMapping.ui} onValueChange={(v) => setManualDbMapping((m) => ({ ...m, ui: v }))}>
                         <SelectTrigger>
                           <SelectValue placeholder="Select source..." />
                         </SelectTrigger>
@@ -1460,10 +1168,7 @@ export default function UploadPage() {
                     </div>
                     <div className="space-y-2">
                       <Label>Other Columns (in Database)</Label>
-                      <Select
-                        value={manualDbMapping.db}
-                        onValueChange={(v) => setManualDbMapping((m) => ({ ...m, db: v }))}
-                      >
+                      <Select value={manualDbMapping.db} onValueChange={(v) => setManualDbMapping((m) => ({ ...m, db: v }))}>
                         <SelectTrigger>
                           <SelectValue placeholder="Select destination..." />
                         </SelectTrigger>
@@ -1504,11 +1209,7 @@ export default function UploadPage() {
                               <TableCell>{ui}</TableCell>
                               <TableCell>{db}</TableCell>
                               <TableCell className="text-right">
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => handleDeleteDbMapping(ui)}
-                                >
+                                <Button variant="ghost" size="icon" onClick={() => handleDeleteDbMapping(ui)}>
                                   <Trash2 className="h-4 w-4 text-destructive" />
                                 </Button>
                               </TableCell>
@@ -1523,7 +1224,7 @@ export default function UploadPage() {
 
               <div className="flex flex-col items-center gap-4">
                 <Button
-                  onClick={() => handleSaveToDatabase()}
+                  onClick={handleSaveToDatabase}
                   disabled={!isDbMappingReady || isSaving}
                   size="lg"
                 >
@@ -1540,17 +1241,18 @@ export default function UploadPage() {
                     <p className="text-sm text-center mt-1 text-muted-foreground">
                       {saveStatus === "checking_duplicates"
                         ? "Checking for existing records..."
-                        : "Saving data..."}
-                      {saveStats.total > 0 && ` (Saved: ${saveStats.saved} / Total: ${saveStats.total})`}
+                        : saveStatus === 'saving' ? `Saving data...` : 'Preparing...'}
+                      {saveStats.total > 0 && ` (Saved: ${saveStats.saved}, Skipped: ${saveStats.skipped}, Updated: ${saveStats.updated})`}
                     </p>
                   </div>
                 )}
               </div>
               {saveStatus === "done" && (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   <SummaryCard icon={<Database />} title="Total Records in File" value={saveStats.total} />
-                  <SummaryCard icon={<SaveIcon />} title="Records Saved" value={saveStats.saved} />
-                  <SummaryCard icon={<ChevronRight />} title="Records Skipped" value={saveStats.skipped} />
+                  <SummaryCard icon={<SaveIcon />} title="New Records Saved" value={saveStats.saved} />
+                  <SummaryCard icon={<Wrench />} title="Existing Records Updated" value={saveStats.updated} />
+                  <SummaryCard icon={<ChevronRight />} title="Skipped Duplicates" value={saveStats.skipped} />
                 </div>
               )}
             </CardContent>
@@ -1570,7 +1272,7 @@ export default function UploadPage() {
               <span className="font-bold">{duplicateInfo.totalInFile}</span> records.
               <br />
               <br />
-              These records share the same Unique ID in the database.
+              These records share the same Unique ID in the database. Choose how to handle them.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="sm:justify-between">
@@ -1583,11 +1285,11 @@ export default function UploadPage() {
               Cancel Saving
             </AlertDialogCancel>
             <div className="flex gap-2">
-              <Button variant="outline" onClick={() => executeBatchSave("skip")}>
-                Skip Duplicates
+              <Button variant="outline" onClick={() => executeBatchSave("skip", duplicateInfo.records)}>
+                Skip Duplicates & Insert New
               </Button>
-              <Button onClick={() => executeBatchSave("replace")}>
-                Replace Records
+              <Button onClick={() => executeBatchSave("replace", duplicateInfo.records)}>
+                Update Existing & Insert New
               </Button>
             </div>
           </AlertDialogFooter>
@@ -1596,3 +1298,4 @@ export default function UploadPage() {
     </div>
   );
 }
+
