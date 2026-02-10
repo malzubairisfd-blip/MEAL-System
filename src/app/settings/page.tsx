@@ -1,5 +1,4 @@
 
-// src/app/settings/page.tsx
 "use client";
 
 import React, { useEffect, useState, useCallback } from "react";
@@ -123,6 +122,27 @@ export default function SettingsPage() {
     setCacheLoading(false);
   };
   
+    const handleDownloadCache = () => {
+        if (!filteredCachedDataString || filteredCachedDataString === "No cached data found.") {
+            toast({
+                title: "No data to download",
+                description: "Please load the cache data first.",
+                variant: "destructive",
+            });
+            return;
+        }
+
+        const blob = new Blob([filteredCachedDataString], { type: "text/plain;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "beneficiary_insights_cache.txt";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    };
+
   useEffect(() => {
     if (!rawCachedDataObject) return;
 
@@ -636,10 +656,16 @@ export default function SettingsPage() {
                 </CardHeader>
                 <CardContent>
                     <div className="flex flex-col gap-2">
-                        <Button onClick={loadCache} disabled={cacheLoading}>
-                            {cacheLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            {t('settings.cache.button')}
-                        </Button>
+                        <div className="flex gap-2">
+                            <Button onClick={loadCache} disabled={cacheLoading} className="flex-1">
+                                {cacheLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                {t('settings.cache.button')}
+                            </Button>
+                             <Button onClick={handleDownloadCache} variant="outline" disabled={!rawCachedDataObject}>
+                                <Download className="mr-2 h-4 w-4" />
+                                Download .txt
+                            </Button>
+                        </div>
                         {rawCachedDataObject && (
                             <div className="relative">
                                 <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />

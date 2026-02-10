@@ -390,6 +390,27 @@ export default function MealSettingsPage() {
       }
       setCacheLoading(false);
     };
+
+    const handleDownloadCache = () => {
+        if (!filteredCachedDataString || filteredCachedDataString === "No cached data found.") {
+            toast({
+                title: "No data to download",
+                description: "Please load the cache data first.",
+                variant: "destructive",
+            });
+            return;
+        }
+
+        const blob = new Blob([filteredCachedDataString], { type: "text/plain;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "beneficiary_insights_cache.txt";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    };
     
     useEffect(() => {
       if (!rawCachedDataObject) return;
@@ -518,6 +539,7 @@ export default function MealSettingsPage() {
         .then((r) => r.json())
         .then((j) => {
           if (j.ok) {
+            // Merge fetched settings with defaults to ensure all keys exist
             const defaults = getDefaultSettings();
             const mergedSettings = {
                 ...defaults,
@@ -528,6 +550,7 @@ export default function MealSettingsPage() {
             };
             setSettings(mergedSettings);
           } else {
+            // If missing, load defaults
             setSettings(getDefaultSettings());
             toast({ title: t('settings.toasts.defaultsLoaded.title'), description: t('settings.toasts.defaultsLoaded.description'), variant: "default" });
           }
@@ -612,6 +635,7 @@ export default function MealSettingsPage() {
       r.onload = (e) => {
         try {
           const parsed = JSON.parse(String(e.target?.result));
+          // Simple validation
           if (parsed.thresholds && parsed.rules && parsed.finalScoreWeights) {
             setSettings(parsed);
             toast({ title: t('settings.toasts.importSuccess.title'), description: t('settings.toasts.importSuccess.description') });
@@ -627,6 +651,8 @@ export default function MealSettingsPage() {
   
     function runTestScoring() {
       if (!settings) { toast({ title: "Settings not loaded", variant: "destructive" }); return; }
+      // This is a simplified test; it won't have access to the full worker context.
+      // We create a minimal version of `computePairScore` on the client.
       const res = computePairScore(testA, testB, settings);
       setLastResult({ source: 'Client Test', ...res });
     }
@@ -634,7 +660,7 @@ export default function MealSettingsPage() {
     if (loading || !settings) {
       return (<div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin" /> <span className="ml-2">Loading settings...</span></div>);
     }
-
+  
     return (
         <div className="space-y-8">
              <div className="flex justify-between items-center">
@@ -830,16 +856,16 @@ export default function MealSettingsPage() {
                         {lastResult && (
                             <div className="mt-3 bg-muted p-3 rounded-lg">
                             <div className="font-bold text-lg">Source: {lastResult.source}</div>
-                            {lastResult.score !== undefined && lastResult.score !== null ? (
+                               {lastResult.score !== undefined && lastResult.score !== null ? (
                                 <>
-                                <div className="font-bold text-lg">{t('settings.testScoring.score')}: {lastResult.score.toFixed(4)}</div>
-                                <div className="text-sm mt-2">{t('settings.testScoring.compareToMinPair')}: <b>{settings.thresholds.minPair}</b></div>
+                                  <div className="font-bold text-lg">{t('settings.testScoring.score')}: {lastResult.score.toFixed(4)}</div>
+                                  <div className="text-sm mt-2">{t('settings.testScoring.compareToMinPair')}: <b>{settings.thresholds.minPair}</b></div>
                                 </>
-                            ) : <div className="font-bold text-lg">No Match</div> }
-                            <details className="mt-2 text-sm">
-                                <summary className="cursor-pointer font-medium">{t('settings.testScoring.viewBreakdown')}</summary>
-                                <pre className="text-xs mt-2 bg-background p-2 rounded">{JSON.stringify(lastResult.breakdown, null, 2)}</pre>
-                            </details>
+                               ) : <div className="font-bold text-lg">No Match</div> }
+                              <details className="mt-2 text-sm">
+                                  <summary className="cursor-pointer font-medium">{t('settings.testScoring.viewBreakdown')}</summary>
+                                  <pre className="text-xs mt-2 bg-background p-2 rounded">{JSON.stringify(lastResult.breakdown, null, 2)}</pre>
+                              </details>
                             </div>
                         )}
                         </CardContent>
@@ -856,7 +882,7 @@ export default function MealSettingsPage() {
                             ) : (
                                 <>
                                     <div className="flex justify-end gap-2 mb-4">
-                                        <Button variant="outline" size="sm" onClick={handleDeleteAll}>
+                                         <Button variant="outline" size="sm" onClick={handleDeleteAll}>
                                             <Trash2 className="mr-2 h-4 w-4" />
                                             Delete All
                                         </Button>
@@ -900,10 +926,16 @@ export default function MealSettingsPage() {
                         </CardHeader>
                         <CardContent>
                             <div className="flex flex-col gap-2">
-                                <Button onClick={loadCache} disabled={cacheLoading}>
-                                    {cacheLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                    {t('settings.cache.button')}
-                                </Button>
+                                 <div className="flex gap-2">
+                                    <Button onClick={loadCache} disabled={cacheLoading} className="flex-1">
+                                        {cacheLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                        {t('settings.cache.button')}
+                                    </Button>
+                                    <Button onClick={handleDownloadCache} variant="outline" disabled={!rawCachedDataObject}>
+                                        <Download className="mr-2 h-4 w-4" />
+                                        Download .txt
+                                    </Button>
+                                </div>
                                 {rawCachedDataObject && (
                                     <div className="relative">
                                         <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
