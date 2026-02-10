@@ -194,6 +194,18 @@ const apiRequest = async (url: string, options: RequestInit) => {
   }
 };
 
+function getDecisionAndNote(confidenceScore: number) {
+  let decision = "إحتمالية تكرار";
+  if (confidenceScore >= 85) {
+    decision = "تكرار مؤكد";
+  } else if (confidenceScore >= 70) {
+    decision = "اشتباه تكرار مؤكد";
+  } else if (confidenceScore >= 60) {
+    decision = "اشتباه تكرار";
+  }
+  return { decision };
+}
+
 export default function UploadPage() {
   const { t, isLoading: isTranslationLoading } = useTranslation();
   const { toast } = useToast();
@@ -648,62 +660,59 @@ export default function UploadPage() {
   
   const enrichData = useCallback((data: any) => {
     const { rows: allRecords, clusters } = data;
-    if (!allRecords || !clusters) throw new Error("Invalid cache: missing rows or clusters.");
-    const recordMap = new Map<string, any>();
+    if (!allRecords || !clusters) {
+      throw new Error("Invalid cache: missing rows or clusters.");
+    }
+    
+    // Create a map for quick lookup of a record's cluster and its specific scored data
+    const recordInfoMap = new Map<string, any>();
     clusters.forEach((cluster: any) => {
-      (cluster.records || []).forEach((record: RecordRow) => {
-        const clusterData = {
-          Generated_Cluster_ID: cluster.Generated_Cluster_ID,
-          Size: (cluster.records || []).length,
-          Flag: "Review",
-          Max_PairScore: cluster.Max_PairScore,
-          confidenceScore: cluster.confidenceScore,
-          reasons: Array.isArray(cluster.reasons) ? cluster.reasons.join(",") : cluster.reasons,
-          groupDecision: cluster.groupDecision,
-          pre_classified_result: cluster.pre_classified_result,
-          group_analysis:
-            typeof cluster.group_analysis === "object"
-              ? JSON.stringify(cluster.group_analysis)
-              : cluster.group_analysis,
-          avgPairScore: cluster.avgPairScore,
-          avgFirstNameScore: cluster.avgFirstNameScore,
-          avgFamilyNameScore: cluster.avgFamilyNameScore,
-          avgAdvancedNameScore: cluster.avgAdvancedNameScore,
-          avgTokenReorderScore: cluster.avgTokenReorderScore,
-          avgWomanNameScore: cluster.avgWomanNameScore,
-          avgHusbandNameScore: cluster.avgHusbandNameScore,
-          avgFinalScore: cluster.avgFinalScore,
-        };
-        const recordSpecificData = {
-          pairScore: record.pairScore,
-          nameScore: record.nameScore,
-          husbandScore: record.husbandScore,
-          childrenScore: record.childrenScore,
-          idScore: record.idScore,
-          phoneScore: record.phoneScore,
-          locationScore: record.locationScore,
-          recordDecisions: cluster.recordDecisions?.[record._internalId!],
-          decisionReasons: cluster.decisionReasons?.[record._internalId!],
-          womanName_normalized: record.womanName_normalized,
-          husbandName_normalized: record.husbandName_normalized,
-          children_normalized: record.children_normalized,
-          subdistrict_normalized: record.subdistrict_normalized,
-          village_normalized: record.village_normalized,
-          parts: typeof record.parts === "object" ? JSON.stringify(record.parts) : record.parts,
-          husbandParts:
-            typeof record.husbandParts === "object"
-              ? JSON.stringify(record.husbandParts)
-              : record.husbandParts,
-        };
-        recordMap.set(record._internalId!, { ...clusterData, ...recordSpecificData });
+      const { decision: pre_classified_result } = getDecisionAndNote(cluster.confidenceScore || 0);
+
+      cluster.records.forEach((record: RecordRow) => {
+        // Store a combination of cluster-wide info and record-specific info
+        recordInfoMap.set(record._internalId!, {
+          clusterInfo: {
+            Generated_Cluster_ID: cluster.Generated_Cluster_ID,
+            Cluster_Size: cluster.records.length,
+            Flag: "Review",
+            Max_PairScore: cluster.Max_PairScore,
+            confidenceScore: cluster.confidenceScore,
+            reasons: Array.isArray(cluster.reasons) ? cluster.reasons.join(",") : cluster.reasons,
+            pre_classified_result: pre_classified_result,
+            avgWomanNameScore: cluster.avgWomanNameScore,
+            avgHusbandNameScore: cluster.avgHusbandNameScore,
+            avgFinalScore: cluster.avgFinalScore,
+          },
+          scoredRecordData: record, // This contains the record-specific scores like avgPairScore
+        });
       });
     });
-    return {
-      enrichedRecords: allRecords.map((record: RecordRow) => {
-        const enrichedData = recordMap.get(record._internalId!) || {};
-        return { ...record, ...enrichedData };
-      }),
-    };
+
+    const enrichedRecords = allRecords.map((record: RecordRow) => {
+      const info = recordInfoMap.get(record._internalId!);
+      if (!info) {
+        return record; // Return original record if not in any cluster
+      }
+
+      // Merge original record, the specific scored data, and the cluster-wide data
+      const finalRecord = {
+        ...record, // original data from file
+        ...info.scoredRecordData, // record-specific scores
+        ...info.clusterInfo, // cluster-wide scores and info
+      };
+      
+      // Ensure complex fields are stringified for the database
+      finalRecord.parts = typeof finalRecord.parts === 'object' ? JSON.stringify(finalRecord.parts) : finalRecord.parts;
+      finalRecord.husbandParts = typeof finalRecord.husbandParts === 'object' ? JSON.stringify(finalRecord.husbandParts) : finalRecord.husbandParts;
+      finalRecord.children_normalized = typeof finalRecord.children_normalized === 'object' ? JSON.stringify(finalRecord.children_normalized) : finalRecord.children_normalized;
+      finalRecord.children = typeof finalRecord.children === 'object' ? JSON.stringify(finalRecord.children) : finalRecord.children;
+
+
+      return finalRecord;
+    });
+
+    return { enrichedRecords, clusters };
   }, []);
 
   const executeBatchSave = useCallback(async (mode: "skip" | "replace", recordsToSave: any[]) => {
