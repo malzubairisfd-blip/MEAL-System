@@ -758,9 +758,9 @@ const executeSaveAndEnrich = useCallback(async (mode: "skip" | "replace", rawRec
         const { enrichedRecords } = enrichData(cachedData);
         
         const enrichedPayload = enrichedRecords.map(record => {
-            const enrichment: Record<string, any> = { internalId: record.internalId! };
+            const enrichment: Record<string, any> = { internalId: record._internalId! };
             dbColumns.forEach(key => {
-                if (record.hasOwnProperty(key) && key !== 'id' && key !== 'internalId' && key !== 'project_id' && key !== 'data') {
+                if (record.hasOwnProperty(key) && key !== 'internalId') {
                     enrichment[key] = record[key];
                 }
             });
