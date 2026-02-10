@@ -645,7 +645,7 @@ export default function UploadPage() {
         recordInfoMap.set(record._internalId!, {
           clusterInfo: {
             Generated_Cluster_ID: cluster.Generated_Cluster_ID,
-            Cluster_Size: cluster.records.length,
+            Size: cluster.records.length,
             Flag: "Review",
             Max_PairScore: cluster.Max_PairScore,
             confidenceScore: cluster.confidenceScore,
@@ -684,7 +684,7 @@ export default function UploadPage() {
     return { enrichedRecords, clusters };
   }, []);
 
-  const executeSaveAndEnrich = useCallback(async (mode: "skip" | "replace", rawRecords: any[]) => {
+const executeSaveAndEnrich = useCallback(async (mode: "skip" | "replace", rawRecords: any[]) => {
     setDuplicateInfo(prev => ({...prev, isOpen: false}));
     setIsSaving(true);
 
@@ -715,7 +715,7 @@ export default function UploadPage() {
         const { enrichedRecords } = enrichData(cachedData);
         
         const enrichedPayload = enrichedRecords.map(record => {
-            const enrichment: Record<string, any> = { internalId: record._internalId! };
+            const enrichment: Record<string, any> = { internalId: record.internalId! };
             DB_COLUMNS.forEach(key => {
                 if (record.hasOwnProperty(key) && key !== 'id' && key !== 'internalId' && key !== 'project_id') {
                     enrichment[key] = record[key];
