@@ -595,7 +595,7 @@ function TrainingStatementsPageContent() {
     } finally {
       setLoading(p => ({ ...p, saving: false }));
     }
-  }, [currentlySelectedApplicantId, selectedVillage, toast, filteredCandidates, villageStatsWithEdReq, sortedVillages, assignedInVillage, fetchProjectData, allProjectEducators]);
+  }, [currentlySelectedApplicantId, selectedVillage, toast, filteredCandidates, villageStatsWithEdReq, sortedVillages, assignedInVillage, currentApplicantBnfConn, fetchProjectData, allProjectEducators]);
 
   const handleTier5Assignment = async () => {
     if (!selectedVillage) return;
@@ -720,8 +720,6 @@ function TrainingStatementsPageContent() {
         ).length;
     }, [allProjectEducators, selectedVillage]);
     
-    const totalBnfForVillage = useMemo(() => villageStatsWithEdReq.find(v => v.villageName === selectedVillage)?.bnfCount || 0, [villageStatsWithEdReq, selectedVillage]);
-    
     const tier5Candidates = useMemo(() => {
       if (!isTier5Active) return [];
       
@@ -837,7 +835,7 @@ function TrainingStatementsPageContent() {
                             <TableHeader>
                                 <TableRow>
                                     <TableHead>
-                                        <Checkbox 
+                                        <Checkbox
                                             className='bg-primary'
                                             checked={filteredApplicantsForHallAssignment.length > 0 && filteredApplicantsForHallAssignment.every(app => selectedApplicantsForHall.has(app.applicant_id))}
                                             onCheckedChange={handleSelectAllForHallAssignment}

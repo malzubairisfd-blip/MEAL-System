@@ -1,3 +1,4 @@
+
 // src/app/api/ed-selection/route.ts
 import { NextResponse } from "next/server";
 import fs from "fs/promises";
@@ -47,186 +48,31 @@ function initializeDatabase(recreate: boolean = false) {
     const createTableStmt = `
         CREATE TABLE IF NOT EXISTS educators (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
-
-          -- =====================
-          -- CORE IDENTIFIERS
-          -- =====================
-          s INTEGER,
-          office_no TEXT,
-          project_id TEXT,
-          project_name TEXT,
-          applicant_id INTEGER,
-          ed_id TEXT,
-
-          -- =====================
-          -- APPLICANT NAMES
-          -- =====================
-          applicant_name TEXT,
-          applicant_familyname TEXT,
-          applicant_husbandname TEXT,
-
-          -- =====================
-          -- PHONE NUMBERS
-          -- =====================
-          phone_no1 TEXT,
-          phone_no2 TEXT,
-          phone_no TEXT,
-
-          -- =====================
-          -- LOCATION IDS
-          -- =====================
-          gov_loc_id INTEGER,
-          mud_loc_id INTEGER,
-          ozla_loc_id INTEGER,
-          loc_id INTEGER,
-
-          -- =====================
-          -- LOCATION NAMES
-          -- =====================
-          gov_name TEXT,
-          mud_name TEXT,
-          ozla_name TEXT,
-          loc_name TEXT,
-          mahla_name TEXT,
-          zoon_no TEXT,
-
-          -- =====================
-          -- SOCIAL & DEMOGRAPHICS
-          -- =====================
-          social_status TEXT,
-          birth_date INTEGER,              -- Excel serial date
-          age_years REAL,
-          age_days REAL,
-          age_rank INTEGER,
-
-          -- =====================
-          -- IDENTITY
-          -- =====================
-          id_type TEXT,
-          id_no TEXT,
-          id_issue_date INTEGER,
-          id_issue_location TEXT,
-
-          -- =====================
-          -- EDUCATION
-          -- =====================
-          applicant_qualification TEXT,
-          qualification_major TEXT,
-          graduation_date INTEGER,
-
-          diploma_starting_date INTEGER,
-          diploma_end_date INTEGER,
-          diploma_duration_years REAL,
-          diploma_duration_days REAL,
-          institution_name TEXT,
-
-          -- =====================
-          -- DUPLICATION
-          -- =====================
-          duplicated_cluster_id INTEGER,
-          duplicated_applicants TEXT,
-
+          s INTEGER, office_no TEXT, project_id TEXT, project_name TEXT, applicant_id INTEGER UNIQUE, ed_id TEXT,
+          applicant_name TEXT, applicant_familyname TEXT, applicant_husbandname TEXT,
+          phone_no1 TEXT, phone_no2 TEXT, phone_no TEXT,
+          gov_loc_id INTEGER, mud_loc_id INTEGER, ozla_loc_id INTEGER, loc_id INTEGER,
+          gov_name TEXT, mud_name TEXT, ozla_name TEXT, loc_name TEXT, mahla_name TEXT, zoon_no TEXT,
+          social_status TEXT, birth_date INTEGER, age_years REAL, age_days REAL, age_rank INTEGER,
+          id_type TEXT, id_no TEXT, id_issue_date INTEGER, id_issue_location TEXT,
+          applicant_qualification TEXT, qualification_major TEXT, graduation_date INTEGER,
+          diploma_starting_date INTEGER, diploma_end_date INTEGER, diploma_duration_years REAL, diploma_duration_days REAL, institution_name TEXT,
+          duplicated_cluster_id INTEGER, duplicated_applicants TEXT,
           age_per_village_ranking INTEGER,
-
-          -- =====================
-          -- SCORING
-          -- =====================
-          qualification_score REAL,
-          id_score REAL,
-          previous_experience_score REAL,
-          total_score REAL,
-
-          -- =====================
-          -- RELATIONSHIP & INTERVIEW
-          -- =====================
-          applcants_relationship TEXT,
-          interview_hall_no TEXT,
-          interview_hall_name TEXT,
-
-          acceptance_results TEXT,
-          disqualification_reason TEXT,
-
-          interview_qualification TEXT,
-          interview_attendance TEXT,
-
-          -- =====================
-          -- INTERVIEW MARKS
-          -- =====================
-          sfd_marks REAL,
-          health_marks REAL,
-          local_community_marks REAL,
-          interview_total_marks REAL,
-          grand_total_score REAL,
-          grand_score_rank INTEGER,
-
-          -- =====================
-          -- TRAINING
-          -- =====================
-          training_qualification TEXT,
-          training_hall_no TEXT,
-          training_hall_name TEXT,
-          training_attendance TEXT,
-
-          -- =====================
-          -- CONTRACT
-          -- =====================
-          is_active INTEGER,
-          contract_type TEXT,
-          working_village TEXT,
-          contract_starting_date INTEGER,
-          contract_end_date INTEGER,
-          contract_duration_months REAL,
-          is_spare INTEGER,
-
-          -- =====================
-          -- DISQUALIFICATION / ASSESSMENT
-          -- =====================
-          disqualified_reasons TEXT,
-          is_registered_in_assessment TEXT,
-          if_no_reason TEXT,
-
-          -- =====================
-          -- BENEFICIARY INFO
-          -- =====================
-          bnf_full_name TEXT,
-          bnf_age REAL,
-          bnf_id_type TEXT,
-          bnf_id_no TEXT,
-          bnf_ozla_name TEXT,
-          bnf_vill_name TEXT,
-          qual_status TEXT,
-          bnf_husband TEXT,
-          male_cnt INTEGER,
-          female_cnt INTEGER,
-          child_names TEXT,
-          bnf_id INTEGER,
-
-          -- =====================
-          -- NOTES & EC / PC
-          -- =====================
+          qualification_score REAL, id_score REAL, previous_experience_score REAL, total_score REAL,
+          applcants_relationship TEXT, interview_hall_no TEXT, interview_hall_name TEXT,
+          acceptance_results TEXT, disqualification_reason TEXT,
+          interview_qualification TEXT, interview_attendance TEXT,
+          sfd_marks REAL, health_marks REAL, local_community_marks REAL, interview_total_marks REAL, grand_total_score REAL, grand_score_rank INTEGER,
+          training_qualification TEXT, training_hall_no TEXT, training_hall_name TEXT, training_attendance TEXT,
+          is_active INTEGER, contract_type TEXT, working_village TEXT, contract_starting_date INTEGER, contract_end_date INTEGER, contract_duration_months REAL, is_spare INTEGER,
+          disqualified_reasons TEXT, is_registered_in_assessment TEXT, if_no_reason TEXT,
+          bnf_full_name TEXT, bnf_age REAL, bnf_id_type TEXT, bnf_id_no TEXT, bnf_ozla_name TEXT, bnf_vill_name TEXT, qual_status TEXT, bnf_husband TEXT, male_cnt INTEGER, female_cnt INTEGER, child_names TEXT, bnf_id INTEGER,
           notes TEXT,
-
-          ec_id TEXT,
-          ec_name TEXT,
-          ec_name2 TEXT,
-          ec_loc_id INTEGER,
-          ec_loc_name TEXT,
-
-          pc_id TEXT,
-          pc_name TEXT,
-
+          ec_id TEXT, ec_name TEXT, ec_name2 TEXT, ec_loc_id INTEGER, ec_loc_name TEXT,
+          pc_id TEXT, pc_name TEXT,
           row_no INTEGER,
-
-          -- =====================
-          -- AGGREGATES
-          -- =====================
-          same_ozla INTEGER,
-          x INTEGER,
-          ed_bnf_cnt INTEGER,
-          pc_ed_cnt INTEGER,
-          ec_ed_cnt INTEGER,
-          pc_bnf_cnt INTEGER,
-          ec_bnf_cnt INTEGER
+          same_ozla INTEGER, x INTEGER, ed_bnf_cnt INTEGER, pc_ed_cnt INTEGER, ec_ed_cnt INTEGER, pc_bnf_cnt INTEGER, ec_bnf_cnt INTEGER
         );
     `;
     db.exec(createTableStmt);
@@ -241,33 +87,65 @@ export async function POST(req: Request) {
 
     try {
         await fs.mkdir(getDataPath(), { recursive: true });
-        const db = initializeDatabase(init);
         
         const body = await req.json();
-        const { projectName, results } = body;
+        const { action, columnName, columnType, projectName, results } = body;
 
+        if (action === 'add_column') {
+            if (!columnName || !columnType) {
+                return NextResponse.json({ error: "Missing columnName or columnType" }, { status: 400 });
+            }
+            const sanitizedColumnName = columnName.replace(/[^a-zA-Z0-9_]/g, "");
+            if (!sanitizedColumnName) {
+                return NextResponse.json({ error: "Invalid column name" }, { status: 400 });
+            }
+            if (!["TEXT", "INTEGER", "REAL"].includes(columnType.toUpperCase())) {
+                 return NextResponse.json({ error: "Invalid column type" }, { status: 400 });
+            }
+            const db = initializeDatabase();
+            try {
+                db.exec(`ALTER TABLE educators ADD COLUMN "${sanitizedColumnName}" ${columnType.toUpperCase()}`);
+                return NextResponse.json({ message: `Column '${sanitizedColumnName}' added.` });
+            } finally {
+                db.close();
+            }
+        }
+
+        // --- Default action: Save records ---
         if (!projectName || !Array.isArray(results)) {
             return NextResponse.json({ error: "Invalid payload: projectName and results array are required." }, { status: 400 });
         }
         
-        // Prepare the insert statement dynamically
-        const columns = DB_COLUMNS.join(', ');
-        const placeholders = DB_COLUMNS.map(() => '?').join(', ');
-        const insert = db.prepare(`INSERT INTO educators (${columns}) VALUES (${placeholders})`);
+        const db = initializeDatabase(init);
+        try {
+            const tableCols = db.prepare("PRAGMA table_info(educators)").all().map((c: any) => c.name);
 
-        const insertMany = db.transaction((records) => {
-            for (const record of records) {
-                // Map the record object to an array of values in the correct order
-                const values = DB_COLUMNS.map(col => record[col] ?? null);
-                insert.run(values);
+            const columnsToInsert = Object.keys(results[0] || {}).filter(col => tableCols.includes(col) && col !== 'id');
+            if (columnsToInsert.length === 0) {
+                 db.close();
+                 return NextResponse.json({ message: "No valid columns to insert." }, { status: 400 });
             }
-        });
+            
+            const columnsString = columnsToInsert.join(', ');
+            const placeholders = columnsToInsert.map(c => `@${c}`).join(', ');
+            const insert = db.prepare(`INSERT OR REPLACE INTO educators (${columnsString}) VALUES (${placeholders})`);
+            
+            const insertMany = db.transaction((records) => {
+                for (const record of records) {
+                    const insertData: {[key: string]: any} = {};
+                    for(const col of columnsToInsert) {
+                        insertData[col] = record[col] ?? null;
+                    }
+                    insert.run(insertData);
+                }
+            });
 
-        insertMany(results);
-        
-        db.close();
-
-        return NextResponse.json({ message: "Educator selection data saved to SQLite database successfully." });
+            insertMany(results);
+            
+            return NextResponse.json({ message: "Educator selection data saved to SQLite database successfully." });
+        } finally {
+             db.close();
+        }
 
     } catch (error: any) {
         console.error("[ED_SELECTION_API_ERROR]", error);
@@ -334,3 +212,5 @@ export async function PUT(req: Request) {
         return NextResponse.json({ error: "Failed to update educator data.", details: error.message }, { status: 500 });
     }
 }
+
+    

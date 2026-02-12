@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Search, ChevronLeft, ChevronRight, ArrowLeft, UserCheck, UserX, Users, FileDown, Filter, ArrowUpAZ, ArrowDownAZ, Trash2, Edit } from "lucide-react";
+import { Loader2, Search, ChevronLeft, ChevronRight, ArrowLeft, UserCheck, UserX, Users, FileDown, Filter, ArrowUpAZ, ArrowDownAZ, Trash2, Edit, Plus } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -227,6 +227,10 @@ export default function EducatorDatabasePage() {
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<ApplicantRecord | null>(null);
 
+  const [newColumnName, setNewColumnName] = useState('');
+  const [newColumnType, setNewColumnType] = useState('TEXT');
+  const [isAddingColumn, setIsAddingColumn] = useState(false);
+
 
   const itemsPerPage = 20;
   const { toast } = useToast();
@@ -251,6 +255,36 @@ export default function EducatorDatabasePage() {
   useEffect(() => {
     fetchRecords();
   }, [fetchRecords]);
+
+    const handleCreateColumn = async () => {
+      if (!newColumnName) {
+          toast({ title: 'Error', description: 'Column name cannot be empty.', variant: 'destructive' });
+          return;
+      }
+      setIsAddingColumn(true);
+      try {
+          const res = await fetch('/api/ed-selection', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                  action: 'add_column',
+                  columnName: newColumnName,
+                  columnType: newColumnType,
+              }),
+          });
+          const result = await res.json();
+          if (!res.ok) throw new Error(result.error || 'Failed to add column.');
+          
+          toast({ title: 'Success', description: result.message });
+          setNewColumnName('');
+          await fetchRecords(); // Refresh data to show new column
+      } catch (err: any) {
+          toast({ title: 'Error', description: err.message, variant: 'destructive' });
+      } finally {
+          setIsAddingColumn(false);
+      }
+  };
+
 
   const handleUpdateRecord = async (updatedData: ApplicantRecord) => {
     setIsUpdating(true);
@@ -461,6 +495,34 @@ export default function EducatorDatabasePage() {
             </div>
         </CardContent>
       </Card>
+      
+      <Card>
+        <CardHeader>
+            <CardTitle>Manage Schema</CardTitle>
+            <CardDescription>Add new columns to the `educators` table.</CardDescription>
+        </CardHeader>
+        <CardContent className="flex items-end gap-4">
+            <div className="flex-1 space-y-2">
+                <Label htmlFor="new-column-name">New Column Name</Label>
+                <Input id="new-column-name" value={newColumnName} onChange={e => setNewColumnName(e.target.value)} placeholder="e.g., notes_v2" />
+            </div>
+            <div className="flex-1 space-y-2">
+                <Label htmlFor="new-column-type">Column Type</Label>
+                <Select value={newColumnType} onValueChange={setNewColumnType}>
+                    <SelectTrigger id="new-column-type"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="TEXT">Text</SelectItem>
+                        <SelectItem value="INTEGER">Integer</SelectItem>
+                        <SelectItem value="REAL">Number (Real)</SelectItem>
+                    </SelectContent>
+                </Select>
+            </div>
+            <Button onClick={handleCreateColumn} disabled={isAddingColumn}>
+                {isAddingColumn ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Plus className="mr-2 h-4 w-4" />}
+                Add Column
+            </Button>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -616,3 +678,5 @@ export default function EducatorDatabasePage() {
     </div>
   );
 }
+
+    
