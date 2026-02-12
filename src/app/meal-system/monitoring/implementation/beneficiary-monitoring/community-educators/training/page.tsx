@@ -377,6 +377,36 @@ function TrainingStatementsPageContent() {
       }
   }, [sortedVillages, selectedVillage, toast]);
 
+  const { chosenEducators, chosenMonitors, chosenSpares, totalBnfConnectedInVillage, totalBnfForVillage, currentApplicantBnfConn } = useMemo(() => {
+    const chosenInVillage = allProjectEducators.filter(edu => edu.working_village === selectedVillage && edu.contract_type === 'مثقفة مجتمعية');
+    const bnfSum = chosenInVillage.reduce((sum, edu) => sum + (edu.ed_bnf_cnt || 0), 0);
+    const villageData = villageStatsWithEdReq.find(v => v.villageName === selectedVillage);
+    const requiredForVillage = villageData?.edReq || 0;
+    const remainingBnf = (villageData?.bnfCount || 0) - bnfSum;
+    
+    // Calculate the BNF connection amount for the currently selected applicant
+    let bnfForCurrentApplicant = 0;
+    if (currentlySelectedApplicantId && chosenInVillage.length < requiredForVillage) {
+        const remainingEducatorsToAssign = requiredForVillage - chosenInVillage.length;
+        if(remainingEducatorsToAssign > 0){
+          const baseCount = Math.floor(remainingBnf / remainingEducatorsToAssign);
+          const remainder = remainingBnf % remainingEducatorsToAssign;
+          const isAmongFirst = chosenInVillage.length < remainder;
+          bnfForCurrentApplicant = baseCount + (isAmongFirst ? 1 : 0);
+        }
+    }
+
+
+    return {
+      chosenEducators: chosenInVillage.length,
+      chosenMonitors: allProjectEducators.filter(e => e.contract_type === 'رقابة').length,
+      chosenSpares: allProjectEducators.filter(e => e.contract_type === 'احتياط').length,
+      totalBnfConnectedInVillage: bnfSum,
+      totalBnfForVillage: villageData?.bnfCount || 0,
+      currentApplicantBnfConn: bnfForCurrentApplicant
+    };
+  }, [allProjectEducators, selectedVillage, villageStatsWithEdReq, currentlySelectedApplicantId]);
+
   const handleAssignContractType = useCallback(async (type: SelectionState['contractType']) => {
     if (!currentlySelectedApplicantId || !selectedVillage) {
       toast({ title: "No applicant selected", variant: "destructive" });
@@ -434,7 +464,8 @@ function TrainingStatementsPageContent() {
     } finally {
       setLoading(p => ({ ...p, saving: false }));
     }
-  }, [currentlySelectedApplicantId, selectedVillage, toast, candidates, allProjectEducators, currentApplicantBnfConn, handleNextVillage]);
+  }, [currentlySelectedApplicantId, selectedVillage, toast, candidates, allProjectEducators, handleNextVillage, villageStatsWithEdReq, currentApplicantBnfConn]);
+
 
   useEffect(() => {
     const unassignedCandidatesInList = filteredCandidates.filter(c => {
@@ -452,7 +483,175 @@ function TrainingStatementsPageContent() {
     }
   }, [filteredCandidates, allProjectEducators, currentlySelectedApplicantId, selectedVillage]);
 
-  const handleTier5Assignment = async () => {
+  const handleSkip = useCallback(() => {
+    if (!currentlySelectedApplicantId) return;
+
+    const currentIndex = filteredCandidates.findIndex(c => c.applicant_id === currentlySelectedApplicantId);
+    
+    let nextUnassignedIndex = -1;
+    for (let i = currentIndex + 1; i < filteredCandidates.length; i++) {
+        if (!allProjectEducators.find(e => e.applicant_id === filteredCandidates[i].applicant_id)?.contract_type) {
+            nextUnassignedIndex = i;
+            break;
+        }
+    }
+
+    if (nextUnassignedIndex !== -1) {
+        setCurrentlySelectedApplicantId(filteredCandidates[nextUnassignedIndex].applicant_id);
+    } else {
+        const firstUnassigned = filteredCandidates.find(c => !allProjectEducators.find(e => e.applicant_id === c.applicant_id)?.contract_type && c.applicant_id !== currentlySelectedApplicantId);
+        if (firstUnassigned) {
+            setCurrentlySelectedApplicantId(firstUnassigned.applicant_id);
+        } else {
+            handleNextVillage();
+        }
+    }
+  }, [currentlySelectedApplicantId, filteredCandidates, allProjectEducators, handleNextVillage]);
+
+  const handlePreviousVillage = useCallback(() => {
+    const currentIndex = sortedVillages.findIndex(v => v.villageName === selectedVillage);
+    if (currentIndex > 0) {
+        setSelectedVillage(sortedVillages[currentIndex - 1].villageName);
+    } else {
+        toast({ title: "Start of List", description: "You are at the first village." });
+    }
+}, [sortedVillages, selectedVillage, toast]);
+
+const selectedVillageStats = useMemo(() => {
+    if (!selectedVillage || !villageStatsWithEdReq) return { required: 0, available: 0 };
+    const village = villageStatsWithEdReq.find(v => v.villageName === selectedVillage);
+    return {
+      required: village?.edReq || 0,
+      available: allProjectEducators.filter(e => e.loc_name === selectedVillage && e.training_attendance === 'حضرت التدريب').length || 0,
+    };
+}, [selectedVillage, villageStatsWithEdReq, allProjectEducators]);
+
+const selectedApplicantForDisplay = useMemo(() => {
+    if (!currentlySelectedApplicantId) return null;
+    return allProjectEducators.find(e => e.applicant_id === currentlySelectedApplicantId);
+}, [currentlySelectedApplicantId, allProjectEducators]);
+
+const chosenInVillage = useMemo(() => {
+    return allProjectEducators.filter(
+        (edu) =>
+            edu.working_village === selectedVillage &&
+            edu.contract_type === 'مثقفة مجتمعية'
+    ).length;
+}, [allProjectEducators, selectedVillage]);
+
+const qualifiedApplicants = useMemo(() => allProjectEducators.filter(e => e.training_qualification === 'مؤهلة للتدريب'), [allProjectEducators]);
+
+const filteredApplicantsForHallAssignment = useMemo(() => {
+    if (!hallAssignmentSearch.trim()) return qualifiedApplicants;
+    const lowerCaseSearch = hallAssignmentSearch.toLowerCase();
+    return qualifiedApplicants.filter(app => 
+        String(app.applicant_id).toLowerCase().includes(lowerCaseSearch) || 
+        app.applicant_name?.toLowerCase().includes(lowerCaseSearch)
+    );
+}, [qualifiedApplicants, hallAssignmentSearch]);
+
+const handleSelectAllForHallAssignment = (checked: boolean | 'indeterminate') => {
+    if (typeof checked !== 'boolean') return;
+    const idsToToggle = new Set(filteredApplicantsForHallAssignment.map(app => app.applicant_id));
+    setSelectedApplicantsForHall(prev => {
+        const newSet = new Set(prev);
+        if(checked) {
+            idsToToggle.forEach(id => newSet.add(id));
+        } else {
+            idsToToggle.forEach(id => newSet.delete(id));
+        }
+        return newSet;
+    });
+};
+
+const handleLinkToHall = async () => {
+    if (!selectedHall || selectedApplicantsForHall.size === 0) {
+        toast({ title: "Incomplete Selection", description: "Please select applicants and a hall.", variant: "destructive"});
+        return;
+    }
+    const hall = halls.find(h => h.hallNumber === selectedHall);
+    try {
+        const res = await fetch('/api/trainings/link', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                projectId: selectedProjectId,
+                hallNumber: selectedHall,
+                hallName: hall?.hallName || `Hall ${selectedHall}`,
+                applicantIds: Array.from(selectedApplicantsForHall)
+            })
+        });
+        if (!res.ok) throw new Error("Failed to link applicants.");
+        toast({ title: "Success", description: "Applicants linked to training hall."});
+        fetchProjectData();
+    } catch(err: any) {
+        toast({ title: "Error", description: err.message, variant: 'destructive'});
+    }
+};
+
+const filteredAbsentees = useMemo(() => {
+    const hallAssigned = allProjectEducators.filter(e => e.training_hall_no);
+    if (!absenteeSearch.trim()) return hallAssigned;
+    const lowerCaseSearch = absenteeSearch.toLowerCase();
+    return hallAssigned.filter(app => 
+        String(app.applicant_id).toLowerCase().includes(lowerCaseSearch) || 
+        app.applicant_name?.toLowerCase().includes(lowerCaseSearch)
+    );
+}, [allProjectEducators, absenteeSearch]);
+
+const handleAbsenteeToggle = (applicantId: number, checked: boolean | 'indeterminate') => {
+    if (typeof checked !== 'boolean') return;
+    setSelectedAbsentees(prev => {
+        const newSet = new Set(prev);
+        if (checked) {
+            newSet.add(applicantId);
+        } else {
+            newSet.delete(applicantId);
+        }
+        return newSet;
+    });
+};
+
+const handleSelectAllAbsentees = (checked: boolean | 'indeterminate') => {
+    if (typeof checked !== 'boolean') return;
+    const idsToToggle = new Set(filteredAbsentees.map(app => app.applicant_id));
+    setSelectedAbsentees(prev => {
+        const newSet = new Set(prev);
+        if (checked) {
+            idsToToggle.forEach(id => newSet.add(id));
+        } else {
+            idsToToggle.forEach(id => newSet.delete(id));
+        }
+        return newSet;
+    });
+};
+
+const handleSubmitAttendance = async (markAsPresent: boolean) => {
+    const allHallAssignedIds = new Set(allProjectEducators.filter(e => e.training_hall_no).map(e => e.applicant_id));
+    const absentIds = Array.from(selectedAbsentees);
+    const attendedIds = Array.from(allHallAssignedIds).filter(id => !selectedAbsentees.has(id));
+
+    try {
+        const res = await fetch('/api/training/attendance', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                attended: markAsPresent ? attendedIds : [],
+                absent: !markAsPresent ? absentIds : []
+            })
+        });
+        if (!res.ok) throw new Error("Failed to update attendance.");
+        toast({ title: "Success", description: "Attendance records updated." });
+        fetchProjectData();
+    } catch(err: any) {
+        toast({ title: "Error", description: err.message, variant: "destructive" });
+    }
+};
+
+const tier5AvailableCandidates = useMemo(() => allProjectEducators.filter(e => e.interview_attendance === 'حضرت المقابلة' && e.contract_type === null), [allProjectEducators]);
+const tier5AssignedCandidates = useMemo(() => allProjectEducators.filter(e => e.contract_type === 'مثقفة مجتمعية'), [allProjectEducators]);
+
+const handleTier5Assignment = async () => {
     if (!selectedVillage) return;
     setLoading(p => ({ ...p, saving: true }));
 
@@ -513,106 +712,56 @@ function TrainingStatementsPageContent() {
         setLoading(p => ({ ...p, saving: false }));
     }
   };
+  
+    const tier5Summary = useMemo(() => {
+        if (!isTier5Active || !selectedVillage) return null;
+        const villageData = villageStatsWithEdReq.find(v => v.villageName === selectedVillage);
 
-  const handleSkip = useCallback(() => {
-    if (!currentlySelectedApplicantId) return;
+        if (tier5Mode === 'add') {
+        const educator = allProjectEducators.find(e => e.applicant_id === Number(tier5AddSelection));
+        if (!educator || !villageData) return null;
+        return {
+            'Working Village': `${educator.working_village} + ${selectedVillage}`,
+            'BNF Connection': (educator.ed_bnf_cnt || 0) + (villageData.bnfCount || 0)
+        };
+        } else if (tier5Mode === 'replace') {
+        const newEdu = allProjectEducators.find(e => e.applicant_id === Number(tier5ReplaceNewSelection));
+        const oldEdu = allProjectEducators.find(e => e.applicant_id === Number(tier5ReplaceOldSelection));
+        if (!newEdu || !oldEdu || !villageData) return null;
+        return {
+            'New Applicant': newEdu.applicant_name,
+            'Replaced Applicant': oldEdu.applicant_name,
+            'New Working Village': `${oldEdu.working_village} + ${selectedVillage}`,
+            'New BNF Connection': (oldEdu.ed_bnf_cnt || 0) + (villageData.bnfCount || 0)
+        };
+        }
+        return null;
+    }, [isTier5Active, tier5Mode, tier5AddSelection, tier5ReplaceNewSelection, tier5ReplaceOldSelection, allProjectEducators, selectedVillage, villageStatsWithEdReq]);
 
-    const currentIndex = filteredCandidates.findIndex(c => c.applicant_id === currentlySelectedApplicantId);
+  useEffect(() => {
+    if (!currentlySelectedApplicantId) {
+        setRelatedCounts({ same: 0, different: 0 });
+        return;
+    }
+    const currentApplicant = allProjectEducators.find(e => e.applicant_id === currentlySelectedApplicantId);
+    if (!currentApplicant || !currentApplicant.applcants_relationship) {
+        setRelatedCounts({ same: 0, different: 0 });
+        return;
+    }
     
-    let nextUnassignedIndex = -1;
-    for (let i = currentIndex + 1; i < filteredCandidates.length; i++) {
-        if (!allProjectEducators.find(e => e.applicant_id === filteredCandidates[i].applicant_id)?.contract_type) {
-            nextUnassignedIndex = i;
-            break;
-        }
-    }
-
-    if (nextUnassignedIndex !== -1) {
-        setCurrentlySelectedApplicantId(filteredCandidates[nextUnassignedIndex].applicant_id);
-    } else {
-        const firstUnassigned = filteredCandidates.find(c => !allProjectEducators.find(e => e.applicant_id === c.applicant_id)?.contract_type && c.applicant_id !== currentlySelectedApplicantId);
-        if (firstUnassigned) {
-            setCurrentlySelectedApplicantId(firstUnassigned.applicant_id);
-        } else {
-            handleNextVillage();
-        }
-    }
-  }, [currentlySelectedApplicantId, filteredCandidates, allProjectEducators, handleNextVillage]);
-
-    const handlePreviousVillage = useCallback(() => {
-        const currentIndex = sortedVillages.findIndex(v => v.villageName === selectedVillage);
-        if (currentIndex > 0) {
-            setSelectedVillage(sortedVillages[currentIndex - 1].villageName);
-        } else {
-            toast({ title: "Start of List", description: "You are at the first village." });
-        }
-    }, [sortedVillages, selectedVillage, toast]);
-
-  const selectedVillageStats = useMemo(() => {
-    if (!selectedVillage || !villageStatsWithEdReq) return { required: 0, available: 0 };
-    const village = villageStatsWithEdReq.find(v => v.villageName === selectedVillage);
-    return {
-      required: village?.edReq || 0,
-      available: allProjectEducators.filter(e => e.loc_name === selectedVillage && e.training_attendance === 'حضرت التدريب').length || 0,
-    };
-  }, [selectedVillage, villageStatsWithEdReq, allProjectEducators]);
-
-    const chosenInVillage = useMemo(() => {
-        return allProjectEducators.filter(
-            (edu) =>
-                edu.working_village === selectedVillage &&
-                edu.contract_type === 'مثقفة مجتمعية'
-        ).length;
-    }, [allProjectEducators, selectedVillage]);
+    // Extract related IDs from the relationship string
+    const relatedIds = (currentApplicant.applcants_relationship.match(/\d+/g) || []).map(Number).filter(id => id !== currentlySelectedApplicantId);
     
-    const tier5Candidates = useMemo(() => {
-      if (!isTier5Active) return [];
-      
-      const unassignedInVillage = allProjectEducators.filter(e => 
-          e.project_id === projectId &&  
-          e.contract_type === null && 
-          e.loc_name === selectedVillage
-      );
-      
-      const assignedInProject = allProjectEducators.filter(e => 
-          e.project_id === projectId && 
-          e.contract_type === 'مثقفة مجتمعية'
-      );
-      
-      const combined = [...unassignedInVillage, ...assignedInProject];
-      const unique = Array.from(new Map(combined.map(item => [item.applicant_id, item])).values());
-      
-      return unique;
-    }, [isTier5Active, allProjectEducators, selectedVillage, projectId]);
+    const sameVillageCount = allProjectEducators.filter(e => 
+        relatedIds.includes(e.applicant_id) && e.contract_type && e.working_village === currentApplicant.loc_name
+    ).length;
 
+    const differentVillageCount = allProjectEducators.filter(e => 
+        relatedIds.includes(e.applicant_id) && e.contract_type && e.working_village !== currentApplicant.loc_name
+    ).length;
 
-  const tier5Summary = useMemo(() => {
-    if (!isTier5Active || !selectedVillage) return null;
-    const villageData = villageStatsWithEdReq.find(v => v.villageName === selectedVillage);
-
-    if (tier5Mode === 'add') {
-      const educator = allProjectEducators.find(e => e.applicant_id === Number(tier5AddSelection));
-      if (!educator || !villageData) return null;
-      return {
-        'Working Village': `${educator.working_village} + ${selectedVillage}`,
-        'BNF Connection': (educator.ed_bnf_cnt || 0) + (villageData.bnfCount || 0)
-      };
-    } else if (tier5Mode === 'replace') {
-      const newEdu = allProjectEducators.find(e => e.applicant_id === Number(tier5ReplaceNewSelection));
-      const oldEdu = allProjectEducators.find(e => e.applicant_id === Number(tier5ReplaceOldSelection));
-      if (!newEdu || !oldEdu || !villageData) return null;
-      return {
-        'New Applicant': newEdu.applicant_name,
-        'Replaced Applicant': oldEdu.applicant_name,
-        'New Working Village': `${oldEdu.working_village} + ${selectedVillage}`,
-        'New BNF Connection': (oldEdu.ed_bnf_cnt || 0) + (villageData.bnfCount || 0)
-      };
-    }
-    return null;
-  }, [isTier5Active, tier5Mode, tier5AddSelection, tier5ReplaceNewSelection, tier5ReplaceOldSelection, allProjectEducators, selectedVillage, villageStatsWithEdReq]);
-
-  const tier5AvailableCandidates = useMemo(() => allProjectEducators.filter(e => e.interview_attendance === 'حضرت المقابلة' && e.contract_type === null), [allProjectEducators]);
-  const tier5AssignedCandidates = useMemo(() => allProjectEducators.filter(e => e.contract_type === 'مثقفة مجتمعية'), [allProjectEducators]);
+    setRelatedCounts({ same: sameVillageCount, different: differentVillageCount });
+}, [currentlySelectedApplicantId, allProjectEducators]);
 
 
   return (
