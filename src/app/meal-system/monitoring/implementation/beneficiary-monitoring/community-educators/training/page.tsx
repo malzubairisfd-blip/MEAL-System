@@ -595,7 +595,7 @@ function TrainingStatementsPageContent() {
     } finally {
       setLoading(p => ({ ...p, saving: false }));
     }
-  }, [currentlySelectedApplicantId, selectedVillage, toast, filteredCandidates, villageStatsWithEdReq, sortedVillages, assignedInVillage, currentApplicantBnfConn, fetchProjectData, allProjectEducators]);
+  }, [currentlySelectedApplicantId, selectedVillage, toast, filteredCandidates, villageStatsWithEdReq, sortedVillages, assignedInVillage, fetchProjectData, allProjectEducators]);
 
   const handleTier5Assignment = async () => {
     if (!selectedVillage) return;
@@ -617,7 +617,8 @@ function TrainingStatementsPageContent() {
             updates.push({
                 applicant_id: educatorToUpdate.applicant_id,
                 working_village: `${educatorToUpdate.working_village} + ${selectedVillage}`,
-                ed_bnf_cnt: (educatorToUpdate.ed_bnf_cnt || 0) + (villageToAdd.bnfCount || 0)
+                ed_bnf_cnt: (educatorToUpdate.ed_bnf_cnt || 0) + (villageToAdd.bnfCount || 0),
+                ed_bnf_cntv2: `${educatorToUpdate.ed_bnf_cntv2 || educatorToUpdate.ed_bnf_cnt} + ${villageToAdd.bnfCount}`
             });
 
         } else if (tier5Mode === 'replace') {
@@ -629,12 +630,14 @@ function TrainingStatementsPageContent() {
                 applicant_id: newEducator.applicant_id,
                 contract_type: 'مثقفة مجتمعية',
                 working_village: `${replacedEducator.working_village} + ${selectedVillage}`,
-                ed_bnf_cnt: (replacedEducator.ed_bnf_cnt || 0) + (villageToAdd.bnfCount || 0)
+                ed_bnf_cnt: (replacedEducator.ed_bnf_cnt || 0) + (villageToAdd.bnfCount || 0),
+                ed_bnf_cntv2: `${replacedEducator.ed_bnf_cntv2 || replacedEducator.ed_bnf_cnt} + ${villageToAdd.bnfCount}`
             });
             updates.push({
                 applicant_id: replacedEducator.applicant_id,
                 contract_type: null,
-                ed_bnf_cnt: null
+                ed_bnf_cnt: null,
+                ed_bnf_cntv2: null
             });
         }
         
@@ -746,11 +749,12 @@ function TrainingStatementsPageContent() {
     const villageData = villageStatsWithEdReq.find(v => v.villageName === selectedVillage);
 
     if (tier5Mode === 'add') {
-      const educator = allProjectEducators.find(e => e.applicant_id === Number(tier5AddSelection));
-      if (!educator || !villageData) return null;
+      const educatorToUpdate = allProjectEducators.find(e => e.applicant_id === Number(tier5AddSelection));
+      if (!educatorToUpdate || !villageData) return null;
       return {
-        'Working Village': `${educator.working_village} + ${selectedVillage}`,
-        'BNF Connection': (educator.ed_bnf_cnt || 0) + (villageData.bnfCount || 0)
+        'Working Village': `${educatorToUpdate.working_village} + ${selectedVillage}`,
+        'BNF Connection': (educatorToUpdate.ed_bnf_cnt || 0) + (villageData.bnfCount || 0),
+         'Separate BNF': `(${educatorToUpdate.ed_bnf_cntv2 || educatorToUpdate.ed_bnf_cnt}) + ${villageData.bnfCount}`,
       };
     } else if (tier5Mode === 'replace') {
       const newEdu = allProjectEducators.find(e => e.applicant_id === Number(tier5ReplaceNewSelection));
@@ -760,7 +764,7 @@ function TrainingStatementsPageContent() {
         'New Applicant': newEdu.applicant_name,
         'Replaced Applicant': oldEdu.applicant_name,
         'New Working Village': `${oldEdu.working_village} + ${selectedVillage}`,
-        'New BNF Connection': (oldEdu.ed_bnf_cnt || 0) + (villageData.bnfCount || 0)
+        'New BNF Connection': (oldEdu.ed_bnf_cnt || 0) + (villageData.bnfCount || 0),
       };
     }
     return null;
@@ -835,7 +839,7 @@ function TrainingStatementsPageContent() {
                             <TableHeader>
                                 <TableRow>
                                     <TableHead>
-                                        <Checkbox
+                                        <Checkbox 
                                             className='bg-primary'
                                             checked={filteredApplicantsForHallAssignment.length > 0 && filteredApplicantsForHallAssignment.every(app => selectedApplicantsForHall.has(app.applicant_id))}
                                             onCheckedChange={handleSelectAllForHallAssignment}
@@ -923,7 +927,7 @@ function TrainingStatementsPageContent() {
                     </div>
 
                     {isTier5Active ? (
-                         <div className="p-4 border rounded-md bg-muted border-amber-700">
+                         <div className="p-4 border rounded-md bg-amber-900/50 border-amber-700">
                              <h4 className="font-bold text-amber-300">Special Assignment for Small Village ({'<'}15 BNF)</h4>
                               <Card className="mt-4">
                                 <CardHeader>
