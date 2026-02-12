@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from '@/components/ui/input';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
@@ -21,8 +21,8 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 
 // --- Types ---
 interface Project {
-    projectId: string;
-    projectName: string;
+  projectId: string;
+  projectName: string;
 
 }
 
@@ -367,181 +367,15 @@ function TrainingStatementsPageContent() {
           )
       );
   }, [qualifiedCandidatesSearch, candidates]);
-
-  useEffect(() => {
-    if (loading.candidates || filteredCandidates.length === 0) {
-        setCurrentlySelectedApplicantId(null);
-        return;
-    }
-    const firstUnassigned = filteredCandidates.find(c => !allProjectEducators.find(e => e.applicant_id === c.applicant_id)?.contract_type);
-    setCurrentlySelectedApplicantId(firstUnassigned ? firstUnassigned.applicant_id : null);
-}, [filteredCandidates, allProjectEducators, loading.candidates]);
-
-  const handleLinkToHall = async () => {
-      if (!selectedHall || selectedApplicantsForHall.size === 0) return toast({ title: "Incomplete", description: "Select a hall and applicants."});
-      
-      const hall = halls.find(h => h.hallNumber === selectedHall);
-      if(!hall) return;
-
-      setLoading(p => ({...p, saving: true}));
-      try {
-          const res = await fetch("/api/trainings/link", {
-              method: 'POST',
-              headers: {'Content-Type': 'application/json'},
-              body: JSON.stringify({ projectId, hallNumber: hall.hallNumber, hallName: hall.hallName, applicantIds: Array.from(selectedApplicantsForHall) })
-          });
-          if(!res.ok) throw new Error("Failed to link applicants.");
-
-          toast({ title: "Success!", description: "Applicants linked to training hall."});
-          setSelectedApplicantsForHall(new Set());
-          fetchProjectData();
-
-      } catch (err: any) {
-          toast({ title: "Error", description: err.message, variant: "destructive" });
-      } finally {
-          setLoading(p => ({...p, saving: false}));
-      }
-  };
   
-  const applicantsForHallAssignment = useMemo(() => {
-    return allProjectEducators.filter(e => e.interview_attendance === 'حضرت المقابلة' && e.training_qualification === null && e.training_hall_name === null);
-  }, [allProjectEducators]);
-
-  useEffect(() => {
-    const qualifiedForTraining = allProjectEducators.filter(e => e.training_qualification === 'مؤهلة للتدريب' && e.training_attendance === null);
-    setTrainingAbsentees(qualifiedForTraining);
-  }, [allProjectEducators]);
-
-  const filteredAbsentees = useMemo(() => {
-    if (!absenteeSearch.trim()) return trainingAbsentees;
-    const searchTerms = absenteeSearch.split(',').map(term => term.trim().toLowerCase()).filter(Boolean);
-    if (searchTerms.length === 0) return trainingAbsentees;
-    
-    return trainingAbsentees.filter(app => 
-        searchTerms.some(term => 
-            String(app.applicant_id).includes(term) || 
-            app.applicant_name?.toLowerCase().includes(term)
-        )
-    );
-  }, [absenteeSearch, trainingAbsentees]);
-
-  const handleAbsenteeToggle = (applicantId: number, checked: boolean | "indeterminate") => {
-    if (typeof checked !== 'boolean') return;
-    setSelectedAbsentees(prev => {
-        const newSet = new Set(prev);
-        if (checked) {
-            newSet.add(applicantId);
-        } else {
-            newSet.delete(applicantId);
-        }
-        return newSet;
-    });
-};
-
-  const handleSubmitAttendance = async (present: boolean) => {
-    setLoading(p => ({...p, saving: true}));
-    try {
-        const payload = {
-            attended: present ? trainingAbsentees.filter(a => !selectedAbsentees.has(a.applicant_id)).map(a => a.applicant_id) : [],
-            absent: present ? [] : Array.from(selectedAbsentees)
-        };
-        const res = await fetch("/api/training/attendance", { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)});
-        if(!res.ok) throw new Error("Failed to submit attendance.");
-        toast({ title: "Attendance Submitted" });
-        fetchProjectData();
-        setSelectedAbsentees(new Set()); // Clear selection
-    } catch (err:any) {
-         toast({ title: "Error", description: err.message, variant: "destructive" });
-    } finally {
-        setLoading(p => ({...p, saving: false}));
-    }
-  };
-
-  const filteredApplicantsForHallAssignment = useMemo(() => {
-      if (!hallAssignmentSearch.trim()) return applicantsForHallAssignment;
-      const searchTerms = hallAssignmentSearch.split(',').map(term => term.trim().toLowerCase()).filter(Boolean);
-      if (searchTerms.length === 0) return applicantsForHallAssignment;
-      return applicantsForHallAssignment.filter(app => 
-          searchTerms.some(term => 
-              String(app.applicant_id).toLowerCase().includes(term) || 
-              app.applicant_name?.toLowerCase().includes(term)
-          )
-      );
-  }, [hallAssignmentSearch, applicantsForHallAssignment]);
-
-    const handleSelectAllForHallAssignment = (checked: boolean | 'indeterminate') => {
-      if (typeof checked !== 'boolean') return;
-      const idsToChange = new Set(filteredApplicantsForHallAssignment.map(app => app.applicant_id));
-      if (checked) {
-          setSelectedApplicantsForHall(prev => new Set([...prev, ...idsToChange]));
+  const handleNextVillage = useCallback(() => {
+      const currentIndex = sortedVillages.findIndex(v => v.villageName === selectedVillage);
+      if (currentIndex < sortedVillages.length - 1) {
+          setSelectedVillage(sortedVillages[currentIndex + 1].villageName);
       } else {
-          setSelectedApplicantsForHall(prev => new Set([...prev].filter(id => !idsToChange.has(id))));
+          toast({ title: "End of List", description: "You are at the last village." });
       }
-  }
-
-  const handleSelectAllAbsentees = (checked: boolean | 'indeterminate') => {
-      if (typeof checked !== 'boolean') return;
-      const idsToChange = new Set(filteredAbsentees.map(a => a.applicant_id));
-      if (checked) {
-          setSelectedAbsentees(prev => new Set([...prev, ...idsToChange]));
-      } else {
-          setSelectedAbsentees(prev => new Set([...prev].filter(id => !idsToChange.has(id))));
-      }
-  };
-
-    const selectedApplicantForDisplay = useMemo(() => {
-        if (!currentlySelectedApplicantId) return null;
-        return allProjectEducators.find(c => c.applicant_id === currentlySelectedApplicantId);
-    }, [currentlySelectedApplicantId, allProjectEducators]);
-    
-    useEffect(() => {
-        if (selectedApplicantForDisplay?.applcants_relationship) {
-            const msg = selectedApplicantForDisplay.applcants_relationship;
-            const loc = selectedApplicantForDisplay.loc_name;
-            const chosenApplicants = allProjectEducators.filter(edu => 
-                edu.contract_type === 'مثقفة مجتمعية' || edu.contract_type === 'رقابة'
-            );
-            const relatedChosen = chosenApplicants.filter(edu => edu.applcants_relationship === msg);
-            const same = relatedChosen.filter(edu => edu.loc_name === loc).length;
-            const different = relatedChosen.filter(edu => edu.loc_name !== loc).length;
-            setRelatedCounts({ same, different });
-        } else {
-            setRelatedCounts({ same: 0, different: 0 });
-        }
-    }, [selectedApplicantForDisplay, allProjectEducators]);
-
-
-    const chosenEducators = useMemo(() => allProjectEducators.filter(e => e.contract_type === 'مثقفة مجتمعية').length, [allProjectEducators]);
-    const chosenMonitors = useMemo(() => allProjectEducators.filter(e => e.contract_type === 'رقابة').length, [allProjectEducators]);
-    const chosenSpares = useMemo(() => allProjectEducators.filter(e => e.contract_type === 'احتياط').length, [allProjectEducators]);
-
-    const totalBnfConnectedInVillage = useMemo(() => {
-        return allProjectEducators.filter(edu => edu.working_village === selectedVillage && edu.contract_type === 'مثقفة مجتمعية').reduce((sum, edu) => sum + (edu.ed_bnf_cnt || 0), 0);
-    }, [allProjectEducators, selectedVillage]);
-
-
-    const assignedInVillage = useMemo(() => {
-      return allProjectEducators.filter(
-        (edu) =>
-          edu.working_village === selectedVillage &&
-          edu.contract_type === 'مثقفة مجتمعية'
-      ).length;
-    }, [allProjectEducators, selectedVillage]);
-
-    const totalBnfForVillage = useMemo(() => villageStatsWithEdReq.find(v => v.villageName === selectedVillage)?.bnfCount || 0, [villageStatsWithEdReq, selectedVillage]);
-    
-    const currentApplicantBnfConn = useMemo(() => {
-        if (!selectedVillage) return 0;
-        const villageStat = villageStatsWithEdReq.find(v => v.villageName === selectedVillage);
-        if (!villageStat) return 0;
-
-        const bnfPerEdValue = bnfPerEd[selectedVillage] || 0;
-        if (bnfPerEdValue === 0) return 0;
-        
-        const remainingBnf = villageStat.bnfCount - totalBnfConnectedInVillage;
-        return Math.max(0, Math.min(remainingBnf, bnfPerEdValue));
-
-    }, [selectedVillage, villageStatsWithEdReq, bnfPerEd, totalBnfConnectedInVillage]);
+  }, [sortedVillages, selectedVillage, toast]);
 
   const handleAssignContractType = useCallback(async (type: SelectionState['contractType']) => {
     if (!currentlySelectedApplicantId || !selectedVillage) {
@@ -567,35 +401,56 @@ function TrainingStatementsPageContent() {
       
       toast({ title: "Saved", description: `Assigned ${type} to applicant ${currentlySelectedApplicantId}.` });
       
-      await fetchProjectData();
+      const justAssignedId = currentlySelectedApplicantId;
 
-      const villageStat = villageStatsWithEdReq.find(v => v.villageName === selectedVillage);
-      const chosenCount = assignedInVillage + 1;
+      // Optimistic update of local state
+      const updatedEducators = allProjectEducators.map(edu => 
+        edu.applicant_id === justAssignedId 
+          ? { ...edu, ...applicantToUpdate }
+          : edu
+      );
+      setAllProjectEducators(updatedEducators);
       
-      const currentIndex = filteredCandidates.findIndex(c => c.applicant_id === currentlySelectedApplicantId);
-      let nextUnassigned = null;
-      for (let i = currentIndex + 1; i < filteredCandidates.length; i++) {
-        if (!allProjectEducators.find(e => e.applicant_id === filteredCandidates[i].applicant_id)?.contract_type) {
-          nextUnassigned = filteredCandidates[i];
-          break;
-        }
+      // Manually find next candidate to avoid waiting for state propagation
+      const currentCandidates = candidates.filter(c => c.applicant_id !== justAssignedId);
+      const currentIndexInOldList = candidates.findIndex(c => c.applicant_id === justAssignedId);
+
+      let nextCandidate = null;
+      if (currentIndexInOldList < currentCandidates.length) {
+          nextCandidate = currentCandidates[currentIndexInOldList];
+      } else if (currentCandidates.length > 0) {
+          nextCandidate = currentCandidates[0]; // fallback to first if at the end
       }
-      setCurrentlySelectedApplicantId(nextUnassigned ? nextUnassigned.applicant_id : null);
       
-      if (villageStat && chosenCount >= villageStat.edReq && !nextUnassigned) {
-        const currentVillageIndex = sortedVillages.findIndex(v => v.villageName === selectedVillage);
-        if (currentVillageIndex < sortedVillages.length - 1) {
-          setSelectedVillage(sortedVillages[currentVillageIndex + 1].villageName);
-        } else {
-          toast({ title: "All villages complete!" });
-        }
+      if (nextCandidate) {
+        setCurrentlySelectedApplicantId(nextCandidate.applicant_id);
+      } else {
+        // No unassigned candidates left, move to next village.
+        handleNextVillage();
       }
+
     } catch (err: any) {
       toast({ title: "Save Error", description: err.message, variant: "destructive" });
     } finally {
       setLoading(p => ({ ...p, saving: false }));
     }
-  }, [currentlySelectedApplicantId, selectedVillage, toast, filteredCandidates, villageStatsWithEdReq, sortedVillages, assignedInVillage, currentApplicantBnfConn, fetchProjectData, allProjectEducators]);
+  }, [currentlySelectedApplicantId, selectedVillage, toast, candidates, allProjectEducators, currentApplicantBnfConn, handleNextVillage]);
+
+  useEffect(() => {
+    const unassignedCandidatesInList = filteredCandidates.filter(c => {
+        const edu = allProjectEducators.find(e => e.applicant_id === c.applicant_id);
+        return !edu || !edu.contract_type;
+    });
+
+    if (unassignedCandidatesInList.length > 0) {
+        if (!currentlySelectedApplicantId || !unassignedCandidatesInList.some(c => c.applicant_id === currentlySelectedApplicantId)) {
+            setCurrentlySelectedApplicantId(unassignedCandidatesInList[0].applicant_id);
+        }
+    } else if (filteredCandidates.length > 0) {
+        // All are assigned, maybe select first to show it's done. Or null.
+        setCurrentlySelectedApplicantId(null);
+    }
+  }, [filteredCandidates, allProjectEducators, currentlySelectedApplicantId, selectedVillage]);
 
   const handleTier5Assignment = async () => {
     if (!selectedVillage) return;
@@ -675,24 +530,14 @@ function TrainingStatementsPageContent() {
     if (nextUnassignedIndex !== -1) {
         setCurrentlySelectedApplicantId(filteredCandidates[nextUnassignedIndex].applicant_id);
     } else {
-        const currentVillageIndex = sortedVillages.findIndex(v => v.villageName === selectedVillage);
-        if (currentVillageIndex < sortedVillages.length - 1) {
-            setSelectedVillage(sortedVillages[currentVillageIndex + 1].villageName);
+        const firstUnassigned = filteredCandidates.find(c => !allProjectEducators.find(e => e.applicant_id === c.applicant_id)?.contract_type && c.applicant_id !== currentlySelectedApplicantId);
+        if (firstUnassigned) {
+            setCurrentlySelectedApplicantId(firstUnassigned.applicant_id);
         } else {
-            toast({ title: "End of All Lists", description: "All candidates in all villages have been reviewed." });
-            setCurrentlySelectedApplicantId(null);
+            handleNextVillage();
         }
     }
-  }, [currentlySelectedApplicantId, filteredCandidates, toast, sortedVillages, selectedVillage, allProjectEducators]);
-
-    const handleNextVillage = useCallback(() => {
-        const currentIndex = sortedVillages.findIndex(v => v.villageName === selectedVillage);
-        if (currentIndex < sortedVillages.length - 1) {
-            setSelectedVillage(sortedVillages[currentIndex + 1].villageName);
-        } else {
-            toast({ title: "End of List", description: "You are at the last village." });
-        }
-    }, [sortedVillages, selectedVillage, toast]);
+  }, [currentlySelectedApplicantId, filteredCandidates, allProjectEducators, handleNextVillage]);
 
     const handlePreviousVillage = useCallback(() => {
         const currentIndex = sortedVillages.findIndex(v => v.villageName === selectedVillage);
@@ -835,7 +680,7 @@ function TrainingStatementsPageContent() {
                             <TableHeader>
                                 <TableRow>
                                     <TableHead>
-                                        <Checkbox
+                                        <Checkbox 
                                             className='bg-primary'
                                             checked={filteredApplicantsForHallAssignment.length > 0 && filteredApplicantsForHallAssignment.every(app => selectedApplicantsForHall.has(app.applicant_id))}
                                             onCheckedChange={handleSelectAllForHallAssignment}
