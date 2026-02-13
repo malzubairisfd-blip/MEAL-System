@@ -35,7 +35,7 @@ const DB_COLUMNS = [
   'ec_id', 'ec_name', 'ec_name2', 'ec_loc_id', 'ec_loc_name',
   'pc_id', 'pc_name',
   'row_no',
-  'same_ozla', 'x', 'ed_bnf_cnt', 'pc_ed_cnt', 'ec_ed_cnt', 'pc_bnf_cnt', 'ec_bnf_cnt'
+  'same_ozla', 'x', 'ed_bnf_cnt', 'pc_ed_cnt', 'ec_ed_cnt', 'pc_bnf_cnt', 'ec_bnf_cnt', 'ed_bnf_cntv2'
 ];
 
 
@@ -72,7 +72,7 @@ function initializeDatabase(recreate: boolean = false) {
           ec_id TEXT, ec_name TEXT, ec_name2 TEXT, ec_loc_id INTEGER, ec_loc_name TEXT,
           pc_id TEXT, pc_name TEXT,
           row_no INTEGER,
-          same_ozla INTEGER, x INTEGER, ed_bnf_cnt INTEGER, pc_ed_cnt INTEGER, ec_ed_cnt INTEGER, pc_bnf_cnt INTEGER, ec_bnf_cnt INTEGER
+          same_ozla INTEGER, x INTEGER, ed_bnf_cnt INTEGER, pc_ed_cnt INTEGER, ec_ed_cnt INTEGER, pc_bnf_cnt INTEGER, ec_bnf_cnt INTEGER, ed_bnf_cntv2 TEXT
         );
     `;
     db.exec(createTableStmt);

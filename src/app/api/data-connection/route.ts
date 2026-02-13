@@ -199,23 +199,33 @@ async function connectBnfToEd({ projectId }: { projectId: string }) {
         const projectName = project?.projectName;
         if (!projectName) throw new Error("Project name not found");
 
-        const educators = edDb.prepare(`SELECT ed_id, applicant_name, working_village, ed_bnf_cnt, ec_id, pc_id, ec_name, pc_name FROM educators WHERE project_id = ? AND contract_type = 'مثقفة مجتمعية'`).all(projectId);
+        // Fetch educators with the new ed_bnf_cntv2 column
+        const educators = edDb.prepare(`
+            SELECT ed_id, applicant_name, working_village, ed_bnf_cnt, ed_bnf_cntv2, ec_id, pc_id, ec_name, pc_name 
+            FROM educators 
+            WHERE project_id = ? AND contract_type = 'مثقفة مجتمعية'
+        `).all(projectId);
+        
         const allBeneficiaries = bnfDb.prepare('SELECT srvy_hh_id, hh_vill_name FROM assessed_data WHERE project_name = ? AND ED_ID IS NULL').all(projectName);
         
         const bnfByVillage: Record<string, any[]> = {};
         allBeneficiaries.forEach(bnf => {
             const village = bnf.hh_vill_name;
-            if (!bnfByVillage[village]) bnfByVillage[village] = [];
-            bnfByVillage[village].push(bnf);
+            if (village) {
+                if (!bnfByVillage[village]) bnfByVillage[village] = [];
+                bnfByVillage[village].push(bnf);
+            }
         });
 
-        Object.keys(bnfByVillage).forEach(village => bnfByVillage[village].sort((a, b) => String(a.srvy_hh_id).localeCompare(String(b.srvy_hh_id))));
+        // Sort beneficiaries within each village to ensure consistent assignment order
+        Object.keys(bnfByVillage).forEach(village => {
+            bnfByVillage[village].sort((a, b) => String(a.srvy_hh_id).localeCompare(String(b.srvy_hh_id)));
+        });
 
-        const edByVillage: Record<string, any[]> = {};
-        educators.forEach(edu => {
-            const village = edu.working_village;
-            if (!edByVillage[village]) edByVillage[village] = [];
-            edByVillage[village].push(edu);
+        // Keep track of the last used index for each village's beneficiary list
+        const villageBnfIndex: Record<string, number> = {};
+        Object.keys(bnfByVillage).forEach(village => {
+            villageBnfIndex[village] = 0;
         });
 
         const updateBnfStmt = bnfDb.prepare('UPDATE assessed_data SET ED_ID = ?, ED_Name = ?, EC_ID = ?, PC_ID = ?, EC_NAME = ?, PC_name = ? WHERE srvy_hh_id = ?');
@@ -225,25 +235,60 @@ async function connectBnfToEd({ projectId }: { projectId: string }) {
         const connectedEcs = new Set();
         const connectedPcs = new Set();
         
-        bnfDb.transaction(() => {
-            Object.keys(edByVillage).forEach(village => {
-                const villageBeneficiaries = bnfByVillage[village] || [];
-                let bnfIndex = 0;
-                edByVillage[village].forEach(edu => {
-                    const numToAssign = edu.ed_bnf_cnt || 0;
-                    const bnfsToAssign = villageBeneficiaries.slice(bnfIndex, bnfIndex + numToAssign);
-                    
-                    bnfsToAssign.forEach(bnf => {
-                        updateBnfStmt.run(edu.ed_id, edu.applicant_name, edu.ec_id, edu.pc_id, edu.ec_name, edu.pc_name, bnf.srvy_hh_id);
-                        totalConnected++;
-                        connectedEds.add(edu.ed_id);
-                        if(edu.ec_id) connectedEcs.add(edu.ec_id);
-                        if(edu.pc_id) connectedPcs.add(edu.pc_id);
+        // Wrap the main loop in a transaction for better performance
+        const processEducators = bnfDb.transaction((educatorsToProcess) => {
+            for (const edu of educatorsToProcess) {
+                const workingVillages = edu.working_village || '';
+                
+                if (workingVillages.includes('+')) {
+                    // Multi-village assignment
+                    const villagesToAssign = workingVillages.split('+').map((v: string) => v.trim());
+                    const countsStr = edu.ed_bnf_cntv2 || '';
+                    const countsToAssign = countsStr.split('+').map((c: string) => parseInt(c.trim(), 10) || 0);
+
+                    villagesToAssign.forEach((village: string, index: number) => {
+                        const count = countsToAssign[index] || 0;
+                        if (village && count > 0) {
+                            const availableBnfs = bnfByVillage[village] || [];
+                            const startIndex = villageBnfIndex[village] || 0;
+                            const bnfsToAssign = availableBnfs.slice(startIndex, startIndex + count);
+            
+                            bnfsToAssign.forEach(bnf => {
+                                updateBnfStmt.run(edu.ed_id, edu.applicant_name, edu.ec_id, edu.pc_id, edu.ec_name, edu.pc_name, bnf.srvy_hh_id);
+                                totalConnected++;
+                                connectedEds.add(edu.ed_id);
+                                if(edu.ec_id) connectedEcs.add(edu.ec_id);
+                                if(edu.pc_id) connectedPcs.add(edu.pc_id);
+                            });
+            
+                            villageBnfIndex[village] = startIndex + bnfsToAssign.length;
+                        }
                     });
-                    bnfIndex += numToAssign;
-                });
-            });
-        })();
+
+                } else {
+                    // Single village assignment
+                    const village = workingVillages.trim();
+                    const count = edu.ed_bnf_cnt || 0;
+                    if (village && count > 0) {
+                        const availableBnfs = bnfByVillage[village] || [];
+                        const startIndex = villageBnfIndex[village] || 0;
+                        const bnfsToAssign = availableBnfs.slice(startIndex, startIndex + count);
+        
+                        bnfsToAssign.forEach(bnf => {
+                            updateBnfStmt.run(edu.ed_id, edu.applicant_name, edu.ec_id, edu.pc_id, edu.ec_name, edu.pc_name, bnf.srvy_hh_id);
+                            totalConnected++;
+                            connectedEds.add(edu.ed_id);
+                            if(edu.ec_id) connectedEcs.add(edu.ec_id);
+                            if(edu.pc_id) connectedPcs.add(edu.pc_id);
+                        });
+        
+                        villageBnfIndex[village] = startIndex + bnfsToAssign.length;
+                    }
+                }
+            }
+        });
+        
+        processEducators(educators);
 
         const stats = {
             bnf_connected: totalConnected,

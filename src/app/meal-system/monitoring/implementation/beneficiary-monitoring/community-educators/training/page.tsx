@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from '@/components/ui/input';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
@@ -595,7 +595,7 @@ function TrainingStatementsPageContent() {
     } finally {
       setLoading(p => ({ ...p, saving: false }));
     }
-  }, [currentlySelectedApplicantId, selectedVillage, toast, filteredCandidates, villageStatsWithEdReq, sortedVillages, assignedInVillage, fetchProjectData, allProjectEducators, handleNextVillage]);
+  }, [currentlySelectedApplicantId, selectedVillage, toast, filteredCandidates, villageStatsWithEdReq, sortedVillages, assignedInVillage, currentApplicantBnfConn, fetchProjectData, allProjectEducators]);
 
   const handleTier5Assignment = async () => {
     if (!selectedVillage) return;
@@ -618,7 +618,7 @@ function TrainingStatementsPageContent() {
                 applicant_id: educatorToUpdate.applicant_id,
                 working_village: `${educatorToUpdate.working_village} + ${selectedVillage}`,
                 ed_bnf_cnt: (educatorToUpdate.ed_bnf_cnt || 0) + (villageToAdd.bnfCount || 0),
-                ed_bnf_cntv2: `${educatorToUpdate.ed_bnf_cntv2 || educatorToUpdate.ed_bnf_cnt || 0} + ${villageToAdd.bnfCount || 0}`,
+                ed_bnf_cntv2: `${educatorToUpdate.ed_bnf_cnt} + ${villageToAdd.bnfCount}`
             });
 
         } else if (tier5Mode === 'replace') {
@@ -631,7 +631,7 @@ function TrainingStatementsPageContent() {
                 contract_type: 'مثقفة مجتمعية',
                 working_village: `${replacedEducator.working_village} + ${selectedVillage}`,
                 ed_bnf_cnt: (replacedEducator.ed_bnf_cnt || 0) + (villageToAdd.bnfCount || 0),
-                ed_bnf_cntv2: `${replacedEducator.ed_bnf_cntv2 || replacedEducator.ed_bnf_cnt || 0} + ${villageToAdd.bnfCount || 0}`,
+                ed_bnf_cntv2: `${replacedEducator.ed_bnf_cnt} + ${villageToAdd.bnfCount}`
             });
             updates.push({
                 applicant_id: replacedEducator.applicant_id,
@@ -754,8 +754,8 @@ function TrainingStatementsPageContent() {
       return {
         'Working Village': `${educator.working_village} + ${selectedVillage}`,
         'BNF Connection': (educator.ed_bnf_cnt || 0) + (villageData.bnfCount || 0),
-        'Village Separate BNF': `${educator.ed_bnf_cntv2 || educator.ed_bnf_cnt || 0} + ${villageData.bnfCount || 0}`
-            
+        'Village Separate BNF': `${educator.ed_bnf_cnt} + ${villageData.bnfCount}`
+
       };
     } else if (tier5Mode === 'replace') {
       const newEdu = allProjectEducators.find(e => e.applicant_id === Number(tier5ReplaceNewSelection));
@@ -766,7 +766,8 @@ function TrainingStatementsPageContent() {
         'Replaced Applicant': oldEdu.applicant_name,
         'New Working Village': `${oldEdu.working_village} + ${selectedVillage}`,
         'New BNF Connection': (oldEdu.ed_bnf_cnt || 0) + (villageData.bnfCount || 0),
-        'Village Separate BNF': `${oldEdu.ed_bnf_cntv2 || oldEdu.ed_bnf_cnt || 0} + ${villageData.bnfCount || 0}`
+        'Village Separate BNF': `${oldEdu.ed_bnf_cnt} + ${villageData.bnfCount}`,
+
       };
     }
     return null;
@@ -841,7 +842,7 @@ function TrainingStatementsPageContent() {
                             <TableHeader>
                                 <TableRow>
                                     <TableHead>
-                                        <Checkbox 
+                                        <Checkbox
                                             className='bg-primary'
                                             checked={filteredApplicantsForHallAssignment.length > 0 && filteredApplicantsForHallAssignment.every(app => selectedApplicantsForHall.has(app.applicant_id))}
                                             onCheckedChange={handleSelectAllForHallAssignment}
@@ -929,8 +930,8 @@ function TrainingStatementsPageContent() {
                     </div>
 
                     {isTier5Active ? (
-                         <div className="p-4 border rounded-md bg-amber-500/10 border-amber-700">
-                             <h4 className="font-bold text-amber-300">Special Assignment for Small Village ({'<'}15 BNF)</h4>
+                         <div className="p-4 border rounded-md bg-amber-50 border-amber-200">
+                             <h4 className="font-bold text-amber-900">Special Assignment for Small Village ({'<'}15 BNF)</h4>
                               <Card className="mt-4">
                                 <CardHeader>
                                     <CardTitle>Candidates for Special Assignment</CardTitle>
