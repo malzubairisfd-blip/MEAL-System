@@ -530,8 +530,7 @@ export default function BeneficiaryDatabasePage() {
             </div>
           ) : (
             <>
-            <div className="border rounded-md overflow-x-auto">
-              <Table>
+            <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead className="sticky left-0 bg-card z-10">Actions</TableHead>
@@ -573,7 +572,6 @@ export default function BeneficiaryDatabasePage() {
                   ))}
                 </TableBody>
               </Table>
-            </div>
             </>
           )}
         </CardContent>
