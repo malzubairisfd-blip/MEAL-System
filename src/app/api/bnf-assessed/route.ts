@@ -531,8 +531,7 @@ export async function POST(req: Request) {
       uniqueIds,
       mode,
       uniqueIdDbCol,
-      columnName,
-      columnType,
+      columns,
     } = body;
     await fs.mkdir(getDataPath(), { recursive: true });
 
@@ -589,24 +588,35 @@ export async function POST(req: Request) {
       }
     }
 
-    if (action === "add_column") {
-      if (!columnName || !columnType) {
-        return NextResponse.json({ error: "Missing columnName or columnType" }, { status: 400 });
-      }
-      const sanitizedColumnName = columnName.replace(/[^a-zA-Z0-9_]/g, "");
-      if (!sanitizedColumnName) {
-        return NextResponse.json({ error: "Invalid column name" }, { status: 400 });
-      }
-      if (!["TEXT", "INTEGER", "REAL", "JSON"].includes(columnType.toUpperCase())) {
-        return NextResponse.json({ error: "Invalid column type" }, { status: 400 });
-      }
-      const db = new Database(getDbPath());
-      try {
-        db.exec(`ALTER TABLE assessed_data ADD COLUMN "${sanitizedColumnName}" ${columnType.toUpperCase()}`);
-        return NextResponse.json({ message: "Column added" });
-      } finally {
-        db.close();
-      }
+    if (action === "add_columns") {
+        if (!Array.isArray(columns) || columns.length === 0) {
+            return NextResponse.json({ error: "Missing 'columns' array in payload" }, { status: 400 });
+        }
+        const db = initializeDatabase();
+        try {
+            const addTransaction = db.transaction((colsToAdd: any[]) => {
+                for (const col of colsToAdd) {
+                    const { name, type } = col;
+                    if (!name || !type) {
+                        throw new Error("Invalid column definition. Each must have a name and type.");
+                    }
+                    const sanitizedColumnName = name.replace(/[^a-zA-Z0-9_]/g, "");
+                    if (!sanitizedColumnName) {
+                        throw new Error(`Invalid column name provided: ${name}`);
+                    }
+                    if (!["TEXT", "INTEGER", "REAL"].includes(type.toUpperCase())) {
+                         throw new Error(`Invalid column type provided: ${type}`);
+                    }
+                    db.exec(`ALTER TABLE assessed_data ADD COLUMN "${sanitizedColumnName}" ${type.toUpperCase()}`);
+                }
+            });
+            
+            addTransaction(columns);
+            
+            return NextResponse.json({ message: `${columns.length} column(s) added successfully.` });
+        } finally {
+            db.close();
+        }
     }
 
     if (action === "save") {

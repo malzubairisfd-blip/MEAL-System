@@ -9,8 +9,7 @@ import { useForm } from "react-hook-form";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { Loader2, Search, ArrowLeft, Users, FileDown, Filter, ArrowUpAZ, ArrowDownAZ, Trash2, Edit, Database, Link2, Plus, ChevronLeft, ChevronRight } from "lucide-react";
+import { Loader2, Search, ArrowLeft, Users, FileDown, Filter, ArrowUpAZ, ArrowDownAZ, Trash2, Edit, Link2, Plus, ChevronLeft, ChevronRight } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -24,7 +23,6 @@ import { Label } from "@/components/ui/label";
 
 import { useToast } from "@/hooks/use-toast";
 import { exportBnfToExcel } from "@/lib/exportBnfToExcel";
-import { cn } from "@/lib/utils";
 
 interface BnfRecord {
   id: number;
@@ -230,8 +228,8 @@ export default function BeneficiaryDatabasePage() {
   const [deletingRecord, setDeletingRecord] = useState<BnfRecord | null>(null);
   const [editingRecord, setEditingRecord] = useState<BnfRecord | null>(null);
 
-  const [newColumnName, setNewColumnName] = useState('');
-  const [newColumnType, setNewColumnType] = useState('TEXT');
+  const [numNewColumns, setNumNewColumns] = useState(1);
+  const [newColumns, setNewColumns] = useState([{ name: '', type: 'TEXT' }]);
   const [isAddingColumn, setIsAddingColumn] = useState(false);
 
   const itemsPerPage = 20;
@@ -258,34 +256,52 @@ export default function BeneficiaryDatabasePage() {
     fetchRecords();
   }, [fetchRecords]);
 
-  const handleCreateColumn = async () => {
-      if (!newColumnName) {
-          toast({ title: 'Error', description: 'Column name cannot be empty.', variant: 'destructive' });
+  useEffect(() => {
+    setNewColumns(prev => {
+        const newArr = Array.from({ length: numNewColumns }, (_, i) => 
+            prev[i] || { name: '', type: 'TEXT' }
+        );
+        return newArr;
+    });
+  }, [numNewColumns]);
+  
+  const handleNewColumnChange = (index: number, field: 'name' | 'type', value: string) => {
+    const updated = [...newColumns];
+    updated[index] = { ...updated[index], [field]: value };
+    setNewColumns(updated);
+  };
+
+  const handleCreateColumns = async () => {
+      const columnsToCreate = newColumns.filter(col => col.name.trim() !== '');
+      if (columnsToCreate.length === 0) {
+          toast({ title: 'Error', description: 'Please enter at least one column name.', variant: 'destructive' });
           return;
       }
+
       setIsAddingColumn(true);
       try {
           const res = await fetch('/api/bnf-assessed', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                  action: 'add_column',
-                  columnName: newColumnName,
-                  columnType: newColumnType,
+                  action: 'add_columns',
+                  columns: columnsToCreate,
               }),
           });
           const result = await res.json();
-          if (!res.ok) throw new Error(result.error || 'Failed to add column.');
+          if (!res.ok) throw new Error(result.error || 'Failed to add columns.');
           
           toast({ title: 'Success', description: result.message });
-          setNewColumnName('');
-          await fetchRecords(); // Refresh data to show new column
+          setNewColumns([{ name: '', type: 'TEXT' }]);
+          setNumNewColumns(1);
+          await fetchRecords(); // Refresh data to show new columns
       } catch (err: any) {
           toast({ title: 'Error', description: err.message, variant: 'destructive' });
       } finally {
           setIsAddingColumn(false);
       }
   };
+
 
   const handleUpdateRecord = async (updatedData: BnfRecord) => {
     setIsUpdating(true);
@@ -477,31 +493,59 @@ export default function BeneficiaryDatabasePage() {
             <CardTitle>Manage Schema</CardTitle>
             <CardDescription>Add new columns to the `assessed_data` table.</CardDescription>
         </CardHeader>
-        <CardContent className="flex items-end gap-4">
-            <div className="flex-1 space-y-2">
-                <Label htmlFor="new-column-name">New Column Name</Label>
-                <Input id="new-column-name" value={newColumnName} onChange={e => setNewColumnName(e.target.value)} placeholder="e.g., notes_v2" />
+        <CardContent className="space-y-4">
+            <div className="flex items-center gap-4">
+                <div className='space-y-2'>
+                    <Label htmlFor="num-new-columns">Number of Columns to Add</Label>
+                    <Input 
+                        id="num-new-columns" 
+                        type="number" 
+                        value={numNewColumns} 
+                        onChange={e => setNumNewColumns(Math.max(1, parseInt(e.target.value) || 1))}
+                        min="1"
+                        className="w-24"
+                    />
+                </div>
             </div>
-            <div className="flex-1 space-y-2">
-                <Label htmlFor="new-column-type">Column Type</Label>
-                <Select value={newColumnType} onValueChange={setNewColumnType}>
-                    <SelectTrigger id="new-column-type"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="TEXT">Text</SelectItem>
-                        <SelectItem value="INTEGER">Integer</SelectItem>
-                        <SelectItem value="REAL">Number (Real)</SelectItem>
-                    </SelectContent>
-                </Select>
+            
+            <div className="space-y-4">
+                {newColumns.map((col, index) => (
+                    <div key={index} className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end border p-4 rounded-md">
+                        <div className="space-y-2">
+                            <Label htmlFor={`new-column-name-${index}`}>New Column Name {index + 1}</Label>
+                            <Input 
+                                id={`new-column-name-${index}`} 
+                                value={col.name} 
+                                onChange={e => handleNewColumnChange(index, 'name', e.target.value)} 
+                                placeholder="e.g., notes_v2" 
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor={`new-column-type-${index}`}>Column Type {index + 1}</Label>
+                            <Select 
+                                value={col.type} 
+                                onValueChange={value => handleNewColumnChange(index, 'type', value)}
+                            >
+                                <SelectTrigger id={`new-column-type-${index}`}><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="TEXT">Text</SelectItem>
+                                    <SelectItem value="INTEGER">Integer</SelectItem>
+                                    <SelectItem value="REAL">Number (Real)</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+                ))}
             </div>
-            <Button onClick={handleCreateColumn} disabled={isAddingColumn}>
+            <Button onClick={handleCreateColumns} disabled={isAddingColumn}>
                 {isAddingColumn ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Plus className="mr-2 h-4 w-4" />}
-                Add Column
+                Create {newColumns.filter(c => c.name).length} Column(s)
             </Button>
         </CardContent>
       </Card>
 
 
-      <Card>
+      <Card className="w-full">
         <CardHeader>
           <CardTitle>Beneficiary Records</CardTitle>
           <CardDescription>
@@ -531,50 +575,50 @@ export default function BeneficiaryDatabasePage() {
             </div>
           ) : (
             <>
-              <div className="border rounded-md overflow-x-auto">
-                <Table>
-                    <TableHeader>
+              <div className="w-full overflow-x-auto">
+                  <Table>
+                      <TableHeader>
                       <TableRow>
-                        <TableHead className="sticky left-0 bg-card z-10">Actions</TableHead>
-                        {allColumns.map((col) => (
-                          <TableHead key={col} className="whitespace-nowrap">
-                              <div className="flex items-center">
-                                {col.replace(/_/g, ' ')}
-                                <ColumnFilter
-                                    column={col}
-                                    onFilter={handleFilterChange}
-                                    onSort={handleSortChange}
-                                    onClear={handleClearFilter}
-                                    uniqueValues={uniqueColumnValues[col] || []}
-                                />
+                          <TableHead className="sticky left-0 bg-card z-10">Actions</TableHead>
+                          {allColumns.map((col) => (
+                          <TableHead key={col} className="whitespace-nowrap px-4">
+                              <div className="flex items-center gap-2">
+                                  {col.replace(/_/g, ' ')}
+                                  <ColumnFilter
+                                      column={col}
+                                      onFilter={handleFilterChange}
+                                      onSort={handleSortChange}
+                                      onClear={handleClearFilter}
+                                      uniqueValues={uniqueColumnValues[col] || []}
+                                  />
                               </div>
                           </TableHead>
-                        ))}
+                          ))}
                       </TableRow>
-                    </TableHeader>
-                    <TableBody>
+                      </TableHeader>
+                      <TableBody>
                       {paginatedRecords.map((record) => (
-                        <TableRow key={record.id}>
+                          <TableRow key={record.id}>
                           <TableCell className="sticky left-0 bg-card z-10">
                               <div className="flex gap-1">
-                                 <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setEditingRecord(record)}>
+                                  <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setEditingRecord(record)}>
                                   <Edit className="h-4 w-4" />
-                                </Button>
-                                <Button variant="destructive" size="icon" className="h-8 w-8" onClick={() => setDeletingRecord(record)}>
-                                    <Trash2 className="h-4 w-4" />
-                                </Button>
+                                  </Button>
+                                  <Button variant="destructive" size="icon" className="h-8 w-8" onClick={() => setDeletingRecord(record)}>
+                                      <Trash2 className="h-4 w-4" />
+                                  </Button>
                               </div>
                           </TableCell>
                           {allColumns.map((col) => (
-                            <TableCell key={col} className="whitespace-nowrap">
-                                {String(record[col] ?? '')}
-                            </TableCell>
+                              <TableCell key={col} className="whitespace-nowrap px-4">
+                                  {String(record[col] ?? '')}
+                              </TableCell>
                           ))}
-                        </TableRow>
+                          </TableRow>
                       ))}
-                    </TableBody>
+                      </TableBody>
                   </Table>
-                </div>
+              </div>
                 <div className="flex justify-between items-center mt-4">
                     <span className="text-sm text-muted-foreground">
                         Page {currentPage} of {totalPages}
