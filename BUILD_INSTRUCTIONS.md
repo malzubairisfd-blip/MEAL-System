@@ -1358,319 +1358,1184 @@ function calculateSimilarity_double_benefit(educator: any, beneficiary: any, map
 ```
 
 ---
-## Part 8: Custom Hooks
+## Part 8: Enrollment Review Page
 
-This section contains the full source code for all custom React hooks used in the application, located in `src/hooks`.
+This new section implements an advanced "Enrollment Review" page for correcting data and generating new matching rules.
 
-#### File: src/hooks/use-itt-data.ts
+### **Step 6: Update Database Schema**
+
+First, update the `src/app/api/bnf-assessed/route.ts` file to include all the new columns required for the name difference analysis.
+
+**File**: `src/app/api/bnf-assessed/route.ts`
 ```ts
-// src/hooks/use-itt-data.ts
-import { useState, useEffect, useCallback } from 'react';
-import { useToast as useToast_use_itt_data } from './use-toast';
-import type { Logframe as Logframe_use_itt_data } from '@/lib/logframe';
-import type { IndicatorTrackingPlan as IndicatorTrackingPlan_use_itt_data } from '@/types/monitoring-indicators';
+// src/app/api/bnf-assessed/route.ts
+import { NextResponse } from "next/server";
+import fs from "fs/promises";
+import path from "path";
+import Database from "better-sqlite3";
 
-interface Project_use_itt_data {
+const getDataPath = () => path.join(process.cwd(), "src/data");
+const getDbPath = () => path.join(getDataPath(), "bnf-assessed.db");
+
+
+const DB_COLUMNS_FOR_CREATION = `(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id TEXT,
+    project_name TEXT,
+    Generated_Cluster_ID TEXT,
+    Size INTEGER,
+    Flag TEXT,
+    Max_PairScore REAL,
+    pairScore REAL,
+    nameScore REAL,
+    husbandScore REAL,
+    childrenScore REAL,
+    idScore REAL,
+    phoneScore REAL,
+    locationScore REAL,
+    groupDecision TEXT,
+    recordDecisions TEXT,
+    decisionReasons TEXT,
+    s TEXT,
+    cluster_id TEXT,
+    dup_cluster_id2 TEXT,
+    eq_clusters TEXT,
+    dup_flag2 TEXT,
+    new_dup_flag1 TEXT,
+    dup_flag TEXT,
+    cluster_size INTEGER,
+    dup_cluster_size INTEGER,
+    match_probability REAL,
+    match_weight REAL,
+    l_id TEXT,
+    l_benef_name TEXT,
+    l_hsbnd_name TEXT,
+    l_child_list TEXT,
+    l_phone_no TEXT,
+    l_id_card_no TEXT,
+    l_age_years INTEGER,
+    l_mud_id TEXT,
+    gv_bnf_name TEXT,
+    gv_hsbnd_name TEXT,
+    gv_bnf_hsbnd_name TEXT,
+    gv_n_child_list TEXT,
+    gv_id_card_no TEXT,
+    gv_phone_no TEXT,
+    gv_age_years INTEGER,
+    r_id TEXT,
+    r_benef_name TEXT,
+    r_husband_name TEXT,
+    r_child_list TEXT,
+    r_phone_no TEXT,
+    r_id_card_no TEXT,
+    r_age_years INTEGER,
+    r_mud_id TEXT,
+    lr_eq_mud TEXT,
+    lr_eq_phone TEXT,
+    lr_age_diff INTEGER,
+    lr_benef_name_jw_sim REAL,
+    lr_husband_name_jw_sim REAL,
+    lr_benef_name_jaccard REAL,
+    lr_husband_name_jaccard REAL,
+    lr_id_card_dist REAL,
+    lr_child_jaccard REAL,
+    dup_cluster_size_2 INTEGER,
+    dup_cluster_id TEXT,
+    dup_cluster_flag TEXT,
+    record_id TEXT,
+    benef_name TEXT,
+    husband_name TEXT,
+    child_list_str TEXT,
+    phone_no TEXT,
+    bnf_id_card_no TEXT,
+    age_years INTEGER,
+    gov_name TEXT,
+    mud_name TEXT,
+    hh_ozla_name TEXT,
+    hh_vill_name TEXT,
+    dup_cluster_score REAL,
+    hh_uuid_dup_cnt INTEGER,
+    hh_uuid_rn TEXT,
+    hh_team_name TEXT,
+    hh_srvyr_name TEXT,
+    hh_srvyr_phone_no TEXT,
+    hh_mahlah TEXT,
+    hh_address TEXT,
+    hh_name TEXT,
+    hh_gender TEXT,
+    hh_is_swf TEXT,
+    hh_is_dislocated TEXT,
+    hh_is_dislocated_guest TEXT,
+    child_cnt INTEGER,
+    child_m_cnt INTEGER,
+    child_f_cnt INTEGER,
+    bnf_id TEXT,
+    srvy_hh_id TEXT,
+    bnf_idx INTEGER,
+    id_card_type TEXT,
+    bnf_relation TEXT,
+    bnf_relation_label TEXT,
+    bnf_relation_code TEXT,
+    n_child_list_str TEXT,
+    hh_deviceid TEXT,
+    hh_vill_id TEXT,
+    gov_no TEXT,
+    mud_no TEXT,
+    hh_ozla_no TEXT,
+    hh_srvyr_id TEXT,
+    hh_srvyr_team_id TEXT,
+    paper_form_date TEXT,
+    paper_form_no TEXT,
+    hh_qual_women_cnt INTEGER,
+    bnf_child_cnt INTEGER,
+    bnf_child_m_cnt INTEGER,
+    bnf_child_f_cnt INTEGER,
+    bnf_social_status TEXT,
+    bnf_qual_status TEXT,
+    bnf_qual_status_desc TEXT,
+    bnf_qual_is_preg TEXT,
+    bnf_qual_is_mother5 TEXT,
+    bnf_qual_is_mother_handicaped TEXT,
+    bnf_is_handicaped TEXT,
+    bnf_is_dislocated TEXT,
+    hh_phone_no TEXT,
+    bnf_phone_no TEXT,
+    hh_is_new_instance TEXT,
+    hh_uuid TEXT,
+    hh_submission_time TEXT,
+    hh_submitted_by TEXT,
+    n_hh_name TEXT,
+    child_list2 TEXT,
+    child_list_long TEXT,
+    bnf_1name TEXT,
+    bnf_2name TEXT,
+    bnf_3name TEXT,
+    bnf_4name TEXT,
+    bnf_5name TEXT,
+    hsbnd_1name TEXT,
+    hsbnd_2name TEXT,
+    hsbnd_3name TEXT,
+    hsbnd_4name TEXT,
+    hsbnd_5name TEXT,
+    proj_no TEXT,
+    id_card_no TEXT,
+    loc_id TEXT,
+    status TEXT,
+    notes TEXT,
+    flag_2 TEXT,
+    cluster_min_score REAL,
+    cluster_max_score REAL,
+    cluster_score REAL,
+    bnf_relations TEXT,
+    hsbnd_relations TEXT,
+    common_child TEXT,
+    common_child_cnt INTEGER,
+    relation_score REAL,
+    same_mud TEXT,
+    same_proj TEXT,
+    office_no TEXT,
+    ser TEXT,
+    benef_id TEXT,
+    is_active TEXT,
+    benef_class_desc TEXT,
+    term_reason TEXT,
+    is_dup_cluster TEXT,
+    dup_woman_id TEXT,
+    dup_benef_id TEXT,
+    reg_form_date TEXT,
+    old_bnf_name TEXT,
+    old_hsbnd_name TEXT,
+    curr_benef_name TEXT,
+    curr_husband_name TEXT,
+    calc_bnf_1name TEXT,
+    calc_bnf_2name TEXT,
+    calc_bnf_3name TEXT,
+    calc_bnf_4name TEXT,
+    calc_bnf_5name TEXT,
+    calc_hsbnd_1name TEXT,
+    calc_hsbnd_2name TEXT,
+    calc_hsbnd_3name TEXT,
+    calc_hsbnd_4name TEXT,
+    calc_hsbnd_5name TEXT,
+    cbnf_name TEXT,
+    chsbnd_name TEXT,
+    n_child_list TEXT,
+    b_1name TEXT,
+    b_2name TEXT,
+    b_3name TEXT,
+    b_4name TEXT,
+    b_5name TEXT,
+    h_1name TEXT,
+    h_2name TEXT,
+    h_3name TEXT,
+    h_4name TEXT,
+    h_5name TEXT,
+    child_list TEXT,
+    bnf_name_2 TEXT,
+    hsbnd_name_2 TEXT,
+    bnf_name2 TEXT,
+    bnf_name2b TEXT,
+    bnf_name2c TEXT,
+    bnf_name3 TEXT,
+    bnf_name3b TEXT,
+    bnf_name3c TEXT,
+    bnf_name3d TEXT,
+    bnf_name4 TEXT,
+    bnf_name4c TEXT,
+    bnf_name4b TEXT,
+    bnf_f_name4 TEXT,
+    bnf_f_name3 TEXT,
+    bnf_f_name3c TEXT,
+    hsbnd_name2 TEXT,
+    hsbnd_name2b TEXT,
+    hsbnd_name2c TEXT,
+    hsbnd_name3 TEXT,
+    hsbnd_name3b TEXT,
+    hsbnd_name3c TEXT,
+    hsbnd_name3d TEXT,
+    hsbnd_name4 TEXT,
+    hsbnd_name4c TEXT,
+    hsbnd_name4b TEXT,
+    hsbnd_f_name4 TEXT,
+    hsbnd_f_name3 TEXT,
+    hsbnd_f_name3c TEXT,
+    bnf_name_list TEXT,
+    hsbnd_name_list TEXT,
+    dup_cluster_id2_2 TEXT,
+    c_max_weight REAL,
+    c_min_weight REAL,
+    c_id_max_weight REAL,
+    c_id_min_weight REAL,
+    c_max_pct REAL,
+    c_min_pct REAL,
+    c_id_max_pct REAL,
+    c_id_min_pct REAL,
+    c_min_proj REAL,
+    c_max_proj REAL,
+    c_proj2_cnt INTEGER,
+    c_mud2_cnt INTEGER,
+    c_id_min_proj REAL,
+    c_id_max_proj REAL,
+    c_id_proj2_cnt INTEGER,
+    c_id_mud2_cnt INTEGER,
+    womanName TEXT,
+    husbandName TEXT,
+    nationalId INTEGER,
+    phone INTEGER,
+    village TEXT,
+    subdistrict TEXT,
+    children TEXT,
+    beneficiaryId TEXT,
+    avgPairScore REAL,
+    avgFirstNameScore REAL,
+    avgFamilyNameScore REAL,
+    avgAdvancedNameScore REAL,
+    avgTokenReorderScore REAL,
+    reasons TEXT,
+    confidenceScore REAL,
+    avgWomanNameScore REAL,
+    avgHusbandNameScore REAL,
+    avgFinalScore REAL,
+    pre_classified_result TEXT,
+    group_analysis TEXT,
+    womanName_normalized TEXT,
+    husbandName_normalized TEXT,
+    children_normalized TEXT,
+    subdistrict_normalized TEXT,
+    village_normalized TEXT,
+    parts TEXT,
+    husbandParts TEXT,
+    ED_NO TEXT,
+    ED_ID TEXT,
+    EC_ID TEXT,
+    PC_ID TEXT,
+    ED_NAME TEXT,
+    EC_NAME TEXT,
+    PC_NAME TEXT,
+    SRVY_HH_ID_2 TEXT,
+    CANDID_SER_NO TEXT,
+    WOMAN_ID TEXT,
+    source_ID_2 TEXT,
+    BENEF_ID_2 TEXT,
+    BENEF_NO TEXT,
+    HH_NAME_2 TEXT,
+    BNF_RELATION_2 TEXT,
+    BENEF_NAME_3 TEXT,
+    HUSBAND_NAME_3 TEXT,
+    IS_ACTIVE_2 TEXT,
+    STATUS_2 TEXT,
+    QUAL_STATUS TEXT,
+    STATUS_DESC TEXT,
+    QUAL_STATUS_DESC TEXT,
+    VERIFY_STATUS TEXT,
+    VERIFY_NOTES TEXT,
+    VERIFY_REASON TEXT,
+    VERIFY_DATE TEXT,
+    REG_STATUS TEXT,
+    REG_FORM_DATE_2 TEXT,
+    REG_NOTES TEXT,
+    TOTAL_CHILD_COUNT INTEGER,
+    MALE_CHILD_COUNT INTEGER,
+    FEMALE_CHILD_COUNT INTEGER,
+    LOC_ID_2 TEXT,
+    LOC_NAME TEXT,
+    ID_CARD_TYPE_2 TEXT,
+    ID_CARD_TYPE_DESC TEXT,
+    ID_CARD_NO_2 TEXT,
+    AGE_YEARS_2 INTEGER,
+    ADDRESS TEXT,
+    PHONE_NO_2 TEXT,
+    IS_TERMINATED TEXT,
+    TERM_DATE TEXT,
+    TERM_REASON_2 TEXT,
+    TERM_NOTES TEXT,
+    NOTES_2 TEXT,
+    PC_FAC_ID TEXT,
+    EC_FAC_ID TEXT,
+    BENEF_CLASS TEXT,
+    BENEF_CLASS_DESC_2 TEXT,
+    OLD_BNF_NAME_2 TEXT,
+    OLD_HSBND_NAME_2 TEXT,
+    OLD_PHONE_NO TEXT,
+    OLD_ID_CARD_NO TEXT,
+    enrollment_modification_type TEXT,
+    eligible_woman_modify_type TEXT,
+    eligible_woman_name_correction TEXT,
+    eligible_woman_phone_correction TEXT,
+    eligible_woman_ID_correction TEXT,
+    eligible_woman_husband_name_correction TEXT,
+    pregnancy_month INTEGER,
+    educational_level_of_the_targeted_woman TEXT,
+    new_bnf_name TEXT,
+    the_corrected_part_of_the_targets_name TEXT,
+    corrected_part_of_the_targets_namefirst_name TEXT,
+    the_corrected_part_of_the_targets_namefathers_name TEXT,
+    the_corrected_part_of_the_targets_namegrandfathers_name TEXT,
+    corrected_part_of_the_targets_namefourth_name TEXT,
+    corrected_part_of_the_targets_nametitle TEXT,
+    correcting_the_first_name TEXT,
+    correcting_the_fathers_name TEXT,
+    correcting_the_grandfathers_name TEXT,
+    correcting_the_fourth_name TEXT,
+    correcting_the_title TEXT,
+    bnf_1name_flag TEXT,
+    bnf_2name_flag TEXT,
+    bnf_3name_flag TEXT,
+    bnf_4name_flag TEXT,
+    bnf_5name_flag TEXT,
+    bnf_1name_is_valid TEXT,
+    bnf_2name_is_valid TEXT,
+    bnf_3name_is_valid TEXT,
+    bnf_4name_is_valid TEXT,
+    bnf_5name_is_valid TEXT,
+    bnf_1name_valid_note TEXT,
+    bnf_2name_valid_note TEXT,
+    bnf_3name_valid_note TEXT,
+    bnf_4name_valid_note TEXT,
+    bnf_5name_valid_note TEXT,
+    reference_under_which_the_name_was_corrected TEXT,
+    reference_under_which_the_namepersonal_ID_card_correction_was_made TEXT,
+    reference_under_which_the_namefamily_card_correction_was_made TEXT,
+    reference_under_which_the_namepassport_correction_was_made TEXT,
+    reference_under_which_the_name_correctionmarriage_contract_was_made TEXT,
+    reference_under_which_the_nameelectoral_card_correction_was_made TEXT,
+    reference_under_which_the_name_correctionquestionnaire_was_made TEXT,
+    reference_used_to_correct_the_nameaccording_to_the_womans_statement TEXT,
+    reference_under_which_the_nameseat_number_was_corrected TEXT,
+    reference_under_which_the_name_correction_was_madeother_mentioned TEXT,
+    another_reference_under_which_the_name_was_modified TEXT,
+    the_corrected_part_of_the_husbands_name TEXT,
+    corrected_part_of_husbands_namefirst_name TEXT,
+    corrected_part_of_husbands_namefathers_name TEXT,
+    the_corrected_part_of_the_husbands_namegrandfathers_name TEXT,
+    corrected_part_of_husbands_namefourth_name TEXT,
+    corrected_part_of_husbands_namesurname TEXT,
+    new_hsbnd_name TEXT,
+    correcting_the_first_name_6 TEXT,
+    correcting_the_fathers_name_8 TEXT,
+    correcting_the_grandfathers_name_10 TEXT,
+    correcting_the_fourth_name_12 TEXT,
+    title_correction_14 TEXT,
+    hsbnd_1name_flag TEXT,
+    hsbnd_2name_flag TEXT,
+    hsbnd_3name_flag TEXT,
+    hsbnd_4name_flag TEXT,
+    hsbnd_5name_flag TEXT,
+    hsbnd_1name_is_valid TEXT,
+    hsbnd_2name_is_valid TEXT,
+    hsbnd_3name_is_valid TEXT,
+    hsbnd_4name_is_valid TEXT,
+    hsbnd_5name_is_valid TEXT,
+    hsbnd_1name_valid_note TEXT,
+    hsbnd_2name_valid_note TEXT,
+    hsbnd_3name_valid_note TEXT,
+    hsbnd_4name_valid_note TEXT,
+    hsbnd_5name_valid_note TEXT,
+    reference_under_which_the_name_was_corrected_16 TEXT,
+    reference_under_which_the_namepersonal_ID_card_correction_was_made_17 TEXT,
+    reference_under_which_the_namefamily_card_correction_was_made_18 TEXT,
+    reference_under_which_the_namepassport_correction_was_made_19 TEXT,
+    reference_under_which_the_name_correction_was_mademarriage_contract_20 TEXT,
+    reference_under_which_the_name_correction_was_madeelectoral_card_21 TEXT,
+    reference_under_which_the_name_correction_was_madeQuestionnaire_22 TEXT,
+    reference_used_to_correct_the_nameaccording_to_what_the_woman_stated23 TEXT,
+    reference_under_which_the_nameseat_number_was_corrected_24 TEXT,
+    reference_under_which_the_name_correction_was_madeother_mentions_25 TEXT,
+    another_reference_under_which_the_name_was_modified26 TEXT,
+    telephone_number TEXT,
+    ID_card_type_3 TEXT,
+    other_determines TEXT,
+    ID_card_number TEXT,
+    day_of_signing_the_form TEXT,
+    month TEXT,
+    the_reason_for_not_joining_the_project_is_stated TEXT,
+    other_things_to_mention TEXT,
+    do_you_want_to_repackage_the_beneficiary_for_another_educator TEXT,
+    please_select_the_alternative_educator TEXT,
+    the_name_of_the_new_intellectual TEXT,
+    comments TEXT,
+    diff_per__bnf1 TEXT,
+    diff_level_bnf1 TEXT,
+    diff_per__bnf2 TEXT,
+    diff_level_bnf2 TEXT,
+    diff_per__bnf3 TEXT,
+    diff_level_bnf3 TEXT,
+    diff_per__bnf4 TEXT,
+    diff_level__bnf4 TEXT,
+    diff_per__bnf5 TEXT,
+    diff_level__bnf5 TEXT,
+    diff_per__bnf TEXT,
+    diff_level__bnf TEXT,
+    diff_per__hus1 TEXT,
+    diff_level__hus1 TEXT,
+    diff_per__hus2 TEXT,
+    diff_level__hus2 TEXT,
+    diff_per__hus3 TEXT,
+    diff_level__hus3 TEXT,
+    diff_per__hus4 TEXT,
+    diff_level__hus4 TEXT,
+    diff_per__hus5 TEXT,
+    diff_level__hus5 TEXT,
+    diff_per__hus TEXT,
+    diff_level__hus TEXT,
+    enroll_sim_score TEXT,
+    enroll_cluster_id TEXT,
+    branch_recommendation TEXT,
+    HQ_recommendation TEXT,
+    enroll_recom TEXT,
+    weighted_damerau_score TEXT,
+    positional_similarity TEXT,
+    bigram_similarity TEXT,
+    lcs_ratio TEXT,
+    length_factor TEXT,
+    structural_integrity TEXT,
+    root_factor TEXT,
+    internalId TEXT,
+    data JSON
+)`;
+// ... (rest of the file remains the same)
+```
+This is a large file, so the rest is omitted for brevity but remains unchanged. The key is adding the new `diff_...`, `enroll_...`, and score breakdown columns to the `CREATE TABLE` statement.
+
+### **Step 7: Create the Name Difference Engine**
+
+Create a new library file to house the advanced name comparison logic.
+
+**File**: `src/lib/name-engine.ts`
+```ts
+// src/lib/name-engine.ts
+
+// ==========================================
+// 1. ARABIC NORMALIZATION ENGINE
+// ==========================================
+
+const FIXED_COMPOUND_NAMES = [
+    // === ALLAH NAMES (Sorted by length desc to match longest first) ===
+    "عبد الرحمن", "عبد الرحيم", "عبد الكريم", "عبد العزيز", "عبد الملك",
+    "عبد السلام", "عبد القادر", "عبد الجليل", "عبد الرزاق", "عبد الغني",
+    "عبد الوهاب", "عبد الاله", "عبد الواحد", "عبد الماجد", "عبد الصمد",
+    "عبد الباري", "عبد القدوس", "عبد المطلب", "عبد المهيمن", "عبد الله",
+    
+    // === FEMALE ===
+    "امه الله", "امه الرحمن", "امه الرحيم", "امه الكريم", "فاطمه الزهراء",
+  
+    // === MALE RELIGIOUS ===
+    "صنع الله", "عطاء الله", "نور الله", "فتح الله", "نصر الله",
+    "فضل الله", "رحمه الله", "حسب الله", "جود الله", "جار الله",
+  
+    // === PROPHET / RELIGIOUS TITLES ===
+    "نور الدين", "شمس الدين", "سيف الدين", "زين الدين", "جمال الدين",
+    "كمال الدين", "صلاح الدين", "علاء الدين", "تقي الدين", "نجم الدين",
+    "عز الدين", "بدر الدين", "عماد الدين",
+  
+    // === HISTORICAL / KUNYA ===
+    "ابو بكر", "ابو طالب", "ابو هريره", "ابو القاسم",
+    "ام كلثوم", "ام sلمه", "ام حبيبه",
+    "ابن تيميه", "ابn سينا", "ابن خلدون", "ابن رشد",
+    "بنت الشاطئ"
+  ];
+  
+  function baseArabicNormalize(value: any): string {
+    if (!value) return "";
+    
+    let s = String(value).normalize("NFKC");
+  
+    // Specific Spelling Corrections
+    s = s
+      .replace(/يحيي/g, "يحي")
+      .replace(/يحيى/g, "يحي");
+  
+    // Character Unification
+    s = s
+      .replace(/[ًٌٍَُِّْـء]/g, "")   // Remove Tashkeel (Diacritics), Tatweel, Hamza
+      .replace(/[أإآ]/g, "ا")       // Normalize Alef
+      .replace(/[ى]/g, "ي")         // Normalize Alef Maqsura to Ya
+      .replace(/[ؤ]/g, "و")         // Hamza on Waw to Waw
+      .replace(/[ئ]/g, "ي")         // Hamza on Ya to Ya
+      .replace(/ة/g, "ه")           // Ta Marbuta to Ha
+      .replace(/گ/g, "ك")           // Persian Gaf to Kaf
+      .replace(/ڤ/g, "ف");          // Persian/Kurdish Ve to Fa
+  
+    // Clean non-alphanumeric (Keep spaces for now)
+    s = s
+      .replace(/[^ء-ي0-9a-zA-Z\s]/g, " ") 
+      .replace(/\s+/g, " ")
+      .trim()
+      .toLowerCase();
+  
+    return s;
+  }
+  
+  /**
+   * Main Normalization Function
+   * Applies base normalization + compound name merging (underscores).
+   */
+  export function normalizeArabicWithCompounds(text: any): string {
+    let s = baseArabicNormalize(text);
+  
+    // 1. Apply Fixed Compound List
+    for (const compound of FIXED_COMPOUND_NAMES) {
+      const normalizedCompound = baseArabicNormalize(compound);
+      if (s.includes(normalizedCompound)) {
+        // Replace with underscored version globally
+        // We use split/join to replace all occurrences
+        const replacement = normalizedCompound.replace(/\s/g, "_");
+        s = s.split(normalizedCompound).join(replacement);
+      }
+    }
+  
+    // 2. Apply Dynamic Patterns (Regex) for unknown compounds
+    
+    // Rule: "Abd" prefix (عبد + Name) -> abd_name
+    s = s.replace(/\b(عبد)\s+([ء-ي]+)\b/g, "$1_$2");
+  
+    // Rule: "Abu/Umm/Ibn/Bint" prefix -> abu_name
+    s = s.replace(/\b(ابو|ام|ابن|بنت)\s+([ء-ي]+)\b/g, "$1_$2");
+  
+    // Rule: "Al-Din" / "Al-Allah" suffix -> name_aldin
+    s = s.replace(/\b([ء-ي]+)\s+(الدين|الله)\b/g, "$1_$2");
+  
+    return s.replace(/_+/g, "_").trim();
+  }
+  
+  
+  // ==========================================
+  // 2. MATH & ALGORITHMS
+  // ==========================================
+  
+  // A. Weighted Damerau-Levenshtein
+  function damerauLevenshtein(s1: string, s2: string): number {
+    const n = s1.length;
+    const m = s2.length;
+    
+    if (n === 0) return m;
+    if (m === 0) return n;
+  
+    const d: number[][] = [];
+    for (let i = 0; i <= n; i++) d[i] = [i];
+    for (let j = 0; j <= m; j++) d[0][j] = j;
+  
+    for (let i = 1; i <= n; i++) {
+      for (let j = 1; j <= m; j++) {
+        const cost = s1[i - 1] === s2[j - 1] ? 0 : 1;
+        
+        d[i][j] = Math.min(
+          d[i - 1][j] + 1,       // deletion
+          d[i][j - 1] + 1,       // insertion
+          d[i - 1][j - 1] + cost // substitution
+        );
+  
+        // Transposition check
+        if (i > 1 && j > 1 && s1[i - 1] === s2[j - 2] && s1[i - 2] === s2[j - 1]) {
+          d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1); 
+        }
+      }
+    }
+    return d[n][m];
+  }
+  
+  // B. Bigram Similarity
+  function getBigrams(str: string): Set<string> {
+    const bigrams = new Set<string>();
+    for (let i = 0; i < str.length - 1; i++) {
+      bigrams.add(str.substring(i, i + 2));
+    }
+    return bigrams;
+  }
+  
+  function bigramSimilarity(s1: string, s2: string): number {
+    const b1 = getBigrams(s1);
+    const b2 = getBigrams(s2);
+    if (b1.size === 0 || b2.size === 0) return 0;
+    
+    let intersection = 0;
+    b1.forEach(x => { if (b2.has(x)) intersection++; });
+    
+    return (2.0 * intersection) / (b1.size + b2.size);
+  }
+  
+  // C. Longest Common Subsequence (LCS)
+  function lcsLength(s1: string, s2: string): number {
+    const dp = Array(s1.length + 1).fill(0).map(() => Array(s2.length + 1).fill(0));
+    for (let i = 1; i <= s1.length; i++) {
+      for (let j = 1; j <= s2.length; j++) {
+        if (s1[i - 1] === s2[j - 1]) dp[i][j] = dp[i - 1][j - 1] + 1;
+        else dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+      }
+    }
+    return dp[s1.length][s2.length];
+  }
+  
+  // D. Consonant Skeleton (Root Stability Proxy)
+  // Removes Alef, Waw, Ya to approximate the Arabic root
+  function getConsonantSkeleton(str: string): string {
+    return str.replace(/[اوي]/g, "");
+  }
+  
+  
+  // ==========================================
+  // 3. MAIN SCORING LOGIC
+  // ==========================================
+  
+  export interface ScoreResult {
+    totalScore: number;
+    details: {
+      weighted_damerau: number;
+      positional_similarity: number;
+      bigram_similarity: number;
+      lcs_ratio: number;
+      length_factor: number;
+      structural_integrity: number;
+      root_factor: number;
+    };
+  }
+  
+  export function calculateAdvancedNameSimilarity(oldName: string, newName: string): ScoreResult {
+    // 1. Normalize
+    const s1 = normalizeArabicWithCompounds(oldName);
+    const s2 = normalizeArabicWithCompounds(newName);
+  
+    // 2. Edge Case: Empty or Identical
+    if (!s1 && !s2) return { totalScore: 0, details: zeroDetails() };
+    if (!s1 || !s2) return { totalScore: 0, details: zeroDetails() };
+    if (s1 === s2) return { totalScore: 100, details: perfectDetails() };
+  
+    const maxLen = Math.max(s1.length, s2.length);
+  
+    // --- COMPONENT 1: Weighted Damerau-Levenshtein (35%) ---
+    const dist = damerauLevenshtein(s1, s2);
+    // Score is inverted: 0 distance = 100 score
+    const damerauScore = Math.max(0, (1 - dist / maxLen) * 100);
+  
+    // --- COMPONENT 2: Positional Similarity (20%) ---
+    // Start matches are more important than end matches
+    let posScore = 0;
+    const sameStart = s1[0] === s2[0];
+    const sameEnd = s1[s1.length - 1] === s2[s2.length - 1];
+    
+    if (sameStart) posScore += 60; // Start is heavier
+    if (sameEnd) posScore += 40;   // End is lighter
+    
+    // Penalty if lengths differ significantly
+    const lenDiff = Math.abs(s1.length - s2.length);
+    if (lenDiff > 2) posScore *= 0.7; // Reduce confidence if length varies wildly
+  
+    // --- COMPONENT 3: Bigram Similarity (15%) ---
+    const bigramScore = bigramSimilarity(s1, s2) * 100;
+  
+    // --- COMPONENT 4: LCS Ratio (10%) ---
+    const lcs = lcsLength(s1, s2);
+    const lcsScore = (lcs / maxLen) * 100;
+  
+    // --- COMPONENT 5: Structural Integrity (10%) ---
+    // Jaccard Index of character sets (does this name contain the same letters?)
+    const set1 = new Set(s1.split(''));
+    const set2 = new Set(s2.split(''));
+    let intersection = 0;
+    set1.forEach(x => { if(set2.has(x)) intersection++; });
+    const union = new Set([...s1, ...s2]).size;
+    const structuralScore = (intersection / union) * 100;
+  
+    // --- COMPONENT 6: Length Deviation Penalty (5%) ---
+    // 100 if lengths are same, approaches 0 as they diverge
+    const lengthFactor = Math.max(0, (1 - lenDiff / maxLen) * 100);
+  
+    // --- COMPONENT 7: Root Stability (5%) ---
+    const root1 = getConsonantSkeleton(s1);
+    const root2 = getConsonantSkeleton(s2);
+    const rootMax = Math.max(root1.length, root2.length) || 1;
+    const rootDist = damerauLevenshtein(root1, root2);
+    const rootFactor = Math.max(0, (1 - rootDist / rootMax) * 100);
+  
+    // --- FINAL WEIGHTED CALCULATION ---
+    const totalScore = 
+      (0.35 * damerauScore) +
+      (0.20 * posScore) +
+      (0.15 * bigramScore) +
+      (0.10 * lcsScore) +
+      (0.10 * structuralScore) +
+      (0.05 * lengthFactor) +
+      (0.05 * rootFactor);
+  
+    return {
+      totalScore: parseFloat(totalScore.toFixed(2)),
+      details: {
+        weighted_damerau: parseFloat(damerauScore.toFixed(2)),
+        positional_similarity: parseFloat(posScore.toFixed(2)),
+        bigram_similarity: parseFloat(bigramScore.toFixed(2)),
+        lcs_ratio: parseFloat(lcsScore.toFixed(2)),
+        length_factor: parseFloat(lengthFactor.toFixed(2)),
+        structural_integrity: parseFloat(structuralScore.toFixed(2)),
+        root_factor: parseFloat(rootFactor.toFixed(2))
+      }
+    };
+  }
+  
+  // Helper: Classification Level
+  export function getModificationLevel(score: number): string {
+    if (score >= 97) return "Spelling mistake";
+    if (score >= 92) return "Small modification";
+    if (score >= 80) return "Moderate modification";
+    if (score >= 65) return "High modification";
+    return "Complete modification";
+  }
+  
+  // Helpers for edge cases
+  function zeroDetails() {
+    return { 
+      weighted_damerau: 0, positional_similarity: 0, bigram_similarity: 0, 
+      lcs_ratio: 0, length_factor: 0, structural_integrity: 0, root_factor: 0 
+    };
+  }
+  
+  function perfectDetails() {
+    return { 
+      weighted_damerau: 100, positional_similarity: 100, bigram_similarity: 100, 
+      lcs_ratio: 100, length_factor: 100, structural_integrity: 100, root_factor: 100 
+    };
+  }
+```
+
+### **Step 8: Create the Enrollment Review Worker**
+
+This worker will perform the intensive calculations in the background.
+
+**File**: `src/workers/enrollment-review.worker.ts`
+```ts
+// src/workers/enrollment-review.worker.ts
+import { normalizeArabicWithCompounds, calculateAdvancedNameSimilarity, getModificationLevel } from '@/lib/name-engine';
+
+self.onmessage = async (event) => {
+    const { uploadedData, lookupColumnFile, lookupColumnDb, allDbData, mapping, origin } = event.data;
+
+    try {
+        postMessage({ type: 'progress', status: 'Starting analysis...', progress: 5 });
+
+        const dbDataMap = new Map(allDbData.map((row: any) => [String(row[lookupColumnDb]), row]));
+        const totalRecords = uploadedData.length;
+
+        const results = uploadedData.map((fileRow: any, index: number) => {
+            const lookupValue = fileRow[lookupColumnFile];
+            const dbRecord = dbDataMap.get(String(lookupValue));
+            
+            if (!dbRecord) return null; // Skip if no match in DB
+
+            const updatedRecord = { ...dbRecord };
+            
+            // Apply mapped data from file to DB record
+            for(const [fileCol, dbCol] of Object.entries(mapping)) {
+                if(fileRow.hasOwnProperty(fileCol)) {
+                    updatedRecord[dbCol as string] = fileRow[fileCol];
+                }
+            }
+
+            // --- Name Difference Calculations ---
+            const nameParts = [
+                { key: 'bnf1', oldNameCol: 'bnf_1name', newNameCol: 'correcting_the_first_name', flagCol: 'corrected_part_of_the_targets_namefirst_name' },
+                { key: 'bnf2', oldNameCol: 'bnf_2name', newNameCol: 'correcting_the_fathers_name', flagCol: 'the_corrected_part_of_the_targets_namefathers_name' },
+                { key: 'bnf3', oldNameCol: 'bnf_3name', newNameCol: 'correcting_the_grandfathers_name', flagCol: 'the_corrected_part_of_the_targets_namegrandfathers_name' },
+                { key: 'bnf4', oldNameCol: 'bnf_4name', newNameCol: 'correcting_the_fourth_name', flagCol: 'corrected_part_of_the_targets_namefourth_name' },
+                { key: 'bnf5', oldNameCol: 'bnf_5name', newNameCol: 'correcting_the_title', flagCol: 'corrected_part_of_the_targets_nametitle' },
+                { key: 'hus1', oldNameCol: 'hsbnd_1name', newNameCol: 'correcting_the_first_name_6', flagCol: 'corrected_part_of_husbands_namefirst_name' },
+                { key: 'hus2', oldNameCol: 'hsbnd_2name', newNameCol: 'correcting_the_fathers_name_8', flagCol: 'corrected_part_of_husbands_namefathers_name' },
+                { key: 'hus3', oldNameCol: 'hsbnd_3name', newNameCol: 'correcting_the_grandfathers_name_10', flagCol: 'the_corrected_part_of_the_husbands_namegrandfathers_name' },
+                { key: 'hus4', oldNameCol: 'hsbnd_4name', newNameCol: 'correcting_the_fourth_name_12', flagCol: 'corrected_part_of_husbands_namefourth_name' },
+                { key: 'hus5', oldNameCol: 'hsbnd_5name', newNameCol: 'title_correction_14', flagCol: 'corrected_part_of_husbands_namesurname' },
+            ];
+
+            nameParts.forEach(part => {
+                if (Number(updatedRecord[part.flagCol]) === 1) {
+                    const scoreResult = calculateAdvancedNameSimilarity(updatedRecord[part.oldNameCol], updatedRecord[part.newNameCol]);
+                    updatedRecord[`diff_per__${part.key}`] = scoreResult.totalScore;
+                    updatedRecord[`diff_level_${part.key}`] = getModificationLevel(scoreResult.totalScore);
+                }
+            });
+
+            // --- Whole Name Difference ---
+            const bnfScoreResult = calculateAdvancedNameSimilarity(updatedRecord['l_benef_name'], updatedRecord['new_bnf_name']);
+            updatedRecord['diff_per__bnf'] = bnfScoreResult.totalScore;
+            updatedRecord['diff_level__bnf'] = getModificationLevel(bnfScoreResult.totalScore);
+            
+            const husScoreResult = calculateAdvancedNameSimilarity(updatedRecord['l_hsbnd_name'], updatedRecord['new_hsbnd_name']);
+            updatedRecord['diff_per__hus'] = husScoreResult.totalScore;
+            updatedRecord['diff_level__hus'] = getModificationLevel(husScoreResult.totalScore);
+            
+            // --- Similarity Score ---
+            updatedRecord['enroll_sim_score'] = 0; // Placeholder for now
+
+            postMessage({ type: 'progress', status: `Processing record ${index + 1}...`, progress: 10 + ((index + 1) / totalRecords) * 80 });
+            
+            return updatedRecord;
+
+        }).filter(Boolean); // Filter out nulls
+
+        // --- Save to DB ---
+        postMessage({ type: 'progress', status: 'Saving results to database...', progress: 95 });
+
+        const saveResponse = await fetch(`${origin}/api/bnf-assessed`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: "save", records: results, uniqueIdDbCol: lookupColumnDb, projectId: 'N/A' })
+        });
+        
+        if (!saveResponse.ok) {
+            const error = await saveResponse.json();
+            throw new Error(`Failed to save uploaded data: ${error.details || error.error}`);
+        }
+
+        postMessage({ type: 'done', data: { processed: results.length } });
+
+    } catch (e: any) {
+        postMessage({ type: 'error', error: e.message || 'An unknown error occurred.' });
+    }
+};
+```
+
+### **Step 9: Create the Enrollment Review Page**
+
+Finally, create the main page component that ties everything together.
+
+**File**: `src/app/meal-system/monitoring/implementation/enrollment/review/page.tsx`
+```tsx
+// This file is now empty as the page has been moved.
+```
+This should now be `src/app/meal-system/monitoring/implementation/enrollment/review/page.tsx`. I will place the code there.
+
+**File**: `src/app/meal-system/monitoring/implementation/enrollment/review/page.tsx`
+```tsx
+"use client";
+
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import Link from 'next/link';
+import * as XLSX from 'xlsx';
+
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { useToast } from '@/hooks/use-toast';
+import { ArrowLeft, Loader2, GitCompareArrows, Trash2, Plus, FileDown, Upload, Database } from 'lucide-react';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Progress } from '@/components/ui/progress';
+
+
+interface Project {
   projectId: string;
   projectName: string;
-  governorates: string[];
-  districts: string[];
-  subDistricts: string[];
-  startDateMonth: string;
-  startDateYear:string;
-  endDateMonth: string;
-  endDateYear: string;
-  beneficiaries: number;
 }
 
-export function useIttData() {
-    const { toast } = useToast_use_itt_data();
-    const [projects, setProjects] = useState<Project_use_itt_data[]>([]);
-    const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
-    const [loading, setLoading] = useState({ projects: true, data: false });
-    const [logframe, setLogframe] = useState<Logframe_use_itt_data | null>(null);
-    const [indicatorPlan, setIndicatorPlan] = useState<IndicatorTrackingPlan_use_itt_data | null>(null);
-    const [trackingData, setTrackingData] = useState<IndicatorTrackingPlan_use_itt_data | null>(null);
+const LOCAL_STORAGE_MAPPING_PREFIX = "enrollment-review-mapping-";
 
+export default function EnrollmentUploadAndProcessPage() {
+    const { toast } = useToast();
+    const [projects, setProjects] = useState<Project[]>([]);
+    const [selectedProjectId, setSelectedProjectId] = useState('');
+    const [loadingProjects, setLoadingProjects] = useState(true);
+
+    const [file, setFile] = useState<File | null>(null);
+    const [sheets, setSheets] = useState<string[]>([]);
+    const [selectedSheet, setSelectedSheet] = useState('');
+    const [columns, setColumns] = useState<string[]>([]);
+    const [rawFileData, setRawFileData] = useState<any[]>([]);
+    
+    const [dbColumns, setDbColumns] = useState<string[]>([]);
+    const [loadingDbSchema, setLoadingDbSchema] = useState(true);
+    const [allDbData, setAllDbData] = useState<any[]>([]);
+
+    const [lookupColumnFile, setLookupColumnFile] = useState('');
+    const [lookupColumnDb, setLookupColumnDb] = useState('');
+    
+    const [columnMapping, setColumnMapping] = useState<Map<string, string>>(new Map());
+    const [manualMapping, setManualMapping] = useState({ ui: '', db: '' });
+
+    const [isProcessing, setIsProcessing] = useState(false);
+    const [workerStatus, setWorkerStatus] = useState('idle');
+    const [workerProgress, setWorkerProgress] = useState(0);
+
+    const workerRef = useRef<Worker | null>(null);
+
+    // Initialization
     useEffect(() => {
-        const fetchProjects = async () => {
-            setLoading(prev => ({ ...prev, projects: true }));
+        const fetchInitialData = async () => {
             try {
-                const res = await fetch('/api/projects');
-                if (!res.ok) throw new Error("Failed to fetch projects");
-                setProjects(await res.json());
+                const [projRes, dbSchemaRes] = await Promise.all([
+                    fetch('/api/projects'),
+                    fetch('/api/bnf-assessed', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'get_schema' })})
+                ]);
+                if (projRes.ok) setProjects(await projRes.json());
+                if (dbSchemaRes.ok) {
+                    const schema = await dbSchemaRes.json();
+                    setDbColumns(schema.columns || []);
+                }
             } catch (error: any) {
-                toast({ title: "Error loading projects", description: error.message, variant: "destructive" });
+                toast({ title: "Error loading initial data", description: error.message, variant: "destructive" });
             } finally {
-                setLoading(prev => ({ ...prev, projects: false }));
+                setLoadingProjects(false);
+                setLoadingDbSchema(false);
             }
         };
-        fetchProjects();
-    }, [toast]);
+        fetchInitialData();
+        
+        // Initialize Worker
+        const worker = new Worker(new URL('@/workers/enrollment-review.worker.ts', import.meta.url));
+        workerRef.current = worker;
+        
+        worker.onmessage = (event) => {
+            const { type, status, progress, error } = event.data;
+        
+            if (type === "progress") {
+                setWorkerStatus(status);
+                setWorkerProgress(progress);
+            } else if (type === "done") {
+                setIsProcessing(false);
+                setWorkerStatus('done');
+                setWorkerProgress(100);
+                toast({ title: 'Success!', description: `Successfully processed and saved ${event.data.data.processed} records.`});
+            } else if (type === "error") {
+                setIsProcessing(false);
+                setWorkerStatus('error');
+                toast({ title: 'Worker Error', description: error, variant: 'destructive'});
+            }
+        };
+        
+        return () => worker.terminate();
 
-    const selectProject = useCallback(async (projectId: string) => {
-        setSelectedProjectId(projectId);
-        if (!projectId) {
-            setLogframe(null);
-            setIndicatorPlan(null);
-            setTrackingData(null);
+    }, [toast]);
+    
+    // UI Logic (Memoization, Handlers)
+    const unmappedFileColumns = useMemo(() => columns.filter(col => !Array.from(columnMapping.keys()).includes(col) && col !== lookupColumnFile), [columns, columnMapping, lookupColumnFile]);
+    const unmappedDbColumns = useMemo(() => dbColumns.filter(col => !Array.from(columnMapping.values()).includes(col) && col !== lookupColumnDb), [dbColumns, columnMapping, lookupColumnDb]);
+    
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (e.target.files) {
+        setFile(e.target.files[0]);
+        setSheets([]);
+        setSelectedSheet('');
+        setColumns([]);
+        setRawFileData([]);
+      }
+    };
+
+    useEffect(() => {
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const data = new Uint8Array(e.target!.result as ArrayBuffer);
+            const workbook = XLSX.read(data, { type: 'array' });
+            setSheets(workbook.SheetNames);
+            if (workbook.SheetNames.length > 0) {
+                setSelectedSheet(workbook.SheetNames[0]);
+            }
+        };
+        reader.readAsArrayBuffer(file);
+    }, [file]);
+
+    useEffect(() => {
+        if (!file || !selectedSheet) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const data = new Uint8Array(e.target!.result as ArrayBuffer);
+            const workbook = XLSX.read(data, { type: 'array' });
+            const worksheet = workbook.Sheets[selectedSheet];
+            const jsonData = XLSX.utils.sheet_to_json(worksheet);
+            setRawFileData(jsonData);
+            const fileColumns = Object.keys(jsonData[0] || {});
+            setColumns(fileColumns);
+            
+            const storageKey = `${LOCAL_STORAGE_MAPPING_PREFIX}${fileColumns.join(',')}`;
+            const savedMapping = localStorage.getItem(storageKey);
+            if(savedMapping) {
+                setColumnMapping(new Map(Object.entries(JSON.parse(savedMapping))));
+                toast({ title: "Mapping Restored" });
+            } else {
+                setColumnMapping(new Map());
+            }
+        };
+        reader.readAsArrayBuffer(file);
+    }, [file, selectedSheet, toast]);
+    
+    useEffect(() => {
+        if (columns.length > 0 && columnMapping.size > 0) {
+            const storageKey = `${LOCAL_STORAGE_MAPPING_PREFIX}${columns.join(',')}`;
+            localStorage.setItem(storageKey, JSON.stringify(Object.fromEntries(columnMapping)));
+        }
+    }, [columnMapping, columns]);
+
+    const handleAutoMatch = () => {
+        const newMapping = new Map<string, string>();
+        unmappedFileColumns.forEach(uiCol => {
+            const matchedDbCol = unmappedDbColumns.find(dbCol => dbCol.toLowerCase().replace(/_/g, '') === uiCol.toLowerCase().replace(/_/g, ''));
+            if(matchedDbCol) { newMapping.set(uiCol, matchedDbCol); }
+        });
+        setColumnMapping(prev => new Map([...prev, ...newMapping]));
+        toast({ title: "Auto-match Complete" });
+    };
+
+    const handleAddManualMapping = () => {
+        if (manualMapping.ui && manualMapping.db) {
+            setColumnMapping(prev => new Map(prev).set(manualMapping.ui, manualMapping.db));
+            setManualMapping({ ui: '', db: '' });
+        }
+    };
+    
+    const handleProcessAndSave = async () => {
+        if (!selectedProjectId || !lookupColumnFile || !lookupColumnDb || rawFileData.length === 0) {
+            toast({ title: "Missing prerequisites", description: "Select project, upload file, and define lookup columns.", variant: "destructive" });
             return;
         }
-        setLoading(prev => ({...prev, data: true }));
+
+        setIsProcessing(true);
+        setWorkerStatus('fetching_db_data');
+        setWorkerProgress(0);
+
         try {
-            const [logframeRes, indicatorPlanRes, trackingDataRes] = await Promise.all([
-                fetch(`/api/logframe?projectId=${projectId}`),
-                fetch(`/api/monitoring-indicators?projectId=${projectId}`),
-                fetch(`/api/indicator-tracking?projectId=${projectId}`)
-            ]);
-
-            if (logframeRes.ok) {
-                setLogframe(await logframeRes.json());
-            } else {
-                 setLogframe(null);
-            }
+            const res = await fetch('/api/bnf-assessed');
+            if (!res.ok) throw new Error("Failed to fetch current bnf-assessed data.");
+            const fullDbData = await res.json();
             
-            if (indicatorPlanRes.ok) {
-                 setIndicatorPlan(await indicatorPlanRes.json());
-            } else {
-                toast({ title: "Indicator Plan Not Found", description: "No indicator plan found for this project. Please create one first.", variant: 'destructive'});
-                setIndicatorPlan(null);
-            }
+            workerRef.current?.postMessage({
+                uploadedData: rawFileData,
+                lookupColumnFile,
+                lookupColumnDb,
+                allDbData: fullDbData,
+                mapping: Object.fromEntries(columnMapping),
+                origin: window.location.origin,
+            });
 
-            if(trackingDataRes.ok) {
-                setTrackingData(await trackingDataRes.json());
-            } else {
-                setTrackingData(null);
-            }
-
-        } catch (error: any) {
-             toast({ title: "Error loading project data", description: error.message, variant: "destructive" });
-        } finally {
-            setLoading(prev => ({...prev, data: false }));
+        } catch(error: any) {
+            toast({ title: "Error starting process", description: error.message, variant: "destructive" });
+            setIsProcessing(false);
         }
-
-    }, [toast]);
-
-    return {
-        projects,
-        selectedProject: projects.find(p => p.projectId === selectedProjectId) || null,
-        logframe,
-        indicatorPlan,
-        trackingData,
-        loading,
-        selectProject,
     };
+    
+    return (
+        <div className="space-y-6">
+            <div className="flex justify-between items-center">
+                <h1 className="text-3xl font-bold">Enrollment Review & Correction</h1>
+                 <Button variant="outline" asChild><Link href="/meal-system/monitoring/implementation/enrollment"><ArrowLeft className="mr-2 h-4 w-4" /> Back</Link></Button>
+            </div>
+            
+            {/* Sections */}
+            <Card><CardHeader><CardTitle>1. Select Project</CardTitle></CardHeader>
+                <CardContent><Select onValueChange={setSelectedProjectId} value={selectedProjectId} disabled={loadingProjects}>
+                    <SelectTrigger><SelectValue placeholder="Select a project..." /></SelectTrigger>
+                    <SelectContent>{projects.map(p => <SelectItem key={p.projectId} value={p.projectId}>{p.projectName}</SelectItem>)}</SelectContent>
+                </Select></CardContent>
+            </Card>
+
+            <Card>
+                <CardHeader><CardTitle>2. Upload Data File</CardTitle></CardHeader>
+                <CardContent className="space-y-4">
+                     <Input type="file" onChange={handleFileChange} accept=".xlsx,.xls,.csv" />
+                     {sheets.length > 0 && <Select value={selectedSheet} onValueChange={handleSheetSelect}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent>{sheets.map(s=><SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select>}
+                </CardContent>
+            </Card>
+
+            {columns.length > 0 && (
+                 <Card>
+                    <CardHeader><CardTitle>3. Define Lookup Columns</CardTitle></CardHeader>
+                    <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                           <Label>Lookup Column from File</Label>
+                           <Select value={lookupColumnFile} onValueChange={setLookupColumnFile}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{columns.map(c=><SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent></Select>
+                        </div>
+                         <div className="space-y-2">
+                           <Label>Lookup Column from Database</Label>
+                           <Select value={lookupColumnDb} onValueChange={setLookupColumnDb}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{dbColumns.map(c=><SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent></Select>
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
+
+            {columns.length > 0 && (
+                <Card>
+                    <CardHeader>
+                       <div className="flex justify-between items-center">
+                         <CardTitle>4. Map Columns for Update</CardTitle>
+                         <Button onClick={handleAutoMatch}><GitCompareArrows className="mr-2 h-4 w-4" />Auto-match</Button>
+                       </div>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                            <div className="space-y-2">
+                                <Label>Unmapped File Column</Label>
+                                <Select value={manualMapping.ui} onValueChange={v => setManualMapping(m=>({...m, ui: v}))}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent>{unmappedFileColumns.map(c=><SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent></Select>
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Unmapped DB Column</Label>
+                                <Select value={manualMapping.db} onValueChange={v => setManualMapping(m=>({...m, db: v}))}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent>{unmappedDbColumns.map(c=><SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent></Select>
+                            </div>
+                            <Button onClick={handleAddManualMapping}><Plus className="mr-2 h-4 w-4"/>Add Mapping</Button>
+                        </div>
+                        <ScrollArea className="h-48 border rounded-md">
+                            <Table><TableHeader><TableRow><TableHead>File Column</TableHead><TableHead>Database Column</TableHead><TableHead>Action</TableHead></TableRow></TableHeader>
+                            <TableBody>{Array.from(columnMapping.entries()).map(([ui, db]) => <TableRow key={ui}><TableCell>{ui}</TableCell><TableCell>{db}</TableCell><TableCell><Button variant="ghost" size="icon" onClick={()=>setColumnMapping(p=>{const n=new Map(p);n.delete(ui);return n;})}><Trash2 className="h-4 w-4 text-destructive"/></Button></TableCell></TableRow>)}</TableBody>
+                            </Table>
+                        </ScrollArea>
+                    </CardContent>
+                </Card>
+            )}
+
+            <Card>
+                <CardHeader><CardTitle>5. Execute and Save</CardTitle></CardHeader>
+                <CardContent className="space-y-4">
+                     <Button onClick={handleProcessAndSave} disabled={isProcessing || !isMappingComplete}>
+                        {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Save className="mr-2 h-4 w-4"/>}
+                        {isProcessing ? `Processing... (${workerStatus})` : 'Process & Save Changes'}
+                    </Button>
+                    {isProcessing && <Progress value={workerProgress} />}
+                </CardContent>
+            </Card>
+
+            <div className="flex justify-end gap-2">
+                 <Button variant="secondary" asChild><Link href="/meal-system/monitoring/implementation/beneficiary-monitoring/Beneficiaries/review">Go to Review Page</Link></Button>
+                 <Button variant="secondary" asChild><Link href="/meal-system/monitoring/implementation/beneficiary-monitoring/Beneficiaries/database">Go to Database Page</Link></Button>
+            </div>
+        </div>
+    );
 }
+
 ```
-
-#### File: src/hooks/use-mobile.tsx
-```ts
-// src/hooks/use-mobile.tsx
-"use client"
-
-import * as React_use_mobile from "react"
-
-const MOBILE_BREAKPOINT_use_mobile = 768
-
-export function useIsMobile() {
-  // Always return false to force desktop view
-  return false
-}
-```
-
-#### File: src/hooks/use-toast.ts
-```ts
-// src/hooks/use-toast.ts
-"use client"
-
-// Inspired by react-hot-toast library
-import * as React_use_toast from "react"
-
-import type {
-  ToastActionElement,
-  ToastProps,
-} from "@/components/ui/toast"
-
-const TOAST_LIMIT_use_toast = 1
-const TOAST_REMOVE_DELAY_use_toast = 1000000
-
-type ToasterToast_use_toast = ToastProps & {
-  id: string
-  title?: React_use_toast.ReactNode
-  description?: React_use_toast.ReactNode
-  action?: ToastActionElement
-}
-
-const actionTypes_use_toast = {
-  ADD_TOAST: "ADD_TOAST",
-  UPDATE_TOAST: "UPDATE_TOAST",
-  DISMISS_TOAST: "DISMISS_TOAST",
-  REMOVE_TOAST: "REMOVE_TOAST",
-} as const
-
-let count_use_toast = 0
-
-function genId_use_toast() {
-  count_use_toast = (count_use_toast + 1) % Number.MAX_SAFE_INTEGER
-  return count_use_toast.toString()
-}
-
-type ActionType_use_toast = typeof actionTypes_use_toast
-
-type Action_use_toast =
-  | {
-      type: ActionType_use_toast["ADD_TOAST"]
-      toast: ToasterToast_use_toast
-    }
-  | {
-      type: ActionType_use_toast["UPDATE_TOAST"]
-      toast: Partial<ToasterToast_use_toast>
-    }
-  | {
-      type: ActionType_use_toast["DISMISS_TOAST"]
-      toastId?: ToasterToast_use_toast["id"]
-    }
-  | {
-      type: ActionType_use_toast["REMOVE_TOAST"]
-      toastId?: ToasterToast_use_toast["id"]
-    }
-
-interface State_use_toast {
-  toasts: ToasterToast_use_toast[]
-}
-
-const toastTimeouts_use_toast = new Map<string, ReturnType<typeof setTimeout>>()
-
-const addToRemoveQueue_use_toast = (toastId: string) => {
-  if (toastTimeouts_use_toast.has(toastId)) {
-    return
-  }
-
-  const timeout = setTimeout(() => {
-    toastTimeouts_use_toast.delete(toastId)
-    dispatch_use_toast({
-      type: "REMOVE_TOAST",
-      toastId: toastId,
-    })
-  }, TOAST_REMOVE_DELAY_use_toast)
-
-  toastTimeouts_use_toast.set(toastId, timeout)
-}
-
-export const reducer_use_toast = (state: State_use_toast, action: Action_use_toast): State_use_toast => {
-  switch (action.type) {
-    case "ADD_TOAST":
-      return {
-        ...state,
-        toasts: [action.toast, ...state.toasts].slice(0, TOAST_LIMIT_use_toast),
-      }
-
-    case "UPDATE_TOAST":
-      return {
-        ...state,
-        toasts: state.toasts.map((t) =>
-          t.id === action.toast.id ? { ...t, ...action.toast } : t
-        ),
-      }
-
-    case "DISMISS_TOAST": {
-      const { toastId } = action
-
-      // ! Side effects ! - This could be extracted into a dismissToast() action,
-      // but I'll keep it here for simplicity
-      if (toastId) {
-        addToRemoveQueue_use_toast(toastId)
-      } else {
-        state.toasts.forEach((toast) => {
-          addToRemoveQueue_use_toast(toast.id)
-        })
-      }
-
-      return {
-        ...state,
-        toasts: state.toasts.map((t) =>
-          t.id === toastId || toastId === undefined
-            ? {
-                ...t,
-                open: false,
-              }
-            : t
-        ),
-      }
-    }
-    case "REMOVE_TOAST":
-      if (action.toastId === undefined) {
-        return {
-          ...state,
-          toasts: [],
-        }
-      }
-      return {
-        ...state,
-        toasts: state.toasts.filter((t) => t.id !== action.toastId),
-      }
-  }
-}
-
-const listeners_use_toast: Array<(state: State_use_toast) => void> = []
-
-let memoryState_use_toast: State_use_toast = { toasts: [] }
-
-function dispatch_use_toast(action: Action_use_toast) {
-  memoryState_use_toast = reducer_use_toast(memoryState_use_toast, action)
-  listeners_use_toast.forEach((listener) => {
-    listener(memoryState_use_toast)
-  })
-}
-
-type Toast_use_toast = Omit<ToasterToast_use_toast, "id">
-
-function toast_use_toast({ ...props }: Toast_use_toast) {
-  const id = genId_use_toast()
-
-  const update = (props: ToasterToast_use_toast) =>
-    dispatch_use_toast({
-      type: "UPDATE_TOAST",
-      toast: { ...props, id },
-    })
-  const dismiss = () => dispatch_use_toast({ type: "DISMISS_TOAST", toastId: id })
-
-  dispatch_use_toast({
-    type: "ADD_TOAST",
-    toast: {
-      ...props,
-      id,
-      open: true,
-      onOpenChange: (open) => {
-        if (!open) dismiss()
-      },
-    },
-  })
-
-  return {
-    id: id,
-    dismiss,
-    update,
-  }
-}
-
-function useToast_use_toast() {
-  const [state, setState] = React_use_toast.useState<State_use_toast>(memoryState_use_toast)
-
-  React_use_toast.useEffect(() => {
-    listeners_use_toast.push(setState)
-    return () => {
-      const index = listeners_use_toast.indexOf(setState)
-      if (index > -1) {
-        listeners_use_toast.splice(index, 1)
-      }
-    }
-  }, [state])
-
-  return {
-    ...state,
-    toast: toast_use_toast,
-    dismiss: (toastId?: string) => dispatch_use_toast({ type: "DISMISS_TOAST", toastId }),
-  }
-}
-```
+This sets up all the required parts for your new feature.
