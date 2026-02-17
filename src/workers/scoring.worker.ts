@@ -94,7 +94,7 @@ type PairScore = {
 
 type ClusterConfidenceResult = {
   avgWomanScore: number;
-  avgHusbandScore: number;
+  avgHusbandNameScore: number;
   totalAverageScore: number;
   standardDeviation: number;
   sizePenalty: number;
@@ -146,14 +146,14 @@ function arabicConfidenceLabel(percent: number): string {
 --------------------------------------------------------- */
 
 function calculateClusterConfidence(
-  pairScore: PairScore[],
+  pairScores: PairScore[],
   clusterSize: number
 ): ClusterConfidenceResult {
 
   // ---- Collect Scores ----
-  const womanScores = pairScore.map(p => p.womanScore);
-  const husbandScores = pairScore.map(p => p.husbandScore);
-  const totalScores = pairScore.map(p => p.totalAvg);
+  const womanScores = pairScores.map(p => p.womanScore);
+  const husbandScores = pairScores.map(p => p.husbandScore);
+  const totalScores = pairScores.map(p => p.totalAvg);
 
   // ---- Averages ----
   const avgWomanScore = mean(womanScores);
@@ -222,17 +222,18 @@ self.onmessage = (event) => {
         return {
           ...cluster,
           records,
-          pairScore: [],
+          pairScores: [],
           confidenceScore: 0,
           avgWomanNameScore: 0,
           avgHusbandNameScore: 0,
           avgFinalScore: 0,
           Max_PairScore: 0,
+          Flag: '',
           Generated_Cluster_ID: generatedClusterId,
         };
       }
       
-      const pairScore: PairScore[] = [];
+      const pairScores: PairScore[] = [];
       let maxPairScore = 0;
       for (let i = 0; i < records.length; i++) {
         for (let j = i + 1; j < records.length; j++) {
@@ -241,7 +242,7 @@ self.onmessage = (event) => {
               maxPairScore = result.score;
             }
             const nameAvgs = totalAverageNameScore(records[i], records[j]);
-            pairScore.push({
+            pairScores.push({
                 aId: records[i]._internalId,
                 bId: records[j]._internalId,
                 womanScore: nameAvgs.womanAvg,
@@ -254,10 +255,21 @@ self.onmessage = (event) => {
         }
       }
 
-      const confidenceResult = calculateClusterConfidence(pairScore, records.length);
+      let flag = '';
+      if (maxPairScore >= 0.95) {
+        flag = 'm?';
+      } else if (maxPairScore >= 0.85) {
+        flag = 'm';
+      } else if (maxPairScore >= 0.75) {
+        flag = '??';
+      } else if (maxPairScore >= 0.65) {
+        flag = '?';
+      }
+
+      const confidenceResult = calculateClusterConfidence(pairScores, records.length);
       
       const recordsWithAvgScores = records.map(record => {
-        const relatedPairs = pairScore.filter((p: any) => p.aId === record._internalId || p.bId === record._internalId);
+        const relatedPairs = pairScores.filter((p: any) => p.aId === record._internalId || p.bId === record._internalId);
         
         const safeAvg = (arr: (number | null | undefined)[]) => {
             const valid = arr.filter(v => typeof v === 'number' && isFinite(v)) as number[];
@@ -277,12 +289,13 @@ self.onmessage = (event) => {
       return {
         ...cluster,
         records: recordsWithAvgScores,
-        pairScore: pairScore,
+        pairScores: pairScores,
         confidenceScore: confidenceResult.confidencePercent,
         avgWomanNameScore: confidenceResult.avgWomanScore,
-        avgHusbandNameScore: confidenceResult.avgHusbandScore,
+        avgHusbandNameScore: confidenceResult.avgHusbandNameScore,
         avgFinalScore: confidenceResult.totalAverageScore,
         Max_PairScore: maxPairScore,
+        Flag: flag,
         Generated_Cluster_ID: generatedClusterId
       };
     });
