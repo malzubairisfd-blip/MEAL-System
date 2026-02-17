@@ -689,7 +689,7 @@ export default function UploadPage() {
           clusterInfo: {
             Generated_Cluster_ID: cluster.Generated_Cluster_ID,
             Size: cluster.records.length,
-            Flag: "Review",
+            Flag: cluster.Flag,
             Max_PairScore: cluster.Max_PairScore,
             confidenceScore: cluster.confidenceScore,
             reasons: Array.isArray(cluster.reasons) ? cluster.reasons.join(",") : cluster.reasons,
@@ -760,7 +760,7 @@ const executeSaveAndEnrich = useCallback(async (mode: "skip" | "replace", rawRec
         const { enrichedRecords } = enrichData(cachedData);
         
         const enrichedPayload = enrichedRecords.map(record => {
-            const enrichment: Record<string, any> = { _internalId: record._internalId! };
+            const enrichment: Record<string, any> = { beneficiaryId: record.beneficiaryId! };
             dbColumns.forEach(key => {
                 if (record.hasOwnProperty(key) && key !== '_internalId') {
                     enrichment[key] = record[key];
@@ -809,7 +809,7 @@ const executeSaveAndEnrich = useCallback(async (mode: "skip" | "replace", rawRec
     try {
         const recordsToProcess = rawRowsRef.current.map((record) => {
             const newRecord: Record<string, any> = { 
-                _internalId: record._internalId,
+                beneficiaryId: record.beneficiaryId,
                 project_id: selectedProjectId,
                 project_name: selectedProjectData.projectName,
             };

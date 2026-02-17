@@ -712,14 +712,14 @@ export async function POST(req: Request) {
         let updatedCount = 0;
         const transaction = db.transaction((recordsToUpdate) => {
           for (const record of recordsToUpdate) {
-            if(!record.internalId) continue;
+            if(!record.beneficiaryId) continue;
             
-            const colsToUpdate = Object.keys(record).filter(col => tableCols.includes(col) && col !== 'id' && col !== 'internalId' && col !== 'project_id');
+            const colsToUpdate = Object.keys(record).filter(col => tableCols.includes(col) && col !== 'id' && col !== 'beneficiaryId' && col !== 'project_id');
             if(colsToUpdate.length === 0) continue;
             
             const setClause = colsToUpdate.map(col => `${col} = @${col}`).join(", ");
             const stmt = db.prepare(
-                `UPDATE assessed_data SET ${setClause} WHERE project_id = @project_id AND internalId = @internalId`
+                `UPDATE assessed_data SET ${setClause} WHERE project_id = @project_id AND beneficiaryId = @beneficiaryId`
               );
             
             const info = stmt.run({ ...record, project_id: projectId });
