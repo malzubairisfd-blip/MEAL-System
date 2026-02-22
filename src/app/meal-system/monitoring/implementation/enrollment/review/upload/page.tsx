@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import * as XLSX from 'xlsx';
-import { openDB } from 'idb';
+import { saveEnrollmentDataToCache, loadEnrollmentDataFromCache } from '@/lib/cache';
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from "@/components/ui/button";
@@ -18,10 +18,6 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { cn } from '@/lib/utils';
-
-const ENROLLMENT_CACHE_DB_NAME = 'enrollment-review-cache-db';
-const ENROLLMENT_CACHE_STORE_NAME = 'files';
-const ENROLLMENT_CACHE_KEY = 'enrollmentData';
 
 interface Project {
   projectId: string;
@@ -72,7 +68,8 @@ export default function EnrollmentReviewUploadPage() {
             } else if (type === 'done') {
                 setWorkerStatus('done');
                 setWorkerProgress(100);
-                toast({ title: 'Analysis Complete', description: 'Data has been processed and results are cached.' });
+                toast({ title: 'Analysis Complete', description: `Successfully processed ${data.processedCount} records.` });
+                 setLoading(p => ({...p, worker: false}));
             } else if (type === 'error') {
                 setWorkerStatus('error');
                 setLoading(p => ({...p, worker: false}));
@@ -81,6 +78,32 @@ export default function EnrollmentReviewUploadPage() {
         };
         return () => worker.terminate();
     }, [toast]);
+    
+    useEffect(() => {
+        const autoSaveToCache = async () => {
+            if (rawFileData.length > 0 && selectedProjectId && uniqueIdFileCol) {
+                setLoading(p => ({ ...p, caching: true }));
+                try {
+                    const project = projects.find(p => p.projectId === selectedProjectId);
+                    if (!project) throw new Error("Selected project not found.");
+                    
+                    const dataToCache = rawFileData.map(row => ({
+                        ...row,
+                        project_id: project.projectId,
+                        project_name: project.projectName
+                    }));
+                    
+                    await saveEnrollmentDataToCache(dataToCache);
+                    toast({ title: "Data Ready", description: "File data has been automatically cached and is ready for analysis." });
+                } catch (err: any) {
+                    toast({ title: "Error Caching Data", description: err.message, variant: 'destructive' });
+                } finally {
+                    setLoading(p => ({ ...p, caching: false }));
+                }
+            }
+        };
+        autoSaveToCache();
+    }, [rawFileData, selectedProjectId, uniqueIdFileCol, projects, toast]);
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       if (e.target.files) {
@@ -116,10 +139,8 @@ export default function EnrollmentReviewUploadPage() {
                 const workbook = XLSX.read(data, { type: 'array' });
                 const worksheet = workbook.Sheets[selectedSheet];
                 const jsonData = XLSX.utils.sheet_to_json(worksheet);
-
                 setRawFileData(jsonData);
                 setColumns(Object.keys(jsonData[0] || {}));
-
             } catch (err: any) {
                 toast({ title: "Error reading sheet", description: err.message, variant: 'destructive'});
             }
@@ -127,40 +148,12 @@ export default function EnrollmentReviewUploadPage() {
         reader.readAsArrayBuffer(file);
     }, [file, selectedSheet, toast]);
 
-    const handleSaveToCache = useCallback(async () => {
-        if (rawFileData.length === 0 || !selectedProjectId || !uniqueIdFileCol) {
-            toast({ title: "Missing Information", description: "Please select a project, upload a file, choose a sheet, and select a unique ID column.", variant: "destructive" });
-            return;
-        }
-        setLoading(p => ({ ...p, caching: true }));
-        try {
-            const project = projects.find(p => p.projectId === selectedProjectId);
-            if (!project) throw new Error("Selected project not found.");
-            
-            const dataToCache = rawFileData.map(row => ({
-                ...row,
-                project_id: project.projectId,
-                project_name: project.projectName
-            }));
-
-            const db = await openDB(ENROLLMENT_CACHE_DB_NAME, 1, {
-                upgrade(db) {
-                    if (!db.objectStoreNames.contains(ENROLLMENT_CACHE_STORE_NAME)) {
-                        db.createObjectStore(ENROLLMENT_CACHE_STORE_NAME);
-                    }
-                },
-            });
-            await db.put(ENROLLMENT_CACHE_STORE_NAME, dataToCache, ENROLLMENT_CACHE_KEY);
-            toast({ title: "Data Saved to Cache", description: "Your file has been saved to the local browser cache and is ready for analysis." });
-        } catch (err: any) {
-            toast({ title: "Error Caching Data", description: err.message, variant: 'destructive' });
-        } finally {
-            setLoading(p => ({ ...p, caching: false }));
-        }
-    }, [rawFileData, selectedProjectId, uniqueIdFileCol, toast, projects]);
-
     const handleRunAnalysis = () => {
         if (!workerRef.current) return;
+        if (!uniqueIdFileCol) {
+            toast({ title: "Unique ID Required", description: "Please select the unique ID column before running analysis.", variant: "destructive" });
+            return;
+        }
         setLoading(p => ({...p, worker: true}));
         setWorkerStatus('initializing');
         setWorkerProgress(0);
@@ -180,8 +173,8 @@ export default function EnrollmentReviewUploadPage() {
             
              <Card>
                 <CardHeader>
-                    <CardTitle>1. Upload & Cache Data</CardTitle>
-                    <CardDescription>Select your project and upload the enrollment file. This will save the data to your browser's local storage for processing.</CardDescription>
+                    <CardTitle>1. Upload & Configure Data</CardTitle>
+                    <CardDescription>Select your project, upload the enrollment file, and choose the unique identifier column. The data will be cached automatically.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -212,10 +205,6 @@ export default function EnrollmentReviewUploadPage() {
                             </div>
                          )}
                      </div>
-                     <Button onClick={handleSaveToCache} disabled={!file || !selectedSheet || !selectedProjectId || !uniqueIdFileCol || loading.caching}>
-                         {loading.caching ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Save className="mr-2 h-4 w-4"/>}
-                         Save to Cache
-                     </Button>
                 </CardContent>
             </Card>
 
@@ -225,7 +214,7 @@ export default function EnrollmentReviewUploadPage() {
                     <CardDescription>Once data is cached, run the background worker to perform normalization and advanced difference analysis.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <Button onClick={handleRunAnalysis} disabled={loading.worker || columns.length === 0}>
+                    <Button onClick={handleRunAnalysis} disabled={loading.worker || loading.caching || rawFileData.length === 0}>
                         {loading.worker ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Check className="mr-2 h-4 w-4"/>}
                         {workerStatus === 'done' ? 'Analysis Complete' : (loading.worker ? 'Analyzing...' : 'Run Analysis')}
                     </Button>
@@ -238,7 +227,6 @@ export default function EnrollmentReviewUploadPage() {
                 </CardContent>
             </Card>
 
-            {/* The rest of the UI will be added in subsequent steps */}
              <Card>
                  <CardHeader>
                      <CardTitle>3. Map and Save to Final Database</CardTitle>

@@ -28,7 +28,7 @@ import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { Textarea } from "@/components/ui/textarea";
 import { useTranslation } from "@/hooks/use-translation";
-import { loadCachedResult } from "@/lib/cache";
+import { loadCachedResult, loadEnrollmentDataFromCache } from "@/lib/cache";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 
@@ -378,10 +378,15 @@ export default function MealSettingsPage() {
       });
     };
   
-    const loadCache = async () => {
+    const loadCache = useCallback(async (cacheType: 'beneficiary' | 'enrollment') => {
       setCacheLoading(true);
       setCacheSearchQuery('');
-      const data = await loadCachedResult();
+      let data = null;
+      if (cacheType === 'beneficiary') {
+          data = await loadCachedResult();
+      } else {
+          data = await loadEnrollmentDataFromCache();
+      }
       setRawCachedDataObject(data);
       if (data) {
         setFilteredCachedDataString(JSON.stringify(data, null, 2));
@@ -389,7 +394,7 @@ export default function MealSettingsPage() {
         setFilteredCachedDataString("No cached data found.");
       }
       setCacheLoading(false);
-    };
+    }, []);
 
     const handleDownloadCache = () => {
         if (!filteredCachedDataString || filteredCachedDataString === "No cached data found.") {
@@ -405,7 +410,7 @@ export default function MealSettingsPage() {
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = "beneficiary_insights_cache.txt";
+        a.download = "cache_data.txt";
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -448,7 +453,7 @@ export default function MealSettingsPage() {
               return null;
           };
           
-          const filtered = deepFilter({rows: rawCachedDataObject.rows, clusters: rawCachedDataObject.clusters});
+          const filtered = deepFilter(rawCachedDataObject);
           setFilteredCachedDataString(JSON.stringify(filtered, null, 2));
   
       } catch (e) {
@@ -919,45 +924,51 @@ export default function MealSettingsPage() {
                         </CardContent>
                     </Card>
 
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>{t('settings.cache.title')}</CardTitle>
-                            <CardDescription>{t('settings.cache.description')}</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="flex flex-col gap-2">
-                                 <div className="flex gap-2">
-                                    <Button onClick={loadCache} disabled={cacheLoading} className="flex-1">
-                                        {cacheLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                        {t('settings.cache.button')}
-                                    </Button>
-                                    <Button onClick={handleDownloadCache} variant="outline" disabled={!rawCachedDataObject}>
-                                        <Download className="mr-2 h-4 w-4" />
-                                        Download .txt
-                                    </Button>
-                                </div>
-                                {rawCachedDataObject && (
-                                    <div className="relative">
-                                        <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                                        <Input
-                                            type="text"
-                                            placeholder="Search cached data..."
-                                            className="pl-10"
-                                            value={cacheSearchQuery}
-                                            onChange={(e) => setCacheSearchQuery(e.target.value)}
-                                        />
-                                    </div>
-                                )}
+                   <Card>
+                      <CardHeader>
+                        <CardTitle>{t('settings.cache.title')}</CardTitle>
+                        <CardDescription>{t('settings.cache.description')}</CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="flex flex-col gap-2">
+                          <div className="flex gap-2">
+                            <Button onClick={() => loadCache('beneficiary')} disabled={cacheLoading} className="flex-1">
+                              {cacheLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                              Load Beneficiary Cache
+                            </Button>
+                            <Button onClick={() => loadCache('enrollment')} disabled={cacheLoading} className="flex-1">
+                              {cacheLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                              Load Enrollment Cache
+                            </Button>
+                          </div>
+                          <div className="flex gap-2">
+                             <Button onClick={handleDownloadCache} variant="outline" disabled={!rawCachedDataObject} className="flex-1">
+                                <Download className="mr-2 h-4 w-4" />
+                                Download .txt
+                            </Button>
+                          </div>
+                          {rawCachedDataObject && (
+                            <div className="relative">
+                              <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                              <Input
+                                type="text"
+                                placeholder="Search cached data..."
+                                className="pl-10"
+                                value={cacheSearchQuery}
+                                onChange={(e) => setCacheSearchQuery(e.target.value)}
+                              />
                             </div>
-                            {rawCachedDataObject && (
-                                <Textarea
-                                    readOnly
-                                    className="mt-4 h-64 font-mono text-xs"
-                                    value={filteredCachedDataString}
-                                    placeholder={t('settings.cache.loading')}
-                                />
-                            )}
-                        </CardContent>
+                          )}
+                        </div>
+                        {rawCachedDataObject && (
+                          <Textarea
+                            readOnly
+                            className="mt-4 h-64 font-mono text-xs"
+                            value={filteredCachedDataString}
+                            placeholder={t('settings.cache.loading')}
+                          />
+                        )}
+                      </CardContent>
                     </Card>
 
                 </aside>

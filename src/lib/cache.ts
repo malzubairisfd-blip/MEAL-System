@@ -1,10 +1,10 @@
-
 import { openDB, IDBPDatabase } from 'idb';
 import type { RecordRow } from './types';
 import type { AuditFinding } from './auditEngine';
 
+// --- Beneficiary Insights Cache ---
 const DB_NAME = 'beneficiary-insights-cache';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_NAME = 'results';
 const FULL_RESULT_KEY = 'FULL_RESULT';
 
@@ -16,7 +16,6 @@ interface FullResult {
   chartImages?: Record<string, string>;
   processedDataForReport?: any;
 }
-
 
 async function getDb(): Promise<IDBPDatabase> {
   return openDB(DB_NAME, DB_VERSION, {
@@ -67,7 +66,6 @@ export async function cacheFinalResult(payload: { clusters: any[] }): Promise<vo
     await tx.done;
 }
 
-
 export async function loadCachedResult(): Promise<FullResult | null> {
   try {
     const db = await getDb();
@@ -79,4 +77,39 @@ export async function loadCachedResult(): Promise<FullResult | null> {
   }
 }
 
-  
+// --- Enrollment Review Cache ---
+const ENROLLMENT_DB_NAME = 'enrollment-review-db';
+const ENROLLMENT_STORE_NAME = 'files';
+const ENROLLMENT_DATA_KEY = 'enrollmentData';
+const ENROLLMENT_DB_VERSION = 1;
+
+async function getEnrollmentDb(): Promise<IDBPDatabase> {
+  return openDB(ENROLLMENT_DB_NAME, ENROLLMENT_DB_VERSION, {
+    upgrade(db) {
+      if (!db.objectStoreNames.contains(ENROLLMENT_STORE_NAME)) {
+        db.createObjectStore(ENROLLMENT_STORE_NAME);
+      }
+    },
+  });
+}
+
+export async function saveEnrollmentDataToCache(data: any[]): Promise<void> {
+    if (!Array.isArray(data) || data.length === 0) {
+        throw new Error("Invalid or empty data provided to cache.");
+    }
+    const db = await getEnrollmentDb();
+    const tx = db.transaction(ENROLLMENT_STORE_NAME, 'readwrite');
+    await tx.objectStore(ENROLLMENT_STORE_NAME).put(data, ENROLLMENT_DATA_KEY);
+    await tx.done;
+}
+
+export async function loadEnrollmentDataFromCache(): Promise<any[] | null> {
+    try {
+        const db = await getEnrollmentDb();
+        const data = await db.get(ENROLLMENT_STORE_NAME, ENROLLMENT_DATA_KEY);
+        return Array.isArray(data) ? data : null;
+    } catch (error) {
+        console.error("Failed to load enrollment data from cache:", error);
+        return null;
+    }
+}
