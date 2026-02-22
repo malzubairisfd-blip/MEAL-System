@@ -1,5 +1,5 @@
 // src/workers/enrollment-review.worker.ts
-import { loadEnrollmentDataFromCache, saveEnrollmentDataToCache } from '@/lib/cache';
+import { openDB, IDBPDatabase } from 'idb';
 
 // --- START of code moved from name-engine.ts ---
 
@@ -294,6 +294,45 @@ const FIXED_COMPOUND_NAMES = [
   }
 
 // --- END of code moved from name-engine.ts ---
+
+
+// --- WORKER LOGIC ---
+const ENROLLMENT_DB_NAME = 'enrollment-review-db';
+const ENROLLMENT_STORE_NAME = 'files';
+const ENROLLMENT_DATA_KEY = 'enrollmentData';
+const ENROLLMENT_DB_VERSION = 2; // <-- CORRECTED VERSION
+
+async function getEnrollmentDb(): Promise<IDBPDatabase> {
+  return openDB(ENROLLMENT_DB_NAME, ENROLLMENT_DB_VERSION, {
+    upgrade(db) {
+      if (!db.objectStoreNames.contains(ENROLLMENT_STORE_NAME)) {
+        db.createObjectStore(ENROLLMENT_STORE_NAME);
+      }
+    },
+  });
+}
+
+async function loadEnrollmentDataFromCache(): Promise<any[] | null> {
+    try {
+        const db = await getEnrollmentDb();
+        const data = await db.get(ENROLLMENT_STORE_NAME, ENROLLMENT_DATA_KEY);
+        return Array.isArray(data) ? data : null;
+    } catch (error) {
+        console.error("Failed to load enrollment data from cache:", error);
+        return null;
+    }
+}
+
+async function saveEnrollmentDataToCache(data: any[]): Promise<void> {
+    if (!Array.isArray(data) || data.length === 0) {
+        throw new Error("Invalid or empty data provided to cache.");
+    }
+    const db = await getEnrollmentDb();
+    const tx = db.transaction(ENROLLMENT_STORE_NAME, 'readwrite');
+    await tx.objectStore(ENROLLMENT_STORE_NAME).put(data, ENROLLMENT_DATA_KEY);
+    await tx.done;
+}
+
 
 self.onmessage = async (event) => {
     const { uniqueIdCol } = event.data;
