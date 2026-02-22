@@ -4,7 +4,7 @@ import type { AuditFinding } from './auditEngine';
 
 // --- Beneficiary Insights Cache ---
 const DB_NAME = 'beneficiary-insights-cache';
-const DB_VERSION = 2;
+const DB_VERSION = 2; // Keep this updated if schema changes
 const STORE_NAME = 'results';
 const FULL_RESULT_KEY = 'FULL_RESULT';
 
@@ -19,9 +19,14 @@ interface FullResult {
 
 async function getDb(): Promise<IDBPDatabase> {
   return openDB(DB_NAME, DB_VERSION, {
-    upgrade(db) {
-      if (!db.objectStoreNames.contains(STORE_NAME)) {
-        db.createObjectStore(STORE_NAME);
+    upgrade(db, oldVersion) {
+      if (oldVersion < 1) {
+        if (!db.objectStoreNames.contains(STORE_NAME)) {
+            db.createObjectStore(STORE_NAME);
+        }
+      }
+      if (oldVersion < 2) {
+          // Future migrations
       }
     },
   });
@@ -94,8 +99,8 @@ async function getEnrollmentDb(): Promise<IDBPDatabase> {
 }
 
 export async function saveEnrollmentDataToCache(data: any[]): Promise<void> {
-    if (!Array.isArray(data) || data.length === 0) {
-        throw new Error("Invalid or empty data provided to cache.");
+    if (!Array.isArray(data)) {
+        throw new Error("Invalid data provided to cache; expected an array.");
     }
     const db = await getEnrollmentDb();
     const tx = db.transaction(ENROLLMENT_STORE_NAME, 'readwrite');
@@ -113,3 +118,5 @@ export async function loadEnrollmentDataFromCache(): Promise<any[] | null> {
         return null;
     }
 }
+
+    

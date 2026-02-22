@@ -5,3 +5,5 @@ import { UnderConstructionPage } from "@/components/under-construction-page";
 export default function RecommendationPage() {
   return <UnderConstructionPage title="Enrollment Recommendation" />;
 }
+
+    

@@ -297,7 +297,7 @@ export async function POST(req: Request) {
                 
                 const allRecordKeys = new Set(records.flatMap(r => Object.keys(r)));
                 const insertCols = [...allRecordKeys].filter(col => tableCols.includes(col) && col !== 'id');
-                const updateCols = insertCols.filter(col => col !== sanitizedIdCol && col !== 'project_id');
+                const updateCols = insertCols.filter(col => col !== 'id' && col !== sanitizedIdCol && col !== 'project_id');
 
                 const insertStmt = db.prepare(`INSERT INTO enrollment_data (${insertCols.join(", ")}) VALUES (${insertCols.map(c => `@${c}`).join(", ")})`);
                 const updateStmt = db.prepare(`UPDATE enrollment_data SET ${updateCols.map(col => `${col} = @${col}`).join(", ")} WHERE project_id = @project_id AND ${sanitizedIdCol} = @${sanitizedIdCol}`);
@@ -313,7 +313,8 @@ export async function POST(req: Request) {
 
                         if(existing) {
                             if(mode === 'replace') {
-                                const info = updateStmt.run(record);
+                                const fullRecord = {...record, project_id: projectId};
+                                const info = updateStmt.run(fullRecord);
                                 if(info.changes > 0) updated++;
                             } else {
                                 skipped++;
@@ -355,3 +356,5 @@ export async function GET(req: Request) {
         return NextResponse.json({ error: "Failed to fetch enrollment data.", details: error.message }, { status: 500 });
     }
 }
+
+    
