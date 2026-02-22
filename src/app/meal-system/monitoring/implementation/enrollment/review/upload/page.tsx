@@ -1,3 +1,4 @@
+
 // src/app/meal-system/monitoring/implementation/enrollment/review/upload/page.tsx
 "use client";
 
@@ -26,6 +27,18 @@ interface Project {
 
 const LOCAL_STORAGE_MAPPING_PREFIX = "enrollment-review-mapping-v2-";
 
+const SummaryCard = ({ title, value, icon }: { title: string, value: string | number, icon: React.ReactNode }) => (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-sm font-medium">{title}</CardTitle>
+        {icon}
+      </CardHeader>
+      <CardContent>
+        <div className="text-2xl font-bold">{value}</div>
+      </CardContent>
+    </Card>
+);
+
 export default function EnrollmentReviewUploadPage() {
     const { toast } = useToast();
     const [projects, setProjects] = useState<Project[]>([]);
@@ -38,25 +51,40 @@ export default function EnrollmentReviewUploadPage() {
     const [rawFileData, setRawFileData] = useState<any[]>([]);
     const [uniqueIdFileCol, setUniqueIdFileCol] = useState('');
     
-    const [loading, setLoading] = useState({ projects: true, caching: false, worker: false, saving: false });
+    const [loading, setLoading] = useState({ projects: true, caching: false, worker: false, saving: false, dbSchema: true });
     const [workerStatus, setWorkerStatus] = useState('idle');
     const [workerProgress, setWorkerProgress] = useState(0);
 
     const workerRef = useRef<Worker | null>(null);
 
+    // New state for DB saving logic
+    const [dbColumns, setDbColumns] = useState<string[]>([]);
+    const [dbColumnMapping, setDbColumnMapping] = useState<Map<string, string>>(new Map());
+    const [uniqueIdDbCol, setUniqueIdDbCol] = useState('');
+    const [manualDbMapping, setManualDbMapping] = useState({ ui: "", db: "" });
+    const [saveStats, setSaveStats] = useState({ saved: 0, skipped: 0, updated: 0, total: 0 });
+    const [duplicateInfo, setDuplicateInfo] = useState({ isOpen: false, count: 0, totalInFile: 0, records: [] as any[] });
+
     // Initialization
     useEffect(() => {
-        const fetchProjects = async () => {
+        const fetchInitialData = async () => {
             try {
-                const res = await fetch('/api/projects');
-                if (res.ok) setProjects(await res.json());
+                const [projRes, dbSchemaRes] = await Promise.all([
+                    fetch('/api/projects'),
+                    fetch('/api/enrollment-review', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'get_schema' })})
+                ]);
+                if (projRes.ok) setProjects(await projRes.json());
+                if (dbSchemaRes.ok) {
+                    const schema = await dbSchemaRes.json();
+                    setDbColumns(schema.columns || []);
+                }
             } catch (err: any) {
-                toast({ title: 'Error loading projects', description: err.message, variant: 'destructive'});
+                toast({ title: 'Error loading initial data', description: err.message, variant: 'destructive'});
             } finally {
-                setLoading(p => ({...p, projects: false}));
+                setLoading(p => ({...p, projects: false, dbSchema: false}));
             }
         };
-        fetchProjects();
+        fetchInitialData();
 
         const worker = new Worker(new URL('@/workers/enrollment-review.worker.ts', import.meta.url));
         workerRef.current = worker;
@@ -69,7 +97,7 @@ export default function EnrollmentReviewUploadPage() {
                 setWorkerStatus('done');
                 setWorkerProgress(100);
                 toast({ title: 'Analysis Complete', description: `Successfully processed ${data.processedCount} records.` });
-                 setLoading(p => ({...p, worker: false}));
+                setLoading(p => ({...p, worker: false}));
             } else if (type === 'error') {
                 setWorkerStatus('error');
                 setLoading(p => ({...p, worker: false}));
@@ -79,7 +107,7 @@ export default function EnrollmentReviewUploadPage() {
         return () => worker.terminate();
     }, [toast]);
     
-    useEffect(() => {
+     useEffect(() => {
         const autoSaveToCache = async () => {
             if (rawFileData.length > 0 && selectedProjectId && uniqueIdFileCol) {
                 setLoading(p => ({ ...p, caching: true }));
@@ -160,6 +188,140 @@ export default function EnrollmentReviewUploadPage() {
         workerRef.current.postMessage({ uniqueIdCol: uniqueIdFileCol });
     };
 
+    // --- Mapping and Saving Logic ---
+    const unmappedUiColumns = useMemo(() => {
+        const usedCols = new Set([...Array.from(dbColumnMapping.keys()), uniqueIdFileCol]);
+        return columns.filter(c => !usedCols.has(c));
+    }, [columns, dbColumnMapping, uniqueIdFileCol]);
+
+    const unmappedDbColumns = useMemo(() => {
+        const usedDbCols = new Set([...dbColumnMapping.values(), uniqueIdDbCol]);
+        return dbColumns.filter((c) => !usedDbCols.has(c));
+    }, [dbColumns, dbColumnMapping, uniqueIdDbCol]);
+
+     const handleAutoMatch = useCallback(async () => {
+        const cachedData = await loadEnrollmentDataFromCache();
+        if (!cachedData || cachedData.length === 0) {
+            toast({ title: "No Data", description: "Cache is empty. Please upload and analyze data first.", variant: "destructive" });
+            return;
+        }
+        const sourceColumns = Object.keys(cachedData[0]);
+        const newMapping = new Map<string, string>();
+        const usedDbCols = new Set<string>();
+
+        sourceColumns.forEach((uiCol) => {
+            const matchedDbCol = dbColumns.find(dbCol =>
+                dbCol.toLowerCase().replace(/_/g, "") === uiCol.toLowerCase().replace(/_/g, "") &&
+                !usedDbCols.has(dbCol)
+            );
+            if (matchedDbCol) {
+                newMapping.set(uiCol, matchedDbCol);
+                usedDbCols.add(matchedDbCol);
+            }
+        });
+        setDbColumnMapping(newMapping);
+        toast({ title: "Auto-match Complete", description: `Matched ${newMapping.size} columns.` });
+    }, [dbColumns, toast]);
+
+    const handleAddDbMapping = () => {
+        if (manualDbMapping.ui && manualDbMapping.db) {
+            setDbColumnMapping(prev => new Map(prev).set(manualDbMapping.ui, manualDbMapping.db));
+            setManualDbMapping({ ui: '', db: '' });
+        }
+    };
+
+    const handleDeleteDbMapping = (key: string) => {
+        setDbColumnMapping(prev => { const n = new Map(prev); n.delete(key); return n; });
+    };
+
+    const executeSave = useCallback(async (mode: "skip" | "replace") => {
+        setDuplicateInfo(d => ({ ...d, isOpen: false }));
+        setLoading(p => ({ ...p, saving: true }));
+        setWorkerStatus("saving");
+        let totalSaved = 0, totalSkipped = 0, totalUpdated = 0;
+        try {
+            const cachedRecords = await loadEnrollmentDataFromCache();
+            if (!cachedRecords) throw new Error("No cached data to save.");
+            
+            const totalToProcess = cachedRecords.length;
+            const CHUNK_SIZE = 500;
+            
+            for (let i = 0; i < totalToProcess; i += CHUNK_SIZE) {
+                const chunk = cachedRecords.slice(i, i + CHUNK_SIZE);
+                const payloadRecords = chunk.map(record => {
+                    const newRecord: Record<string, any> = { project_id: selectedProjectId };
+                    for (const [uiCol, dbCol] of dbColumnMapping.entries()) {
+                         if (record.hasOwnProperty(uiCol)) newRecord[dbCol] = record[uiCol];
+                    }
+                    if (uniqueIdDbCol && record.hasOwnProperty(uniqueIdFileCol)) {
+                        newRecord[uniqueIdDbCol] = record[uniqueIdFileCol];
+                    }
+                    return newRecord;
+                });
+                
+                const res = await fetch('/api/enrollment-review', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: "save", projectId: selectedProjectId, records: payloadRecords, mode, uniqueIdCol: uniqueIdDbCol })
+                });
+
+                const result = await res.json();
+                if (!res.ok) throw new Error(result.details || 'Failed to save a chunk of data.');
+                
+                totalSaved += result.saved || 0;
+                totalSkipped += result.skipped || 0;
+                totalUpdated += result.updated || 0;
+                
+                setSaveStats({ saved: totalSaved, skipped: totalSkipped, updated: totalUpdated, total: totalToProcess });
+                setWorkerProgress(Math.round(((i + chunk.length) / totalToProcess) * 100));
+            }
+             toast({ title: "Save Complete", description: `Saved: ${totalSaved}, Updated: ${totalUpdated}, Skipped: ${totalSkipped}` });
+             setWorkerStatus('done');
+        } catch (err: any) {
+            toast({ title: "Save Error", description: err.message, variant: 'destructive'});
+            setWorkerStatus('error');
+        } finally {
+             setLoading(p => ({ ...p, saving: false }));
+        }
+    }, [selectedProjectId, dbColumnMapping, uniqueIdDbCol, uniqueIdFileCol, toast]);
+
+
+    const handleSaveToDatabase = useCallback(async () => {
+        if (!uniqueIdDbCol) {
+            toast({ title: "Incomplete Mapping", description: "Please map the unique ID column for the database.", variant: "destructive" });
+            return;
+        }
+        
+        setLoading(p => ({ ...p, saving: true }));
+        setWorkerStatus('checking_duplicates');
+        try {
+            const cachedRecords = await loadEnrollmentDataFromCache();
+            if (!cachedRecords) throw new Error("No cached data to check.");
+            
+            const uniqueIds = cachedRecords.map(r => r[uniqueIdFileCol]).filter(Boolean);
+            const res = await fetch('/api/enrollment-review', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'check_duplicates', projectId: selectedProjectId, uniqueIdCol: uniqueIdDbCol, uniqueIds })
+            });
+
+            const result = await res.json();
+            if (!res.ok) throw new Error(result.details || 'Failed to check for duplicates.');
+
+            if (result.count > 0) {
+                setDuplicateInfo({ isOpen: true, count: result.count, totalInFile: cachedRecords.length, records: cachedRecords });
+            } else {
+                await executeSave('skip');
+            }
+        } catch (err: any) {
+            toast({ title: "Error", description: err.message, variant: 'destructive'});
+        } finally {
+            setLoading(p => ({...p, saving: false}));
+            setWorkerStatus('idle');
+        }
+    }, [uniqueIdDbCol, uniqueIdFileCol, selectedProjectId, toast, executeSave]);
+
+
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center">
@@ -232,10 +394,80 @@ export default function EnrollmentReviewUploadPage() {
                      <CardTitle>3. Map and Save to Final Database</CardTitle>
                      <CardDescription>Map the processed columns from the cache to the final `enrollment-review.db` and save.</CardDescription>
                  </CardHeader>
-                 <CardContent>
-                     <p className="text-muted-foreground text-center p-8">Mapping and saving UI will be implemented here.</p>
+                 <CardContent className="space-y-4">
+                     <div className="flex justify-end"><Button onClick={handleAutoMatch}><GitCompareArrows className="mr-2 h-4 w-4"/>Auto-match</Button></div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 border rounded-lg bg-muted/50">
+                        <div className="space-y-2">
+                          <Label className="font-semibold">Unique ID (from Cache/File)</Label>
+                          <Select value={uniqueIdFileCol} onValueChange={setUniqueIdFileCol}>
+                            <SelectTrigger><SelectValue placeholder="Select file column..." /></SelectTrigger>
+                            <SelectContent>{columns.map(c=><SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="font-semibold">Unique ID (in Database)</Label>
+                          <Select value={uniqueIdDbCol} onValueChange={setUniqueIdDbCol} disabled={loading.dbSchema}>
+                            <SelectTrigger><SelectValue placeholder={loading.dbSchema ? "Loading schema..." : "Select DB column..."} /></SelectTrigger>
+                            <SelectContent>{dbColumns.map(c=><SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                        <div className="space-y-2">
+                          <Label>Other Columns (from Cache/File)</Label>
+                           <Select value={manualDbMapping.ui} onValueChange={v => setManualDbMapping(m => ({ ...m, ui: v }))}><SelectTrigger><SelectValue placeholder="Select source..."/></SelectTrigger><SelectContent><ScrollArea className="h-60">{unmappedUiColumns.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</ScrollArea></SelectContent></Select>
+                        </div>
+                         <div className="space-y-2">
+                          <Label>Other Columns (in Database)</Label>
+                          <Select value={manualDbMapping.db} onValueChange={v => setManualDbMapping(m => ({ ...m, db: v }))} disabled={loading.dbSchema}>
+                            <SelectTrigger><SelectValue placeholder={loading.dbSchema ? "Loading..." : "Select destination..."}/></SelectTrigger>
+                            <SelectContent><ScrollArea className="h-60">{unmappedDbColumns.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</ScrollArea></SelectContent>
+                          </Select>
+                        </div>
+                        <Button onClick={handleAddDbMapping}>Add Mapping</Button>
+                      </div>
+                      <div>
+                        <h4 className="font-semibold mb-2">Current Mappings</h4>
+                        <ScrollArea className="h-40 border rounded-md">
+                            <Table><TableHeader><TableRow><TableHead>File Column</TableHead><TableHead>Database Field</TableHead><TableHead>Action</TableHead></TableRow></TableHeader>
+                            <TableBody>
+                              <TableRow className="bg-blue-50 dark:bg-blue-900/20"><TableCell>{uniqueIdFileCol}</TableCell><TableCell>{uniqueIdDbCol}</TableCell><TableCell></TableCell></TableRow>
+                              {Array.from(dbColumnMapping.entries()).map(([ui, db]) => <TableRow key={ui}><TableCell>{ui}</TableCell><TableCell>{db}</TableCell><TableCell><Button variant="ghost" size="icon" onClick={()=>handleDeleteDbMapping(ui)}><Trash2 className="h-4 w-4 text-destructive"/></Button></TableCell></TableRow>)}
+                            </TableBody></Table>
+                        </ScrollArea>
+                      </div>
+                    <div className="flex flex-col items-center gap-4">
+                      <Button onClick={handleSaveToDatabase} disabled={loading.saving || !uniqueIdFileCol || !uniqueIdDbCol || !selectedProjectId} size="lg">
+                          {loading.saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Save className="mr-2 h-4 w-4" />}
+                          Save to Database
+                      </Button>
+                      {loading.saving && (
+                          <div className="w-full max-w-md text-center">
+                              <Progress value={workerProgress} />
+                              <p className="text-sm mt-1 text-muted-foreground">{workerStatus} ({workerProgress}%)</p>
+                              <p className="text-xs mt-1">{saveStats.saved} saved, {saveStats.updated} updated, {saveStats.skipped} skipped of {saveStats.total}</p>
+                          </div>
+                      )}
+                    </div>
                  </CardContent>
             </Card>
+            
+            <AlertDialog open={duplicateInfo.isOpen} onOpenChange={(isOpen) => setDuplicateInfo(prev => ({ ...prev, isOpen }))}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Duplicate Records Found</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Found {duplicateInfo.count} records in your file that already exist in the database based on the selected Unique ID.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <Button variant="outline" onClick={() => executeSave("skip")}>Skip Duplicates</Button>
+                        <AlertDialogAction onClick={() => executeSave("replace")}>Replace Existing</AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
 
              <div className="flex justify-end gap-2">
                 <Button variant="secondary" asChild><Link href="/meal-system/monitoring/implementation/enrollment/review/recommendation">Go to Recommendation</Link></Button>
@@ -245,3 +477,4 @@ export default function EnrollmentReviewUploadPage() {
         </div>
     );
 }
+
