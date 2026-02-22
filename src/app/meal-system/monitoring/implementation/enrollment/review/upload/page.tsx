@@ -39,6 +39,7 @@ export default function EnrollmentReviewUploadPage() {
     const [sheets, setSheets] = useState<string[]>([]);
     const [selectedSheet, setSelectedSheet] = useState<string>('');
     const [columns, setColumns] = useState<string[]>([]);
+    const [rawFileData, setRawFileData] = useState<any[]>([]);
     const [uniqueIdFileCol, setUniqueIdFileCol] = useState('');
     
     const [loading, setLoading] = useState({ projects: true, caching: false, worker: false, saving: false });
@@ -87,6 +88,7 @@ export default function EnrollmentReviewUploadPage() {
         setSheets([]);
         setSelectedSheet('');
         setColumns([]);
+        setRawFileData([]);
         setUniqueIdFileCol('');
       }
     };
@@ -105,8 +107,28 @@ export default function EnrollmentReviewUploadPage() {
         reader.readAsArrayBuffer(file);
     }, [file]);
 
+    useEffect(() => {
+        if (!file || !selectedSheet) return;
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            try {
+                const data = new Uint8Array(e.target!.result as ArrayBuffer);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const worksheet = workbook.Sheets[selectedSheet];
+                const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+                setRawFileData(jsonData);
+                setColumns(Object.keys(jsonData[0] || {}));
+
+            } catch (err: any) {
+                toast({ title: "Error reading sheet", description: err.message, variant: 'destructive'});
+            }
+        };
+        reader.readAsArrayBuffer(file);
+    }, [file, selectedSheet, toast]);
+
     const handleSaveToCache = useCallback(async () => {
-        if (!file || !selectedSheet || !selectedProjectId || !uniqueIdFileCol) {
+        if (rawFileData.length === 0 || !selectedProjectId || !uniqueIdFileCol) {
             toast({ title: "Missing Information", description: "Please select a project, upload a file, choose a sheet, and select a unique ID column.", variant: "destructive" });
             return;
         }
@@ -115,37 +137,27 @@ export default function EnrollmentReviewUploadPage() {
             const project = projects.find(p => p.projectId === selectedProjectId);
             if (!project) throw new Error("Selected project not found.");
             
-            const reader = new FileReader();
-            reader.onload = async (e) => {
-                const data = new Uint8Array(e.target!.result as ArrayBuffer);
-                const workbook = XLSX.read(data, { type: 'array' });
-                const worksheet = workbook.Sheets[selectedSheet];
-                const jsonData = XLSX.utils.sheet_to_json(worksheet);
+            const dataToCache = rawFileData.map(row => ({
+                ...row,
+                project_id: project.projectId,
+                project_name: project.projectName
+            }));
 
-                const dataToCache = jsonData.map(row => ({
-                    ...row,
-                    project_id: project.projectId,
-                    project_name: project.projectName
-                }));
-
-                const db = await openDB(ENROLLMENT_CACHE_DB_NAME, 1, {
-                    upgrade(db) {
-                        if (!db.objectStoreNames.contains(ENROLLMENT_CACHE_STORE_NAME)) {
-                            db.createObjectStore(ENROLLMENT_CACHE_STORE_NAME);
-                        }
-                    },
-                });
-                await db.put(ENROLLMENT_CACHE_STORE_NAME, dataToCache, ENROLLMENT_CACHE_KEY);
-                toast({ title: "Data Saved to Cache", description: "Your file has been saved to the local browser cache and is ready for analysis." });
-                setColumns(Object.keys(jsonData[0] || {}));
-            };
-            reader.readAsArrayBuffer(file);
+            const db = await openDB(ENROLLMENT_CACHE_DB_NAME, 1, {
+                upgrade(db) {
+                    if (!db.objectStoreNames.contains(ENROLLMENT_CACHE_STORE_NAME)) {
+                        db.createObjectStore(ENROLLMENT_CACHE_STORE_NAME);
+                    }
+                },
+            });
+            await db.put(ENROLLMENT_CACHE_STORE_NAME, dataToCache, ENROLLMENT_CACHE_KEY);
+            toast({ title: "Data Saved to Cache", description: "Your file has been saved to the local browser cache and is ready for analysis." });
         } catch (err: any) {
             toast({ title: "Error Caching Data", description: err.message, variant: 'destructive' });
         } finally {
             setLoading(p => ({ ...p, caching: false }));
         }
-    }, [file, selectedSheet, selectedProjectId, uniqueIdFileCol, toast, projects]);
+    }, [rawFileData, selectedProjectId, uniqueIdFileCol, toast, projects]);
 
     const handleRunAnalysis = () => {
         if (!workerRef.current) return;
@@ -195,7 +207,7 @@ export default function EnrollmentReviewUploadPage() {
                                 <Label>Select Unique ID Column</Label>
                                 <Select value={uniqueIdFileCol} onValueChange={setUniqueIdFileCol}>
                                     <SelectTrigger><SelectValue placeholder="Select unique ID..."/></SelectTrigger>
-                                    <SelectContent>{Object.keys(rawFileData[0] || {}).map(c=><SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                                    <SelectContent>{columns.map(c=><SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
                                 </Select>
                             </div>
                          )}
