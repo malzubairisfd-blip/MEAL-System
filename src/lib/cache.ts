@@ -4,7 +4,7 @@ import type { AuditFinding } from './auditEngine';
 
 // --- Beneficiary Insights Cache ---
 const DB_NAME = 'beneficiary-insights-cache';
-const DB_VERSION = 2; // Keep this updated if schema changes
+const DB_VERSION = 1; 
 const STORE_NAME = 'results';
 const FULL_RESULT_KEY = 'FULL_RESULT';
 
@@ -19,14 +19,9 @@ interface FullResult {
 
 async function getDb(): Promise<IDBPDatabase> {
   return openDB(DB_NAME, DB_VERSION, {
-    upgrade(db, oldVersion) {
-      if (oldVersion < 1) {
-        if (!db.objectStoreNames.contains(STORE_NAME)) {
-            db.createObjectStore(STORE_NAME);
-        }
-      }
-      if (oldVersion < 2) {
-          // Future migrations
+    upgrade(db) {
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+          db.createObjectStore(STORE_NAME);
       }
     },
   });
@@ -118,5 +113,3 @@ export async function loadEnrollmentDataFromCache(): Promise<any[] | null> {
         return null;
     }
 }
-
-    

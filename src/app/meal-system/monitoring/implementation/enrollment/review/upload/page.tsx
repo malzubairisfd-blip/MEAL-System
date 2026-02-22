@@ -1,4 +1,3 @@
-
 // src/app/meal-system/monitoring/implementation/enrollment/review/upload/page.tsx
 "use client";
 
@@ -13,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Loader2, Upload, GitCompareArrows, Trash2, Plus, FileDown, Database, Save, Check, X } from 'lucide-react';
+import { ArrowLeft, Loader2, Upload, GitCompareArrows, Trash2, Plus, FileDown, Database, Save, Check } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -50,6 +49,7 @@ export default function EnrollmentReviewUploadPage() {
     const [columns, setColumns] = useState<string[]>([]);
     const [rawFileData, setRawFileData] = useState<any[]>([]);
     const [uniqueIdFileCol, setUniqueIdFileCol] = useState('');
+    const [enrichedColumns, setEnrichedColumns] = useState<string[]>([]);
     
     const [loading, setLoading] = useState({ projects: true, caching: false, worker: false, saving: false, dbSchema: true });
     const [workerStatus, setWorkerStatus] = useState('idle');
@@ -88,7 +88,7 @@ export default function EnrollmentReviewUploadPage() {
 
         const worker = new Worker(new URL('@/workers/enrollment-review.worker.ts', import.meta.url));
         workerRef.current = worker;
-        worker.onmessage = (event) => {
+        worker.onmessage = async (event) => {
             const { type, status, progress, error, data } = event.data;
             if (type === 'progress') {
                 setWorkerStatus(status);
@@ -98,6 +98,13 @@ export default function EnrollmentReviewUploadPage() {
                 setWorkerProgress(100);
                 toast({ title: 'Analysis Complete', description: `Successfully processed ${data.processedCount} records.` });
                 setLoading(p => ({...p, worker: false}));
+                
+                // Load the enriched columns for mapping
+                const finalData = await loadEnrollmentDataFromCache();
+                if (finalData && finalData.length > 0) {
+                    setEnrichedColumns(Object.keys(finalData[0]));
+                }
+
             } else if (type === 'error') {
                 setWorkerStatus('error');
                 setLoading(p => ({...p, worker: false}));
@@ -190,9 +197,10 @@ export default function EnrollmentReviewUploadPage() {
 
     // --- Mapping and Saving Logic ---
     const unmappedUiColumns = useMemo(() => {
+        const sourceCols = enrichedColumns.length > 0 ? enrichedColumns : columns;
         const usedCols = new Set([...Array.from(dbColumnMapping.keys()), uniqueIdFileCol]);
-        return columns.filter(c => !usedCols.has(c));
-    }, [columns, dbColumnMapping, uniqueIdFileCol]);
+        return sourceCols.filter(c => !usedCols.has(c));
+    }, [columns, enrichedColumns, dbColumnMapping, uniqueIdFileCol]);
 
     const unmappedDbColumns = useMemo(() => {
         const usedDbCols = new Set([...dbColumnMapping.values(), uniqueIdDbCol]);
@@ -200,12 +208,7 @@ export default function EnrollmentReviewUploadPage() {
     }, [dbColumns, dbColumnMapping, uniqueIdDbCol]);
 
      const handleAutoMatch = useCallback(async () => {
-        const cachedData = await loadEnrollmentDataFromCache();
-        if (!cachedData || cachedData.length === 0) {
-            toast({ title: "No Data", description: "Cache is empty. Please upload and analyze data first.", variant: "destructive" });
-            return;
-        }
-        const sourceColumns = Object.keys(cachedData[0]);
+        const sourceColumns = enrichedColumns.length > 0 ? enrichedColumns : columns;
         const newMapping = new Map<string, string>();
         const usedDbCols = new Set<string>();
 
@@ -221,7 +224,7 @@ export default function EnrollmentReviewUploadPage() {
         });
         setDbColumnMapping(newMapping);
         toast({ title: "Auto-match Complete", description: `Matched ${newMapping.size} columns.` });
-    }, [dbColumns, toast]);
+    }, [dbColumns, columns, enrichedColumns, toast]);
 
     const handleAddDbMapping = () => {
         if (manualDbMapping.ui && manualDbMapping.db) {
@@ -316,7 +319,7 @@ export default function EnrollmentReviewUploadPage() {
         } catch (err: any) {
             toast({ title: "Error", description: err.message, variant: 'destructive'});
         } finally {
-            setLoading(p => ({...p, saving: false}));
+            setLoading(p => ({ ...p, saving: false }));
             setWorkerStatus('idle');
         }
     }, [uniqueIdDbCol, uniqueIdFileCol, selectedProjectId, toast, executeSave]);
@@ -477,4 +480,3 @@ export default function EnrollmentReviewUploadPage() {
         </div>
     );
 }
-

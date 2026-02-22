@@ -1,4 +1,3 @@
-
 // src/app/api/enrollment-review/route.ts
 import { NextResponse } from "next/server";
 import fs from "fs/promises";
@@ -160,6 +159,7 @@ const DB_SCHEMA = `(
     please_select_the_alternative_educator TEXT,
     the_name_of_the_new_intellectual TEXT,
     comments TEXT,
+    unique_id TEXT,
     curr_bnf_1name_normalized TEXT,
     curr_bnf_2name_normalized TEXT,
     curr_bnf_3name_normalized TEXT,
@@ -180,8 +180,10 @@ const DB_SCHEMA = `(
     correcting_the_fourth_name_normalized TEXT,
     correcting_the_title_normalized TEXT,
     correcting_the_first_name_6_normalized TEXT,
+    correcting_the_fathers_name_8_normalized TEXT,
     correcting_the_grandfathers_name_10_normalized TEXT,
     correcting_the_fourth_name_12_normalized TEXT,
+    title_correction_14_normalized TEXT,
     diff_per_bnf1 REAL,
     diff_level_bnf1 TEXT,
     diff_per_bnf2 REAL,
@@ -245,11 +247,24 @@ export async function POST(req: Request) {
         const { action, projectId, records, uniqueIdCol, uniqueIds, mode } = body;
 
         if (action === "get_schema") {
-            const db = initializeDatabase();
-            const tableInfo = db.prepare("PRAGMA table_info(enrollment_data)").all();
-            const columns = tableInfo.map((c: any) => c.name);
-            db.close();
-            return NextResponse.json({ columns });
+            let db: Database.Database | null = null;
+            try {
+                db = initializeDatabase();
+                const tableInfo = db.prepare("PRAGMA table_info(enrollment_data)").all();
+                const columns = tableInfo.map((c: any) => c.name);
+                return NextResponse.json({ columns });
+            } catch (error: any) {
+                if (error.code === 'SQLITE_CANTOPEN') {
+                  const db = initializeDatabase();
+                  const tableInfo = db.prepare("PRAGMA table_info(enrollment_data)").all();
+                  const columns = tableInfo.map((c: any) => c.name);
+                  db.close();
+                  return NextResponse.json({ columns });
+                }
+                throw error;
+            } finally {
+                if (db) db.close();
+            }
         }
 
         if (action === "check_duplicates") {
@@ -297,7 +312,7 @@ export async function POST(req: Request) {
                 
                 const allRecordKeys = new Set(records.flatMap(r => Object.keys(r)));
                 const insertCols = [...allRecordKeys].filter(col => tableCols.includes(col) && col !== 'id');
-                const updateCols = insertCols.filter(col => col !== 'id' && col !== sanitizedIdCol && col !== 'project_id');
+                const updateCols = insertCols.filter(col => col !== 'id' && col !== sanitizedIdCol);
 
                 const insertStmt = db.prepare(`INSERT INTO enrollment_data (${insertCols.join(", ")}) VALUES (${insertCols.map(c => `@${c}`).join(", ")})`);
                 const updateStmt = db.prepare(`UPDATE enrollment_data SET ${updateCols.map(col => `${col} = @${col}`).join(", ")} WHERE project_id = @project_id AND ${sanitizedIdCol} = @${sanitizedIdCol}`);
@@ -311,16 +326,17 @@ export async function POST(req: Request) {
                         }
                         const existing = checkStmt.get(projectId, uniqueValue);
 
+                        const fullRecord = {...record, project_id: projectId};
+
                         if(existing) {
                             if(mode === 'replace') {
-                                const fullRecord = {...record, project_id: projectId};
                                 const info = updateStmt.run(fullRecord);
                                 if(info.changes > 0) updated++;
                             } else {
                                 skipped++;
                             }
                         } else {
-                           insertStmt.run(record);
+                           insertStmt.run(fullRecord);
                            saved++;
                         }
                     }
@@ -356,5 +372,3 @@ export async function GET(req: Request) {
         return NextResponse.json({ error: "Failed to fetch enrollment data.", details: error.message }, { status: 500 });
     }
 }
-
-    
