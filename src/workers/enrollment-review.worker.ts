@@ -1,3 +1,4 @@
+
 // src/workers/enrollment-review.worker.ts
 import { openDB, IDBPDatabase } from 'idb';
 
@@ -190,7 +191,7 @@ const FIXED_COMPOUND_NAMES = [
 const ENROLLMENT_DB_NAME = 'enrollment-review-db';
 const ENROLLMENT_STORE_NAME = 'files';
 const ENROLLMENT_DATA_KEY = 'enrollmentData';
-const ENROLLMENT_DB_VERSION = 2;
+const ENROLLMENT_DB_VERSION = 2; // Correct version
 
 async function getEnrollmentDb(): Promise<IDBPDatabase> {
   return openDB(ENROLLMENT_DB_NAME, ENROLLMENT_DB_VERSION, {
@@ -247,16 +248,29 @@ self.onmessage = async (event) => {
 
             // 2. Normalization
             const normalizedColumns: { [key: string]: string } = {
-                curr_bnf_1name_normalized: 'curr_bnf_1name', curr_bnf_2name_normalized: 'curr_bnf_2name', curr_bnf_3name_normalized: 'curr_bnf_3name',
-                curr_bnf_4name_normalized: 'curr_bnf_4name', curr_bnf_5name_normalized: 'curr_bnf_5name',
-                curr_hsbnd_1name_normalized: 'curr_hsbnd_1name', curr_hsbnd_2name_normalized: 'curr_hsbnd_2name', curr_hsbnd_3name_normalized: 'curr_hsbnd_3name',
-                curr_hsbnd_4name_normalized: 'curr_hsbnd_4name', curr_hsbnd_5name_normalized: 'curr_hsbnd_5name',
-                bnf_name_normalized: 'bnf_name', hsbnd_name_normalized: 'hsbnd_name', new_bnf_name_normalized: 'new_bnf_name', new_hsbnd_name_normalized: 'new_hsbnd_name',
-                correcting_the_first_name_normalized: 'correcting_the_first_name', correcting_the_fathers_name_normalized: 'correcting_the_fathers_name',
-                correcting_the_grandfathers_name_normalized: 'correcting_the_grandfathers_name', correcting_the_fourth_name_normalized: 'correcting_the_fourth_name',
+                curr_bnf_1name_normalized: 'curr_bnf_1name', 
+                curr_bnf_2name_normalized: 'curr_bnf_2name', 
+                curr_bnf_3name_normalized: 'curr_bnf_3name',
+                curr_bnf_4name_normalized: 'curr_bnf_4name', 
+                curr_bnf_5name_normalized: 'curr_bnf_5name',
+                curr_hsbnd_1name_normalized: 'curr_hsbnd_1name', 
+                curr_hsbnd_2name_normalized: 'curr_hsbnd_2name', 
+                curr_hsbnd_3name_normalized: 'curr_hsbnd_3name',
+                curr_hsbnd_4name_normalized: 'curr_hsbnd_4name',
+                curr_hsbnd_5name_normalized: 'curr_hsbnd_5name',
+                bnf_name_normalized: 'bnf_name', 
+                hsbnd_name_normalized: 'hsbnd_name', 
+                new_bnf_name_normalized: 'new_bnf_name', 
+                new_hsbnd_name_normalized: 'new_hsbnd_name',
+                correcting_the_first_name_normalized: 'correcting_the_first_name', 
+                correcting_the_fathers_name_normalized: 'correcting_the_fathers_name',
+                correcting_the_grandfathers_name_normalized: 'correcting_the_grandfathers_name', 
+                correcting_the_fourth_name_normalized: 'correcting_the_fourth_name',
                 correcting_the_title_normalized: 'correcting_the_title',
-                correcting_the_first_name_6_normalized: 'correcting_the_first_name_6', correcting_the_fathers_name_8_normalized: 'correcting_the_fathers_name_8',
-                correcting_the_grandfathers_name_10_normalized: 'correcting_the_grandfathers_name_10', correcting_the_fourth_name_12_normalized: 'correcting_the_fourth_name_12',
+                correcting_the_first_name_6_normalized: 'correcting_the_first_name_6', 
+                correcting_the_fathers_name_8_normalized: 'correcting_the_fathers_name_8',
+                correcting_the_grandfathers_name_10_normalized: 'correcting_the_grandfathers_name_10', 
+                correcting_the_fourth_name_12_normalized: 'correcting_the_fourth_name_12',
                 title_correction_14_normalized: 'title_correction_14'
             };
             Object.entries(normalizedColumns).forEach(([newCol, oldCol]) => {
@@ -294,6 +308,8 @@ self.onmessage = async (event) => {
             const husScoreResult = calculateAdvancedNameSimilarity(newRecord['hsbnd_name_normalized'], newRecord['new_hsbnd_name_normalized']);
             newRecord['diff_per_hus'] = husScoreResult.totalScore;
             newRecord['diff_level_hus'] = getModificationLevel(husScoreResult.totalScore);
+            // Also add husband details if needed
+            // Object.assign(newRecord, { hus_weighted_damerau: husScoreResult.details.weighted_damerau, ... });
 
             // 5. Placeholder for Similarity and Clustering
             newRecord.enroll_bnf_sim_score = null;
@@ -320,3 +336,5 @@ self.onmessage = async (event) => {
         postMessage({ type: 'error', error: e.message || 'An unknown error occurred in the worker.' });
     }
 };
+
+    
