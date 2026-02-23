@@ -86,12 +86,12 @@ export async function loadCachedResult(): Promise<FullResult | null> {
 const ENROLLMENT_DB_NAME = 'enrollment-review-db';
 const ENROLLMENT_STORE_NAME = 'files';
 const ENROLLMENT_DATA_KEY = 'enrollmentData';
-const ENROLLMENT_DB_VERSION = 2;
+const ENROLLMENT_DB_VERSION = 1;
 
 async function getEnrollmentDb(): Promise<IDBPDatabase> {
   return openDB(ENROLLMENT_DB_NAME, ENROLLMENT_DB_VERSION, {
     upgrade(db, oldVersion) {
-        if (oldVersion < 2) {
+        if (oldVersion < 1) {
              if (!db.objectStoreNames.contains(ENROLLMENT_STORE_NAME)) {
                 db.createObjectStore(ENROLLMENT_STORE_NAME);
             }

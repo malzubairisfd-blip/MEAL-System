@@ -307,367 +307,427 @@ const FileEditor = () => {
 
 
 export default function MealSettingsPage() {
-    const { t } = useTranslation();
-    const [settings, setSettings] = useState<Settings | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [saving, setSaving] = useState(false);
-    const [testA, setTestA] = useState({ womanName: "", husbandName: "", nationalId: "", phone: "" });
-    const [testB, setTestB] = useState({ womanName: "", husbandName: "", nationalId: "", phone: "" });
-    const [lastResult, setLastResult] = useState<any>(null);
-    const { toast } = useToast();
-    
-    const [savedProgressFiles, setSavedProgressFiles] = useState<SavedProgressFile[]>([]);
-    const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
-    
-    const [rawCachedDataObject, setRawCachedDataObject] = useState<any>(null);
-    const [filteredCachedDataString, setFilteredCachedDataString] = useState('');
-    const [cacheSearchQuery, setCacheSearchQuery] = useState('');
-    const [cacheLoading, setCacheLoading] = useState(false);
+  const { t } = useTranslation();
+  const [settings, setSettings] = useState<Settings | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [testA, setTestA] = useState({ womanName: "", husbandName: "", nationalId: "", phone: "" });
+  const [testB, setTestB] = useState({ womanName: "", husbandName: "", nationalId: "", phone: "" });
+  const [lastResult, setLastResult] = useState<any>(null);
+  const { toast } = useToast();
   
-    const [autoRules, setAutoRules] = useState<AutoRule[]>([]);
-    const [rulesLoading, setRulesLoading] = useState(true);
-    const [selectedRules, setSelectedRules] = useState<string[]>([]);
+  const [savedProgressFiles, setSavedProgressFiles] = useState<SavedProgressFile[]>([]);
+  const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
   
-    const fetchRules = useCallback(async () => {
-      setRulesLoading(true);
-      try {
-        const res = await fetch('/api/rules', { cache: 'no-store' });
-        if (res.ok) {
-          const rules = await res.json();
-          setAutoRules(Array.isArray(rules) ? rules : []);
-        } else {
-          setAutoRules([]);
-        }
-      } catch (error) {
-        setAutoRules([]);
-        console.error("Failed to fetch auto-rules:", error);
-      } finally {
-        setRulesLoading(false);
-      }
-    }, []);
-  
-    useEffect(() => {
-      fetchRules();
-    }, [fetchRules]);
-  
-    const handleDeleteRules = async () => {
-      if (selectedRules.length === 0) return;
-      try {
-        const res = await fetch('/api/rules', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'delete', ids: selectedRules }),
-        });
-        if (!res.ok) throw new Error('Failed to delete rules');
-        toast({ title: "Rules Deleted", description: `Successfully deleted ${selectedRules.length} rule(s).` });
-        setSelectedRules([]);
-        fetchRules(); // Refresh the list
-      } catch (err: any) {
-        toast({ title: "Error", description: err.message, variant: 'destructive' });
-      }
-    };
-  
-    const handleSelectRule = (id: string, checked: boolean | 'indeterminate') => {
-      if (typeof checked !== 'boolean') return;
-      setSelectedRules(prev => {
-        if (checked) {
-          return [...prev, id];
-        } else {
-          return prev.filter(ruleId => ruleId !== id);
-        }
-      });
-    };
-  
-    const loadCache = useCallback(async (cacheType: 'beneficiary' | 'enrollment') => {
-      setCacheLoading(true);
-      setCacheSearchQuery('');
-      let data = null;
-      if (cacheType === 'beneficiary') {
-          data = await loadCachedResult();
-      } else {
-          data = await loadEnrollmentDataFromCache();
-      }
-      setRawCachedDataObject(data);
-      if (data) {
-        setFilteredCachedDataString(JSON.stringify(data, null, 2));
-      } else {
-        setFilteredCachedDataString("No cached data found.");
-      }
-      setCacheLoading(false);
-    }, []);
+  const [rawCachedDataObject, setRawCachedDataObject] = useState<any>(null);
+  const [filteredCachedDataString, setFilteredCachedDataString] = useState('');
+  const [cacheSearchQuery, setCacheSearchQuery] = useState('');
+  const [cacheLoading, setCacheLoading] = useState(false);
 
-    const handleDownloadCache = () => {
-        if (!filteredCachedDataString || filteredCachedDataString === "No cached data found.") {
+  const [enrollmentCachedData, setEnrollmentCachedData] = useState<any>(null);
+  const [filteredEnrollmentCacheString, setFilteredEnrollmentCacheString] = useState('');
+  const [enrollmentCacheSearchQuery, setEnrollmentCacheSearchQuery] = useState('');
+  const [enrollmentCacheLoading, setEnrollmentCacheLoading] = useState(false);
+  
+  const [autoRules, setAutoRules] = useState<AutoRule[]>([]);
+  const [rulesLoading, setRulesLoading] = useState(true);
+  const [selectedRules, setSelectedRules] = useState<string[]>([]);
+  
+  const fetchRules = useCallback(async () => {
+    setRulesLoading(true);
+    try {
+      const res = await fetch('/api/rules', { cache: 'no-store' });
+      if (res.ok) {
+        const rules = await res.json();
+        setAutoRules(Array.isArray(rules) ? rules : []);
+      } else {
+        setAutoRules([]);
+      }
+    } catch (error) {
+      setAutoRules([]);
+      console.error("Failed to fetch auto-rules:", error);
+    } finally {
+      setRulesLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchRules();
+  }, [fetchRules]);
+
+  const handleDeleteRules = async () => {
+    if (selectedRules.length === 0) return;
+    try {
+      const res = await fetch('/api/rules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'delete', ids: selectedRules }),
+      });
+      if (!res.ok) throw new Error('Failed to delete rules');
+      toast({ title: "Rules Deleted", description: `Successfully deleted ${selectedRules.length} rule(s).` });
+      setSelectedRules([]);
+      fetchRules(); // Refresh the list
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: 'destructive' });
+    }
+  };
+
+  const handleSelectRule = (id: string, checked: boolean | 'indeterminate') => {
+    if (typeof checked !== 'boolean') return;
+    setSelectedRules(prev => {
+      if (checked) {
+        return [...prev, id];
+      } else {
+        return prev.filter(ruleId => ruleId !== id);
+      }
+    });
+  };
+
+  const loadCache = useCallback(async () => {
+    setCacheLoading(true);
+    setCacheSearchQuery('');
+    const data = await loadCachedResult();
+    setRawCachedDataObject(data);
+    if (data) {
+      setFilteredCachedDataString(JSON.stringify(data, null, 2));
+    } else {
+      setFilteredCachedDataString("No cached data found.");
+    }
+    setCacheLoading(false);
+  }, []);
+
+  const handleDownloadCache = () => {
+      if (!filteredCachedDataString || filteredCachedDataString === "No cached data found.") {
+          toast({
+              title: "No data to download",
+              description: "Please load the cache data first.",
+              variant: "destructive",
+          });
+          return;
+      }
+
+      const blob = new Blob([filteredCachedDataString], { type: "text/plain;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "beneficiary_insights_cache.txt";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+  };
+  
+    const loadEnrollmentCache = useCallback(async () => {
+        setEnrollmentCacheLoading(true);
+        setEnrollmentCacheSearchQuery('');
+        try {
+            const data = await loadEnrollmentDataFromCache();
+            setEnrollmentCachedData(data);
+            if (data) {
+              setFilteredEnrollmentCacheString(JSON.stringify(data, null, 2));
+            } else {
+              setFilteredEnrollmentCacheString("No enrollment cache data found.");
+            }
+        } catch (error) {
+            setFilteredEnrollmentCacheString("Failed to load cache data.");
+            toast({ title: "Error", description: "Failed to load enrollment cache.", variant: "destructive" });
+        } finally {
+            setEnrollmentCacheLoading(false);
+        }
+    }, [toast]);
+    
+    const handleDownloadEnrollmentCache = () => {
+        if (!filteredEnrollmentCacheString || filteredEnrollmentCacheString === "No enrollment cache data found.") {
             toast({
                 title: "No data to download",
-                description: "Please load the cache data first.",
+                description: "Please load the enrollment cache data first.",
                 variant: "destructive",
             });
             return;
         }
-
-        const blob = new Blob([filteredCachedDataString], { type: "text/plain;charset=utf-8" });
+        const blob = new Blob([filteredEnrollmentCacheString], { type: "text/plain;charset=utf-8" });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = "cache_data.txt";
+        a.download = "enrollment_review_cache.txt";
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
     };
-    
+
     useEffect(() => {
-      if (!rawCachedDataObject) return;
+        if (!enrollmentCachedData) return;
+        if (!enrollmentCacheSearchQuery.trim()) {
+            setFilteredEnrollmentCacheString(JSON.stringify(enrollmentCachedData, null, 2));
+            return;
+        }
+        try {
+            const query = enrollmentCacheSearchQuery.toLowerCase();
+            const filteredData = enrollmentCachedData.filter((record: any) => {
+                return Object.values(record).some(val => 
+                    String(val).toLowerCase().includes(query)
+                );
+            });
+            setFilteredEnrollmentCacheString(JSON.stringify(filteredData, null, 2));
+        } catch (e) {
+            setFilteredEnrollmentCacheString("Error while filtering data.");
+        }
+    }, [enrollmentCacheSearchQuery, enrollmentCachedData]);
   
-      if (!cacheSearchQuery.trim()) {
-          setFilteredCachedDataString(JSON.stringify(rawCachedDataObject, null, 2));
-          return;
+  useEffect(() => {
+    if (!rawCachedDataObject) return;
+
+    if (!cacheSearchQuery.trim()) {
+        setFilteredCachedDataString(JSON.stringify(rawCachedDataObject, null, 2));
+        return;
+    }
+
+    try {
+        const query = cacheSearchQuery.toLowerCase();
+        
+        const deepFilter = (obj: any): any => {
+            if (!obj) return null;
+
+            if (Array.isArray(obj)) {
+                const filteredArray = obj.map(deepFilter).filter(item => item !== null && (typeof item !== 'object' || Object.keys(item).length > 0));
+                return filteredArray.length > 0 ? filteredArray : null;
+            }
+
+            if (typeof obj === 'object') {
+                const isMatch = Object.values(obj).some(val => String(val).toLowerCase().includes(query));
+                if (isMatch) return obj;
+
+                const newObj: any = {};
+                for (const key in obj) {
+                    const result = deepFilter(obj[key]);
+                    if (result !== null) {
+                        newObj[key] = result;
+                    }
+                }
+                return Object.keys(newObj).length > 0 ? newObj : null;
+            }
+            
+            return null;
+        };
+        
+        const filtered = deepFilter({rows: rawCachedDataObject.rows, clusters: rawCachedDataObject.clusters});
+        setFilteredCachedDataString(JSON.stringify(filtered, null, 2));
+
+    } catch (e) {
+        setFilteredCachedDataString("Error while filtering data.");
+    }
+
+  }, [cacheSearchQuery, rawCachedDataObject]);
+
+  const loadSavedProgress = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    const files: SavedProgressFile[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith(PROGRESS_KEY_PREFIX)) {
+        try {
+            const parts = key.substring(PROGRESS_KEY_PREFIX.length).split('-');
+            const date = new Date(parseInt(parts[parts.length-1])).toLocaleDateString();
+            const size = (parseInt(parts[parts.length-2]) / (1024*1024)).toFixed(2) + ' MB';
+            const name = parts.slice(0, -2).join('-');
+            files.push({ key, name, size, date });
+        } catch {
+             // Fallback for old key format
+             files.push({ key, name: key.substring(PROGRESS_KEY_PREFIX.length), size: 'N/A', date: 'N/A' });
+        }
       }
+    }
+    setSavedProgressFiles(files);
+  }, []);
+
+  useEffect(() => {
+    loadSavedProgress();
+  }, [loadSavedProgress]);
+
+
+  const handleDeleteSelected = () => {
+    if (selectedFiles.length === 0) return;
+    selectedFiles.forEach(key => localStorage.removeItem(key));
+    toast({ title: `Deleted ${selectedFiles.length} saved progress file(s).`});
+    setSelectedFiles([]);
+    loadSavedProgress();
+  };
+
+  const handleDeleteAll = () => {
+    if (confirm("Are you sure you want to delete all saved progress data? This cannot be undone.")) {
+        savedProgressFiles.forEach(file => localStorage.removeItem(file.key));
+        toast({ title: "All saved progress has been deleted." });
+        setSelectedFiles([]);
+        loadSavedProgress();
+    }
+  };
   
-      try {
-          const query = cacheSearchQuery.toLowerCase();
-          
-          const deepFilter = (obj: any): any => {
-              if (!obj) return null;
-  
-              if (Array.isArray(obj)) {
-                  const filteredArray = obj.map(deepFilter).filter(item => item !== null && (typeof item !== 'object' || Object.keys(item).length > 0));
-                  return filteredArray.length > 0 ? filteredArray : null;
-              }
-  
-              if (typeof obj === 'object') {
-                  const isMatch = Object.values(obj).some(val => String(val).toLowerCase().includes(query));
-                  if (isMatch) return obj;
-  
-                  const newObj: any = {};
-                  for (const key in obj) {
-                      const result = deepFilter(obj[key]);
-                      if (result !== null) {
-                          newObj[key] = result;
-                      }
-                  }
-                  return Object.keys(newObj).length > 0 ? newObj : null;
-              }
-              
-              return null;
+  const handleSelectFile = (key: string, isSelected: boolean | 'indeterminate') => {
+      if (typeof isSelected !== 'boolean') return;
+      if (isSelected) {
+          setSelectedFiles(prev => [...prev, key]);
+      } else {
+          setSelectedFiles(prev => prev.filter(k => k !== key));
+      }
+  };
+
+
+  const getDefaultSettings = () => ({
+    thresholds: {
+      minPair: 0.62,
+      minInternal: 0.54,
+      blockChunkSize: 3000
+    },
+    finalScoreWeights: {
+      firstNameScore: 0.15,
+      familyNameScore: 0.25,
+      advancedNameScore: 0.12,
+      tokenReorderScore: 0.10,
+      husbandScore: 0.12,
+      idScore: 0.08,
+      phoneScore: 0.05,
+      childrenScore: 0.04,
+      locationScore: 0.04
+    },
+    rules: {
+      enableNameRootEngine: true,
+      enableTribalLineage: true,
+      enableMaternalLineage: true,
+      enablePolygamyRules: true
+    }
+  });
+
+
+  useEffect(() => {
+    fetch("/api/settings")
+      .then((r) => r.json())
+      .then((j) => {
+        if (j.ok) {
+          // Merge fetched settings with defaults to ensure all keys exist
+          const defaults = getDefaultSettings();
+          const mergedSettings = {
+              ...defaults,
+              ...j.settings,
+              thresholds: { ...defaults.thresholds, ...j.settings.thresholds },
+              finalScoreWeights: { ...defaults.finalScoreWeights, ...j.settings.finalScoreWeights },
+              rules: { ...defaults.rules, ...j.settings.rules },
           };
-          
-          const filtered = deepFilter(rawCachedDataObject);
-          setFilteredCachedDataString(JSON.stringify(filtered, null, 2));
-  
-      } catch (e) {
-          setFilteredCachedDataString("Error while filtering data.");
-      }
-  
-    }, [cacheSearchQuery, rawCachedDataObject]);
-  
-    const loadSavedProgress = useCallback(() => {
-      if (typeof window === 'undefined') return;
-      const files: SavedProgressFile[] = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && key.startsWith(PROGRESS_KEY_PREFIX)) {
-          try {
-              const parts = key.substring(PROGRESS_KEY_PREFIX.length).split('-');
-              const date = new Date(parseInt(parts[parts.length-1])).toLocaleDateString();
-              const size = (parseInt(parts[parts.length-2]) / (1024*1024)).toFixed(2) + ' MB';
-              const name = parts.slice(0, -2).join('-');
-              files.push({ key, name, size, date });
-          } catch {
-               files.push({ key, name: key.substring(PROGRESS_KEY_PREFIX.length), size: 'N/A', date: 'N/A' });
-          }
-        }
-      }
-      setSavedProgressFiles(files);
-    }, []);
-  
-    useEffect(() => {
-      loadSavedProgress();
-    }, [loadSavedProgress]);
-  
-  
-    const handleDeleteSelected = () => {
-      if (selectedFiles.length === 0) return;
-      selectedFiles.forEach(key => localStorage.removeItem(key));
-      toast({ title: `Deleted ${selectedFiles.length} saved progress file(s).`});
-      setSelectedFiles([]);
-      loadSavedProgress();
-    };
-  
-    const handleDeleteAll = () => {
-      if (confirm("Are you sure you want to delete all saved progress data? This cannot be undone.")) {
-          savedProgressFiles.forEach(file => localStorage.removeItem(file.key));
-          toast({ title: "All saved progress has been deleted." });
-          setSelectedFiles([]);
-          loadSavedProgress();
-      }
-    };
-    
-    const handleSelectFile = (key: string, isSelected: boolean | 'indeterminate') => {
-        if (typeof isSelected !== 'boolean') return;
-        if (isSelected) {
-            setSelectedFiles(prev => [...prev, key]);
+          setSettings(mergedSettings);
         } else {
-            setSelectedFiles(prev => prev.filter(k => k !== key));
-        }
-    };
-  
-    const getDefaultSettings = () => ({
-      thresholds: {
-        minPair: 0.62,
-        minInternal: 0.54,
-        blockChunkSize: 3000
-      },
-      finalScoreWeights: {
-        firstNameScore: 0.15,
-        familyNameScore: 0.25,
-        advancedNameScore: 0.12,
-        tokenReorderScore: 0.10,
-        husbandScore: 0.12,
-        idScore: 0.08,
-        phoneScore: 0.05,
-        childrenScore: 0.04,
-        locationScore: 0.04
-      },
-      rules: {
-        enableNameRootEngine: true,
-        enableTribalLineage: true,
-        enableMaternalLineage: true,
-        enablePolygamyRules: true
-      }
-    });
-  
-  
-    useEffect(() => {
-      fetch("/api/settings")
-        .then((r) => r.json())
-        .then((j) => {
-          if (j.ok) {
-            // Merge fetched settings with defaults to ensure all keys exist
-            const defaults = getDefaultSettings();
-            const mergedSettings = {
-                ...defaults,
-                ...j.settings,
-                thresholds: { ...defaults.thresholds, ...j.settings.thresholds },
-                finalScoreWeights: { ...defaults.finalScoreWeights, ...j.settings.finalScoreWeights },
-                rules: { ...defaults.rules, ...j.settings.rules },
-            };
-            setSettings(mergedSettings);
-          } else {
-            // If missing, load defaults
-            setSettings(getDefaultSettings());
-            toast({ title: t('settings.toasts.defaultsLoaded.title'), description: t('settings.toasts.defaultsLoaded.description'), variant: "default" });
-          }
-        })
-        .catch(() => {
+          // If missing, load defaults
           setSettings(getDefaultSettings());
-          toast({ title: t('settings.toasts.loadError.title'), description: t('settings.toasts.loadError.description'), variant: "destructive" });
-        })
-        .finally(() => setLoading(false));
-    }, [toast, t]);
+          toast({ title: t('settings.toasts.defaultsLoaded.title'), description: t('settings.toasts.defaultsLoaded.description'), variant: "default" });
+        }
+      })
+      .catch(() => {
+        setSettings(getDefaultSettings());
+        toast({ title: t('settings.toasts.loadError.title'), description: t('settings.toasts.loadError.description'), variant: "destructive" });
+      })
+      .finally(() => setLoading(false));
+  }, [toast, t]);
+
+
+  function update(path: string, value: any) {
+    if (!settings) return;
+    const clone = JSON.parse(JSON.stringify(settings));
+    const parts = path.split(".");
+    let cur: any = clone;
+    for (let i = 0; i < parts.length - 1; i++) {
+      cur[parts[i]] = cur[parts[i]] ?? {};
+      cur = cur[parts[i]];
+    }
+    cur[parts[parts.length - 1]] = value;
+    setSettings(clone);
+  }
   
-  
-    function update(path: string, value: any) {
+  function handleNumericChange(path: string, change: number) {
       if (!settings) return;
-      const clone = JSON.parse(JSON.stringify(settings));
       const parts = path.split(".");
-      let cur: any = clone;
+      let cur: any = settings;
       for (let i = 0; i < parts.length - 1; i++) {
-        cur[parts[i]] = cur[parts[i]] ?? {};
         cur = cur[parts[i]];
       }
-      cur[parts[parts.length - 1]] = value;
-      setSettings(clone);
+      const currentValue = cur[parts[parts.length - 1]] || 0;
+      const newValue = Math.max(0, Math.min(1, parseFloat((currentValue + change).toFixed(2))));
+      update(path, newValue);
+  }
+
+  function handleWeightChange(key: string, change: number) {
+    handleNumericChange(`finalScoreWeights.${key}`, change);
+  }
+
+  async function save() {
+    if (!settings) return;
+    setSaving(true);
+    try {
+      const res = await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(settings)
+      });
+      const j = await res.json();
+      if (!j.ok) throw new Error(j.error || t('settings.toasts.saveFailed'));
+      toast({ title: t('settings.toasts.saveSuccess.title'), description: t('settings.toasts.saveSuccess.description') });
+    } catch (err: any) {
+      toast({ title: t('settings.toasts.saveFailed'), description: err.message, variant: "destructive" });
+    } finally {
+      setSaving(false);
     }
-    
-    function handleNumericChange(path: string, change: number) {
-        if (!settings) return;
-        const parts = path.split(".");
-        let cur: any = settings;
-        for (let i = 0; i < parts.length - 1; i++) {
-          cur = cur[parts[i]];
-        }
-        const currentValue = cur[parts[parts.length - 1]] || 0;
-        const newValue = Math.max(0, Math.min(1, parseFloat((currentValue + change).toFixed(2))));
-        update(path, newValue);
+  }
+
+  function resetDefaults() {
+    if (confirm(t('settings.toasts.resetConfirm'))) {
+      setSettings(getDefaultSettings());
+      toast({ title: t('settings.toasts.resetSuccess.title'), description: t('settings.toasts.resetSuccess.description') });
     }
-  
-    function handleWeightChange(key: string, change: number) {
-      handleNumericChange(`finalScoreWeights.${key}`, change);
-    }
-  
-    async function save() {
-      if (!settings) return;
-      setSaving(true);
+  }
+
+  function exportJSON() {
+    if (!settings) return;
+    const blob = new Blob([JSON.stringify(settings, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "clustering-settings.json";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function importJSON(file: File | null) {
+    if (!file) return;
+    const r = new FileReader();
+    r.onload = (e) => {
       try {
-        const res = await fetch("/api/settings", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(settings)
-        });
-        const j = await res.json();
-        if (!j.ok) throw new Error(j.error || t('settings.toasts.saveFailed'));
-        toast({ title: t('settings.toasts.saveSuccess.title'), description: t('settings.toasts.saveSuccess.description') });
-      } catch (err: any) {
-        toast({ title: t('settings.toasts.saveFailed'), description: err.message, variant: "destructive" });
-      } finally {
-        setSaving(false);
-      }
-    }
-  
-    function resetDefaults() {
-      if (confirm(t('settings.toasts.resetConfirm'))) {
-        setSettings(getDefaultSettings());
-        toast({ title: t('settings.toasts.resetSuccess.title'), description: t('settings.toasts.resetSuccess.description') });
-      }
-    }
-  
-    function exportJSON() {
-      if (!settings) return;
-      const blob = new Blob([JSON.stringify(settings, null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "clustering-settings.json";
-      a.click();
-      URL.revokeObjectURL(url);
-    }
-  
-    function importJSON(file: File | null) {
-      if (!file) return;
-      const r = new FileReader();
-      r.onload = (e) => {
-        try {
-          const parsed = JSON.parse(String(e.target?.result));
-          // Simple validation
-          if (parsed.thresholds && parsed.rules && parsed.finalScoreWeights) {
-            setSettings(parsed);
-            toast({ title: t('settings.toasts.importSuccess.title'), description: t('settings.toasts.importSuccess.description') });
-          } else {
-            throw new Error("Invalid settings file structure.");
-          }
-        } catch (err: any) {
-          toast({ title: t('settings.toasts.importFailed'), description: err.message, variant: "destructive" });
+        const parsed = JSON.parse(String(e.target?.result));
+        // Simple validation
+        if (parsed.thresholds && parsed.rules && parsed.finalScoreWeights) {
+          setSettings(parsed);
+          toast({ title: t('settings.toasts.importSuccess.title'), description: t('settings.toasts.importSuccess.description') });
+        } else {
+          throw new Error("Invalid settings file structure.");
         }
-      };
-      r.readAsText(file);
-    }
+      } catch (err: any) {
+        toast({ title: t('settings.toasts.importFailed'), description: err.message, variant: "destructive" });
+      }
+    };
+    r.readAsText(file);
+  }
+
+  function runTestScoring() {
+    if (!settings) { toast({ title: "Settings not loaded", variant: "destructive" }); return; }
+    // This is a simplified test; it won't have access to the full worker context.
+    // We create a minimal version of `computePairScore` on the client.
+    const res = computePairScore(testA, testB, settings);
+    setLastResult({ source: 'Client Test', ...res });
+  }
   
-    function runTestScoring() {
-      if (!settings) { toast({ title: "Settings not loaded", variant: "destructive" }); return; }
-      // This is a simplified test; it won't have access to the full worker context.
-      // We create a minimal version of `computePairScore` on the client.
-      const res = computePairScore(testA, testB, settings);
-      setLastResult({ source: 'Client Test', ...res });
-    }
-    
-    if (loading || !settings) {
-      return (<div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin" /> <span className="ml-2">Loading settings...</span></div>);
-    }
-  
-    return (
-        <div className="space-y-8">
+  if (loading || !settings) {
+    return (<div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin" /> <span className="ml-2">Loading settings...</span></div>);
+  }
+
+  return (
+    <div className="space-y-8">
              <div className="flex justify-between items-center">
                 <h1 className="text-3xl font-bold">MEAL System Settings</h1>
                 <Button variant="outline" asChild>
@@ -731,7 +791,7 @@ export default function MealSettingsPage() {
                                 <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleNumericChange('thresholds.minInternal', 0.01)}><Plus className="h-4 w-4" /></Button>
                             </div>
                             </div>
-                            <p className="text-xs text-muted-foreground mt-1 pl-1">{t('settings.thresholds.minInternalDescription')}</p>
+                             <p className="text-xs text-muted-foreground mt-1 pl-1">{t('settings.thresholds.minInternalDescription')}</p>
                         </div>
                         <div>
                             <Label htmlFor="blockChunkSize">{t('settings.thresholds.blockChunkSize')}</Label>
@@ -745,14 +805,14 @@ export default function MealSettingsPage() {
                         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {Object.entries(settings.finalScoreWeights).map(([k, v]: [string, any]) => (
                             <div key={k} className="flex flex-col gap-2 p-3 border rounded-md">
-                            <div className="flex justify-between items-center">
-                                <Label htmlFor={`fsw-${k}`} className="capitalize flex items-center">{t(`settings.weights.${k}`)}</Label>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleWeightChange(k, -0.01)}><Minus className="h-4 w-4" /></Button>
-                                <Input type="number" step="0.01" value={v || ''} onChange={(e)=>update(`finalScoreWeights.${k}`, parseFloat(e.target.value) || 0)} className="w-24 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"/>
-                                <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleWeightChange(k, 0.01)}><Plus className="h-4 w-4" /></Button>
-                            </div>
+                               <div className="flex justify-between items-center">
+                                 <Label htmlFor={`fsw-${k}`} className="capitalize flex items-center">{t(`settings.weights.${k}`)}</Label>
+                               </div>
+                               <div className="flex items-center gap-2">
+                                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleWeightChange(k, -0.01)}><Minus className="h-4 w-4" /></Button>
+                                    <Input type="number" step="0.01" value={v || ''} onChange={(e)=>update(`finalScoreWeights.${k}`, parseFloat(e.target.value) || 0)} className="w-24 text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"/>
+                                    <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleWeightChange(k, 0.01)}><Plus className="h-4 w-4" /></Button>
+                               </div>
                                 <Slider dir="ltr" id={`fsw-${k}`} min={0} max={1} step={0.01} value={[v]} onValueChange={(val)=>update(`finalScoreWeights.${k}`, val[0])} />
                                 <p className="text-xs text-muted-foreground mt-1">{t(`settings.weights.${k}Description`)}</p>
                             </div>
@@ -764,11 +824,11 @@ export default function MealSettingsPage() {
                         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {Object.entries(settings.rules).map(([k, v]: [string, any]) => (
                             <div key={k} className="flex items-start justify-between p-3 rounded-lg border">
-                            <div className="flex flex-col gap-1 flex-1 ltr:mr-4 rtl:ml-4">
+                              <div className="flex flex-col gap-1 flex-1 ltr:mr-4 rtl:ml-4">
                                 <Label htmlFor={`r-${k}`} className="capitalize flex items-center">{t(`settings.rules.${k}`)}</Label>
                                 <p className="text-xs text-muted-foreground">{t(`settings.rules.${k}Description`)}</p>
-                            </div>
-                            <Switch id={`r-${k}`} checked={v} onCheckedChange={(val)=>update(`rules.${k}`, val)} />
+                              </div>
+                              <Switch id={`r-${k}`} checked={v} onCheckedChange={(val)=>update(`rules.${k}`, val)} />
                             </div>
                         ))}
                         </CardContent>
@@ -924,48 +984,83 @@ export default function MealSettingsPage() {
                         </CardContent>
                     </Card>
 
-                   <Card>
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>{t('settings.cache.title')}</CardTitle>
+                            <CardDescription>{t('settings.cache.description')}</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="flex flex-col gap-2">
+                                <div className="flex gap-2">
+                                    <Button onClick={loadCache} disabled={cacheLoading} className="flex-1">
+                                        {cacheLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                        {t('settings.cache.button')}
+                                    </Button>
+                                     <Button onClick={handleDownloadCache} variant="outline" disabled={!rawCachedDataObject}>
+                                        <Download className="mr-2 h-4 w-4" />
+                                        Download .txt
+                                    </Button>
+                                </div>
+                                {rawCachedDataObject && (
+                                    <div className="relative">
+                                        <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                                        <Input
+                                            type="text"
+                                            placeholder="Search cached data..."
+                                            className="pl-10"
+                                            value={cacheSearchQuery}
+                                            onChange={(e) => setCacheSearchQuery(e.target.value)}
+                                        />
+                                    </div>
+                                )}
+                            </div>
+                            {rawCachedDataObject && (
+                                <Textarea
+                                    readOnly
+                                    className="mt-4 h-64 font-mono text-xs"
+                                    value={filteredCachedDataString}
+                                    placeholder={t('settings.cache.loading')}
+                                />
+                            )}
+                        </CardContent>
+                    </Card>
+
+                     <Card>
                       <CardHeader>
-                        <CardTitle>{t('settings.cache.title')}</CardTitle>
-                        <CardDescription>{t('settings.cache.description')}</CardDescription>
+                        <CardTitle>Enrollment Cache Viewer</CardTitle>
+                        <CardDescription>Inspect the data cached by the Enrollment Review worker.</CardDescription>
                       </CardHeader>
                       <CardContent>
                         <div className="flex flex-col gap-2">
                           <div className="flex gap-2">
-                            <Button onClick={() => loadCache('beneficiary')} disabled={cacheLoading} className="flex-1">
-                              {cacheLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                              Load Beneficiary Cache
-                            </Button>
-                            <Button onClick={() => loadCache('enrollment')} disabled={cacheLoading} className="flex-1">
-                              {cacheLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            <Button onClick={loadEnrollmentCache} disabled={enrollmentCacheLoading} className="flex-1">
+                              {enrollmentCacheLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                               Load Enrollment Cache
                             </Button>
-                          </div>
-                          <div className="flex gap-2">
-                             <Button onClick={handleDownloadCache} variant="outline" disabled={!rawCachedDataObject} className="flex-1">
-                                <Download className="mr-2 h-4 w-4" />
-                                Download .txt
+                            <Button onClick={handleDownloadEnrollmentCache} variant="outline" disabled={!enrollmentCachedData}>
+                              <Download className="mr-2 h-4 w-4" />
+                              Download .txt
                             </Button>
                           </div>
-                          {rawCachedDataObject && (
+                          {enrollmentCachedData && (
                             <div className="relative">
                               <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                               <Input
                                 type="text"
                                 placeholder="Search cached data..."
                                 className="pl-10"
-                                value={cacheSearchQuery}
-                                onChange={(e) => setCacheSearchQuery(e.target.value)}
+                                value={enrollmentCacheSearchQuery}
+                                onChange={(e) => setEnrollmentCacheSearchQuery(e.target.value)}
                               />
                             </div>
                           )}
                         </div>
-                        {rawCachedDataObject && (
+                        {enrollmentCachedData && (
                           <Textarea
                             readOnly
                             className="mt-4 h-64 font-mono text-xs"
-                            value={filteredCachedDataString}
-                            placeholder={t('settings.cache.loading')}
+                            value={filteredEnrollmentCacheString}
+                            placeholder={"Loading data..."}
                           />
                         )}
                       </CardContent>
