@@ -5,5 +5,3 @@ import { UnderConstructionPage } from "@/components/under-construction-page";
 export default function DownloadPage() {
   return <UnderConstructionPage title="Enrollment Download" />;
 }
-
-    

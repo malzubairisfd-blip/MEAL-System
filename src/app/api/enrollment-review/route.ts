@@ -312,10 +312,10 @@ export async function POST(req: Request) {
                 
                 const allRecordKeys = new Set(records.flatMap(r => Object.keys(r)));
                 const insertCols = [...allRecordKeys].filter(col => tableCols.includes(col) && col !== 'id');
-                const updateCols = insertCols.filter(col => col !== 'id' && col !== sanitizedIdCol);
+                const updateCols = insertCols.filter(col => col !== 'id' && col !== sanitizedIdCol && col !== 'project_id');
 
                 const insertStmt = db.prepare(`INSERT INTO enrollment_data (${insertCols.join(", ")}) VALUES (${insertCols.map(c => `@${c}`).join(", ")})`);
-                const updateStmt = db.prepare(`UPDATE enrollment_data SET ${updateCols.map(col => `${col} = @${col}`).join(", ")} WHERE project_id = @project_id AND ${sanitizedIdCol} = @${sanitizedIdCol}`);
+                const updateStmt = db.prepare(`UPDATE enrollment_data SET ${updateCols.map(col => `${col} = @${col}`).join(", ")} WHERE project_id = @project_id AND ${sanitizedIdCol} = @uniqueValue`);
                 const checkStmt = db.prepare(`SELECT id FROM enrollment_data WHERE project_id = ? AND ${sanitizedIdCol} = ?`);
 
                 const transaction = db.transaction(() => {
@@ -326,7 +326,7 @@ export async function POST(req: Request) {
                         }
                         const existing = checkStmt.get(projectId, uniqueValue);
 
-                        const fullRecord = {...record, project_id: projectId};
+                        const fullRecord = {...record, project_id: projectId, uniqueValue};
 
                         if(existing) {
                             if(mode === 'replace') {
