@@ -1,3 +1,4 @@
+
 import { NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
@@ -311,13 +312,16 @@ export async function POST(req: Request) {
         const allRecordKeys = new Set(records.flatMap((r) => Object.keys(r)));
         const insertCols = [...allRecordKeys].filter((col) => tableCols.includes(col) && col !== "id");
         const updateCols = insertCols.filter((col) => col !== "id" && col !== sanitizedIdCol && col !== "project_id");
+        
         const insertStmt = db.prepare(
           `INSERT INTO enrollment_data (${insertCols.join(", ")}) VALUES (${insertCols.map((c) => `@${c}`).join(", ")})`
         );
-        const updateStmt = db.prepare(
+        const updateStmt = updateCols.length > 0 ? db.prepare(
           `UPDATE enrollment_data SET ${updateCols.map((col) => `${col} = @${col}`).join(", ")} WHERE project_id = @project_id AND ${sanitizedIdCol} = @${sanitizedIdCol}`
-        );
+        ) : null;
+        
         const checkStmt = db.prepare(`SELECT id FROM enrollment_data WHERE project_id = ? AND ${sanitizedIdCol} = ?`);
+        
         const transaction = db.transaction(() => {
           for (const record of records) {
             const uniqueValue = record[sanitizedIdCol];
@@ -328,7 +332,7 @@ export async function POST(req: Request) {
             const existing = checkStmt.get(projectId, uniqueValue);
             const payload = { ...record, project_id: projectId };
             if (existing) {
-              if (mode === "replace") {
+              if (mode === "replace" && updateStmt) {
                 updateStmt.run(payload);
                 updated++;
               } else {
