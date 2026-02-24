@@ -14,18 +14,28 @@ import { cn } from "@/lib/utils";
 // --- Helper Functions & Components ---
 
 const CharacterDiff = ({ oldStr, newStr }: { oldStr: string; newStr: string }) => {
+  if (!oldStr && !newStr) return null;
+  oldStr = oldStr || '';
+  newStr = newStr || '';
+
   const oldChars = oldStr.split('');
   const newChars = newStr.split('');
   let i = 0, j = 0;
   const result: React.ReactNode[] = [];
+  
+  // This is a simplified diff, a more advanced one would be too slow for UI
   while (i < oldChars.length || j < newChars.length) {
     if (i < oldChars.length && j < newChars.length && oldChars[i] === newChars[j]) {
       result.push(<span key={`same-${i}`}>{oldChars[i]}</span>);
       i++; j++;
     } else {
       if (j < newChars.length) {
-        result.push(<span key={`add-${j}`} className="text-red-500 bg-red-100">{newChars[j]}</span>);
+        result.push(<span key={`add-${j}`} className="text-red-500 bg-red-100 dark:bg-red-900/50">{newChars[j]}</span>);
         j++;
+      } else if (i < oldChars.length) {
+         // To show removed characters, you would add a similar span here.
+         // For this use case, we only highlight additions/changes in the new name.
+         i++;
       }
     }
   }
@@ -77,15 +87,35 @@ export default function RecommendationPage() {
             const data = await res.json();
             setAllRecords(data);
 
-            const group1 = data.filter((r: any) => r.new_bnf_name && r.new_hsbnd_name);
-            const group2 = data.filter((r: any) => r.new_bnf_name && !r.new_hsbnd_name);
-            const group3 = data.filter((r: any) => !r.new_bnf_name && r.new_hsbnd_name);
-            const similarityGroup = data.filter((r: any) => r.enroll_cluster_id);
-            
-            const grouped = [group1, group2, group3, similarityGroup].filter(g => g.length > 0);
-            setGroupedRecords(grouped);
+            // Optimized single-pass grouping
+            const groups: { group1: any[]; group2: any[]; group3: any[]; similarityGroup: any[]; } = {
+                group1: [], group2: [], group3: [], similarityGroup: []
+            };
+
+            data.forEach((r: any) => {
+                const hasNewBnf = r.new_bnf_name;
+                const hasNewHsbnd = r.new_hsbnd_name;
+                const hasClusterId = r.enroll_cluster_id;
+
+                if (hasNewBnf && hasNewHsbnd) {
+                    groups.group1.push(r);
+                } else if (hasNewBnf && !hasNewHsbnd) {
+                    groups.group2.push(r);
+                } else if (!hasNewBnf && hasNewHsbnd) {
+                    groups.group3.push(r);
+                } else if (hasClusterId) {
+                    groups.similarityGroup.push(r);
+                }
+            });
+
+            const finalGroups = [groups.group1, groups.group2, groups.group3, groups.similarityGroup].filter(g => g.length > 0);
+            setGroupedRecords(finalGroups);
+
+            // Reset state for the new data
             setCurrentGroupIndex(0);
             setCurrentItemIndex(0);
+            setDecisionState({});
+            setCurrentStep('bnf');
         } catch (error: any) {
             toast({ title: "Error", description: error.message, variant: "destructive" });
         } finally {
@@ -106,7 +136,14 @@ export default function RecommendationPage() {
     const moveToNext = useCallback(() => {
         setDecisionState({});
         setCurrentStep('bnf');
-        if (currentItemIndex < groupedRecords[currentGroupIndex].length - 1) {
+        
+        const currentGroup = groupedRecords[currentGroupIndex];
+        if (!currentGroup) {
+            toast({ title: "Review Complete", description: "All records have been reviewed." });
+            return;
+        }
+
+        if (currentItemIndex < currentGroup.length - 1) {
             setCurrentItemIndex(i => i + 1);
         } else if (currentGroupIndex < groupedRecords.length - 1) {
             setCurrentGroupIndex(i => i + 1);
@@ -166,6 +203,10 @@ export default function RecommendationPage() {
         }).then(res => {
             if(!res.ok) throw new Error("Failed to save recommendation.");
             toast({ title: "Saved", description: `Recommendation for ${currentRecord.bnf_name} saved.` });
+            
+            // Optimistically update local state before moving to next
+            setAllRecords(prev => prev.map(r => r.id === currentRecord.id ? {...r, branch_recommendation: recommendation } : r));
+
             moveToNext();
         }).catch(err => {
             toast({ title: "Save Error", description: err.message, variant: 'destructive' });
@@ -244,9 +285,9 @@ export default function RecommendationPage() {
                                     <div className="p-4 border-t">
                                         <h4 className="font-semibold mb-2">Recommendation:</h4>
                                         <div className="flex gap-2">
-                                            <DecisionButton label="إعتماد تصحيح الاسم" icon={Check} onClick={() => handleDecision(currentStep, 'approve')} disabled={isSaving || isSimilarityCase} />
-                                            <DecisionButton label="عدم اعتماد التصحيح" icon={X} onClick={() => handleDecision(currentStep, 'reject')} disabled={isSaving || isSimilarityCase} />
-                                            <DecisionButton label="تعليق الاسم للتحقق" icon={Hand} onClick={() => handleDecision(currentStep, 'suspend')} disabled={isSaving} />
+                                            <DecisionButton label="إعتماد تصحيح الاسم" icon={Check} onClick={() => handleDecision(currentStep === 'done' ? 'bnf' : currentStep, 'approve')} disabled={isSaving || isSimilarityCase} />
+                                            <DecisionButton label="عدم اعتماد التصحيح" icon={X} onClick={() => handleDecision(currentStep === 'done' ? 'bnf' : currentStep, 'reject')} disabled={isSaving || isSimilarityCase} />
+                                            <DecisionButton label="تعليق الاسم للتحقق" icon={Hand} onClick={() => handleDecision(currentStep === 'done' ? 'bnf' : currentStep, 'suspend')} disabled={isSaving} />
                                         </div>
                                     </div>
                                 </div>
@@ -259,6 +300,7 @@ export default function RecommendationPage() {
                            <p>Record {currentItemIndex + 1} of {groupedRecords[currentGroupIndex]?.length || 0} in Group {currentGroupIndex + 1}</p>
                            <p>Beneficiary Decision: {decisionState.bnf || 'Pending'}</p>
                            <p>Husband Decision: {decisionState.hsbnd || 'Pending'}</p>
+                           <p className="text-sm text-muted-foreground pt-4">Current Record ID: {currentRecord?.id}</p>
                         </CardContent>
                     </Card>
                 </div>
