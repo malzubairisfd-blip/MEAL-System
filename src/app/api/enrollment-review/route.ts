@@ -1,3 +1,4 @@
+// src/app/api/enrollment-review/route.ts
 import { NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
@@ -279,9 +280,8 @@ export async function POST(req: Request) {
 
         let totalCount = 0;
         const chunks = chunkArray(uniqueIds, 900);
-        const tableTotal = dbInstance
-          .prepare("SELECT COUNT(*) as total FROM enrollment_data WHERE project_id = ?")
-          .get(projectId);
+        const tableTotalResult = dbInstance.prepare("SELECT COUNT(*) as total FROM enrollment_data WHERE project_id = ?").get(projectId) as {total: number} | undefined;
+        const totalInDb = tableTotalResult?.total || 0;
         for (const chunk of chunks) {
           if (chunk.length === 0) continue;
           const placeholders = chunk.map(() => "?").join(",");
@@ -291,7 +291,7 @@ export async function POST(req: Request) {
           const result: any = stmt.get(projectId, ...chunk);
           totalCount += result.count;
         }
-        return NextResponse.json({ count: totalCount, totalInDb: tableTotal?.total || 0 });
+        return NextResponse.json({ count: totalCount, totalInDb });
       } catch (error: any) {
         if (error.code === "SQLITE_CANTOPEN") return NextResponse.json({ count: 0, totalInDb: 0 });
         throw error;
@@ -336,17 +336,19 @@ export async function POST(req: Request) {
             }
 
             const existing = checkStmt.get(projectId, uniqueValue);
+            
             const fullRecord: Record<string, any> = { project_id: projectId };
             insertCols.forEach((col) => {
               fullRecord[col] = record.hasOwnProperty(col) ? record[col] : null;
             });
             fullRecord[sanitizedIdCol] = uniqueValue;
 
+
             if (existing) {
               if (mode === "replace") {
                 const updatePayload: Record<string, any> = { project_id: projectId, [sanitizedIdCol]: uniqueValue };
-                updateCols.forEach((col) => {
-                  updatePayload[col] = record.hasOwnProperty(col) ? record[col] : null;
+                 updateCols.forEach(col => {
+                    updatePayload[col] = record.hasOwnProperty(col) ? record[col] : null;
                 });
                 const info = updateStmt.run(updatePayload);
                 if (info.changes > 0) updated++;
@@ -378,11 +380,59 @@ export async function GET(req: Request) {
   try {
     await fs.mkdir(getDataPath(), { recursive: true });
     const db = new Database(getDbPath(), { fileMustExist: true });
-    const records = db.prepare("SELECT * FROM enrollment_data").all();
+    const { searchParams } = new URL(req.url);
+    const projectId = searchParams.get('projectId');
+    
+    let records;
+    if (projectId) {
+      records = db.prepare("SELECT * FROM enrollment_data WHERE project_id = ?").all(projectId);
+    } else {
+      records = db.prepare("SELECT * FROM enrollment_data").all();
+    }
+    
     db.close();
     return NextResponse.json(records);
   } catch (error: any) {
     if (error.code === "SQLITE_CANTOPEN") return NextResponse.json([]);
     return NextResponse.json({ error: "Failed to fetch enrollment data.", details: error.message }, { status: 500 });
+  }
+}
+
+export async function PUT(req: Request) {
+  try {
+    const { recordId, updates } = await req.json();
+    if (!recordId || !updates) {
+      return NextResponse.json({ error: "Missing recordId or updates object." }, { status: 400 });
+    }
+
+    const db = initializeDatabase();
+    try {
+      const allowedColumns = db.prepare("PRAGMA table_info(enrollment_data)").all().map((c: any) => c.name);
+      
+      const setClauses = Object.keys(updates)
+        .filter(key => allowedColumns.includes(key) && key !== 'id')
+        .map(key => `${key} = @${key}`);
+      
+      if (setClauses.length === 0) {
+        return NextResponse.json({ error: "No valid columns to update." }, { status: 400 });
+      }
+
+      const stmt = db.prepare(
+        `UPDATE enrollment_data SET ${setClauses.join(', ')} WHERE id = @id`
+      );
+
+      const info = stmt.run({ ...updates, id: recordId });
+
+      if (info.changes === 0) {
+        return NextResponse.json({ error: "Record not found or no changes made." }, { status: 404 });
+      }
+
+      return NextResponse.json({ message: "Record updated successfully." });
+    } finally {
+      db.close();
+    }
+  } catch (error: any) {
+    console.error("[ENROLLMENT_REVIEW_PUT_ERROR]", error);
+    return NextResponse.json({ error: "Failed to update record.", details: error.message }, { status: 500 });
   }
 }
