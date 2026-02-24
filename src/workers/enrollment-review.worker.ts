@@ -312,6 +312,7 @@ function applySimilarityAndClusters(
   const scoreField = type === 'bnf' ? 'enroll_bnf_sim_score' : 'enroll_hsbnd_sim_score';
   const total = records.length;
   if (total === 0) return;
+
   records.forEach((record, idx) => {
     const targetValue = record[newField];
     if (!targetValue) {
@@ -323,7 +324,7 @@ function applySimilarityAndClusters(
     let bestScore = 0;
     let bestMatch: any = null;
     for (const candidate of candidates) {
-      if (candidate === record) continue;
+      if (candidate.unique_id === record.unique_id) continue;
       const score = calculateAdvancedNameSimilarity(targetValue, candidate[oldField]).totalScore;
       if (score > bestScore) {
         bestScore = score;
@@ -335,9 +336,18 @@ function applySimilarityAndClusters(
       const clusterCandidates = [record.unique_id, bestMatch.unique_id, record.enroll_cluster_id, bestMatch.enroll_cluster_id];
       const clusterId = getClusterIdFromIds(clusterCandidates);
       if (clusterId) {
-        [record, bestMatch].forEach((entry) => {
-          entry.enroll_cluster_id = clusterId;
-        });
+        // Propagate the cluster ID
+        const updateClusterId = (rec: any) => {
+          if (rec.enroll_cluster_id !== clusterId) {
+            rec.enroll_cluster_id = clusterId;
+            const matchInAllRecords = records.find(r => r.unique_id === rec.unique_id);
+            if (matchInAllRecords) {
+              matchInAllRecords.enroll_cluster_id = clusterId;
+            }
+          }
+        };
+        updateClusterId(record);
+        updateClusterId(bestMatch);
       }
     }
     if ((idx + 1) % 25 === 0 || idx === total - 1) {
@@ -354,66 +364,93 @@ self.onmessage = async (event) => {
     updateProgress('generating_unique_id', 5);
     const cachedData = await loadEnrollmentDataFromCache();
     if (!cachedData || cachedData.length === 0) throw new Error('No cached data found. Upload a file first.');
-    updateProgress('normalizing_names', 15);
+    
+    updateProgress('calculating_differences', 15);
     const totalRecords = cachedData.length;
     const normalizedRecords = cachedData.map((record: any, index: number) => {
       const newRecord: any = { ...record };
       newRecord.unique_id = record[uniqueIdCol];
+
       Object.entries(normalizedFieldMapping).forEach(([newCol, oldCol]) => {
         newRecord[newCol] = normalizeArabicWithCompounds(record[oldCol]);
       });
+
       namePartDefinitions.forEach((part) => {
         if (Number(record[part.flag]) === 1) {
           const scoreResult = calculateAdvancedNameSimilarity(newRecord[part.oldCol] || '', newRecord[part.newCol] || '');
           newRecord[`diff_per_${part.key}`] = scoreResult.totalScore;
           newRecord[`diff_level_${part.key}`] = getModificationLevel(scoreResult.totalScore);
+          
+          if (part.key === 'bnf4' && !newRecord.curr_bnf_4name_normalized && newRecord.correcting_the_fourth_name_normalized) {
+              newRecord['diff_level_bnf4'] = 'adding the fourth name';
+          }
+          if (part.key === 'hus4' && !newRecord.curr_hsbnd_4name_normalized && newRecord.correcting_the_fourth_name_12_normalized) {
+              newRecord['diff_level_hus4'] = 'adding the fourth name';
+          }
         }
       });
       NAME_PART_DIFF_KEYS.forEach((key) => {
         if (newRecord[key] === undefined) newRecord[key] = null;
       });
-      const bnfScore = calculateAdvancedNameSimilarity(newRecord.bnf_name_normalized, newRecord.new_bnf_name_normalized);
-      newRecord.diff_per_bnf = bnfScore.totalScore;
-      newRecord.diff_level_bnf = getModificationLevel(bnfScore.totalScore);
-      Object.assign(newRecord, bnfScore.details);
-      const husScore = calculateAdvancedNameSimilarity(newRecord.hsbnd_name_normalized, newRecord.new_hsbnd_name_normalized);
-      newRecord.diff_per_hus = husScore.totalScore;
-      newRecord.diff_level_hus = getModificationLevel(husScore.totalScore);
+
+      if (newRecord.new_bnf_name_normalized) {
+          const bnfScore = calculateAdvancedNameSimilarity(newRecord.bnf_name_normalized, newRecord.new_bnf_name_normalized);
+          newRecord.diff_per_bnf = bnfScore.totalScore;
+          newRecord.diff_level_bnf = getModificationLevel(bnfScore.totalScore);
+          Object.assign(newRecord, bnfScore.details);
+      } else {
+          newRecord.diff_per_bnf = null;
+          newRecord.diff_level_bnf = null;
+          const details = zeroDetails();
+          Object.assign(newRecord, details);
+      }
+
+      if (newRecord.new_hsbnd_name_normalized) {
+          const husScore = calculateAdvancedNameSimilarity(newRecord.hsbnd_name_normalized, newRecord.new_hsbnd_name_normalized);
+          newRecord.diff_per_hus = husScore.totalScore;
+          newRecord.diff_level_hus = getModificationLevel(husScore.totalScore);
+      } else {
+          newRecord.diff_per_hus = null;
+          newRecord.diff_level_hus = null;
+      }
       WHOLE_NAME_DIFF_KEYS.forEach((key) => {
         if (newRecord[key] === undefined) newRecord[key] = null;
       });
+
+      newRecord.branch_recommendation = null;
+      newRecord.HQ_recommendation = null;
+      newRecord.enroll_recom = null;
+
       newRecord.enroll_bnf_sim_score = 0;
       newRecord.enroll_hsbnd_sim_score = 0;
       newRecord.enroll_cluster_id = '';
-      newRecord.branch_recommendation = newRecord.diff_per_bnf >= 90 ? 'Approve locally' : 'Needs review';
-      newRecord.HQ_recommendation = newRecord.diff_per_bnf < 80 ? 'Escalate to HQ' : 'Monitor';
-      newRecord.enroll_recom = newRecord.diff_per_bnf >= 92 ? 'Proceed' : 'Review';
-      newRecord.weighted_damerau_score = bnfScore.details.weighted_damerau;
-      newRecord.positional_similarity = bnfScore.details.positional_similarity;
-      newRecord.bigram_similarity = bnfScore.details.bigram_similarity;
-      newRecord.lcs_ratio = bnfScore.details.lcs_ratio;
-      newRecord.length_factor = bnfScore.details.length_factor;
-      newRecord.structural_integrity = bnfScore.details.structural_integrity;
-      newRecord.root_factor = bnfScore.details.root_factor;
+      
       newRecord.data = JSON.stringify(record);
+
       if ((index + 1) % 50 === 0 || index === totalRecords - 1) {
         const relativeProgress = Math.round(((index + 1) / totalRecords) * 20);
-        updateProgress('normalizing_names', 15 + relativeProgress);
+        updateProgress('calculating_differences', 15 + relativeProgress);
       }
       return newRecord;
     });
+
     updateProgress('similarity_and_clustering', 50);
     const bnfGroupMap = buildNameGroupMap(normalizedRecords, 'bnf');
     const husGroupMap = buildNameGroupMap(normalizedRecords, 'hus');
+
     const recordsWithBnfNew = normalizedRecords.filter((record) => record.new_bnf_name_normalized);
     const recordsWithHusNew = normalizedRecords.filter((record) => record.new_hsbnd_name_normalized);
+
     applySimilarityAndClusters(recordsWithBnfNew, bnfGroupMap, 'bnf', (value) => updateProgress('similarity_and_clustering', value), 50, 25);
     applySimilarityAndClusters(recordsWithHusNew, husGroupMap, 'hus', (value) => updateProgress('similarity_and_clustering', value), 75, 15);
-    updateProgress('caching_results', 85);
+
+    updateProgress('caching_results', 95);
     await saveEnrollmentDataToCache(normalizedRecords);
+
     updateProgress('done', 100);
     postMessage({ type: 'done', data: { processedCount: normalizedRecords.length } });
   } catch (error: any) {
     postMessage({ type: 'error', error: error.message || 'An unknown error occurred in the worker.' });
   }
 };
+

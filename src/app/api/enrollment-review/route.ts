@@ -1,4 +1,3 @@
-
 import { NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
@@ -243,24 +242,25 @@ export async function POST(req: Request) {
     await fs.mkdir(getDataPath(), { recursive: true });
     const body = await req.json();
     const { action, projectId, records, uniqueIdCol, uniqueIds, mode } = body;
+
     if (action === "get_schema") {
-      let db: Database.Database | null = null;
+      let dbInstance: Database.Database | null = null;
       try {
-        db = initializeDatabase();
-        const tableInfo = db.prepare("PRAGMA table_info(enrollment_data)").all();
+        dbInstance = initializeDatabase();
+        const tableInfo = dbInstance.prepare("PRAGMA table_info(enrollment_data)").all();
         const columns = tableInfo.map((c: any) => c.name);
         return NextResponse.json({ columns });
       } catch (error: any) {
         if (error.code === "SQLITE_CANTOPEN") {
-          const db = initializeDatabase();
-          const tableInfo = db.prepare("PRAGMA table_info(enrollment_data)").all();
+          const dbFallback = initializeDatabase();
+          const tableInfo = dbFallback.prepare("PRAGMA table_info(enrollment_data)").all();
           const columns = tableInfo.map((c: any) => c.name);
-          db.close();
+          dbFallback.close();
           return NextResponse.json({ columns });
         }
         throw error;
       } finally {
-        if (db) db.close();
+        if (dbInstance) dbInstance.close();
       }
     }
 
@@ -268,32 +268,35 @@ export async function POST(req: Request) {
       if (!projectId || !uniqueIdCol || !Array.isArray(uniqueIds)) {
         return NextResponse.json({ error: "Missing parameters for duplicate check." }, { status: 400 });
       }
-      let db: Database.Database | null = null;
+      let dbInstance: Database.Database | null = null;
       try {
-        db = new Database(getDbPath(), { fileMustExist: true });
+        dbInstance = new Database(getDbPath(), { fileMustExist: true });
         const sanitizedColumn = sanitizeColumn(uniqueIdCol);
-        const tableCols = db.prepare("PRAGMA table_info(enrollment_data)").all().map((c: any) => c.name);
+        const tableCols = dbInstance.prepare("PRAGMA table_info(enrollment_data)").all().map((c: any) => c.name);
         if (!tableCols.includes(sanitizedColumn)) {
           return NextResponse.json({ error: `Invalid column: ${uniqueIdCol}` }, { status: 400 });
         }
-        const totalRecordsResult = db.prepare("SELECT COUNT(*) as total FROM enrollment_data WHERE project_id = ?").get(projectId);
+
         let totalCount = 0;
         const chunks = chunkArray(uniqueIds, 900);
+        const tableTotal = dbInstance
+          .prepare("SELECT COUNT(*) as total FROM enrollment_data WHERE project_id = ?")
+          .get(projectId);
         for (const chunk of chunks) {
           if (chunk.length === 0) continue;
           const placeholders = chunk.map(() => "?").join(",");
-          const stmt = db.prepare(
+          const stmt = dbInstance.prepare(
             `SELECT COUNT(*) as count FROM enrollment_data WHERE project_id = ? AND ${sanitizedColumn} IN (${placeholders})`
           );
           const result: any = stmt.get(projectId, ...chunk);
           totalCount += result.count;
         }
-        return NextResponse.json({ count: totalCount, totalInDb: totalRecordsResult?.total || 0 });
+        return NextResponse.json({ count: totalCount, totalInDb: tableTotal?.total || 0 });
       } catch (error: any) {
         if (error.code === "SQLITE_CANTOPEN") return NextResponse.json({ count: 0, totalInDb: 0 });
         throw error;
       } finally {
-        if (db) db.close();
+        if (dbInstance) dbInstance.close();
       }
     }
 
@@ -301,27 +304,29 @@ export async function POST(req: Request) {
       if (!projectId || !Array.isArray(records) || !mode || !uniqueIdCol) {
         return NextResponse.json({ error: "Missing parameters for save." }, { status: 400 });
       }
+
       const db = initializeDatabase();
       try {
         const tableCols = db.prepare("PRAGMA table_info(enrollment_data)").all().map((c: any) => c.name);
         const sanitizedIdCol = sanitizeColumn(uniqueIdCol);
         if (!sanitizedIdCol || !tableCols.includes(sanitizedIdCol)) throw new Error("Invalid unique ID column");
+
         let saved = 0;
         let skipped = 0;
         let updated = 0;
+
         const allRecordKeys = new Set(records.flatMap((r) => Object.keys(r)));
         const insertCols = [...allRecordKeys].filter((col) => tableCols.includes(col) && col !== "id");
         const updateCols = insertCols.filter((col) => col !== "id" && col !== sanitizedIdCol && col !== "project_id");
-        
+
         const insertStmt = db.prepare(
           `INSERT INTO enrollment_data (${insertCols.join(", ")}) VALUES (${insertCols.map((c) => `@${c}`).join(", ")})`
         );
-        const updateStmt = updateCols.length > 0 ? db.prepare(
+        const updateStmt = db.prepare(
           `UPDATE enrollment_data SET ${updateCols.map((col) => `${col} = @${col}`).join(", ")} WHERE project_id = @project_id AND ${sanitizedIdCol} = @${sanitizedIdCol}`
-        ) : null;
-        
+        );
         const checkStmt = db.prepare(`SELECT id FROM enrollment_data WHERE project_id = ? AND ${sanitizedIdCol} = ?`);
-        
+
         const transaction = db.transaction(() => {
           for (const record of records) {
             const uniqueValue = record[sanitizedIdCol];
@@ -329,22 +334,34 @@ export async function POST(req: Request) {
               skipped++;
               continue;
             }
+
             const existing = checkStmt.get(projectId, uniqueValue);
-            const payload = { ...record, project_id: projectId };
+            const fullRecord: Record<string, any> = { project_id: projectId };
+            insertCols.forEach((col) => {
+              fullRecord[col] = record.hasOwnProperty(col) ? record[col] : null;
+            });
+            fullRecord[sanitizedIdCol] = uniqueValue;
+
             if (existing) {
-              if (mode === "replace" && updateStmt) {
-                updateStmt.run(payload);
-                updated++;
+              if (mode === "replace") {
+                const updatePayload: Record<string, any> = { project_id: projectId, [sanitizedIdCol]: uniqueValue };
+                updateCols.forEach((col) => {
+                  updatePayload[col] = record.hasOwnProperty(col) ? record[col] : null;
+                });
+                const info = updateStmt.run(updatePayload);
+                if (info.changes > 0) updated++;
               } else {
                 skipped++;
               }
             } else {
-              insertStmt.run(payload);
+              insertStmt.run(fullRecord);
               saved++;
             }
           }
         });
+
         transaction();
+
         return NextResponse.json({ saved, skipped, updated, total: records.length, mode });
       } finally {
         if (db) db.close();
