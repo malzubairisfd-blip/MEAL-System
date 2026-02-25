@@ -1,15 +1,17 @@
 // src/app/meal-system/monitoring/implementation/enrollment/review/recommendation/page.tsx
 "use client";
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, ArrowLeft, ThumbsUp, ThumbsDown, Hand, Check, X, Eye } from "lucide-react";
+import { Loader2, ArrowLeft, ThumbsUp, ThumbsDown, Hand, Check, X, Eye, Search } from "lucide-react";
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Input } from '@/components/ui/input';
 
 // --- Helper Functions & Components ---
 
@@ -23,7 +25,6 @@ const CharacterDiff = ({ oldStr, newStr }: { oldStr: string; newStr: string }) =
   let i = 0, j = 0;
   const result: React.ReactNode[] = [];
   
-  // This is a simplified diff, a more advanced one would be too slow for UI
   while (i < oldChars.length || j < newChars.length) {
     if (i < oldChars.length && j < newChars.length && oldChars[i] === newChars[j]) {
       result.push(<span key={`same-${i}`}>{oldChars[i]}</span>);
@@ -33,8 +34,6 @@ const CharacterDiff = ({ oldStr, newStr }: { oldStr: string; newStr: string }) =
         result.push(<span key={`add-${j}`} className="text-red-500 bg-red-100 dark:bg-red-900/50">{newChars[j]}</span>);
         j++;
       } else if (i < oldChars.length) {
-         // To show removed characters, you would add a similar span here.
-         // For this use case, we only highlight additions/changes in the new name.
          i++;
       }
     }
@@ -74,6 +73,8 @@ export default function RecommendationPage() {
     const [currentStep, setCurrentStep] = useState<'bnf' | 'hsbnd' | 'done'>('bnf');
     const [loading, setLoading] = useState({ projects: true, data: false });
     const [isSaving, setIsSaving] = useState(false);
+    const [searchTerm, setSearchTerm] = useState('');
+    const phonePanelRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         fetch('/api/projects').then(res => res.json()).then(data => setProjects(data)).finally(() => setLoading(p => ({ ...p, projects: false })));
@@ -87,7 +88,6 @@ export default function RecommendationPage() {
             const data = await res.json();
             setAllRecords(data);
 
-            // Optimized single-pass grouping
             const groups: { group1: any[]; group2: any[]; group3: any[]; similarityGroup: any[]; } = {
                 group1: [], group2: [], group3: [], similarityGroup: []
             };
@@ -111,7 +111,6 @@ export default function RecommendationPage() {
             const finalGroups = [groups.group1, groups.group2, groups.group3, groups.similarityGroup].filter(g => g.length > 0);
             setGroupedRecords(finalGroups);
 
-            // Reset state for the new data
             setCurrentGroupIndex(0);
             setCurrentItemIndex(0);
             setDecisionState({});
@@ -132,6 +131,31 @@ export default function RecommendationPage() {
     const currentRecord = useMemo(() => {
         return groupedRecords[currentGroupIndex]?.[currentItemIndex];
     }, [groupedRecords, currentGroupIndex, currentItemIndex]);
+
+    const filteredRecords = useMemo(() => {
+      if (!searchTerm) return allRecords;
+      const lowercasedTerm = searchTerm.toLowerCase();
+      return allRecords.filter(r => 
+        (r.bnf_name && r.bnf_name.toLowerCase().includes(lowercasedTerm)) ||
+        (r.ed_name && r.ed_name.toLowerCase().includes(lowercasedTerm)) ||
+        (r.branch_recommendation && r.branch_recommendation.toLowerCase().includes(lowercasedTerm)) ||
+        (r.id && String(r.id).includes(lowercasedTerm))
+      );
+    }, [allRecords, searchTerm]);
+
+    const handleSelectRecord = (recordId: number) => {
+        for (let gIdx = 0; gIdx < groupedRecords.length; gIdx++) {
+            const iIdx = groupedRecords[gIdx].findIndex(r => r.id === recordId);
+            if (iIdx !== -1) {
+                setCurrentGroupIndex(gIdx);
+                setCurrentItemIndex(iIdx);
+                setDecisionState({});
+                setCurrentStep('bnf');
+                phonePanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                return;
+            }
+        }
+    };
     
     const moveToNext = useCallback(() => {
         setDecisionState({});
@@ -160,13 +184,11 @@ export default function RecommendationPage() {
         const hasBnfChange = !!currentRecord.new_bnf_name;
         const hasHsbndChange = !!currentRecord.new_hsbnd_name;
 
-        // If it's a combined change and we just decided on bnf, move to husband
         if (part === 'bnf' && hasBnfChange && hasHsbndChange) {
             setCurrentStep('hsbnd');
-            return; // Wait for the second decision
+            return; 
         }
 
-        // --- All decisions are made, finalize the recommendation text ---
         let recommendation = '';
         if (hasBnfChange && hasHsbndChange) {
             const bnfD = newDecisionState.bnf;
@@ -194,7 +216,6 @@ export default function RecommendationPage() {
             recommendation = 'تعلق الحاله للتحقق كون تغيير متشابه مع مستفيدة أخرى';
         }
 
-        // Save and move to next
         setIsSaving(true);
         fetch('/api/enrollment-review', {
             method: 'PUT',
@@ -204,14 +225,11 @@ export default function RecommendationPage() {
             if(!res.ok) throw new Error("Failed to save recommendation.");
             toast({ title: "Saved", description: `Recommendation for ${currentRecord.bnf_name} saved.` });
             
-            // Optimistically update local state before moving to next
             setAllRecords(prev => prev.map(r => r.id === currentRecord.id ? {...r, branch_recommendation: recommendation } : r));
-
             moveToNext();
         }).catch(err => {
-            toast({ title: "Save Error", description: err.message, variant: 'destructive' });
+            toast({ title: "Save Error", description: err.message, variant: "destructive" });
         }).finally(() => setIsSaving(false));
-
     }, [decisionState, currentRecord, moveToNext, toast]);
 
     const isSimilarityCase = !!currentRecord?.enroll_cluster_id;
@@ -224,87 +242,171 @@ export default function RecommendationPage() {
             </div>
 
             <Card>
-                <CardHeader>
-                    <CardTitle>Select Project</CardTitle>
-                </CardHeader>
+                <CardHeader><CardTitle>Select Project</CardTitle></CardHeader>
                 <CardContent>
                     <Select onValueChange={setSelectedProjectId} value={selectedProjectId} disabled={loading.projects}>
-                        <SelectTrigger className="w-full md:w-1/2">
-                            <SelectValue placeholder={loading.projects ? "Loading..." : "Select a project..."} />
-                        </SelectTrigger>
+                        <SelectTrigger className="w-full md:w-1/2"><SelectValue placeholder={loading.projects ? "Loading..." : "Select a project..."} /></SelectTrigger>
                         <SelectContent>{projects.map(p => <SelectItem key={p.projectId} value={p.projectId}>{p.projectName}</SelectItem>)}</SelectContent>
                     </Select>
                 </CardContent>
             </Card>
 
             {loading.data ? <div className="text-center p-8"><Loader2 className="animate-spin h-8 w-8"/></div> : 
-            currentRecord ? (
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <div className="lg:col-span-2">
-                        <div className="border border-gray-800 bg-gray-800 rounded-[1rem] p-1">
-                            <div className="bg-background rounded-[1rem] overflow-hidden">
-                                <div className="p-3 border-b text-center"><h3 className="font-bold">Review Name Correction</h3></div>
-                                <div className="p-4 space-y-4">
-                                    <Table>
-                                        <TableHeader>
-                                            <TableRow>
-                                                <TableHead className="w-[40%]">Name (Old/New)</TableHead>
-                                                <TableHead>Difference Score</TableHead>
-                                                <TableHead>Difference Level</TableHead>
-                                                <TableHead>Similarity Score</TableHead>
-                                                <TableHead>Cluster ID</TableHead>
+            selectedProjectId && (
+                <>
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>All Reviewable Records</CardTitle>
+                            <CardDescription>Select a record to review or edit its recommendation.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="relative">
+                                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                                <Input placeholder="Search records..." className="pl-8 mb-2" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                            </div>
+                            <ScrollArea className="h-72 border rounded-md">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>ID</TableHead>
+                                            <TableHead>Beneficiary Name</TableHead>
+                                            <TableHead>Educator</TableHead>
+                                            <TableHead>Recommendation</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {filteredRecords.map(record => (
+                                            <TableRow key={record.id} onClick={() => handleSelectRecord(record.id)} className="cursor-pointer hover:bg-muted">
+                                                <TableCell>{record.id}</TableCell>
+                                                <TableCell>{record.bnf_name}</TableCell>
+                                                <TableCell>{record.ed_name}</TableCell>
+                                                <TableCell>{record.branch_recommendation}</TableCell>
                                             </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
-                                            {currentRecord.new_bnf_name && (
-                                                <TableRow className={currentStep === 'bnf' ? 'bg-blue-100 dark:bg-blue-900/30' : ''}>
-                                                    <TableCell>
-                                                        <div className="font-mono text-xs text-muted-foreground">{currentRecord.bnf_name}</div>
-                                                        <div className="font-semibold"><CharacterDiff oldStr={currentRecord.bnf_name || ''} newStr={currentRecord.new_bnf_name || ''} /></div>
-                                                    </TableCell>
-                                                    <TableCell>{currentRecord.diff_per_bnf?.toFixed(2)}</TableCell>
-                                                    <TableCell>{currentRecord.diff_level_bnf}</TableCell>
-                                                    <TableCell>{currentRecord.enroll_bnf_sim_score?.toFixed(2)}</TableCell>
-                                                    <TableCell>{currentRecord.enroll_cluster_id}</TableCell>
-                                                </TableRow>
-                                            )}
-                                             {currentRecord.new_hsbnd_name && (
-                                                <TableRow className={currentStep === 'hsbnd' ? 'bg-blue-100 dark:bg-blue-900/30' : ''}>
-                                                    <TableCell>
-                                                        <div className="font-mono text-xs text-muted-foreground">{currentRecord.hsbnd_name}</div>
-                                                        <div className="font-semibold"><CharacterDiff oldStr={currentRecord.hsbnd_name || ''} newStr={currentRecord.new_hsbnd_name || ''} /></div>
-                                                    </TableCell>
-                                                    <TableCell>{currentRecord.diff_per_hus?.toFixed(2)}</TableCell>
-                                                    <TableCell>{currentRecord.diff_level_hus}</TableCell>
-                                                     <TableCell>{currentRecord.enroll_hsbnd_sim_score?.toFixed(2)}</TableCell>
-                                                    <TableCell>{currentRecord.enroll_cluster_id}</TableCell>
-                                                </TableRow>
-                                            )}
-                                        </TableBody>
-                                    </Table>
-                                    <div className="p-4 border-t">
-                                        <h4 className="font-semibold mb-2">Recommendation:</h4>
-                                        <div className="flex gap-2">
-                                            <DecisionButton label="إعتماد تصحيح الاسم" icon={Check} onClick={() => handleDecision(currentStep === 'done' ? 'bnf' : currentStep, 'approve')} disabled={isSaving || isSimilarityCase} />
-                                            <DecisionButton label="عدم اعتماد التصحيح" icon={X} onClick={() => handleDecision(currentStep === 'done' ? 'bnf' : currentStep, 'reject')} disabled={isSaving || isSimilarityCase} />
-                                            <DecisionButton label="تعليق الاسم للتحقق" icon={Hand} onClick={() => handleDecision(currentStep === 'done' ? 'bnf' : currentStep, 'suspend')} disabled={isSaving} />
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </ScrollArea>
+                        </CardContent>
+                    </Card>
+
+                    {currentRecord ? (
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6" ref={phonePanelRef}>
+                            <div className="lg:col-span-2">
+                                <div className="border border-gray-800 bg-gray-800 rounded-[1rem] p-1">
+                                    <div className="bg-background rounded-[1rem] overflow-hidden">
+                                        <div className="p-3 border-b text-center"><h3 className="font-bold">Review Name Correction</h3></div>
+                                        <div className="p-4 space-y-4">
+                                            <Table>
+                                                <TableHeader>
+                                                    <TableRow>
+                                                        <TableHead className="w-[40%]">Name (Old/New)</TableHead>
+                                                        <TableHead>Difference Score</TableHead>
+                                                        <TableHead>Difference Level</TableHead>
+                                                        <TableHead>Similarity Score</TableHead>
+                                                        <TableHead>Cluster ID</TableHead>
+                                                    </TableRow>
+                                                </TableHeader>
+                                                <TableBody>
+                                                    {currentRecord.new_bnf_name && (
+                                                        <TableRow className={currentStep === 'bnf' ? 'bg-blue-100 dark:bg-blue-900/30' : ''}>
+                                                            <TableCell>
+                                                                <div className="font-mono text-xs text-muted-foreground">{currentRecord.bnf_name}</div>
+                                                                <div className="font-semibold"><CharacterDiff oldStr={currentRecord.bnf_name || ''} newStr={currentRecord.new_bnf_name || ''} /></div>
+                                                            </TableCell>
+                                                            <TableCell>{currentRecord.diff_per_bnf?.toFixed(2)}</TableCell>
+                                                            <TableCell>{currentRecord.diff_level_bnf}</TableCell>
+                                                            <TableCell>{currentRecord.enroll_bnf_sim_score?.toFixed(2)}</TableCell>
+                                                            <TableCell>{currentRecord.enroll_cluster_id}</TableCell>
+                                                        </TableRow>
+                                                    )}
+                                                     {currentRecord.new_hsbnd_name && (
+                                                        <TableRow className={currentStep === 'hsbnd' ? 'bg-blue-100 dark:bg-blue-900/30' : ''}>
+                                                            <TableCell>
+                                                                <div className="font-mono text-xs text-muted-foreground">{currentRecord.hsbnd_name}</div>
+                                                                <div className="font-semibold"><CharacterDiff oldStr={currentRecord.hsbnd_name || ''} newStr={currentRecord.new_hsbnd_name || ''} /></div>
+                                                            </TableCell>
+                                                            <TableCell>{currentRecord.diff_per_hus?.toFixed(2)}</TableCell>
+                                                            <TableCell>{currentRecord.diff_level_hus}</TableCell>
+                                                             <TableCell>{currentRecord.enroll_hsbnd_sim_score?.toFixed(2)}</TableCell>
+                                                            <TableCell>{currentRecord.enroll_cluster_id}</TableCell>
+                                                        </TableRow>
+                                                    )}
+                                                </TableBody>
+                                            </Table>
+                                            <div className="p-4 border-t">
+                                                <h4 className="font-semibold mb-2">Recommendation:</h4>
+                                                <div className="flex gap-2">
+                                                    <DecisionButton label="إعتماد تصحيح الاسم" icon={Check} onClick={() => handleDecision(currentStep === 'done' ? 'bnf' : currentStep, 'approve')} disabled={isSaving || isSimilarityCase} />
+                                                    <DecisionButton label="عدم اعتماد التصحيح" icon={X} onClick={() => handleDecision(currentStep === 'done' ? 'bnf' : currentStep, 'reject')} disabled={isSaving || isSimilarityCase} />
+                                                    <DecisionButton label="تعليق الاسم للتحقق" icon={Hand} onClick={() => handleDecision(currentStep === 'done' ? 'bnf' : currentStep, 'suspend')} disabled={isSaving} />
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
+                             <Card>
+                                <CardHeader><CardTitle>Review Progress & Info</CardTitle></CardHeader>
+                                <CardContent className="space-y-4">
+                                   <p>Record {currentItemIndex + 1} of {groupedRecords[currentGroupIndex]?.length || 0} in Group {currentGroupIndex + 1}</p>
+                                   <p>Beneficiary Decision: {decisionState.bnf || 'Pending'}</p>
+                                   <p>Husband Decision: {decisionState.hsbnd || 'Pending'}</p>
+                                   <p className="text-sm text-muted-foreground pt-4">Current Record ID: {currentRecord?.id}</p>
+                                </CardContent>
+                            </Card>
                         </div>
-                    </div>
-                     <Card>
-                        <CardHeader><CardTitle>Review Progress & Info</CardTitle></CardHeader>
-                        <CardContent className="space-y-4">
-                           <p>Record {currentItemIndex + 1} of {groupedRecords[currentGroupIndex]?.length || 0} in Group {currentGroupIndex + 1}</p>
-                           <p>Beneficiary Decision: {decisionState.bnf || 'Pending'}</p>
-                           <p>Husband Decision: {decisionState.hsbnd || 'Pending'}</p>
-                           <p className="text-sm text-muted-foreground pt-4">Current Record ID: {currentRecord?.id}</p>
-                        </CardContent>
-                    </Card>
-                </div>
-            ) : <p className="text-center text-muted-foreground py-8">Select a project to begin the review process.</p>}
+                    ) : <p className="text-center text-muted-foreground py-8">Select a record from the table to begin the review process.</p>}
+                </>
+            )}
         </div>
     );
+}
+
+```
+  </change>
+  <change>
+    <file>src/lib/exportEnrollmentToExcel.ts</file>
+    <content><![CDATA[// src/lib/exportEnrollmentToExcel.ts
+import ExcelJS from 'exceljs';
+import { saveAs } from 'file-saver';
+
+export async function exportEnrollmentToExcel(records: any[], columns: string[]) {
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet('Enrollment_Data');
+
+  worksheet.columns = columns.map(col => ({
+    header: col.replace(/_/g, ' '),
+    key: col,
+    width: col.length > 20 ? 30 : 20,
+  }));
+  
+  const headerRow = worksheet.getRow(1);
+  headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+  headerRow.fill = {
+    type: 'pattern',
+    pattern: 'solid',
+    fgColor: { argb: 'FF002060' }
+  };
+  headerRow.alignment = { horizontal: 'center' };
+
+  worksheet.addRows(records);
+
+  worksheet.views = [
+    { state: 'frozen', xSplit: 1, ySplit: 1, activeCell: 'B2' }
+  ];
+  worksheet.getColumn(1).font = { bold: true };
+  
+  worksheet.eachRow({ includeEmpty: true }, (row) => {
+    row.eachCell({ includeEmpty: true }, (cell) => {
+      cell.border = {
+        top: { style: 'thin' },
+        left: { style: 'thin' },
+        bottom: { style: 'thin' },
+        right: { style: 'thin' }
+      };
+    });
+  });
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  saveAs(new Blob([buffer]), 'enrollment_review_database.xlsx');
 }

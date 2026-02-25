@@ -4,7 +4,7 @@
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ArrowRight, Upload, LayoutDashboard, Download, ThumbsUp } from "lucide-react";
+import { ArrowLeft, ArrowRight, Upload, LayoutDashboard, Download, ThumbsUp, Database } from "lucide-react";
 
 export default function EnrollmentReviewHubPage() {
   const features = [
@@ -32,6 +32,12 @@ export default function EnrollmentReviewHubPage() {
       href: "/meal-system/monitoring/implementation/enrollment/review/download",
       icon: <Download className="h-8 w-8 text-orange-500" />,
     },
+     {
+      title: "Enrollment Database",
+      description: "Browse, search, and manage the complete enrollment review database.",
+      href: "/meal-system/monitoring/implementation/enrollment/review/database",
+      icon: <Database className="h-8 w-8 text-cyan-500" />,
+    },
   ];
 
   return (
@@ -46,7 +52,7 @@ export default function EnrollmentReviewHubPage() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {features.map((feature) => (
           <Card key={feature.title} className="flex flex-col text-center items-center justify-center p-6 transition-all duration-300 hover:shadow-xl hover:-translate-y-2">
             <div className="p-4 bg-muted rounded-full mb-4">
