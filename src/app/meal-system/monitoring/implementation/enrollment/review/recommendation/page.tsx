@@ -66,8 +66,6 @@ const getInitialStep = (record: any): 'bnf' | 'hsbnd' | 'done' => {
     if (hasBnfChange) {
         return 'bnf';
     }
-    // If no bnf change, the only other options are husband change or similarity.
-    // In both cases, the first action relates to the husband or the overall record.
     return 'hsbnd';
 }
 
@@ -99,12 +97,14 @@ export default function RecommendationPage() {
             const data = await res.json();
             setAllRecords(data);
 
+            const reviewableData = data.filter((r: any) => r.new_bnf_name || r.new_hsbnd_name || r.enroll_cluster_id);
+
             const groups: { [key: string]: any[] } = {
                 group1: [], group2: [], group3: [], similarityGroup: []
             };
 
             const processedIds = new Set();
-            data.forEach((r: any) => {
+            reviewableData.forEach((r: any) => {
                 if(processedIds.has(r.id)) return;
 
                 const hasNewBnf = r.new_bnf_name;
@@ -150,21 +150,30 @@ export default function RecommendationPage() {
         }
     }, [selectedProjectId, fetchAndGroupData]);
 
-    const currentRecord = useMemo(() => {
-        return groupedRecords[currentGroupIndex]?.[currentItemIndex];
-    }, [groupedRecords, currentGroupIndex, currentItemIndex]);
+    const reviewableRecords = useMemo(() => {
+        if (!allRecords) return [];
+        return allRecords.filter(r => 
+            (r.new_bnf_name && r.new_bnf_name.trim() !== '') ||
+            (r.new_hsbnd_name && r.new_hsbnd_name.trim() !== '') ||
+            (r.enroll_cluster_id && r.enroll_cluster_id.trim() !== '')
+        );
+    }, [allRecords]);
 
     const filteredRecords = useMemo(() => {
-      if (!searchTerm) return allRecords;
+      if (!searchTerm) return reviewableRecords;
       const lowercasedTerm = searchTerm.toLowerCase();
-      return allRecords.filter(r => 
+      return reviewableRecords.filter(r => 
         (r.bnf_name && r.bnf_name.toLowerCase().includes(lowercasedTerm)) ||
         (r.ed_name && r.ed_name.toLowerCase().includes(lowercasedTerm)) ||
         (r.branch_recommendation && r.branch_recommendation.toLowerCase().includes(lowercasedTerm)) ||
         (r.id && String(r.id).includes(lowercasedTerm))
       );
-    }, [allRecords, searchTerm]);
+    }, [reviewableRecords, searchTerm]);
 
+    const currentRecord = useMemo(() => {
+        return groupedRecords[currentGroupIndex]?.[currentItemIndex];
+    }, [groupedRecords, currentGroupIndex, currentItemIndex]);
+    
     const handleSelectRecord = (recordId: number) => {
         for (let gIdx = 0; gIdx < groupedRecords.length; gIdx++) {
             const iIdx = groupedRecords[gIdx].findIndex(r => r.id === recordId);
@@ -209,6 +218,7 @@ export default function RecommendationPage() {
         const hasBnfChange = !!currentRecord.new_bnf_name;
         const hasHsbndChange = !!currentRecord.new_hsbnd_name;
 
+        // If it's a two-part decision, wait for the second part.
         if (part === 'bnf' && hasBnfChange && hasHsbndChange) {
             setCurrentStep('hsbnd');
             return; 
@@ -386,4 +396,3 @@ export default function RecommendationPage() {
         </div>
     );
 }
-```
