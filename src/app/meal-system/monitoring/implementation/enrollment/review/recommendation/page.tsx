@@ -1,3 +1,4 @@
+
 // src/app/meal-system/monitoring/implementation/enrollment/review/recommendation/page.tsx
 "use client";
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
@@ -362,51 +363,4 @@ export default function RecommendationPage() {
     );
 }
 
-```
-  </change>
-  <change>
-    <file>src/lib/exportEnrollmentToExcel.ts</file>
-    <content><![CDATA[// src/lib/exportEnrollmentToExcel.ts
-import ExcelJS from 'exceljs';
-import { saveAs } from 'file-saver';
-
-export async function exportEnrollmentToExcel(records: any[], columns: string[]) {
-  const workbook = new ExcelJS.Workbook();
-  const worksheet = workbook.addWorksheet('Enrollment_Data');
-
-  worksheet.columns = columns.map(col => ({
-    header: col.replace(/_/g, ' '),
-    key: col,
-    width: col.length > 20 ? 30 : 20,
-  }));
-  
-  const headerRow = worksheet.getRow(1);
-  headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-  headerRow.fill = {
-    type: 'pattern',
-    pattern: 'solid',
-    fgColor: { argb: 'FF002060' }
-  };
-  headerRow.alignment = { horizontal: 'center' };
-
-  worksheet.addRows(records);
-
-  worksheet.views = [
-    { state: 'frozen', xSplit: 1, ySplit: 1, activeCell: 'B2' }
-  ];
-  worksheet.getColumn(1).font = { bold: true };
-  
-  worksheet.eachRow({ includeEmpty: true }, (row) => {
-    row.eachCell({ includeEmpty: true }, (cell) => {
-      cell.border = {
-        top: { style: 'thin' },
-        left: { style: 'thin' },
-        bottom: { style: 'thin' },
-        right: { style: 'thin' }
-      };
-    });
-  });
-
-  const buffer = await workbook.xlsx.writeBuffer();
-  saveAs(new Blob([buffer]), 'enrollment_review_database.xlsx');
-}
+    
