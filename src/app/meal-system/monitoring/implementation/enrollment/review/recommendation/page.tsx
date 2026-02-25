@@ -1,4 +1,3 @@
-
 // src/app/meal-system/monitoring/implementation/enrollment/review/recommendation/page.tsx
 "use client";
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
@@ -61,6 +60,17 @@ const DecisionButton = ({ icon: Icon, label, onClick, isActive, disabled }: { ic
     </TooltipProvider>
 );
 
+const getInitialStep = (record: any): 'bnf' | 'hsbnd' | 'done' => {
+    if (!record) return 'done';
+    const hasBnfChange = !!record.new_bnf_name;
+    if (hasBnfChange) {
+        return 'bnf';
+    }
+    // If no bnf change, the only other options are husband change or similarity.
+    // In both cases, the first action relates to the husband or the overall record.
+    return 'hsbnd';
+}
+
 // --- Main Page Component ---
 export default function RecommendationPage() {
     const { toast } = useToast();
@@ -89,33 +99,44 @@ export default function RecommendationPage() {
             const data = await res.json();
             setAllRecords(data);
 
-            const groups: { group1: any[]; group2: any[]; group3: any[]; similarityGroup: any[]; } = {
+            const groups: { [key: string]: any[] } = {
                 group1: [], group2: [], group3: [], similarityGroup: []
             };
 
+            const processedIds = new Set();
             data.forEach((r: any) => {
+                if(processedIds.has(r.id)) return;
+
                 const hasNewBnf = r.new_bnf_name;
                 const hasNewHsbnd = r.new_hsbnd_name;
                 const hasClusterId = r.enroll_cluster_id;
 
-                if (hasNewBnf && hasNewHsbnd) {
+                if (hasClusterId) {
+                    const clusterPeers = data.filter((peer: any) => peer.enroll_cluster_id === hasClusterId);
+                    groups.similarityGroup.push(...clusterPeers);
+                    clusterPeers.forEach((peer: any) => processedIds.add(peer.id));
+                } else if (hasNewBnf && hasNewHsbnd) {
                     groups.group1.push(r);
                 } else if (hasNewBnf && !hasNewHsbnd) {
                     groups.group2.push(r);
                 } else if (!hasNewBnf && hasNewHsbnd) {
                     groups.group3.push(r);
-                } else if (hasClusterId) {
-                    groups.similarityGroup.push(r);
                 }
             });
 
             const finalGroups = [groups.group1, groups.group2, groups.group3, groups.similarityGroup].filter(g => g.length > 0);
             setGroupedRecords(finalGroups);
 
-            setCurrentGroupIndex(0);
-            setCurrentItemIndex(0);
-            setDecisionState({});
-            setCurrentStep('bnf');
+            if (finalGroups.length > 0 && finalGroups[0].length > 0) {
+                 setCurrentGroupIndex(0);
+                setCurrentItemIndex(0);
+                setDecisionState({});
+                setCurrentStep(getInitialStep(finalGroups[0][0]));
+            } else {
+                setCurrentGroupIndex(0);
+                setCurrentItemIndex(0);
+            }
+
         } catch (error: any) {
             toast({ title: "Error", description: error.message, variant: "destructive" });
         } finally {
@@ -151,7 +172,7 @@ export default function RecommendationPage() {
                 setCurrentGroupIndex(gIdx);
                 setCurrentItemIndex(iIdx);
                 setDecisionState({});
-                setCurrentStep('bnf');
+                setCurrentStep(getInitialStep(groupedRecords[gIdx][iIdx]));
                 phonePanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 return;
             }
@@ -159,23 +180,26 @@ export default function RecommendationPage() {
     };
     
     const moveToNext = useCallback(() => {
-        setDecisionState({});
-        setCurrentStep('bnf');
-        
         const currentGroup = groupedRecords[currentGroupIndex];
-        if (!currentGroup) {
+        let nextGroupIndex = currentGroupIndex;
+        let nextItemIndex = currentItemIndex;
+
+        if (currentItemIndex < currentGroup.length - 1) {
+            nextItemIndex++;
+        } else if (currentGroupIndex < groupedRecords.length - 1) {
+            nextGroupIndex++;
+            nextItemIndex = 0;
+        } else {
             toast({ title: "Review Complete", description: "All records have been reviewed." });
             return;
         }
 
-        if (currentItemIndex < currentGroup.length - 1) {
-            setCurrentItemIndex(i => i + 1);
-        } else if (currentGroupIndex < groupedRecords.length - 1) {
-            setCurrentGroupIndex(i => i + 1);
-            setCurrentItemIndex(0);
-        } else {
-            toast({ title: "Review Complete", description: "All records have been reviewed." });
-        }
+        const nextRecord = groupedRecords[nextGroupIndex]?.[nextItemIndex];
+        setDecisionState({});
+        setCurrentStep(getInitialStep(nextRecord));
+        setCurrentGroupIndex(nextGroupIndex);
+        setCurrentItemIndex(nextItemIndex);
+        
     }, [currentItemIndex, currentGroupIndex, groupedRecords, toast]);
 
     const handleDecision = useCallback((part: 'bnf' | 'hsbnd', decision: string) => {
@@ -362,5 +386,4 @@ export default function RecommendationPage() {
         </div>
     );
 }
-
-    
+```
