@@ -201,8 +201,8 @@ export default function RecommendationPage() {
             else if (bnfD === 'approve' && hsbndD === 'suspend') recommendation = 'يعتمد تصحيح اسم المستفيدة وتعلق الحاله للتحقق بسبب تغير ايم الزوج.';
             else if (bnfD === 'reject' && hsbndD === 'reject') recommendation = 'يبقى اسم المستفيدة والزوج كما هو في بيانات المسح.';
             else if (bnfD === 'suspend' && hsbndD === 'suspend') recommendation = 'تعلق الحاله للتحقق بسبب تغير اسم المستفيدة والزوج.';
-            else if (bnfD === 'reject' && hsbndD === 'suspend') recommendation = 'يبقى اسم المستفيدة كما هو وتعلق الحالة للتحقق بسبب تغير اسم الزوج';
-            else if (bnfD === 'suspend' && hsbndD === 'reject') recommendation = 'تعلق الحالة للتحقق بسبب تغير اسم المستفيدة ويبقى اسم الزوج كما هو';
+            else if (bnfD === 'reject' && hsbndD === 'suspend') recommendation = 'يبقى اسم المستفيدة كما هو في بيانات المسح وتعلق الحالة للتحقق بسبب تغير اسم الزوج';
+            else if (bnfD === 'suspend' && hsbndD === 'reject') recommendation = 'تعلق الحالة للتحقق بسبب تغير اسم المستفيدة ويبقى اسم الزوج كما هو في بيانات المسح';
         } else if (hasBnfChange) {
             if (newDecisionState.bnf === 'approve') recommendation = 'يعتمد تصحيح اسم المستفيدة.';
             else if (newDecisionState.bnf === 'reject') recommendation = 'يبقى الاسم كما هو في بيانات المسح.';
