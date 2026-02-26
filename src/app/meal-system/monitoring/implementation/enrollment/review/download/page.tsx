@@ -1,7 +1,9 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import ExcelJS from 'exceljs';
+import { openDB, IDBPDatabase } from 'idb';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -14,16 +16,52 @@ interface Project {
   projectName: string;
 }
 
+const ENROLLMENT_DB_NAME = 'enrollment-review-db';
+const ENROLLMENT_STORE_NAME = 'files';
+const ENROLLMENT_IMAGES_KEY = 'enrollmentDashboardImages';
+const ENROLLMENT_PROCESSED_KEY = 'enrollmentDashboardData';
+const ENROLLMENT_DB_VERSION = 2;
+
+const DISQUALIFIED_CODE_MAP: Record<string, number> = {
+  'ازدواج في الاستفادة (مثقفة /مستفيدة)': 2,
+  'ازدواج في الاستفادة مثقفة و مستفيدة': 2,
+  'التكرار': 3,
+  'مستفيدة مكررة': 3,
+  'عدم القبول بمنافع واشتراطات المشروع': 4,
+  'غياب لاكثر من ثلاث جلسات عامة': 5,
+  'الوفاه لاسمح الله': 6,
+  'الوفاة': 6,
+  'لا تنطبق عليها المعايير': 7,
+  'عدم استيفاء شروط الالتحاق بالمشروع': 9,
+  'خطأ في الإدخال': 10,
+  'ازدواج/مثقفة': 12,
+  'انتحال شخصية': 13,
+  'تزوير وثائق': 14,
+  'انتقال دائم لسكن وإقامة المستفيدة خارج المديرية': 15,
+  'عدم الاستدلال على عنوانها': 51,
+  'مغادرة المنطقة مؤقتا': 52,
+  'رفضت الحضور': 53,
+  'نازحة': 54,
+  'لم تحضر/غائبة': 55,
+  'سفر مؤقت': 56,
+  'أخرى': 99,
+  'اخرى تذكر': 99,
+};
+
+const getRecommendation = (code: number) => {
+  if ([2, 3, 12].includes(code)) return 'تصنف إلى تكرار/ازدواج';
+  if ([6, 7, 9, 13, 10, 14].includes(code)) return 'تصنف إلى مستبعدة';
+  if ([4, 5, 15, 51, 52, 53, 54, 55, 99].includes(code)) return 'تبقى مرشحة';
+  return '';
+};
+
 export default function DownloadEnrollmentPage() {
   const { toast } = useToast();
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string>('');
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
-  const [loading, setLoading] = useState({ projects: true, generating: false });
+  const [loading, setLoading] = useState({ projects: true, generating: false, progress: 0 });
   const [status, setStatus] = useState("Idle");
-  const [progress, setProgress] = useState(0);
-
-  const workerRef = React.useRef<Worker | null>(null);
 
   useEffect(() => {
     const fetchProjects = async () => {
@@ -38,45 +76,8 @@ export default function DownloadEnrollmentPage() {
         setLoading(prev => ({ ...prev, projects: false }));
       }
     };
-
     fetchProjects();
-
-    const worker = new Worker(new URL('@/workers/enrollment-export.worker.ts', import.meta.url), { type: 'module' });
-    workerRef.current = worker;
-
-    worker.onmessage = (event) => {
-      const { type, status: workerStatus, progress: workerProgress, data, error } = event.data;
-      if (type === 'progress') {
-        setStatus(workerStatus);
-        setProgress(workerProgress);
-      } else if (type === 'done') {
-        const blob = new Blob([data], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `Enrollment_Review_Report_${selectedProjectId}.xlsx`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        window.URL.revokeObjectURL(url);
-        toast({ title: "Success", description: "File downloaded successfully." });
-        setLoading(prev => ({ ...prev, generating: false }));
-      } else if (type === 'error') {
-        toast({ title: "Worker Error", description: error, variant: "destructive" });
-        setLoading(prev => ({ ...prev, generating: false }));
-      }
-    };
-
-    worker.onerror = (err) => {
-      toast({ title: "Worker Initialization Error", description: err.message, variant: "destructive" });
-      setLoading(prev => ({ ...prev, generating: false }));
-    };
-
-    return () => {
-      worker.terminate();
-      workerRef.current = null;
-    };
-  }, [toast, selectedProjectId]);
+  }, [toast]);
 
   const handleProjectSelect = (projectId: string) => {
     setSelectedProjectId(projectId);
@@ -84,22 +85,207 @@ export default function DownloadEnrollmentPage() {
     setSelectedProject(project || null);
   };
 
-  const handleGenerate = () => {
-    if (!selectedProject) {
+  const getEnrollmentDb = async (): Promise<IDBPDatabase> => openDB(ENROLLMENT_DB_NAME, ENROLLMENT_DB_VERSION);
+
+  const loadEnrollmentDashboardData = async () => {
+    try {
+      const db = await getEnrollmentDb();
+      const chartImages = await db.get(ENROLLMENT_STORE_NAME, ENROLLMENT_IMAGES_KEY);
+      const processedDataForReport = await db.get(ENROLLMENT_STORE_NAME, ENROLLMENT_PROCESSED_KEY);
+      if (chartImages && processedDataForReport) {
+        return { chartImages, processedDataForReport };
+      }
+    } catch (error) {
+      console.error("Failed to read dashboard cache:", error);
+    }
+    return null;
+  };
+
+  const fetchEnrollmentRecords = async (): Promise<any[]> => {
+    const url = new URL('/api/enrollment-review', window.location.origin);
+    if (selectedProjectId) url.searchParams.set('projectId', selectedProjectId);
+    const res = await fetch(url.toString());
+    if (!res.ok) throw new Error('Failed to load enrollment records.');
+    return res.json();
+  };
+
+  const addDashboardImages = (workbook: ExcelJS.Workbook, worksheet: ExcelJS.Worksheet, images: Record<string, string> | undefined, processedData: any) => {
+    if (!images) return;
+    worksheet.views = [{ rightToLeft: true }];
+    worksheet.columns = [
+      { width: 2 },
+      { width: 20 },
+      { width: 20 },
+      { width: 16 },
+      { width: 20 },
+      { width: 20 },
+    ];
+
+    worksheet.mergeCells('B2:F2');
+    const titleCell = worksheet.getCell('B2');
+    titleCell.value = "Analysis Dashboard Report";
+    titleCell.font = { name: 'Calibri', size: 24, bold: true, color: { argb: 'FF002060' } };
+    titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    worksheet.getRow(2).height = 30;
+
+    const keyFiguresData = [
+      { title: 'Total Enrollments', value: processedData?.total ?? '', cell: 'B4' },
+      ...(processedData?.modificationTypes
+        ? Object.entries(processedData.modificationTypes).map(([type, value], idx) => ({
+            title: type,
+            value,
+            cell: String.fromCharCode(67 + idx) + '4'
+          }))
+        : []),
+    ];
+
+    keyFiguresData.forEach(item => {
+      const title = worksheet.getCell(item.cell);
+      title.value = item.title;
+      title.font = { name: 'Calibri', size: 12, bold: true, color: { argb: 'FFFFFFFF' } };
+      title.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4F81BD' } };
+      title.alignment = { horizontal: 'center', vertical: 'middle' };
+
+      const valueCell = worksheet.getCell(item.cell.replace('4', '5'));
+      valueCell.value = item.value;
+      valueCell.font = { name: 'Calibri', size: 20, bold: true, color: { argb: 'FF002060' } };
+      valueCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDCE6F1' } };
+      valueCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    });
+
+    worksheet.getRow(5).height = 30;
+
+    const addImage = (base64: string, tl: { col: number; row: number }, ext: { width: number; height: number }) => {
+      if (!base64 || !base64.startsWith('data:image/png;base64,')) return;
+      const imageId = workbook.addImage({
+        base64: base64.split(',')[1],
+        extension: 'png'
+      });
+      worksheet.addImage(imageId, { tl, ext });
+    };
+
+    let currentRow = 7;
+    const rowGap = 1;
+
+    if (images.signingDays) addImage(images.signingDays, { col: 1, row: currentRow }, { width: 450, height: 400 });
+    if (images.ozlaChart) addImage(images.ozlaChart, { col: 6, row: currentRow }, { width: 450, height: 400 });
+    currentRow += Math.round(400 / 15) + rowGap;
+
+    if (images.bubbleChart) addImage(images.bubbleChart, { col: 1, row: currentRow }, { width: 900, height: 400 });
+    currentRow += Math.round(400 / 15) + rowGap;
+
+    if (images.namePartsTable) addImage(images.namePartsTable, { col: 1, row: currentRow }, { width: 450, height: 250 });
+    if (images.pieCharts) addImage(images.pieCharts, { col: 6, row: currentRow }, { width: 450, height: 250 });
+    currentRow += Math.round(250 / 15) + rowGap;
+
+    if (images.nonSigningChart) addImage(images.nonSigningChart, { col: 1, row: currentRow }, { width: 900, height: 300 });
+    currentRow += Math.round(300 / 15) + rowGap;
+
+    if (images.recommendationsTable) addImage(images.recommendationsTable, { col: 1, row: currentRow }, { width: 900, height: 250 });
+  };
+
+  const buildDisqualifiedSheet = (worksheet: ExcelJS.Worksheet, records: any[]) => {
+    worksheet.columns = [
+      { header: 'م', key: 'serial', width: 5 },
+      { header: 'كود المستفيدة', key: 'benef_id', width: 15 },
+      { header: 'اسم المستفيدة', key: 'benef_name', width: 30 },
+      { header: 'كود الاستبعاد', key: 'code', width: 15 },
+      { header: 'مبرر الاستبعاد', key: 'reason', width: 40 },
+      { header: 'كود المثقفة', key: 'ed_id', width: 15 },
+      { header: 'اسم المثقفة', key: 'ed_name', width: 30 },
+      { header: 'ملاحظات', key: 'notes', width: 40 },
+      { header: 'مقترح وتوصية الفرع', key: 'recommendation', width: 30 },
+      { header: 'ملاحظات الوحدة', key: 'hq_notes', width: 30 },
+      { header: 'توصية الوحدة', key: 'hq_recommendation', width: 30 },
+    ];
+
+    const filtered = records.filter(r => r.the_reason_for_not_joining_the_project_is_stated);
+
+    filtered.forEach((record, index) => {
+      const reason = record.the_reason_for_not_joining_the_project_is_stated;
+      const code = DISQUALIFIED_CODE_MAP[reason] ?? 99;
+      worksheet.addRow({
+        serial: index + 1,
+        benef_id: record.benef_id,
+        benef_name: record.benef_name,
+        code,
+        reason,
+        ed_id: record.ed_id,
+        ed_name: record.ed_name,
+        notes: record.other_things_to_mention,
+        recommendation: getRecommendation(code),
+        hq_notes: '',
+        hq_recommendation: ''
+      });
+    });
+  };
+
+  const handleGenerate = async () => {
+    if (!selectedProjectId) {
       toast({ title: "No Project Selected", description: "Please select a project.", variant: "destructive" });
       return;
     }
 
-    if (!workerRef.current) {
-      toast({ title: "Error", description: "Export worker is not available.", variant: "destructive" });
-      return;
+    try {
+      setLoading(prev => ({ ...prev, generating: true, progress: 5 }));
+      setStatus("Fetching enrollment records");
+
+      const records = await fetchEnrollmentRecords();
+      setLoading(prev => ({ ...prev, progress: 20 }));
+      setStatus("Building workbook");
+
+      const workbook = new ExcelJS.Workbook();
+      const mainSheet = workbook.addWorksheet('Enrollment Review Results');
+
+      if (records.length > 0) {
+        const columns = Object.keys(records[0]);
+        mainSheet.columns = columns.map(key => ({ header: key, key, width: 20 }));
+        records.forEach(record => {
+          const row: Record<string, any> = {};
+          columns.forEach(col => {
+            row[col] = record[col];
+          });
+          mainSheet.addRow(row);
+        });
+      }
+
+      setLoading(prev => ({ ...prev, progress: 40 }));
+      setStatus("Adding disqualified sheet");
+
+      const disqualifiedSheet = workbook.addWorksheet('Disqualified');
+      buildDisqualifiedSheet(disqualifiedSheet, records);
+
+      setLoading(prev => ({ ...prev, progress: 60 }));
+      setStatus("Loading dashboard cache");
+
+      const cachedDashboard = await loadEnrollmentDashboardData();
+      if (cachedDashboard) {
+        const dashboardSheet = workbook.addWorksheet('Enrollment Dashboard');
+        addDashboardImages(workbook, dashboardSheet, cachedDashboard.chartImages, cachedDashboard.processedDataForReport);
+      }
+
+      setLoading(prev => ({ ...prev, progress: 90 }));
+      setStatus("Finalizing file");
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Enrollment_Review_Report_${selectedProjectId}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+
+      setLoading(prev => ({ ...prev, generating: false, progress: 100 }));
+      setStatus("Completed");
+      toast({ title: "Success", description: "Enrollment report downloaded." });
+    } catch (error: any) {
+      setLoading(prev => ({ ...prev, generating: false, progress: 0 }));
+      setStatus("Idle");
+      toast({ title: "Error", description: error.message || 'Failed to generate the report.', variant: "destructive" });
     }
-
-    setLoading(prev => ({ ...prev, generating: true }));
-    setStatus("Initializing...");
-    setProgress(0);
-
-    workerRef.current.postMessage({ projectId: selectedProject.projectId, projectName: selectedProject.projectName });
   };
 
   return (
@@ -124,8 +310,10 @@ export default function DownloadEnrollmentPage() {
               <SelectValue placeholder={loading.projects ? "Loading projects..." : "Select a project..."} />
             </SelectTrigger>
             <SelectContent>
-              {projects.map(p => (
-                <SelectItem key={p.projectId} value={p.projectId}>{p.projectName}</SelectItem>
+              {projects.map(project => (
+                <SelectItem key={project.projectId} value={project.projectId}>
+                  {project.projectName} ({project.projectId})
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -141,7 +329,7 @@ export default function DownloadEnrollmentPage() {
       <Card>
         <CardHeader>
           <CardTitle>2. Generate & Download</CardTitle>
-          <CardDescription>Click the button below to start generating your multi-sheet Excel file.</CardDescription>
+          <CardDescription>Download the compiled Excel workbook that includes all sheets.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <Button onClick={handleGenerate} disabled={!selectedProjectId || loading.generating}>
@@ -150,7 +338,7 @@ export default function DownloadEnrollmentPage() {
           </Button>
           {loading.generating && (
             <div className="space-y-1">
-              <Progress value={progress} />
+              <Progress value={loading.progress} />
               <p className="text-sm text-center mt-1 text-muted-foreground">
                 {status}...
               </p>
