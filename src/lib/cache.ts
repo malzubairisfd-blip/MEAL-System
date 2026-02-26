@@ -86,6 +86,8 @@ export async function loadCachedResult(): Promise<FullResult | null> {
 const ENROLLMENT_DB_NAME = 'enrollment-review-db';
 const ENROLLMENT_STORE_NAME = 'files';
 const ENROLLMENT_DATA_KEY = 'enrollmentData';
+const ENROLLMENT_IMAGES_KEY = 'enrollmentDashboardImages';
+const ENROLLMENT_PROCESSED_KEY = 'enrollmentDashboardData';
 const ENROLLMENT_DB_VERSION = 2;
 
 async function getEnrollmentDb(): Promise<IDBPDatabase> {
@@ -117,6 +119,32 @@ export async function loadEnrollmentDataFromCache(): Promise<any[] | null> {
         return Array.isArray(data) ? data : null;
     } catch (error) {
         console.error("Failed to load enrollment data from cache:", error);
+        return null;
+    }
+}
+
+export async function saveEnrollmentDashboardData(data: { chartImages: Record<string, string>, processedDataForReport: any }): Promise<void> {
+    const db = await getEnrollmentDb();
+    const tx = db.transaction(ENROLLMENT_STORE_NAME, 'readwrite');
+    const store = tx.objectStore(ENROLLMENT_STORE_NAME);
+    await Promise.all([
+        store.put(data.chartImages, ENROLLMENT_IMAGES_KEY),
+        store.put(data.processedDataForReport, ENROLLMENT_PROCESSED_KEY)
+    ]);
+    await tx.done;
+}
+
+export async function loadEnrollmentDashboardData(): Promise<{ chartImages: Record<string, string>, processedDataForReport: any } | null> {
+    try {
+        const db = await getEnrollmentDb();
+        const chartImages = await db.get(ENROLLMENT_STORE_NAME, ENROLLMENT_IMAGES_KEY);
+        const processedDataForReport = await db.get(ENROLLMENT_STORE_NAME, ENROLLMENT_PROCESSED_KEY);
+        if (chartImages && processedDataForReport) {
+            return { chartImages, processedDataForReport };
+        }
+        return null;
+    } catch (error) {
+        console.error("Failed to load enrollment dashboard data from cache:", error);
         return null;
     }
 }

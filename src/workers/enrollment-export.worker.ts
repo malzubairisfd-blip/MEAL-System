@@ -8,23 +8,30 @@ interface EnrollmentRecord {
 }
 
 // --- IDB Functions ---
-const DB_NAME = 'beneficiary-insights-cache';
-const STORE_NAME = 'results';
-const FULL_RESULT_KEY = 'FULL_RESULT';
+const ENROLLMENT_DB_NAME = 'enrollment-review-db';
+const ENROLLMENT_STORE_NAME = 'files';
+const ENROLLMENT_DATA_KEY = 'enrollmentData';
+const ENROLLMENT_IMAGES_KEY = 'enrollmentDashboardImages';
+const ENROLLMENT_PROCESSED_KEY = 'enrollmentDashboardData';
+const ENROLLMENT_DB_VERSION = 2;
 
-async function getDb(): Promise<IDBPDatabase> {
-    return openDB(DB_NAME, 2);
+async function getEnrollmentDb(): Promise<IDBPDatabase> {
+  return openDB(ENROLLMENT_DB_NAME, ENROLLMENT_DB_VERSION);
 }
 
-async function loadCachedResult(): Promise<any | null> {
-  try {
-    const db = await getDb();
-    const result = await db.get(STORE_NAME, FULL_RESULT_KEY);
-    return result;
-  } catch (error) {
-     console.error("Failed to load cached result from worker:", error);
-     return null;
-  }
+async function loadEnrollmentDashboardData(): Promise<{ chartImages: Record<string, string>, processedDataForReport: any } | null> {
+    try {
+        const db = await getEnrollmentDb();
+        const chartImages = await db.get(ENROLLMENT_STORE_NAME, ENROLLMENT_IMAGES_KEY);
+        const processedDataForReport = await db.get(ENROLLMENT_STORE_NAME, ENROLLMENT_PROCESSED_KEY);
+        if (chartImages && processedDataForReport) {
+            return { chartImages, processedDataForReport };
+        }
+        return null;
+    } catch (error) {
+        console.error("Failed to load enrollment dashboard data from cache:", error);
+        return null;
+    }
 }
 
 // --- Worker Logic ---
@@ -65,9 +72,9 @@ self.onmessage = async (event: MessageEvent) => {
 
         // --- Sheet 3: Dashboard ---
         postMessage({ type: 'progress', status: 'Loading dashboard images...', progress: 80 });
-        const cachedDashboard = await loadCachedResult();
+        const cachedDashboard = await loadEnrollmentDashboardData();
         if (cachedDashboard?.chartImages) {
-            createDashboardSheet(workbook, cachedDashboard.chartImages);
+            createDashboardSheet(workbook, cachedDashboard.chartImages, cachedDashboard.processedDataForReport);
         }
 
         postMessage({ type: 'progress', status: 'Finalizing file...', progress: 95 });
@@ -144,9 +151,49 @@ function createDisqualifiedSheet(worksheet: ExcelJS.Worksheet, records: Enrollme
     });
 }
 
-function createDashboardSheet(workbook: ExcelJS.Workbook, images: Record<string, string>) {
+function createDashboardSheet(workbook: ExcelJS.Workbook, images: Record<string, string>, processedData: any) {
     const ws = workbook.addWorksheet("Enrollment Dashboard");
+    ws.views = [{ rightToLeft: true }];
     
+    ws.columns = [
+        { width: 2 },  // A
+        { width: 20 }, // B
+        { width: 20 }, // C
+        { width: 16 },  // D
+        { width: 20 }, // E
+        { width: 20 }, // F
+    ];
+
+
+    ws.mergeCells('B2:F2');
+    const titleCell = ws.getCell('B2');
+    titleCell.value = "Analysis Dashboard Report";
+    titleCell.font = { name: 'Calibri', size: 24, bold: true, color: { argb: 'FF002060' } };
+    titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    ws.getRow(2).height = 30;
+
+    const kf = processedData.keyFigures;
+    const keyFiguresData = [
+        { title: 'Total Enrollments', value: processedData.total, cell: 'B4' },
+        ...Object.entries(processedData.modificationTypes).map(([type, value], i) => ({ title: type, value: value as number, cell: String.fromCharCode(67+i) + '4' })),
+    ];
+    
+    keyFiguresData.forEach(item => {
+        const titleCell = ws.getCell(item.cell);
+        titleCell.value = item.title;
+        titleCell.font = { name: 'Calibri', size: 12, bold: true, color: { argb: 'FFFFFFFF' } };
+        titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4F81BD' } };
+        titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+        const valueCell = ws.getCell(item.cell.replace('4', '5'));
+        valueCell.value = item.value;
+        valueCell.font = { name: 'Calibri', size: 20, bold: true, color: { argb: 'FF002060' } };
+        valueCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDCE6F1' } };
+        valueCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    });
+    ws.getRow(5).height = 30;
+
+
     const addImage = (base64: string, tl: { col: number, row: number }, ext: { width: number, height: number }) => {
         if (!base64 || !base64.startsWith('data:image/png;base64,')) return;
 
@@ -157,31 +204,37 @@ function createDashboardSheet(workbook: ExcelJS.Workbook, images: Record<string,
         
         ws.addImage(imageId, { tl, ext });
     };
-
-    let currentRow = 1;
-
-    const addImageToSheet = (key: string, width: number, height: number, col: number) => {
-        if (images[key]) {
-            addImage(images[key], { col, row: currentRow }, { width, height });
-        }
-    };
     
-    addImageToSheet('keyFigures', 900, 200, 1);
-    currentRow += 14; 
-    
-    addImageToSheet('signingDays', 450, 400, 1);
-    addImageToSheet('ozlaChart', 450, 400, 6);
-    currentRow += 28;
+    let currentRow = 7;
+    const rowGap = 1;
 
-    addImageToSheet('bubbleChart', 900, 400, 1);
-    currentRow += 28;
+    if (images.signingDays) {
+      addImage(images.signingDays, { col: 1, row: currentRow }, { width: 450, height: 400 });
+    }
+     if (images.ozlaChart) {
+      addImage(images.ozlaChart, { col: 6, row: currentRow }, { width: 450, height: 400 });
+    }
+    currentRow += Math.round(400 / 15) + rowGap;
 
-    addImageToSheet('namePartsTable', 450, 250, 1);
-    addImageToSheet('pieCharts', 450, 250, 6);
-    currentRow += 18;
+    if (images.bubbleChart) {
+        addImage(images.bubbleChart, { col: 1, row: currentRow }, { width: 900, height: 400 });
+    }
+    currentRow += Math.round(400 / 15) + rowGap;
 
-    addImageToSheet('nonSigningChart', 900, 300, 1);
-    currentRow += 21;
+    if (images.namePartsTable) {
+        addImage(images.namePartsTable, { col: 1, row: currentRow }, { width: 450, height: 250 });
+    }
+    if (images.pieCharts) {
+        addImage(images.pieCharts, { col: 6, row: currentRow }, { width: 450, height: 250 });
+    }
+    currentRow += Math.round(250 / 15) + rowGap;
 
-    addImageToSheet('recommendationsTable', 900, 250, 1);
+    if (images.nonSigningChart) {
+        addImage(images.nonSigningChart, { col: 1, row: currentRow }, { width: 900, height: 300 });
+    }
+    currentRow += Math.round(300 / 15) + rowGap;
+
+    if (images.recommendationsTable) {
+        addImage(images.recommendationsTable, { col: 1, row: currentRow }, { width: 900, height: 250 });
+    }
 }

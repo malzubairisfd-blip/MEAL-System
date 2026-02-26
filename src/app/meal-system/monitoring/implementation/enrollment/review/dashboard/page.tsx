@@ -16,6 +16,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ArrowLeft, Loader2, FileText, CheckSquare, Edit, MessageSquare, ThumbsUp, Database, Download, Camera, ChevronDown } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { saveEnrollmentDashboardData } from '@/lib/cache';
+import { useRouter } from 'next/navigation';
+
 
 interface Project {
   projectId: string;
@@ -37,6 +40,7 @@ const KPICard = ({ title, value, icon }: { title: string, value: string | number
 
 export default function EnrollmentDashboardPage() {
     const { toast } = useToast();
+    const router = useRouter();
     const [projects, setProjects] = useState<Project[]>([]);
     const [selectedProjectId, setSelectedProjectId] = useState('');
     const [allData, setAllData] = useState<any[]>([]);
@@ -153,21 +157,42 @@ export default function EnrollmentDashboardPage() {
     }, [allData]);
 
     const captureAndCache = useCallback(async () => {
+        if (!processedData) {
+            toast({ title: "Cannot Capture", description: "Data is not processed yet.", variant: "destructive" });
+            return;
+        }
+        
         setIsCapturing(true);
-        const images: Record<string, string> = {};
-        for (const [key, ref] of Object.entries(refs)) {
-            if (ref.current) {
-                try {
-                    images[key] = await toPng(ref.current, { cacheBust: true, pixelRatio: 2 });
-                } catch (e) {
-                    console.error(`Failed to capture ${key}:`, e);
+        toast({ title: "Capturing Dashboard...", description: "Please wait while the dashboard components are being captured." });
+        
+        try {
+            const images: Record<string, string> = {};
+            for (const [key, ref] of Object.entries(refs)) {
+                if (ref.current) {
+                    try {
+                        images[key] = await toPng(ref.current, { cacheBust: true, pixelRatio: 2 });
+                    } catch (e) {
+                        console.error(`Failed to capture ${key}:`, e);
+                        toast({ title: `Capture Failed: ${key}`, variant: "destructive" });
+                    }
                 }
             }
+
+            await saveEnrollmentDashboardData({
+                chartImages: images,
+                processedDataForReport: processedData
+            });
+
+            toast({ title: "Dashboard Cached", description: "Dashboard visuals saved. You can now proceed to download.", duration: 5000 });
+            router.push('/meal-system/monitoring/implementation/enrollment/review/download');
+
+        } catch (error: any) {
+            console.error("Export preparation failed:", error);
+            toast({ title: "Error Caching Data", description: error.message, variant: "destructive" });
+        } finally {
+            setIsCapturing(false);
         }
-        // Save images to cache logic would go here
-        toast({ title: "Capture Complete", description: "Dashboard images have been cached." });
-        setIsCapturing(false);
-    }, [refs, toast]);
+      }, [refs, processedData, toast, router]);
     
     if (loading.projects) {
         return <div className="flex justify-center py-8"><Loader2 className="h-8 w-8 animate-spin" /></div>
@@ -251,7 +276,6 @@ export default function EnrollmentDashboardPage() {
                         <CardContent>
                             <ReactECharts style={{ height: '400px' }} option={{
                                 tooltip: { trigger: 'item' },
-                                grid: { top: '10%', bottom: '10%', left: '10%', right: '10%' },
                                 xAxis: { show: false, type: 'value' },
                                 yAxis: { show: false, type: 'value' },
                                 series: [{ 
