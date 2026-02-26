@@ -37,18 +37,25 @@ async function loadEnrollmentDashboardData(): Promise<{ chartImages: Record<stri
 // --- Worker Logic ---
 
 self.onmessage = async (event: MessageEvent) => {
-    const { projectId } = event.data;
+    const { projectId, projectName } = event.data;
 
-    if (!projectId) {
-        postMessage({ type: 'error', error: 'Project ID is required.' });
+    if (!projectId || !projectName) {
+        postMessage({ type: 'error', error: 'Project ID and Project Name are required.' });
         return;
     }
 
     try {
         postMessage({ type: 'progress', status: 'Fetching data...', progress: 10 });
-        const res = await fetch(`/api/enrollment-review?projectId=${projectId}`);
+        const res = await fetch(`/api/enrollment-review`);
         if (!res.ok) throw new Error('Failed to fetch enrollment data.');
-        const records: EnrollmentRecord[] = await res.json();
+        const allRecords: EnrollmentRecord[] = await res.json();
+        
+        const records = allRecords.filter(r => r.project_id === projectId && r.project_name === projectName);
+        
+        if (records.length === 0) {
+          postMessage({ type: 'error', error: 'No records found for the selected project. Please check the project selection or the database content.' });
+          return;
+        }
         
         postMessage({ type: 'progress', status: 'Creating workbook...', progress: 30 });
         const workbook = new ExcelJS.Workbook();
@@ -57,12 +64,19 @@ self.onmessage = async (event: MessageEvent) => {
         postMessage({ type: 'progress', status: 'Creating main sheet...', progress: 40 });
         const mainSheet = workbook.addWorksheet('Enrollment Review Results');
         if (records.length > 0) {
-            mainSheet.columns = Object.keys(records[0]).map(key => ({
+            const columns = Object.keys(records[0]).filter(key => key !== 'data');
+            mainSheet.columns = columns.map(key => ({
                 header: key,
                 key,
                 width: 20
             }));
-            mainSheet.addRows(records);
+            mainSheet.addRows(records.map(r => {
+                const row: any = {};
+                columns.forEach(col => {
+                    row[col] = r[col];
+                });
+                return row;
+            }));
         }
 
         // --- Sheet 2: Disqualified ---

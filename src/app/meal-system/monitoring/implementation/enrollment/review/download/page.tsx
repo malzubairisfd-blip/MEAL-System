@@ -1,7 +1,7 @@
 // src/app/meal-system/monitoring/implementation/enrollment/review/download/page.tsx
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -19,6 +19,7 @@ export default function DownloadEnrollmentPage() {
     const { toast } = useToast();
     const [projects, setProjects] = useState<Project[]>([]);
     const [selectedProjectId, setSelectedProjectId] = useState<string>('');
+    const [selectedProject, setSelectedProject] = useState<Project | null>(null);
     const [loading, setLoading] = useState({ projects: true, generating: false });
     const [status, setStatus] = useState("Idle");
     const [progress, setProgress] = useState(0);
@@ -72,13 +73,19 @@ export default function DownloadEnrollmentPage() {
             setLoading(prev => ({ ...prev, generating: false }));
         };
 
-        return () => worker.terminate();
+        return () => worker.current?.terminate();
 
     }, [toast, selectedProjectId]);
 
 
+    const handleProjectSelect = (projectId: string) => {
+        setSelectedProjectId(projectId);
+        const project = projects.find(p => p.projectId === projectId);
+        setSelectedProject(project || null);
+    };
+
     const handleGenerate = () => {
-        if (!selectedProjectId) {
+        if (!selectedProject) {
             toast({ title: "No Project Selected", description: "Please select a project.", variant: "destructive" });
             return;
         }
@@ -92,7 +99,7 @@ export default function DownloadEnrollmentPage() {
         setStatus("Initializing...");
         setProgress(0);
         
-        workerRef.current.postMessage({ projectId: selectedProjectId });
+        workerRef.current.postMessage({ projectId: selectedProject.projectId, projectName: selectedProject.projectName });
     };
 
     return (
@@ -111,8 +118,8 @@ export default function DownloadEnrollmentPage() {
                     <CardTitle>1. Select Project</CardTitle>
                     <CardDescription>Select the project for which you want to generate the Excel report.</CardDescription>
                 </CardHeader>
-                <CardContent>
-                    <Select onValueChange={setSelectedProjectId} value={selectedProjectId} disabled={loading.projects || loading.generating}>
+                <CardContent className="space-y-4">
+                    <Select onValueChange={handleProjectSelect} value={selectedProjectId} disabled={loading.projects || loading.generating}>
                         <SelectTrigger className="w-full md:w-1/2">
                             <SelectValue placeholder={loading.projects ? "Loading projects..." : "Select a project..."} />
                         </SelectTrigger>
@@ -122,6 +129,12 @@ export default function DownloadEnrollmentPage() {
                             ))}
                         </SelectContent>
                     </Select>
+                     {selectedProject && (
+                        <div className="mt-4 p-4 border rounded-lg bg-muted/50 text-sm">
+                            <p><strong>Project ID:</strong> {selectedProject.projectId}</p>
+                            <p><strong>Project Name:</strong> {selectedProject.projectName}</p>
+                        </div>
+                    )}
                 </CardContent>
             </Card>
 
