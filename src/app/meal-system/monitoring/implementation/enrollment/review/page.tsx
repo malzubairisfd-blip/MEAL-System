@@ -27,16 +27,16 @@ export default function EnrollmentReviewHubPage() {
       icon: <LayoutDashboard className="h-8 w-8 text-purple-500" />,
     },
     {
-      title: "Download Page",
-      description: "Download processed enrollment data and reports.",
-      href: "/meal-system/monitoring/implementation/enrollment/review/download",
-      icon: <Download className="h-8 w-8 text-orange-500" />,
-    },
-     {
       title: "Enrollment Database",
       description: "Browse, search, and manage the complete enrollment review database.",
       href: "/meal-system/monitoring/implementation/enrollment/review/database",
       icon: <Database className="h-8 w-8 text-cyan-500" />,
+    },
+    {
+      title: "Download Page",
+      description: "Download processed enrollment data and reports.",
+      href: "/meal-system/monitoring/implementation/enrollment/review/download",
+      icon: <Download className="h-8 w-8 text-orange-500" />,
     },
   ];
 
