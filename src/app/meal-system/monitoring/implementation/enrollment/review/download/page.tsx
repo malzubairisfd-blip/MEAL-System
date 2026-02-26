@@ -70,7 +70,7 @@ export default function DownloadEnrollmentPage() {
 
         worker.onerror = (err) => {
             toast({ title: "Worker Initialization Error", description: err.message, variant: "destructive" });
-            setLoading(prev => ({ ...prev, generating: false }));
+            setLoading(prev => ({...prev, generating: false}));
         };
 
         return () => {
@@ -80,13 +80,13 @@ export default function DownloadEnrollmentPage() {
         }
 
     }, [toast, selectedProjectId]);
-
-
-    const handleProjectSelect = (projectId: string) => {
+    
+    const handleProjectSelect = useCallback((projectId: string) => {
         setSelectedProjectId(projectId);
         const project = projects.find(p => p.projectId === projectId);
         setSelectedProject(project || null);
-    };
+    }, [projects]);
+
 
     const handleGenerate = async () => {
         if (!selectedProject) {
@@ -104,7 +104,7 @@ export default function DownloadEnrollmentPage() {
         setProgress(5);
 
         try {
-            const res = await fetch(`/api/enrollment-review?projectId=${selectedProject.projectId}`);
+            const res = await fetch(`/api/enrollment-review?projectId=${selectedProjectId}`);
             if (!res.ok) {
               throw new Error('Failed to fetch enrollment data.');
             }
@@ -148,7 +148,7 @@ export default function DownloadEnrollmentPage() {
                     <CardTitle>1. Select Project</CardTitle>
                     <CardDescription>Select the project for which you want to generate the Excel report.</CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent>
                     <Select onValueChange={handleProjectSelect} value={selectedProjectId} disabled={loading.projects || loading.generating}>
                         <SelectTrigger className="w-full md:w-1/2">
                             <SelectValue placeholder={loading.projects ? "Loading projects..." : "Select a project..."} />
