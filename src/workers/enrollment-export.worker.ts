@@ -46,11 +46,12 @@ self.onmessage = async (event: MessageEvent) => {
 
     try {
         postMessage({ type: 'progress', status: 'Fetching data...', progress: 10 });
-        const res = await fetch(`/api/enrollment-review`);
+        const res = await fetch(`/api/enrollment-review?projectId=${projectId}`);
         if (!res.ok) throw new Error('Failed to fetch enrollment data.');
         const allRecords: EnrollmentRecord[] = await res.json();
         
-        const records = allRecords.filter(r => r.project_id === projectId && r.project_name === projectName);
+        // API filters by projectId, we can ensure projectName matches as well
+        const records = allRecords.filter(r => r.project_name === projectName);
         
         if (records.length === 0) {
           postMessage({ type: 'error', error: 'No records found for the selected project. Please check the project selection or the database content.' });
