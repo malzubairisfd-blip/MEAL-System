@@ -73,7 +73,11 @@ export default function DownloadEnrollmentPage() {
             setLoading(prev => ({ ...prev, generating: false }));
         };
 
-        return () => worker.current?.terminate();
+        return () => {
+          if (workerRef.current) {
+            workerRef.current.terminate();
+          }
+        }
 
     }, [toast, selectedProjectId]);
 
@@ -84,7 +88,7 @@ export default function DownloadEnrollmentPage() {
         setSelectedProject(project || null);
     };
 
-    const handleGenerate = () => {
+    const handleGenerate = async () => {
         if (!selectedProject) {
             toast({ title: "No Project Selected", description: "Please select a project.", variant: "destructive" });
             return;
@@ -96,10 +100,36 @@ export default function DownloadEnrollmentPage() {
         }
 
         setLoading(prev => ({ ...prev, generating: true }));
-        setStatus("Initializing...");
-        setProgress(0);
-        
-        workerRef.current.postMessage({ projectId: selectedProject.projectId, projectName: selectedProject.projectName });
+        setStatus("Fetching data...");
+        setProgress(5);
+
+        try {
+            const res = await fetch(`/api/enrollment-review?projectId=${selectedProject.projectId}`);
+            if (!res.ok) {
+              throw new Error('Failed to fetch enrollment data.');
+            }
+            const records = await res.json();
+            
+            const filteredRecords = records.filter((r: any) => r.project_name === selectedProject.projectName);
+      
+            if (filteredRecords.length === 0) {
+              toast({ title: "No Data", description: "No records found for the selected project to generate a report.", variant: 'default' });
+              setLoading(p => ({...p, generating: false}));
+              return;
+            }
+            
+            setStatus("Sending data to worker...");
+            setProgress(10);
+            
+            workerRef.current.postMessage({ 
+              records: filteredRecords,
+              projectName: selectedProject.projectName 
+            });
+      
+          } catch (error: any) {
+            toast({ title: "Error", description: error.message, variant: "destructive" });
+            setLoading(prev => ({...prev, generating: false}));
+          }
     };
 
     return (

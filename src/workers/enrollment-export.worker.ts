@@ -37,24 +37,16 @@ async function loadEnrollmentDashboardData(): Promise<{ chartImages: Record<stri
 // --- Worker Logic ---
 
 self.onmessage = async (event: MessageEvent) => {
-    const { projectId, projectName } = event.data;
+    const { records, projectName } = event.data;
 
-    if (!projectId || !projectName) {
-        postMessage({ type: 'error', error: 'Project ID and Project Name are required.' });
+    if (!records || !projectName) {
+        postMessage({ type: 'error', error: 'Records and Project Name are required.' });
         return;
     }
 
     try {
-        postMessage({ type: 'progress', status: 'Fetching data...', progress: 10 });
-        const res = await fetch(`/api/enrollment-review?projectId=${projectId}`);
-        if (!res.ok) throw new Error('Failed to fetch enrollment data.');
-        const allRecords: EnrollmentRecord[] = await res.json();
-        
-        // Ensure we only process records for the selected project name as a safeguard
-        const records = allRecords.filter(r => r.project_name === projectName);
-        
         if (records.length === 0) {
-          postMessage({ type: 'error', error: 'No records found for the selected project. Please check the project selection or the database content.' });
+          postMessage({ type: 'error', error: 'No records found for the selected project to generate a report.' });
           return;
         }
         
@@ -71,7 +63,7 @@ self.onmessage = async (event: MessageEvent) => {
                 key,
                 width: 20
             }));
-            mainSheet.addRows(records.map(r => {
+            mainSheet.addRows(records.map((r: any) => {
                 const row: any = {};
                 columns.forEach(col => {
                     row[col] = r[col];
