@@ -679,65 +679,68 @@ export default function BeneficiaryDatabasePage() {
                 <p>No records found in the database.</p>
             </div>
           ) : (
-            <>
-                <div className="w-full overflow-x-auto">
-                    <Table>
-                        <TableHeader>
-                          <TableRow>
-                              <TableHead className="sticky left-0 bg-card z-10">Actions</TableHead>
-                              {allColumns.map((col) => (
-                              <TableHead key={col} className="whitespace-nowrap px-4">
-                                  <div className="flex items-center gap-2">
-                                      {col.replace(/_/g, ' ')}
-                                      <ColumnFilter
-                                          column={col}
-                                          onFilter={handleFilterChange}
-                                          onSort={handleSortChange}
-                                          onClear={handleClearFilter}
-                                          uniqueValues={uniqueColumnValues[col] || []}
-                                      />
-                                  </div>
-                              </TableHead>
-                              ))}
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {paginatedRecords.map((record) => (
-                              <TableRow key={record.id}>
-                              <TableCell className="sticky left-0 bg-card z-10">
-                                  <div className="flex gap-1">
-                                      <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setEditingRecord(record)}>
-                                      <Edit className="h-4 w-4" />
-                                      </Button>
-                                      <Button variant="destructive" size="icon" className="h-8 w-8" onClick={() => setDeletingRecord(record)}>
-                                          <Trash2 className="h-4 w-4" />
-                                      </Button>
-                                  </div>
-                              </TableCell>
-                              {allColumns.map((col) => (
-                                  <TableCell key={col} className="whitespace-nowrap px-4">
-                                      {String(record[col] ?? '')}
-                                  </TableCell>
-                              ))}
+            <div className="border border-gray-800 bg-gray-800 rounded-[1rem] p-1">
+                <div className="bg-background rounded-[1rem] overflow-hidden">
+                    <div className="p-3 border-b text-center"><h3 className="font-bold">Beneficiary Records</h3></div>
+                    <div className="p-4">
+                        <Table>
+                            <TableHeader>
+                              <TableRow>
+                                  <TableHead className="sticky left-0 bg-card z-10">Actions</TableHead>
+                                  {allColumns.map((col) => (
+                                  <TableHead key={col} className="whitespace-nowrap px-4">
+                                      <div className="flex items-center gap-2">
+                                          {col.replace(/_/g, ' ')}
+                                          <ColumnFilter
+                                              column={col}
+                                              onFilter={handleFilterChange}
+                                              onSort={handleSortChange}
+                                              onClear={handleClearFilter}
+                                              uniqueValues={uniqueColumnValues[col] || []}
+                                          />
+                                      </div>
+                                  </TableHead>
+                                  ))}
                               </TableRow>
-                          ))}
-                        </TableBody>
-                    </Table>
-                </div>
-                <div className="flex justify-between items-center mt-4">
-                    <span className="text-sm text-muted-foreground">
-                        Page {currentPage} of {totalPages}
-                    </span>
-                    <div className="flex gap-2">
-                        <Button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} variant="outline">
-                            <ChevronLeft className="mr-2 h-4 w-4" /> Previous
-                        </Button>
-                        <Button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} variant="outline">
-                            Next <ChevronRight className="ml-2 h-4 w-4" />
-                        </Button>
+                            </TableHeader>
+                            <TableBody>
+                              {paginatedRecords.map((record) => (
+                                  <TableRow key={record.id}>
+                                  <TableCell className="sticky left-0 bg-card z-10">
+                                      <div className="flex gap-1">
+                                          <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setEditingRecord(record)}>
+                                          <Edit className="h-4 w-4" />
+                                          </Button>
+                                          <Button variant="destructive" size="icon" className="h-8 w-8" onClick={() => setDeletingRecord(record)}>
+                                              <Trash2 className="h-4 w-4" />
+                                          </Button>
+                                      </div>
+                                  </TableCell>
+                                  {allColumns.map((col) => (
+                                      <TableCell key={col} className="whitespace-nowrap px-4">
+                                          {String(record[col] ?? '')}
+                                      </TableCell>
+                                  ))}
+                                  </TableRow>
+                              ))}
+                            </TableBody>
+                        </Table>
+                        <div className="flex justify-between items-center mt-4">
+                            <span className="text-sm text-muted-foreground">
+                                Page {currentPage} of {totalPages}
+                            </span>
+                            <div className="flex gap-2">
+                                <Button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} variant="outline">
+                                    <ChevronLeft className="mr-2 h-4 w-4" /> Previous
+                                </Button>
+                                <Button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} variant="outline">
+                                    Next <ChevronRight className="ml-2 h-4 w-4" />
+                                </Button>
+                            </div>
+                        </div>
                     </div>
                 </div>
-            </>
+            </div>
           )}
         </CardContent>
       </Card>
