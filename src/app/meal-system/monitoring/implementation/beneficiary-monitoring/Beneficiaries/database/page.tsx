@@ -680,9 +680,8 @@ export default function BeneficiaryDatabasePage() {
             </div>
           ) : (
             <>
-              <div className="w-full overflow-x-auto">
-                <Table>
-                  <TableHeader>
+              <Table>
+                <TableHeader>
                   <TableRow>
                       <TableHead className="sticky left-0 bg-card z-10">Actions</TableHead>
                       {allColumns.map((col) => (
@@ -700,8 +699,8 @@ export default function BeneficiaryDatabasePage() {
                       </TableHead>
                       ))}
                   </TableRow>
-                  </TableHeader>
-                  <TableBody>
+                </TableHeader>
+                <TableBody>
                   {paginatedRecords.map((record) => (
                       <TableRow key={record.id}>
                       <TableCell className="sticky left-0 bg-card z-10">
@@ -721,9 +720,8 @@ export default function BeneficiaryDatabasePage() {
                       ))}
                       </TableRow>
                   ))}
-                  </TableBody>
-                </Table>
-              </div>
+                </TableBody>
+              </Table>
                 <div className="flex justify-between items-center mt-4">
                     <span className="text-sm text-muted-foreground">
                         Page {currentPage} of {totalPages}
