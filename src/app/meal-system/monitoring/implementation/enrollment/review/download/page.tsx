@@ -42,7 +42,7 @@ export default function DownloadEnrollmentPage() {
         fetchProjects();
 
         // Initialize worker
-        const worker = new Worker(new URL('@/workers/enrollment-export.worker.ts', import.meta.url));
+        const worker = new Worker(new URL('@/workers/enrollment-export.worker.ts', import.meta.url), { type: 'module' });
         workerRef.current = worker;
 
         worker.onmessage = (event) => {
