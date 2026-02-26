@@ -170,7 +170,7 @@ export default function EnrollmentDashboardPage() {
             for (const [key, ref] of Object.entries(refs)) {
                 if (ref.current) {
                     try {
-                        images[key] = await toPng(ref.current, { cacheBust: true, pixelRatio: 2 });
+                        images[key] = await toPng(ref.current, { cacheBust: true, pixelRatio: 2, style: { backgroundColor: 'white' } });
                     } catch (e) {
                         console.error(`Failed to capture ${key}:`, e);
                         toast({ title: `Capture Failed: ${key}`, variant: "destructive" });
