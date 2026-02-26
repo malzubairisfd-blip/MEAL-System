@@ -1,4 +1,3 @@
-
 // src/app/meal-system/monitoring/implementation/beneficiary-monitoring/Beneficiaries/database/page.tsx
 "use client";
 
@@ -303,7 +302,7 @@ export default function BeneficiaryDatabasePage() {
           setSourceColumns(Object.keys(data[0]));
         }
       } catch (err: any) {
-        toast({ title: 'Error', description: `Failed to load data from ${sourceDb}: ${'\'\'\'err.message\'\'\''}`, variant: 'destructive' });
+        toast({ title: 'Error', description: `Failed to load data from ${sourceDb}: ${err.message}`, variant: 'destructive' });
       }
     };
     fetchSourceData();
@@ -681,48 +680,50 @@ export default function BeneficiaryDatabasePage() {
             </div>
           ) : (
             <>
-              <Table>
-                <TableHeader>
-                <TableRow>
-                    <TableHead className="sticky left-0 bg-card z-10">Actions</TableHead>
-                    {allColumns.map((col) => (
-                    <TableHead key={col} className="whitespace-nowrap px-4">
-                        <div className="flex items-center gap-2">
-                            {col.replace(/_/g, ' ')}
-                            <ColumnFilter
-                                column={col}
-                                onFilter={handleFilterChange}
-                                onSort={handleSortChange}
-                                onClear={handleClearFilter}
-                                uniqueValues={uniqueColumnValues[col] || []}
-                            />
-                        </div>
-                    </TableHead>
-                    ))}
-                </TableRow>
-                </TableHeader>
-                <TableBody>
-                {paginatedRecords.map((record) => (
-                    <TableRow key={record.id}>
-                    <TableCell className="sticky left-0 bg-card z-10">
-                        <div className="flex gap-1">
-                            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setEditingRecord(record)}>
-                            <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button variant="destructive" size="icon" className="h-8 w-8" onClick={() => setDeletingRecord(record)}>
-                                <Trash2 className="h-4 w-4" />
-                            </Button>
-                        </div>
-                    </TableCell>
-                    {allColumns.map((col) => (
-                        <TableCell key={col} className="whitespace-nowrap px-4">
-                            {String(record[col] ?? '')}
-                        </TableCell>
-                    ))}
-                    </TableRow>
-                ))}
-                </TableBody>
-              </Table>
+              <div className="w-full overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                  <TableRow>
+                      <TableHead className="sticky left-0 bg-card z-10">Actions</TableHead>
+                      {allColumns.map((col) => (
+                      <TableHead key={col} className="whitespace-nowrap px-4">
+                          <div className="flex items-center gap-2">
+                              {col.replace(/_/g, ' ')}
+                              <ColumnFilter
+                                  column={col}
+                                  onFilter={handleFilterChange}
+                                  onSort={handleSortChange}
+                                  onClear={handleClearFilter}
+                                  uniqueValues={uniqueColumnValues[col] || []}
+                              />
+                          </div>
+                      </TableHead>
+                      ))}
+                  </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                  {paginatedRecords.map((record) => (
+                      <TableRow key={record.id}>
+                      <TableCell className="sticky left-0 bg-card z-10">
+                          <div className="flex gap-1">
+                              <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setEditingRecord(record)}>
+                              <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button variant="destructive" size="icon" className="h-8 w-8" onClick={() => setDeletingRecord(record)}>
+                                  <Trash2 className="h-4 w-4" />
+                              </Button>
+                          </div>
+                      </TableCell>
+                      {allColumns.map((col) => (
+                          <TableCell key={col} className="whitespace-nowrap px-4">
+                              {String(record[col] ?? '')}
+                          </TableCell>
+                      ))}
+                      </TableRow>
+                  ))}
+                  </TableBody>
+                </Table>
+              </div>
                 <div className="flex justify-between items-center mt-4">
                     <span className="text-sm text-muted-foreground">
                         Page {currentPage} of {totalPages}
