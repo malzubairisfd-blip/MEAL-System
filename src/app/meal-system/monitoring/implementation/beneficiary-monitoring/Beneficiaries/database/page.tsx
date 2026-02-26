@@ -9,7 +9,7 @@ import { useForm } from "react-hook-form";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, Search, ArrowLeft, Users, FileDown, Filter, ArrowUpAZ, ArrowDownAZ, Trash2, Edit, Link2, Plus, ChevronLeft, ChevronRight } from "lucide-react";
+import { Loader2, Search, ArrowLeft, Users, FileDown, Filter, ArrowUpAZ, ArrowDownAZ, Trash2, Edit, Link2, Plus, ChevronLeft, ChevronRight, GitCompareArrows } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -27,6 +27,11 @@ import { exportBnfToExcel } from "@/lib/exportBnfToExcel";
 interface BnfRecord {
   id: number;
   [key: string]: any;
+}
+
+interface Project {
+  projectId: string;
+  projectName: string;
 }
 
 const SummaryCard = ({ icon, title, value }: { icon: React.ReactNode, title: string, value: string | number }) => (
@@ -217,7 +222,10 @@ const EditRecordDialog = ({
 };
 
 export default function BeneficiaryDatabasePage() {
-  const [records, setRecords] = useState<BnfRecord[]>([]);
+  const [allRecords, setAllRecords] = useState<BnfRecord[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [selectedProjectId, setSelectedProjectId] = useState<string>('');
+  
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [globalSearchTerm, setGlobalSearchTerm] = useState("");
@@ -232,19 +240,32 @@ export default function BeneficiaryDatabasePage() {
   const [newColumns, setNewColumns] = useState([{ name: '', type: 'TEXT' }]);
   const [isAddingColumn, setIsAddingColumn] = useState(false);
 
+  // State for the new update section
+  const [sourceDb, setSourceDb] = useState('');
+  const [sourceData, setSourceData] = useState<any[]>([]);
+  const [sourceColumns, setSourceColumns] = useState<string[]>([]);
+  const [sourceUniqueIdCol, setSourceUniqueIdCol] = useState('');
+  const [targetUniqueIdCol, setTargetUniqueIdCol] = useState('');
+  const [updateColumnMapping, setUpdateColumnMapping] = useState<Map<string, string>>(new Map());
+  const [manualUpdateMapping, setManualUpdateMapping] = useState({ source: '', target: '' });
+  const [isUpdatingFromSource, setIsUpdatingFromSource] = useState(false);
+
+
   const itemsPerPage = 20;
   const { toast } = useToast();
-
-  const fetchRecords = useCallback(async () => {
+  
+  const fetchAllRecords = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/bnf-assessed");
-      if (!res.ok) {
-        throw new Error("Failed to fetch data from the database.");
-      }
-      const data = await res.json();
-      setRecords(Array.isArray(data) ? data : []);
+      const [projRes, bnfRes] = await Promise.all([
+          fetch('/api/projects'),
+          fetch("/api/bnf-assessed")
+      ]);
+      if (!projRes.ok) throw new Error("Failed to fetch projects.");
+      if (!bnfRes.ok) throw new Error("Failed to fetch beneficiary data.");
+      setProjects(await projRes.json());
+      setAllRecords(await bnfRes.json());
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -253,54 +274,47 @@ export default function BeneficiaryDatabasePage() {
   }, []);
 
   useEffect(() => {
-    fetchRecords();
-  }, [fetchRecords]);
+    fetchAllRecords();
+  }, [fetchAllRecords]);
 
+  // Fetch source data when source DB changes
   useEffect(() => {
-    setNewColumns(prev => {
-        const newArr = Array.from({ length: numNewColumns }, (_, i) => 
-            prev[i] || { name: '', type: 'TEXT' }
-        );
-        return newArr;
-    });
-  }, [numNewColumns]);
-  
-  const handleNewColumnChange = (index: number, field: 'name' | 'type', value: string) => {
-    const updated = [...newColumns];
-    updated[index] = { ...updated[index], [field]: value };
-    setNewColumns(updated);
-  };
-
-  const handleCreateColumns = async () => {
-      const columnsToCreate = newColumns.filter(col => col.name.trim() !== '');
-      if (columnsToCreate.length === 0) {
-          toast({ title: 'Error', description: 'Please enter at least one column name.', variant: 'destructive' });
-          return;
-      }
-
-      setIsAddingColumn(true);
+    if (!sourceDb || !selectedProjectId) {
+      setSourceData([]);
+      setSourceColumns([]);
+      return;
+    }
+    const fetchSourceData = async () => {
       try {
-          const res = await fetch('/api/bnf-assessed', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                  action: 'add_columns',
-                  columns: columnsToCreate,
-              }),
-          });
-          const result = await res.json();
-          if (!res.ok) throw new Error(result.error || 'Failed to add columns.');
-          
-          toast({ title: 'Success', description: result.message });
-          setNewColumns([{ name: '', type: 'TEXT' }]);
-          setNumNewColumns(1);
-          await fetchRecords(); // Refresh data to show new columns
+        let url = '';
+        if (sourceDb === 'educators.db') url = '/api/ed-selection';
+        else if (sourceDb === 'enrollment-review.db') url = `/api/enrollment-review`;
+        else return;
+
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`Failed to fetch from ${sourceDb}`);
+        
+        let data = await res.json();
+        // Always filter by project ID
+        data = data.filter((row: any) => row.project_id === selectedProjectId);
+
+        setSourceData(data);
+        if (data.length > 0) {
+          setSourceColumns(Object.keys(data[0]));
+        }
       } catch (err: any) {
-          toast({ title: 'Error', description: err.message, variant: 'destructive' });
-      } finally {
-          setIsAddingColumn(false);
+        toast({ title: 'Error', description: `Failed to load data from ${sourceDb}: ${'\'\'\'err.message\'\'\''}`, variant: 'destructive' });
       }
-  };
+    };
+    fetchSourceData();
+  }, [sourceDb, selectedProjectId, toast]);
+
+  const records = useMemo(() => {
+      if (selectedProjectId === 'all' || !selectedProjectId) {
+          return allRecords;
+      }
+      return allRecords.filter(r => r.project_id === selectedProjectId);
+  }, [allRecords, selectedProjectId]);
 
 
   const handleUpdateRecord = async (updatedData: BnfRecord) => {
@@ -319,7 +333,7 @@ export default function BeneficiaryDatabasePage() {
 
       toast({ title: "Success", description: `Record for beneficiary ${updatedData.l_benef_name} has been updated.` });
       setEditingRecord(null);
-      await fetchRecords();
+      await fetchAllRecords();
 
     } catch (error: any) {
       toast({ title: "Update Failed", description: error.message, variant: "destructive" });
@@ -343,7 +357,7 @@ export default function BeneficiaryDatabasePage() {
       }
       toast({ title: "Success", description: "Record deleted."});
       setDeletingRecord(null);
-      await fetchRecords();
+      await fetchAllRecords();
     } catch(err: any) {
       toast({ title: "Delete failed", description: err.message, variant: "destructive" });
     } finally {
@@ -448,8 +462,8 @@ export default function BeneficiaryDatabasePage() {
     if (records.length === 0) return [];
     return Object.keys(records[0]);
   }, [records]);
-
-  const handleDownload = () => {
+  
+    const handleDownload = () => {
     if (filteredRecords.length === 0) {
       toast({ title: "No Data", description: "There is no data to download.", variant: "destructive" });
       return;
@@ -457,6 +471,77 @@ export default function BeneficiaryDatabasePage() {
     exportBnfToExcel(filteredRecords, allColumns);
     toast({ title: "Download Started", description: "Your Excel file is being generated." });
   };
+  
+    // --- Update from Source Logic ---
+  const unmappedSourceColumns = useMemo(() => sourceColumns.filter(c => !Array.from(updateColumnMapping.keys()).includes(c) && c !== sourceUniqueIdCol), [sourceColumns, updateColumnMapping, sourceUniqueIdCol]);
+  const unmappedTargetColumns = useMemo(() => allColumns.filter(c => !Array.from(updateColumnMapping.values()).includes(c) && c !== targetUniqueIdCol), [allColumns, updateColumnMapping, targetUniqueIdCol]);
+
+  const handleAutoMap = useCallback(() => {
+    const newMapping = new Map<string, string>();
+    unmappedSourceColumns.forEach(sourceCol => {
+        const match = unmappedTargetColumns.find(targetCol => targetCol.toLowerCase() === sourceCol.toLowerCase());
+        if (match) {
+            newMapping.set(sourceCol, match);
+        }
+    });
+    setUpdateColumnMapping(prev => new Map([...prev, ...newMapping]));
+    toast({ title: "Auto-match complete", description: `Mapped ${newMapping.size} columns.` });
+  }, [unmappedSourceColumns, unmappedTargetColumns, toast]);
+
+  const handleAddManualUpdateMapping = () => {
+    if (manualUpdateMapping.source && manualUpdateMapping.target) {
+        setUpdateColumnMapping(prev => new Map(prev).set(manualUpdateMapping.source, manualUpdateMapping.target));
+        setManualUpdateMapping({ source: '', target: '' });
+    }
+  };
+
+  const handleExecuteUpdate = useCallback(async () => {
+    if (!sourceUniqueIdCol || !targetUniqueIdCol || !selectedProjectId) {
+      toast({ title: "Incomplete Setup", description: "Please select source, unique IDs, and a project.", variant: "destructive" });
+      return;
+    }
+    setIsUpdatingFromSource(true);
+    try {
+      const sourceMap = new Map(sourceData.map(row => [row[sourceUniqueIdCol], row]));
+      
+      const recordsToUpdate = records
+        .map(targetRecord => {
+            const sourceRecord = sourceMap.get(targetRecord[targetUniqueIdCol]);
+            if (sourceRecord) {
+                const updatedRecord: Record<string, any> = { [targetUniqueIdCol]: targetRecord[targetUniqueIdCol] };
+                updateColumnMapping.forEach((targetCol, sourceCol) => {
+                    if (sourceRecord.hasOwnProperty(sourceCol)) {
+                        updatedRecord[targetCol] = sourceRecord[sourceCol];
+                    }
+                });
+                return updatedRecord;
+            }
+            return null;
+        }).filter(Boolean);
+
+      if (recordsToUpdate.length === 0) {
+        toast({ title: "No Matches Found", description: "No records could be matched between the two databases based on the selected IDs." });
+        return;
+      }
+
+      const res = await fetch('/api/bnf-assessed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'save', mode: 'replace', records: recordsToUpdate, projectId: selectedProjectId, uniqueIdDbCol: targetUniqueIdCol })
+      });
+
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.details || 'Update API call failed.');
+
+      toast({ title: "Update Complete", description: `${result.updated} records in bnf-assessed.db have been updated.` });
+      await fetchAllRecords(); // Refresh data
+
+    } catch (err: any) {
+      toast({ title: "Update Failed", description: err.message, variant: "destructive" });
+    } finally {
+      setIsUpdatingFromSource(false);
+    }
+  }, [records, sourceData, sourceUniqueIdCol, targetUniqueIdCol, updateColumnMapping, selectedProjectId, toast, fetchAllRecords]);
 
   return (
     <div className="space-y-6">
@@ -476,76 +561,97 @@ export default function BeneficiaryDatabasePage() {
       
       <Card>
         <CardHeader>
-            <CardTitle>Database Summary</CardTitle>
-            <CardDescription>Overview of the records in `bnf-assessed.db`.</CardDescription>
+            <CardTitle>Project Filter</CardTitle>
         </CardHeader>
         <CardContent>
-             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <SummaryCard icon={<Users />} title="Total Records" value={summaryStats.totalRecords} />
-                <SummaryCard icon={<Link2 className="text-blue-500"/>} title="Unique Clusters" value={summaryStats.totalClusters} />
-                <SummaryCard icon={<Users className="text-red-500"/>} title="Marked as Duplicate" value={summaryStats.totalDuplicates} />
-            </div>
+             <Select onValueChange={setSelectedProjectId} value={selectedProjectId}>
+                <SelectTrigger className="w-full md:w-1/2">
+                    <SelectValue placeholder="Select a project to filter records..." />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="all">All Projects</SelectItem>
+                    {projects.map(p => (
+                        <SelectItem key={p.projectId} value={p.projectId}>{p.projectName}</SelectItem>
+                    ))}
+                </SelectContent>
+            </Select>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-            <CardTitle>Manage Schema</CardTitle>
-            <CardDescription>Add new columns to the `assessed_data` table.</CardDescription>
+            <CardTitle>Update from Another Database</CardTitle>
+            <CardDescription>Update columns in this database using data from another source.</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-            <div className="flex items-center gap-4">
-                <div className='space-y-2'>
-                    <Label htmlFor="num-new-columns">Number of Columns to Add</Label>
-                    <Input 
-                        id="num-new-columns" 
-                        type="number" 
-                        value={numNewColumns} 
-                        onChange={e => setNumNewColumns(Math.max(1, parseInt(e.target.value) || 1))}
-                        min="1"
-                        className="w-24"
-                    />
+        <CardContent className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                    <Label>Source Database</Label>
+                    <Select onValueChange={setSourceDb} value={sourceDb}>
+                        <SelectTrigger><SelectValue placeholder="Select Source..." /></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="educators.db">Educators DB</SelectItem>
+                            <SelectItem value="enrollment-review.db">Enrollment Review DB</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+                 <div className="space-y-2">
+                    <Label>Source Unique ID</Label>
+                    <Select onValueChange={setSourceUniqueIdCol} value={sourceUniqueIdCol} disabled={!sourceDb}>
+                        <SelectTrigger><SelectValue placeholder="Select Source ID..." /></SelectTrigger>
+                        <SelectContent><ScrollArea className="h-60">{sourceColumns.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</ScrollArea></SelectContent>
+                    </Select>
+                </div>
+                 <div className="space-y-2">
+                    <Label>Target Unique ID (bnf-assessed.db)</Label>
+                    <Select onValueChange={setTargetUniqueIdCol} value={targetUniqueIdCol}>
+                        <SelectTrigger><SelectValue placeholder="Select Target ID..." /></SelectTrigger>
+                        <SelectContent><ScrollArea className="h-60">{allColumns.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</ScrollArea></SelectContent>
+                    </Select>
                 </div>
             </div>
-            
-            <div className="space-y-4">
-                {newColumns.map((col, index) => (
-                    <div key={index} className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end border p-4 rounded-md">
-                        <div className="space-y-2">
-                            <Label htmlFor={`new-column-name-${index}`}>New Column Name {index + 1}</Label>
-                            <Input 
-                                id={`new-column-name-${index}`} 
-                                value={col.name} 
-                                onChange={e => handleNewColumnChange(index, 'name', e.target.value)} 
-                                placeholder="e.g., notes_v2" 
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor={`new-column-type-${index}`}>Column Type {index + 1}</Label>
-                            <Select 
-                                value={col.type} 
-                                onValueChange={value => handleNewColumnChange(index, 'type', value)}
-                            >
-                                <SelectTrigger id={`new-column-type-${index}`}><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="TEXT">Text</SelectItem>
-                                    <SelectItem value="INTEGER">Integer</SelectItem>
-                                    <SelectItem value="REAL">Number (Real)</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
+
+            <Card>
+                <CardHeader>
+                    <div className="flex justify-between items-center">
+                        <CardTitle className="text-lg">Column Mapping</CardTitle>
+                        <Button onClick={handleAutoMap} variant="outline" disabled={!sourceDb}><GitCompareArrows className="mr-2 h-4 w-4" />Auto-match</Button>
                     </div>
-                ))}
-            </div>
-            <Button onClick={handleCreateColumns} disabled={isAddingColumn}>
-                {isAddingColumn ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Plus className="mr-2 h-4 w-4" />}
-                Create {newColumns.filter(c => c.name).length} Column(s)
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                        <div className="space-y-2">
+                            <Label>Source Column</Label>
+                             <Select value={manualUpdateMapping.source} onValueChange={(v) => setManualUpdateMapping(p => ({...p, source: v}))}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><ScrollArea className="h-60">{unmappedSourceColumns.map(c=><SelectItem key={c} value={c}>{c}</SelectItem>)}</ScrollArea></SelectContent></Select>
+                        </div>
+                         <div className="space-y-2">
+                            <Label>Target Column</Label>
+                             <Select value={manualUpdateMapping.target} onValueChange={(v) => setManualUpdateMapping(p => ({...p, target: v}))}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><ScrollArea className="h-60">{unmappedTargetColumns.map(c=><SelectItem key={c} value={c}>{c}</SelectItem>)}</ScrollArea></SelectContent></Select>
+                        </div>
+                        <Button onClick={handleAddManualUpdateMapping}><Plus className="mr-2 h-4 w-4"/>Add Mapping</Button>
+                    </div>
+                    <ScrollArea className="h-48 border rounded-md">
+                        <Table>
+                            <TableHeader><TableRow><TableHead>Source Column</TableHead><TableHead>Target Column (bnf-assessed)</TableHead><TableHead>Action</TableHead></TableRow></TableHeader>
+                            <TableBody>
+                                {Array.from(updateColumnMapping.entries()).map(([source, target]) => (
+                                    <TableRow key={source}><TableCell>{source}</TableCell><TableCell>{target}</TableCell>
+                                    <TableCell><Button variant="ghost" size="icon" onClick={()=>setUpdateColumnMapping(p=>{const n=new Map(p);n.delete(source);return n;})}><Trash2 className="h-4 w-4 text-destructive"/></Button></TableCell></TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </ScrollArea>
+                </CardContent>
+            </Card>
+            <Button onClick={handleExecuteUpdate} disabled={!sourceUniqueIdCol || !targetUniqueIdCol || isUpdatingFromSource}>
+                 {isUpdatingFromSource && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                Execute Update
             </Button>
         </CardContent>
       </Card>
 
 
-      <Card className="w-full">
+      <Card>
         <CardHeader>
           <CardTitle>Beneficiary Records</CardTitle>
           <CardDescription>
@@ -569,7 +675,7 @@ export default function BeneficiaryDatabasePage() {
             <div className="flex justify-center items-center h-64"><Loader2 className="h-8 w-8 animate-spin" /></div>
           ) : error ? (
             <div className="text-center text-red-500">{error}</div>
-          ) : records.length === 0 ? (
+          ) : allRecords.length === 0 ? (
              <div className="text-center text-muted-foreground py-10">
                 <p>No records found in the database.</p>
             </div>
