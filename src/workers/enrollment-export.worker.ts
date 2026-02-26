@@ -95,7 +95,7 @@ self.onmessage = async (event: MessageEvent) => {
         postMessage({ type: 'progress', status: 'Finalizing file...', progress: 95 });
         const buffer = await workbook.xlsx.writeBuffer();
         
-        postMessage({ type: 'done', data: buffer }, [buffer]);
+        postMessage({ type: 'done', data: buffer }, [buffer as any]);
 
     } catch (error: any) {
         postMessage({ type: 'error', error: error.message || 'An unknown error occurred.' });
