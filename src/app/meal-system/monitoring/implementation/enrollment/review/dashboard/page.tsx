@@ -251,9 +251,21 @@ export default function EnrollmentDashboardPage() {
                         <CardContent>
                             <ReactECharts style={{ height: '400px' }} option={{
                                 tooltip: { trigger: 'item' },
-                                series: [{ type: 'scatter', symbolSize: (val: any) => Math.sqrt(val) * 2,
+                                grid: { top: '10%', bottom: '10%', left: '10%', right: '10%' },
+                                xAxis: { show: false, type: 'value' },
+                                yAxis: { show: false, type: 'value' },
+                                series: [{ 
+                                    type: 'scatter', 
+                                    symbolSize: (data: any) => Math.sqrt(data.value) * 15 + 10,
                                     data: Object.entries(processedData.bubbleData).map(([name, value]) => ({name, value})),
-                                    label: { show: true, formatter: '{b}\n{c}' }
+                                    label: { 
+                                        show: true, 
+                                        formatter: '{b}\n{c}',
+                                        fontSize: 12,
+                                        color: '#fff',
+                                        textShadowBlur: 2,
+                                        textShadowColor: 'rgba(0, 0, 0, 0.5)'
+                                    }
                                 }]
                             }} />
                         </CardContent></Card>
