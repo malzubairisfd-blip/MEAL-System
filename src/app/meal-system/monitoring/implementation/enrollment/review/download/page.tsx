@@ -64,7 +64,7 @@ const NORMALIZED_CODE_MAP: Record<string, number> = {
 const getRecommendation = (code: number) => {
   if ([2, 3, 12].includes(code)) return 'تصنف إلى تكرار/ازدواج';
   if ([6, 7, 9, 13, 10, 14].includes(code)) return 'تصنف إلى مستبعدة';
-  if ([4, 5, 15, 51, 52, 53, 54, 55, 99].includes(code)) return 'تبقى مرشحة';
+  if ([4, 5, 15, 51, 52, 53, 54, 55, 56, 99].includes(code)) return 'تبقى مرشحة';
   return '';
 };
 
@@ -204,7 +204,7 @@ export default function DownloadEnrollmentPage() {
     worksheet.columns = [
       { header: 'م', key: 'serial', width: 5 },
       { header: 'كود المستفيدة', key: 'benef_id', width: 15 },
-      { header: 'اسم المستفيدة', key: 'benef_name', width: 30 },
+      { header: 'اسم المستفيدة', key: 'bnf_name', width: 30 },
       { header: 'كود الاستبعاد', key: 'code', width: 15 },
       { header: 'مبرر الاستبعاد', key: 'reason', width: 40 },
       { header: 'كود المثقفة', key: 'ed_id', width: 15 },
