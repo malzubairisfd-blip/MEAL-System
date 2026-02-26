@@ -1,3 +1,4 @@
+// src/app/meal-system/monitoring/implementation/enrollment/review/download/page.tsx
 "use client";
 
 import React, { useState, useEffect } from 'react';
@@ -22,30 +23,42 @@ const ENROLLMENT_IMAGES_KEY = 'enrollmentDashboardImages';
 const ENROLLMENT_PROCESSED_KEY = 'enrollmentDashboardData';
 const ENROLLMENT_DB_VERSION = 2;
 
-const DISQUALIFIED_CODE_MAP: Record<string, number> = {
-  'ازدواج في الاستفادة (مثقفة /مستفيدة)': 2,
-  'ازدواج في الاستفادة مثقفة و مستفيدة': 2,
-  'التكرار': 3,
-  'مستفيدة مكررة': 3,
-  'عدم القبول بمنافع واشتراطات المشروع': 4,
-  'غياب لاكثر من ثلاث جلسات عامة': 5,
-  'الوفاه لاسمح الله': 6,
-  'الوفاة': 6,
-  'لا تنطبق عليها المعايير': 7,
-  'عدم استيفاء شروط الالتحاق بالمشروع': 9,
-  'خطأ في الإدخال': 10,
-  'ازدواج/مثقفة': 12,
-  'انتحال شخصية': 13,
-  'تزوير وثائق': 14,
-  'انتقال دائم لسكن وإقامة المستفيدة خارج المديرية': 15,
-  'عدم الاستدلال على عنوانها': 51,
-  'مغادرة المنطقة مؤقتا': 52,
-  'رفضت الحضور': 53,
-  'نازحة': 54,
-  'لم تحضر/غائبة': 55,
-  'سفر مؤقت': 56,
-  'أخرى': 99,
-  'اخرى تذكر': 99,
+// Normalization function
+const normalizeReason = (s: string | null | undefined): string => {
+  if (!s) return "";
+  return String(s)
+    .replace(/[أإآ]/g, "ا") // alef variations
+    .replace(/ى/g, "ي")    // alef maqsura
+    .replace(/ة/g, "ه")    // ta marbuta
+    .replace(/[^\u0600-\u06FF\s]/g, '') // Keep only Arabic letters and spaces
+    .replace(/\s+/g, ' ') // Collapse whitespace
+    .trim();
+};
+
+const NORMALIZED_CODE_MAP: Record<string, number> = {
+    'ازدواج في الاستفاده مثقفه مستفيده': 2,
+    'ازدواج في الاستفاده مثقفه و مستفيده': 2,
+    'التكرار': 3,
+    'مستفيده مكرره': 3,
+    'عدم القبول بمنافع واشتراطات المشروع': 4,
+    'غياب لاكثر من ثلاث جلسات عامه': 5,
+    'الوفاه لاسمح الله': 6,
+    'الوفاه': 6,
+    'لا تنطبق عليها المعايير': 7,
+    'عدم استيفاء شروط الالتحاق بالمشروع': 9,
+    'خطا في الادخال': 10,
+    'ازدواج مثقفه': 12,
+    'انتحال شخصيه': 13,
+    'تزوير وثائق': 14,
+    'انتقال دائم لسكن واقامه المستفيده خارج المديريه': 15,
+    'عدم الاستدلال على عنوانها': 51,
+    'مغادره المنطقه مؤقتا': 52,
+    'رفضت الحضور': 53,
+    'نازحه': 54,
+    'لم تحضر غائبه': 55,
+    'سفر مؤقت': 56,
+    'اخرى': 99,
+    'اخرى تذكر': 99,
 };
 
 const getRecommendation = (code: number) => {
@@ -54,6 +67,7 @@ const getRecommendation = (code: number) => {
   if ([4, 5, 15, 51, 52, 53, 54, 55, 99].includes(code)) return 'تبقى مرشحة';
   return '';
 };
+
 
 export default function DownloadEnrollmentPage() {
   const { toast } = useToast();
@@ -102,13 +116,15 @@ export default function DownloadEnrollmentPage() {
   };
 
   const fetchEnrollmentRecords = async (): Promise<any[]> => {
-    const url = new URL('/api/enrollment-review', window.location.origin);
-    if (selectedProjectId) url.searchParams.set('projectId', selectedProjectId);
-    const res = await fetch(url.toString());
+    let url = `/api/enrollment-review`;
+    if (selectedProjectId && selectedProjectId !== 'all') {
+      url += `?projectId=${selectedProjectId}`;
+    }
+    const res = await fetch(url);
     if (!res.ok) throw new Error('Failed to load enrollment records.');
     return res.json();
   };
-
+  
   const addDashboardImages = (workbook: ExcelJS.Workbook, worksheet: ExcelJS.Worksheet, images: Record<string, string> | undefined, processedData: any) => {
     if (!images) return;
     worksheet.views = [{ rightToLeft: true }];
@@ -183,8 +199,8 @@ export default function DownloadEnrollmentPage() {
 
     if (images.recommendationsTable) addImage(images.recommendationsTable, { col: 1, row: currentRow }, { width: 900, height: 250 });
   };
-
-  const buildDisqualifiedSheet = (worksheet: ExcelJS.Worksheet, records: any[]) => {
+  
+    const buildDisqualifiedSheet = (worksheet: ExcelJS.Worksheet, records: any[]) => {
     worksheet.columns = [
       { header: 'م', key: 'serial', width: 5 },
       { header: 'كود المستفيدة', key: 'benef_id', width: 15 },
@@ -203,7 +219,19 @@ export default function DownloadEnrollmentPage() {
 
     filtered.forEach((record, index) => {
       const reason = record.the_reason_for_not_joining_the_project_is_stated;
-      const code = DISQUALIFIED_CODE_MAP[reason] ?? 99;
+      
+      const normalizedReason = normalizeReason(reason);
+      let code = 99; // Default to 'أخرى'
+      // Use includes for partial matching
+      for (const [key, value] of Object.entries(NORMALIZED_CODE_MAP)) {
+          if (normalizedReason.includes(key)) {
+              code = value;
+              break;
+          }
+      }
+
+      const recommendation = getRecommendation(code);
+      
       worksheet.addRow({
         serial: index + 1,
         benef_id: record.benef_id,
@@ -213,7 +241,7 @@ export default function DownloadEnrollmentPage() {
         ed_id: record.ed_id,
         ed_name: record.ed_name,
         notes: record.other_things_to_mention,
-        recommendation: getRecommendation(code),
+        recommendation,
         hq_notes: '',
         hq_recommendation: ''
       });
