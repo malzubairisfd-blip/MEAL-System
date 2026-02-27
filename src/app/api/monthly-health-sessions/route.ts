@@ -1,3 +1,4 @@
+
 // src/app/api/monthly-health-sessions/route.ts
 import { NextResponse } from "next/server";
 import fs from "fs/promises";
@@ -7,6 +8,7 @@ import Database from "better-sqlite3";
 const getDataPath = () => path.join(process.cwd(), "src/data");
 const getDbPath = () => path.join(getDataPath(), "monthly-health-sessions.db");
 const getEnrollmentDbPath = () => path.join(getDataPath(), "enrollment-review.db");
+
 
 const DB_COLUMNS_FOR_CREATION = `(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -24,6 +26,22 @@ function initializeDatabase() {
 }
 
 export async function POST(req: Request) {
+  const body = await req.json();
+  const { action } = body;
+
+  if (action === 'get_schema') {
+      try {
+        const db = initializeDatabase();
+        const tableInfo = db.prepare("PRAGMA table_info(monthly_sessions)").all();
+        const columns = tableInfo.map((c: any) => c.name);
+        db.close();
+        return NextResponse.json({ columns });
+      } catch (error: any) {
+        return NextResponse.json({ error: "Failed to get schema", details: error.message }, { status: 500 });
+      }
+  }
+
+
   const stream = new TransformStream();
   const writer = stream.writable.getWriter();
   const encoder = new TextEncoder();
@@ -31,14 +49,12 @@ export async function POST(req: Request) {
 
   (async () => {
     try {
-      const body = await req.json();
       const {
         projectId, sessionNumber, sessionDate,
-        appearanceData, appearanceMapping, absenceData, absenceMapping,
-        uniqueIdFileCol
+        appearanceData, appearanceMapping, absenceData, absenceMapping
       } = body;
 
-      if (!projectId || !sessionNumber || !sessionDate || !appearanceData || !appearanceMapping || !uniqueIdFileCol) {
+      if (!projectId || !sessionNumber || !sessionDate || !appearanceData || !appearanceMapping) {
         throw new Error("Missing required parameters for processing.");
       }
 
@@ -47,7 +63,6 @@ export async function POST(req: Request) {
       const sessionDb = initializeDatabase();
       let enrollmentDb: Database.Database | null = null;
       
-      // Step 1: Populate from enrollment-review.db
       try {
         enrollmentDb = new Database(getEnrollmentDbPath(), { fileMustExist: true });
         const beneficiaries = enrollmentDb.prepare(`
@@ -79,7 +94,6 @@ export async function POST(req: Request) {
           if (enrollmentDb) enrollmentDb.close();
       }
 
-      // Step 2 & 3: Beneficiary Appearance and General Date
       send({ type: 'progress', status: 'SECOND_STEP_SAVING_BENEFICIARY_APPEARANCE', progress: 30, message: "Processing appearance data..." });
       const appearCol = `bnf_appear_s${sessionNumber}`;
       const dateCol = `date_of_general_s${sessionNumber}`;
@@ -97,11 +111,10 @@ export async function POST(req: Request) {
       
       send({ type: 'progress', status: 'THIRD_STEP_SAVING_GENERAL_SESSIONS_DATE', progress: 50, message: "Appearance data processed." });
 
-      // Step 4: Beneficiary Absence
       if (absenceData && absenceMapping) {
           send({ type: 'progress', status: 'FOURTH_STEP_SAVING_BENEFICIARY_ABSENCE', progress: 60, message: "Processing absence data..." });
-          const absenceColsToUpdate = Object.values(absenceMapping).filter(col => col !== 'benef_id');
-          const setClause = absenceColsToUpdate.map(col => `${col} = ?`).join(', ');
+          const absenceColsToUpdate = Object.keys(absenceMapping).filter(col => col !== 'benef_id');
+          const setClause = absenceColsToUpdate.map(dbCol => `${absenceMapping[dbCol]} = ?`).join(', ');
           
           if(setClause) {
               const updateAbsenceStmt = sessionDb.prepare(`UPDATE monthly_sessions SET ${setClause} WHERE benef_id = ?`);
@@ -109,10 +122,7 @@ export async function POST(req: Request) {
                   absenceData.forEach((row: any) => {
                       const benefId = row[absenceMapping.benef_id];
                       if(benefId) {
-                          const values = absenceColsToUpdate.map(dbCol => {
-                              const fileCol = Object.keys(absenceMapping).find(key => absenceMapping[key] === dbCol);
-                              return fileCol ? row[fileCol] : null;
-                          });
+                          const values = absenceColsToUpdate.map(fileCol => row[fileCol] ?? null);
                           updateAbsenceStmt.run(...values, benefId);
                       }
                   });
@@ -120,13 +130,11 @@ export async function POST(req: Request) {
           }
       }
 
-      // Step 5: Mark Absentees
       send({ type: 'progress', status: 'FIFTH_STEP_SAVING_ABSENTEES', progress: 80, message: "Marking absentees..." });
       const absentCol = `absent_s${sessionNumber}`;
       const absenceCodeCol = `absence_code_s${sessionNumber}`;
       sessionDb.prepare(`UPDATE monthly_sessions SET ${absentCol} = 1 WHERE ${absenceCodeCol} IS NOT NULL AND ${absenceCodeCol} != ''`).run();
 
-      // Step 6: Mark Attendance
       send({ type: 'progress', status: 'SIXTH_STEP_SAVING_ATTENDANCE', progress: 90, message: "Finalizing attendance..." });
       const attendingCol = `attending_s${sessionNumber}`;
       sessionDb.prepare(`UPDATE monthly_sessions SET ${attendingCol} = 0 WHERE ${absentCol} = 1`).run();

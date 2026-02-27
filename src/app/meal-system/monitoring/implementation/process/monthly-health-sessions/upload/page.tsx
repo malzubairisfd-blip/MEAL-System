@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ScrollArea } from "@/components/ui/scroll-area';
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Upload, Save, GitCompareArrows, Plus, Trash2, ArrowLeft, CheckCircle, BarChart2, Database } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
@@ -65,16 +65,23 @@ export default function MonthlySessionsUploadPage() {
     const [absenceMapping, setAbsenceMapping] = useState<Map<string, string>>(new Map());
     const [manualAppearanceMapping, setManualAppearanceMapping] = useState({ ui: '', db: '' });
     const [manualAbsenceMapping, setManualAbsenceMapping] = useState({ ui: '', db: '' });
-    const [uniqueIdFileCol, setUniqueIdFileCol] = useState('');
     
-    const [loading, setLoading] = useState({ projects: true, saving: false });
+    const [loading, setLoading] = useState({ projects: true, saving: false, dbSchema: true });
     const [workerStatus, setWorkerStatus] = useState('idle');
     const [workerProgress, setWorkerProgress] = useState(0);
     const [workerMessage, setWorkerMessage] = useState('');
     const [results, setResults] = useState<any>(null);
 
     useEffect(() => {
+        setLoading(p => ({...p, projects: true}));
         fetch('/api/projects').then(res => res.json()).then(data => setProjects(data)).finally(() => setLoading(p => ({...p, projects: false})));
+        
+        setLoading(p => ({...p, dbSchema: true}));
+        fetch('/api/monthly-health-sessions', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'get_schema' })})
+            .then(res => res.json())
+            .then(data => setDbColumns(data.columns || []))
+            .finally(() => setLoading(p => ({...p, dbSchema: false})));
+
     }, []);
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -122,10 +129,71 @@ export default function MonthlySessionsUploadPage() {
     const targetDbColumns = useMemo(() => {
         if (!dbColumns.length) return [];
         const suffix = `_s${sessionNumber}`;
-        return dbColumns.filter(c => c.endsWith(suffix));
+        return dbColumns.filter(c => c === 'benef_id' || c.endsWith(suffix));
     }, [dbColumns, sessionNumber]);
 
+    const unmappedAppearanceFileCols = useMemo(() => appearanceColumns.filter(c => !Array.from(appearanceMapping.keys()).includes(c)), [appearanceColumns, appearanceMapping]);
+    const unmappedAppearanceDbCols = useMemo(() => targetDbColumns.filter(c => !Array.from(appearanceMapping.values()).includes(c)), [targetDbColumns, appearanceMapping]);
+    const unmappedAbsenceFileCols = useMemo(() => absenceColumns.filter(c => !Array.from(absenceMapping.keys()).includes(c)), [absenceColumns, absenceMapping]);
+    const unmappedAbsenceDbCols = useMemo(() => targetDbColumns.filter(c => !Array.from(absenceMapping.values()).includes(c)), [targetDbColumns, absenceMapping]);
+
+    const handleAddAppearanceMapping = () => {
+        if (manualAppearanceMapping.ui && manualAppearanceMapping.db) {
+            const newMap = new Map(appearanceMapping);
+            newMap.set(manualAppearanceMapping.ui, manualAppearanceMapping.db);
+            setAppearanceMapping(newMap);
+            setManualAppearanceMapping({ ui: '', db: '' });
+        }
+    };
+    const handleDeleteAppearanceMapping = (key: string) => {
+        const newMap = new Map(appearanceMapping);
+        newMap.delete(key);
+        setAppearanceMapping(newMap);
+    };
+    const handleAddAbsenceMapping = () => {
+        if (manualAbsenceMapping.ui && manualAbsenceMapping.db) {
+            const newMap = new Map(absenceMapping);
+            newMap.set(manualAbsenceMapping.ui, manualAbsenceMapping.db);
+            setAbsenceMapping(newMap);
+            setManualAbsenceMapping({ ui: '', db: '' });
+        }
+    };
+    const handleDeleteAbsenceMapping = (key: string) => {
+        const newMap = new Map(absenceMapping);
+        newMap.delete(key);
+        setAbsenceMapping(newMap);
+    };
+
+    useEffect(() => {
+        if (!selectedProjectId) return;
+        const key = `${LOCAL_STORAGE_MAPPING_PREFIX}${selectedProjectId}-appearance`;
+        localStorage.setItem(key, JSON.stringify(Array.from(appearanceMapping.entries())));
+    }, [appearanceMapping, selectedProjectId]);
+    
+    useEffect(() => {
+        if (!selectedProjectId) return;
+        const key = `${LOCAL_STORAGE_MAPPING_PREFIX}${selectedProjectId}-absence`;
+        localStorage.setItem(key, JSON.stringify(Array.from(absenceMapping.entries())));
+    }, [absenceMapping, selectedProjectId]);
+    
+    useEffect(() => {
+        if (!selectedProjectId || !file) return;
+        const keyAppearance = `${LOCAL_STORAGE_MAPPING_PREFIX}${selectedProjectId}-appearance`;
+        const storedAppearance = localStorage.getItem(keyAppearance);
+        if (storedAppearance) setAppearanceMapping(new Map(JSON.parse(storedAppearance)));
+        
+        const keyAbsence = `${LOCAL_STORAGE_MAPPING_PREFIX}${selectedProjectId}-absence`;
+        const storedAbsence = localStorage.getItem(keyAbsence);
+        if (storedAbsence) setAbsenceMapping(new Map(JSON.parse(storedAbsence)));
+    }, [selectedProjectId, file]);
+
+
     const handleSave = async () => {
+        if(!Array.from(appearanceMapping.values()).includes('benef_id') && !Array.from(absenceMapping.values()).includes('benef_id')) {
+            toast({ title: "Mapping Incomplete", description: "You must map a column to 'benef_id' in either the appearance or absence sheet.", variant: 'destructive'});
+            return;
+        }
+
         setLoading(prev => ({...prev, saving: true}));
         setWorkerStatus('initializing');
         setWorkerProgress(0);
@@ -141,8 +209,7 @@ export default function MonthlySessionsUploadPage() {
                     appearanceData,
                     appearanceMapping: Object.fromEntries(appearanceMapping),
                     absenceData,
-                    absenceMapping: Object.fromEntries(absenceMapping),
-                    uniqueIdFileCol
+                    absenceMapping: Object.fromEntries(absenceMapping)
                 }),
             });
 
@@ -240,7 +307,39 @@ export default function MonthlySessionsUploadPage() {
             </Card>
             )}
             
-            {/* MAPPING SECTIONS (simplified for brevity) */}
+            {appearanceSheet && (
+                 <Card>
+                    <CardHeader><CardTitle>Appearance Data Mapping</CardTitle></CardHeader>
+                    <CardContent className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                            <div className="space-y-2"><Label>Unmapped File Column</Label><Select value={manualAppearanceMapping.ui} onValueChange={v => setManualAppearanceMapping(m=>({...m, ui: v}))}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><ScrollArea className="h-60">{unmappedAppearanceFileCols.map(c=><SelectItem key={c} value={c}>{c}</SelectItem>)}</ScrollArea></SelectContent></Select></div>
+                            <div className="space-y-2"><Label>Target DB Column</Label><Select value={manualAppearanceMapping.db} onValueChange={v => setManualAppearanceMapping(m=>({...m, db: v}))}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><ScrollArea className="h-60">{unmappedAppearanceDbCols.map(c=><SelectItem key={c} value={c}>{c}</SelectItem>)}</ScrollArea></SelectContent></Select></div>
+                            <Button onClick={handleAddAppearanceMapping}><Plus className="mr-2 h-4 w-4"/>Add Mapping</Button>
+                        </div>
+                        <ScrollArea className="h-48 border rounded-md">
+                            <Table><TableHeader><TableRow><TableHead>File Column</TableHead><TableHead>Database Column</TableHead><TableHead>Action</TableHead></TableRow></TableHeader>
+                            <TableBody>{Array.from(appearanceMapping.entries()).map(([ui, db]) => <TableRow key={ui}><TableCell>{ui}</TableCell><TableCell>{db}</TableCell><TableCell><Button variant="ghost" size="icon" onClick={()=>handleDeleteAppearanceMapping(ui)}><Trash2 className="h-4 w-4 text-destructive"/></Button></TableCell></TableRow>)}</TableBody></Table>
+                        </ScrollArea>
+                    </CardContent>
+                </Card>
+            )}
+
+            {absenceSheet && (
+                 <Card>
+                    <CardHeader><CardTitle>Absence Data Mapping</CardTitle></CardHeader>
+                    <CardContent className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                            <div className="space-y-2"><Label>Unmapped File Column</Label><Select value={manualAbsenceMapping.ui} onValueChange={v => setManualAbsenceMapping(m=>({...m, ui: v}))}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><ScrollArea className="h-60">{unmappedAbsenceFileCols.map(c=><SelectItem key={c} value={c}>{c}</SelectItem>)}</ScrollArea></SelectContent></Select></div>
+                            <div className="space-y-2"><Label>Target DB Column</Label><Select value={manualAbsenceMapping.db} onValueChange={v => setManualAbsenceMapping(m=>({...m, db: v}))}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><ScrollArea className="h-60">{unmappedAbsenceDbCols.map(c=><SelectItem key={c} value={c}>{c}</SelectItem>)}</ScrollArea></SelectContent></Select></div>
+                            <Button onClick={handleAddAbsenceMapping}><Plus className="mr-2 h-4 w-4"/>Add Mapping</Button>
+                        </div>
+                        <ScrollArea className="h-48 border rounded-md">
+                            <Table><TableHeader><TableRow><TableHead>File Column</TableHead><TableHead>Database Column</TableHead><TableHead>Action</TableHead></TableRow></TableHeader>
+                            <TableBody>{Array.from(absenceMapping.entries()).map(([ui, db]) => <TableRow key={ui}><TableCell>{ui}</TableCell><TableCell>{db}</TableCell><TableCell><Button variant="ghost" size="icon" onClick={()=>handleDeleteAbsenceMapping(ui)}><Trash2 className="h-4 w-4 text-destructive"/></Button></TableCell></TableRow>)}</TableBody></Table>
+                        </ScrollArea>
+                    </CardContent>
+                </Card>
+            )}
             
             <Card>
                 <CardHeader><CardTitle>3. Save Data</CardTitle></CardHeader>
@@ -268,7 +367,6 @@ export default function MonthlySessionsUploadPage() {
                 <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4">
                      <KeyFiguresCard title="Session Number" value={sessionNumber} icon={<CheckCircle/>}/>
                     <KeyFiguresCard title="Total Appearance" value={results.totalAppearance} icon={<Users/>}/>
-                    {/* Add other result cards */}
                 </CardContent>
                  <CardContent className="flex gap-2">
                     <Button asChild><Link href="/meal-system/monitoring/implementation/process/monthly-health-sessions/dashboard"><BarChart2 className="mr-2 h-4 w-4"/>Go to Dashboard</Link></Button>
