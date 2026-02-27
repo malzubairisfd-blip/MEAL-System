@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Upload, Save, GitCompareArrows, Plus, Trash2, ArrowLeft, CheckCircle, BarChart2, Database } from "lucide-react";
+import { Loader2, Upload, Save, GitCompareArrows, Plus, Trash2, ArrowLeft, CheckCircle, BarChart2, Database, Users } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 
 interface Project {
