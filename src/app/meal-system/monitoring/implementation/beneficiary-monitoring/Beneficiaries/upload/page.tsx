@@ -42,6 +42,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   AlertDialog,
+  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
@@ -96,6 +97,7 @@ const LOCAL_STORAGE_KEY_PREFIX = "beneficiary-mapping-";
 const CHUNK_SIZE = 5000;
 const DB_SAVE_CHUNK_SIZE = 1000;
   
+const WORKER_COLUMN_KEYS: string[] = [];
 
 type WorkerProgress = {
   status: string;
@@ -193,8 +195,13 @@ export default function UploadPage() {
     count: number;
     totalInFile: number;
     records: any[];
-  }>({ isOpen: false, count: 0, totalInFile: 0, records: [] });
+    totalInDb: number;
+  }>({ isOpen: false, count: 0, totalInFile: 0, records: [], totalInDb: 0 });
   const [saveStats, setSaveStats] = useState({ saved: 0, skipped: 0, updated: 0, total: 0 });
+  const [enrichedColumns, setEnrichedColumns] = useState<string[]>([]);
+  const [uniqueIdFileCol, setUniqueIdFileCol] = useState('');
+  const [uniqueIdDbCol, setUniqueIdDbCol] = useState('');
+  const [mapSavedKey, setMapSavedKey] = useState('');
 
   const rawRowsRef = useRef<any[]>([]);
   const clusterWorkerRef = useRef<Worker | null>(null);
@@ -216,38 +223,16 @@ export default function UploadPage() {
   );
   const isDbMappingReady = useMemo(() => uniqueIdMapping.fileCol && uniqueIdMapping.dbCol, [uniqueIdMapping]);
   
-  const unmappedUiColumns = useMemo(() => {
-    const cachedData =
-      rawRowsRef.current.length > 0
-        ? { rows: rawRowsRef.current, clusters: clusters }
-        : null;
+  const sourceColumns = useMemo(() => {
+    const set = new Set<string>(enrichedColumns.length > 0 ? enrichedColumns : columns);
+    WORKER_COLUMN_KEYS.forEach((key) => set.add(key));
+    return Array.from(set);
+}, [enrichedColumns, columns]);
 
-    if (!cachedData || !cachedData.clusters || cachedData.clusters.length === 0) {
-        const usedCols = new Set([...Array.from(dbColumnMapping.keys()), uniqueIdMapping.fileCol]);
-        return columns.filter(c => !usedCols.has(c));
-    }
-
-    const clusterRecordKeys = cachedData.clusters?.[0]?.records?.[0]
-      ? Object.keys(cachedData.clusters[0].records[0])
-      : [];
-    const clusterTopLevelKeys = cachedData.clusters?.[0] ? Object.keys(cachedData.clusters[0]) : [];
-      
-    const availableColumns = [...new Set([...columns, ...clusterTopLevelKeys, ...clusterRecordKeys])];
-    
-    const usedCols = new Set([...Array.from(dbColumnMapping.keys()), uniqueIdMapping.fileCol]);
-
-    return availableColumns.filter(
-      (c) =>
-        !usedCols.has(c) &&
-        !c.startsWith("_")
-    );
-  }, [columns, clusters, dbColumnMapping, uniqueIdMapping.fileCol]);
-
-
-  const unmappedDbColumns = useMemo(() => {
-    const usedDbCols = new Set([...dbColumnMapping.values(), uniqueIdMapping.dbCol]);
-    return dbColumns.filter((c) => !usedDbCols.has(c));
-  }, [dbColumns, dbColumnMapping, uniqueIdMapping.dbCol]);
+  const mappedUiColumns = useMemo(() => Array.from(dbColumnMapping.keys()), [dbColumnMapping]);
+  const usedDbColumns = useMemo(() => new Set([...dbColumnMapping.values(), uniqueIdDbCol]), [dbColumnMapping, uniqueIdDbCol]);
+  const unmappedUiColumns = sourceColumns.filter((col) => !mappedUiColumns.includes(col) && col !== uniqueIdFileCol);
+  const unmappedDbColumns = dbColumns.filter((c) => !usedDbColumns.has(c));
   
   const resetAll = useCallback(() => {
     setFile(null);
@@ -265,7 +250,7 @@ export default function UploadPage() {
     setIsSaving(false);
     setSaveStatus("idle");
     setSaveProgress(0);
-    setDuplicateInfo({ isOpen: false, count: 0, totalInFile: 0, records: [] });
+    setDuplicateInfo({ isOpen: false, count: 0, totalInFile: 0, records: [], totalInDb: 0 });
     setSaveStats({ saved: 0, skipped: 0, updated: 0, total: 0 });
     if (timerRef.current) clearInterval(timerRef.current);
   }, []);
@@ -437,8 +422,8 @@ export default function UploadPage() {
     };
   }, [workerStatus]);
 
-  const handleFile = useCallback(
-    async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
       const selectedFile = event.target.files?.[0];
       if (!selectedFile) return;
 
@@ -616,61 +601,80 @@ export default function UploadPage() {
     }
   }, [workerStatus, toast]);
 
-  const handleAutoMatch = useCallback(async () => {
-    const cachedData =
-      rawRowsRef.current.length > 0
-        ? { rows: rawRowsRef.current, clusters: clusters }
-        : null;
-
-    let availableSourceColumns = [...columns];
-    if (cachedData && cachedData.clusters && cachedData.clusters.length > 0) {
-        const clusterRecordKeys = cachedData.clusters?.[0]?.records?.[0]
-          ? Object.keys(cachedData.clusters[0].records[0])
-          : [];
-        const clusterTopLevelKeys = cachedData.clusters?.[0]
-          ? Object.keys(cachedData.clusters[0])
-          : [];
-        
-        const generatedKeys = [...clusterTopLevelKeys, ...clusterRecordKeys].filter(key => !key.startsWith('_') && !['records', 'pairScore'].includes(key));
-        availableSourceColumns = [...new Set([...columns, ...generatedKeys])];
+  useEffect(() => {
+    const mappingKey = `${LOCAL_STORAGE_KEY_PREFIX}${selectedProjectId}-${file?.name || "default"}`;
+    setMapSavedKey(mappingKey);
+    if (!selectedProjectId || !file || typeof window === "undefined") return;
+    const stored = localStorage.getItem(mappingKey);
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        setUniqueIdFileCol(parsed.uniqueIdFileCol || "");
+        setUniqueIdDbCol(parsed.uniqueIdDbCol || "");
+        const newMap = new Map<string, string>(parsed.mappings || []);
+        setDbColumnMapping(newMap);
+      } catch {
+        localStorage.removeItem(mappingKey);
+      }
+    } else {
+      setDbColumnMapping(new Map());
+      setUniqueIdDbCol("");
     }
-    
+  }, [selectedProjectId, file]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !mapSavedKey) return;
+    const payload = {
+      uniqueIdFileCol,
+      uniqueIdDbCol,
+      mappings: Array.from(dbColumnMapping.entries()),
+    };
+    window.localStorage.setItem(mapSavedKey, JSON.stringify(payload));
+  }, [dbColumnMapping, uniqueIdDbCol, uniqueIdFileCol, mapSavedKey]);
+
+  const handleAutoMatch = useCallback(() => {
     const newMapping = new Map<string, string>();
-    const usedDbCols = new Set<string>();
-    
-    availableSourceColumns.forEach((uiCol) => {
-      const matchedDbCol = dbColumns.find(
-        (dbCol) =>
-          dbCol.toLowerCase().replace(/_/g, "") ===
-            uiCol.toLowerCase().replace(/_/g, "").replace(/\s/g, "") &&
-          !usedDbCols.has(dbCol)
-      );
-      if (matchedDbCol) {
-        newMapping.set(uiCol, matchedDbCol);
-        usedDbCols.add(matchedDbCol);
+    const usedDb = new Set<string>();
+    sourceColumns.forEach((uiCol) => {
+      const normalizedUi = uiCol.toLowerCase().replace(/_/g, "");
+      const match = dbColumns.find((dbCol) => !usedDb.has(dbCol) && dbCol.toLowerCase().replace(/_/g, "") === normalizedUi);
+      if (match) {
+        newMapping.set(uiCol, match);
+        usedDb.add(match);
       }
     });
-
     setDbColumnMapping(newMapping);
-    toast({
-      title: "Auto-match Complete",
-      description: `Automatically matched ${newMapping.size} columns.`,
-    });
-  }, [columns, clusters, dbColumns, toast]);
+    toast({ title: "Auto-mapping saved", description: `${newMapping.size} columns matched.` });
+  }, [dbColumns, sourceColumns, toast]);
 
   const handleAddDbMapping = () => {
     if (manualDbMapping.ui && manualDbMapping.db) {
-      const newMap = new Map(dbColumnMapping);
-      newMap.set(manualDbMapping.ui, manualDbMapping.db);
-      setDbColumnMapping(newMap);
+      setDbColumnMapping((prev) => {
+        const updated = new Map(prev);
+        updated.set(manualDbMapping.ui, manualDbMapping.db);
+        return updated;
+      });
       setManualDbMapping({ ui: "", db: "" });
     }
   };
 
   const handleDeleteDbMapping = (key: string) => {
-    const newMap = new Map(dbColumnMapping);
-    newMap.delete(key);
-    setDbColumnMapping(newMap);
+    setDbColumnMapping((prev) => {
+      const updated = new Map(prev);
+      updated.delete(key);
+      return updated;
+    });
+  };
+
+  const persistMappingNow = () => {
+    if (typeof window === "undefined" || !mapSavedKey) return;
+    const payload = {
+      uniqueIdFileCol,
+      uniqueIdDbCol,
+      mappings: Array.from(dbColumnMapping.entries()),
+    };
+    window.localStorage.setItem(mapSavedKey, JSON.stringify(payload));
+    toast({ title: "Mapping saved", description: "Column mapping stored for this project and file." });
   };
   
   const enrichData = useCallback((data: any) => {
@@ -726,105 +730,114 @@ export default function UploadPage() {
     return { enrichedRecords, clusters };
   }, []);
 
-  const executeSave = useCallback(async (mode: "skip" | "replace") => {
-    setDuplicateInfo(prev => ({...prev, isOpen: false}));
-    setIsSaving(true);
+  const executeSave = useCallback(
+    async (mode: "skip" | "replace", duplicateContext?: { duplicates: number; totalInDb: number }) => {
+      setDuplicateInfo((prev) => ({ ...prev, isOpen: false }));
+      setLoading((p) => ({ ...p, saving: true }));
+      setSaveStatus("saving");
+      let totalSaved = 0;
+      let totalSkipped = 0;
+      let totalUpdated = 0;
+      try {
+        const cachedRecords = await loadCachedResult();
+        if (!cachedRecords) throw new Error("No cached data to save.");
 
-    try {
-        setSaveStatus("saving");
-        setSaveProgress(0);
-        let totalSaved = 0;
-        let totalSkipped = 0;
-        let totalUpdated = 0;
+        const { enrichedRecords } = enrichData(cachedRecords);
         
-        const cachedData = await loadCachedResult();
-        if (!cachedData) throw new Error("Could not load cached data for enrichment.");
-        const { enrichedRecords } = enrichData(cachedData);
-        
-        const totalToProcess = enrichedRecords.length;
-
-        for (let i = 0; i < totalToProcess; i += DB_SAVE_CHUNK_SIZE) {
-            const chunk = enrichedRecords.slice(i, i + DB_SAVE_CHUNK_SIZE);
-            const payloadRecords = chunk.map(record => {
-                const newRecord: Record<string, any> = { project_id: selectedProjectId };
-
-                dbColumnMapping.forEach((dbCol, uiCol) => {
-                    if (record.hasOwnProperty(uiCol)) {
-                        newRecord[dbCol] = record[uiCol];
-                    }
-                });
-
-                if (uniqueIdMapping.dbCol && record.hasOwnProperty(uniqueIdMapping.fileCol)) {
-                    newRecord[uniqueIdMapping.dbCol] = record[uniqueIdMapping.fileCol];
-                }
-
-                // Add main mapping fields
-                MAPPING_FIELDS.forEach(field => {
-                    const mappedCol = mapping[field as keyof Mapping];
-                    if (mappedCol && record.hasOwnProperty(mappedCol)) {
-                        newRecord[field] = record[mappedCol];
-                    }
-                });
-
-                return newRecord;
-            });
-            
-            const result = await apiRequest("/api/bnf-assessed", {
-              method: "POST",
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ action: "save", projectId: selectedProjectId, records: payloadRecords, mode: mode, uniqueIdCol: uniqueIdMapping.dbCol })
-            });
-
-            totalSaved += result.saved || 0;
-            totalSkipped += result.skipped || 0;
-            totalUpdated += result.updated || 0;
-            setSaveStats({ saved: totalSaved, skipped: totalSkipped, updated: totalUpdated, total: totalToProcess });
-            setSaveProgress(((i + chunk.length) / totalToProcess) * 100);
+        if (mode === "skip" && duplicateContext?.duplicates === duplicateContext?.totalInDb && duplicateContext?.totalInDb) {
+          toast({ title: "All records already exist", description: "No new records to save.", variant: "destructive" });
+          setLoading((p) => ({ ...p, saving: false }));
+          setSaveStatus("idle");
+          return;
         }
-        
+        const totalToProcess = enrichedRecords.length;
+        const CHUNK_SIZE = 500;
+        for (let i = 0; i < totalToProcess; i += CHUNK_SIZE) {
+          const chunk = enrichedRecords.slice(i, i + CHUNK_SIZE);
+          const payloadRecords = chunk.map((record) => {
+            const payload: Record<string, any> = { project_id: selectedProjectId };
+            dbColumnMapping.forEach((dbCol, uiCol) => {
+              if (record.hasOwnProperty(uiCol)) {
+                payload[dbCol] = record[uiCol];
+              }
+            });
+            if (uniqueIdDbCol && record.hasOwnProperty(uniqueIdFileCol)) {
+              payload[uniqueIdDbCol] = record[uniqueIdFileCol];
+            }
+             // Add main mapping fields
+             MAPPING_FIELDS.forEach(field => {
+              const mappedCol = mapping[field as keyof Mapping];
+              if (mappedCol && record.hasOwnProperty(mappedCol)) {
+                  payload[field] = record[mappedCol];
+              }
+            });
+            return payload;
+          });
+          const response = await fetch("/api/bnf-assessed", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "save", projectId: selectedProjectId, records: payloadRecords, mode, uniqueIdCol: uniqueIdDbCol }),
+          });
+          const result = await response.json();
+          if (!response.ok) throw new Error(result.details || "Failed to save records.");
+          totalSaved += result.saved || 0;
+          totalSkipped += result.skipped || 0;
+          totalUpdated += result.updated || 0;
+          setSaveStats({ saved: totalSaved, skipped: totalSkipped, updated: totalUpdated, total: totalToProcess });
+          setSaveProgress(Math.round(((i + chunk.length) / totalToProcess) * 100));
+        }
+        toast({
+          title: "Save Completed",
+          description: `Saved: ${totalSaved}, Updated: ${totalUpdated}, Skipped: ${totalSkipped}`,
+        });
         setSaveStatus("done");
-        toast({ title: "Save Complete!", description: `Successfully processed ${totalToProcess} records. Saved: ${totalSaved}, Updated: ${totalUpdated}, Skipped: ${totalSkipped}.` });
-
-    } catch (error: any) {
+      } catch (err: any) {
+        toast({ title: "Save Error", description: err.message, variant: "destructive" });
         setSaveStatus("error");
-        toast({ title: "Save Process Failed", description: error.message, variant: "destructive" });
-    } finally {
-        setIsSaving(false);
-    }
-}, [selectedProjectId, uniqueIdMapping, dbColumnMapping, mapping, enrichData, toast]);
-
+      } finally {
+        setLoading((p) => ({ ...p, saving: false }));
+      }
+    },
+    [dbColumnMapping, selectedProjectId, uniqueIdDbCol, uniqueIdFileCol, toast, enrichData, mapping]
+  );
 
   const handleSaveToDatabase = useCallback(async () => {
-    if (!selectedProjectId || !uniqueIdMapping.fileCol || !uniqueIdMapping.dbCol) {
+    if (!selectedProjectId || !uniqueIdFileCol || !uniqueIdDbCol) {
       toast({ title: "Incomplete Setup", description: "Select a project and map the unique ID column for both file and database.", variant: "destructive" });
       return;
     }
-    setIsSaving(true);
+    setLoading((p) => ({ ...p, saving: true }));
     setSaveStatus("checking_duplicates");
-
     try {
-        const uniqueIds = rawRowsRef.current.map((r) => r[uniqueIdMapping.fileCol]).filter(Boolean);
-        if (!uniqueIds.length) throw new Error("Unique ID column is empty in all file records.");
-
-        const dupResult = await apiRequest("/api/bnf-assessed", {
-            method: "POST",
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: "check_duplicates", projectId: selectedProjectId, uniqueIdCol: uniqueIdMapping.dbCol, uniqueIds })
-        });
-
-        if (dupResult.count > 0) {
-            setDuplicateInfo({ isOpen: true, count: dupResult.count, totalInFile: rawRowsRef.current.length, records: [] });
-            setIsSaving(false);
-        } else {
-            await executeSave("skip");
-        }
-
-    } catch (error: any) {
-        setSaveStatus("error");
-        toast({ title: "Preparation Failed", description: error.message, variant: "destructive" });
-        setIsSaving(false);
+      const cachedData = await loadCachedResult();
+      if (!cachedData || !cachedData.rows) throw new Error("No cached data to check.");
+      const uniqueIds = cachedData.rows.map((r) => r[uniqueIdFileCol]).filter(Boolean);
+      const response = await fetch("/api/bnf-assessed", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "check_duplicates", projectId: selectedProjectId, uniqueIdCol: uniqueIdDbCol, uniqueIds }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.details || "Failed to check duplicates.");
+      if (result.count > 0) {
+        setDuplicateInfo((prev) => ({
+          ...prev,
+          isOpen: true,
+          count: result.count,
+          totalInFile: cachedData.rows.length,
+          totalInDb: result.totalInDb || 0,
+        }));
+      } else {
+        await executeSave("skip", { duplicates: 0, totalInDb: result.totalInDb || 0 });
+      }
+    } catch (err: any) {
+      toast({ title: "Duplicate Check Error", description: err.message, variant: "destructive" });
+    } finally {
+        setLoading((p) => ({ ...p, saving: false }));
+        setSaveStatus("idle");
     }
-  }, [selectedProjectId, uniqueIdMapping, executeSave, toast]);
+  }, [executeSave, selectedProjectId, uniqueIdDbCol, uniqueIdFileCol, toast]);
+
 
   const isProcessing = workerStatus !== "idle" && workerStatus !== "done" && workerStatus !== "error";
 
@@ -886,7 +899,7 @@ export default function UploadPage() {
                   id="file-upload"
                   type="file"
                   className="hidden"
-                  onChange={handleFile}
+                  onChange={handleFileChange}
                   accept=".xlsx,.xls,.csv,.xlsm,.xlsb"
                 />
               </div>
@@ -1135,10 +1148,16 @@ export default function UploadPage() {
                         Match source columns to database fields. A unique ID is required.
                       </CardDescription>
                     </div>
-                    <Button onClick={handleAutoMatch}>
-                      <GitCompareArrows className="mr-2 h-4 w-4" />
-                      Auto-match
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button onClick={handleAutoMatch} variant="outline" size="sm">
+                        <GitCompareArrows className="mr-2 h-4 w-4" />
+                        Auto-match
+                      </Button>
+                       <Button onClick={persistMappingNow} variant="outline" size="sm">
+                          <SaveIcon className="mr-2 h-4 w-4" />
+                          Save Mapping
+                        </Button>
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -1146,14 +1165,14 @@ export default function UploadPage() {
                     <div className="space-y-2">
                       <Label className="font-semibold">Unique ID (from File)</Label>
                       <Select
-                        value={uniqueIdMapping.fileCol}
-                        onValueChange={(v) => setUniqueIdMapping((p) => ({ ...p, fileCol: v }))}
+                        value={uniqueIdFileCol}
+                        onValueChange={setUniqueIdFileCol}
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="Select file column..." />
                         </SelectTrigger>
                         <SelectContent>
-                          {columns.map((c) => (
+                          {sourceColumns.map((c) => (
                             <SelectItem key={c} value={c}>
                               {c}
                             </SelectItem>
@@ -1164,8 +1183,8 @@ export default function UploadPage() {
                     <div className="space-y-2">
                       <Label className="font-semibold">Unique ID (in Database)</Label>
                       <Select
-                        value={uniqueIdMapping.dbCol}
-                        onValueChange={(v) => setUniqueIdMapping((p) => ({ ...p, dbCol: v }))}
+                        value={uniqueIdDbCol}
+                        onValueChange={setUniqueIdDbCol}
                         disabled={loadingDbSchema}
                       >
                         <SelectTrigger>
@@ -1216,7 +1235,7 @@ export default function UploadPage() {
                         </SelectContent>
                       </Select>
                     </div>
-                    <Button onClick={handleAddDbMapping}>Add Mapping</Button>
+                    <Button onClick={handleAddDbMapping} type="button">Add Mapping</Button>
                   </div>
                   <div>
                     <h4 className="font-semibold mb-2">Current Mappings</h4>
@@ -1230,10 +1249,10 @@ export default function UploadPage() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {uniqueIdMapping.fileCol && (
+                          {uniqueIdFileCol && (
                             <TableRow className="bg-blue-50 dark:bg-blue-900/20">
-                              <TableCell className="font-bold">{uniqueIdMapping.fileCol}</TableCell>
-                              <TableCell className="font-bold">{uniqueIdMapping.dbCol}</TableCell>
+                              <TableCell className="font-bold">{uniqueIdFileCol}</TableCell>
+                              <TableCell className="font-bold">{uniqueIdDbCol}</TableCell>
                               <TableCell></TableCell>
                             </TableRow>
                           )}
@@ -1258,7 +1277,7 @@ export default function UploadPage() {
               <div className="flex flex-col items-center gap-4">
                 <Button
                   onClick={handleSaveToDatabase}
-                  disabled={!isDbMappingReady || isSaving}
+                  disabled={!uniqueIdFileCol || !uniqueIdDbCol || isSaving}
                   size="lg"
                 >
                   {isSaving ? (
@@ -1299,32 +1318,24 @@ export default function UploadPage() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Existing Records Found</AlertDialogTitle>
-            <AlertDialogDescription className="text-base">
-              Found <span className="font-bold text-destructive">{duplicateInfo.count}</span> duplicates out of{" "}
-              <span className="font-bold">{duplicateInfo.totalInFile}</span> records.
-              <br />
-              <br />
-              These records share the same Unique ID in the database. Choose how to handle them.
+            <AlertDialogTitle>Duplicate Records Found</AlertDialogTitle>
+            <AlertDialogDescription>
+              {duplicateInfo.count} records already exist for this project (total in DB: {duplicateInfo.totalInDb}). Choose how to proceed.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter className="sm:justify-between">
-            <AlertDialogCancel
-              onClick={() => {
-                setIsSaving(false);
-                setSaveStatus("idle");
-              }}
+          <AlertDialogFooter className="flex flex-col gap-2">
+             <Button
+              variant="outline"
+              onClick={() => executeSave("skip", { duplicates: duplicateInfo.count, totalInDb: duplicateInfo.totalInDb })}
             >
-              Cancel Saving
-            </AlertDialogCancel>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => executeSave("skip")}>
-                Skip Duplicates & Insert New
-              </Button>
-              <Button onClick={() => executeSave("replace")}>
-                Update Existing & Insert New
-              </Button>
-            </div>
+              Skip duplicates and save new records
+            </Button>
+            <Button
+              onClick={() => executeSave("replace", { duplicates: duplicateInfo.count, totalInDb: duplicateInfo.totalInDb })}
+            >
+              Update existing and add new records
+            </Button>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
