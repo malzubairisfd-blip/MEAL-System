@@ -6,6 +6,7 @@ import Database from "better-sqlite3";
 
 const getDataPath = () => path.join(process.cwd(), "src/data");
 const getDbPath = () => path.join(getDataPath(), "monthly-health-sessions.db");
+const getEnrollmentDbPath = () => path.join(getDataPath(), "enrollment-review.db");
 
 const DB_COLUMNS_FOR_CREATION = `(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -17,82 +18,145 @@ const DB_COLUMNS_FOR_CREATION = `(
 )`;
 
 function initializeDatabase() {
-    const db = new Database(getDbPath());
-    db.exec(`CREATE TABLE IF NOT EXISTS monthly_sessions ${DB_COLUMNS_FOR_CREATION};`);
-    return db;
-}
-
-export async function GET(req: Request) {
-  try {
-    await fs.mkdir(getDataPath(), { recursive: true });
-    const db = initializeDatabase();
-    const { searchParams } = new URL(req.url);
-    const projectId = searchParams.get('projectId');
-    
-    let records;
-    if (projectId && projectId !== 'all') {
-      records = db.prepare("SELECT * FROM monthly_sessions WHERE project_id = ?").all(projectId);
-    } else {
-      records = db.prepare("SELECT * FROM monthly_sessions").all();
-    }
-    
-    db.close();
-    return NextResponse.json(records);
-  } catch (error: any) {
-    if (error.code === "SQLITE_CANTOPEN") return NextResponse.json([]);
-    return NextResponse.json({ error: "Failed to fetch session data.", details: error.message }, { status: 500 });
-  }
+  const db = new Database(getDbPath());
+  db.exec(`CREATE TABLE IF NOT EXISTS monthly_sessions ${DB_COLUMNS_FOR_CREATION};`);
+  return db;
 }
 
 export async function POST(req: Request) {
+  const stream = new TransformStream();
+  const writer = stream.writable.getWriter();
+  const encoder = new TextEncoder();
+  const send = (data: any) => writer.write(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+
+  (async () => {
+    try {
+      const body = await req.json();
+      const {
+        projectId, sessionNumber, sessionDate,
+        appearanceData, appearanceMapping, absenceData, absenceMapping,
+        uniqueIdFileCol
+      } = body;
+
+      if (!projectId || !sessionNumber || !sessionDate || !appearanceData || !appearanceMapping || !uniqueIdFileCol) {
+        throw new Error("Missing required parameters for processing.");
+      }
+
+      send({ type: 'progress', status: 'FIRST_STEP_SAVING_FROM_ENROLLMENT_REVIEW_DATABASE', progress: 10, message: "Initializing databases..." });
+      
+      const sessionDb = initializeDatabase();
+      let enrollmentDb: Database.Database | null = null;
+      
+      // Step 1: Populate from enrollment-review.db
+      try {
+        enrollmentDb = new Database(getEnrollmentDbPath(), { fileMustExist: true });
+        const beneficiaries = enrollmentDb.prepare(`
+          SELECT benef_id, bnf_name, bnf_vill, bnf_ozla, bnf_mud, ed_id, ed_name 
+          FROM enrollment_data 
+          WHERE project_id = ?
+        `).all(projectId);
+
+        const insertStmt = sessionDb.prepare(`
+          INSERT OR IGNORE INTO monthly_sessions (project_id, project_name, benef_id, bnf_name, bnf_vill, bnf_ozla, bnf_mud, ed_id, ed_name)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+
+        sessionDb.transaction(() => {
+          beneficiaries.forEach((bnf: any) => {
+            insertStmt.run(projectId, bnf.project_name, bnf.benef_id, bnf.bnf_name, bnf.bnf_vill, bnf.bnf_ozla, bnf.bnf_mud, bnf.ed_id, bnf.ed_name);
+          });
+        })();
+
+        send({ type: 'progress', status: 'FIRST_STEP_SAVING_FROM_ENROLLMENT_REVIEW_DATABASE', progress: 20, message: `Loaded ${beneficiaries.length} base records.` });
+
+      } catch (e: any) {
+        if (e.code === 'SQLITE_CANTOPEN') {
+           send({ type: 'progress', status: 'FIRST_STEP_SAVING_FROM_ENROLLMENT_REVIEW_DATABASE', progress: 20, message: 'Enrollment DB not found, skipping initial population.' });
+        } else {
+            throw e;
+        }
+      } finally {
+          if (enrollmentDb) enrollmentDb.close();
+      }
+
+      // Step 2 & 3: Beneficiary Appearance and General Date
+      send({ type: 'progress', status: 'SECOND_STEP_SAVING_BENEFICIARY_APPEARANCE', progress: 30, message: "Processing appearance data..." });
+      const appearCol = `bnf_appear_s${sessionNumber}`;
+      const dateCol = `date_of_general_s${sessionNumber}`;
+      
+      const updateAppearanceStmt = sessionDb.prepare(`UPDATE monthly_sessions SET ${appearCol} = 1, ${dateCol} = ? WHERE benef_id = ?`);
+      
+      sessionDb.transaction(() => {
+          appearanceData.forEach((row: any) => {
+              const benefId = row[appearanceMapping.benef_id];
+              if (benefId) {
+                  updateAppearanceStmt.run(sessionDate, benefId);
+              }
+          });
+      })();
+      
+      send({ type: 'progress', status: 'THIRD_STEP_SAVING_GENERAL_SESSIONS_DATE', progress: 50, message: "Appearance data processed." });
+
+      // Step 4: Beneficiary Absence
+      if (absenceData && absenceMapping) {
+          send({ type: 'progress', status: 'FOURTH_STEP_SAVING_BENEFICIARY_ABSENCE', progress: 60, message: "Processing absence data..." });
+          const absenceColsToUpdate = Object.values(absenceMapping).filter(col => col !== 'benef_id');
+          const setClause = absenceColsToUpdate.map(col => `${col} = ?`).join(', ');
+          
+          if(setClause) {
+              const updateAbsenceStmt = sessionDb.prepare(`UPDATE monthly_sessions SET ${setClause} WHERE benef_id = ?`);
+              sessionDb.transaction(() => {
+                  absenceData.forEach((row: any) => {
+                      const benefId = row[absenceMapping.benef_id];
+                      if(benefId) {
+                          const values = absenceColsToUpdate.map(dbCol => {
+                              const fileCol = Object.keys(absenceMapping).find(key => absenceMapping[key] === dbCol);
+                              return fileCol ? row[fileCol] : null;
+                          });
+                          updateAbsenceStmt.run(...values, benefId);
+                      }
+                  });
+              })();
+          }
+      }
+
+      // Step 5: Mark Absentees
+      send({ type: 'progress', status: 'FIFTH_STEP_SAVING_ABSENTEES', progress: 80, message: "Marking absentees..." });
+      const absentCol = `absent_s${sessionNumber}`;
+      const absenceCodeCol = `absence_code_s${sessionNumber}`;
+      sessionDb.prepare(`UPDATE monthly_sessions SET ${absentCol} = 1 WHERE ${absenceCodeCol} IS NOT NULL AND ${absenceCodeCol} != ''`).run();
+
+      // Step 6: Mark Attendance
+      send({ type: 'progress', status: 'SIXTH_STEP_SAVING_ATTENDANCE', progress: 90, message: "Finalizing attendance..." });
+      const attendingCol = `attending_s${sessionNumber}`;
+      sessionDb.prepare(`UPDATE monthly_sessions SET ${attendingCol} = 0 WHERE ${absentCol} = 1`).run();
+      sessionDb.prepare(`UPDATE monthly_sessions SET ${attendingCol} = 1 WHERE ${appearCol} = 1 AND (${attendingCol} IS NULL OR ${attendingCol} != 0)`).run();
+      
+      send({ type: 'done', message: "Processing complete!" });
+
+    } catch (e: any) {
+      send({ type: 'error', error: e.message || 'An unknown error occurred' });
+    } finally {
+      writer.close();
+    }
+  })();
+  
+  return new Response(stream.readable, {
+    headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' },
+  });
+}
+
+export async function GET(req: Request) {
     try {
         await fs.mkdir(getDataPath(), { recursive: true });
-        const body = await req.json();
-        const { action, records, projectId, uniqueIdCol } = body;
-
-        if (action === 'save') {
-             if (!projectId || !Array.isArray(records) || !uniqueIdCol) {
-                return NextResponse.json({ error: "Missing parameters for save." }, { status: 400 });
-            }
-
-            const db = initializeDatabase();
-            try {
-                const checkStmt = db.prepare(`SELECT id FROM monthly_sessions WHERE ${uniqueIdCol} = ?`);
-                const insertCols = Object.keys(records[0]).filter(k => k !== 'id');
-                const insertPlaceholders = insertCols.map(c => `@${c}`).join(', ');
-                const insertStmt = db.prepare(`INSERT INTO monthly_sessions (${insertCols.join(', ')}) VALUES (${insertPlaceholders})`);
-
-                const updateCols = insertCols.filter(c => c !== uniqueIdCol);
-                const updatePlaceholders = updateCols.map(c => `${c} = @${c}`).join(', ');
-                const updateStmt = db.prepare(`UPDATE monthly_sessions SET ${updatePlaceholders} WHERE ${uniqueIdCol} = @${uniqueIdCol}`);
-                
-                let saved = 0;
-                let updated = 0;
-
-                const transaction = db.transaction(() => {
-                    for (const record of records) {
-                        const existing = checkStmt.get(record[uniqueIdCol]);
-                        if (existing) {
-                            updateStmt.run(record);
-                            updated++;
-                        } else {
-                            insertStmt.run(record);
-                            saved++;
-                        }
-                    }
-                });
-
-                transaction();
-                return NextResponse.json({ saved, updated });
-            } finally {
-                db.close();
-            }
+        const db = initializeDatabase();
+        const records = db.prepare("SELECT * FROM monthly_sessions").all();
+        db.close();
+        return NextResponse.json(records);
+    } catch (err: any) {
+        if (err.code === 'SQLITE_CANTOPEN') {
+            return NextResponse.json([]);
         }
-        
-        return NextResponse.json({ error: "Invalid action" }, { status: 400 });
-
-    } catch (error: any) {
-        console.error("API Error (monthly-health-sessions):", error);
-        return NextResponse.json({ error: "Failed to process request", details: error.message }, { status: 500 });
+        return NextResponse.json({ error: "Failed to fetch session data", details: err.message }, { status: 500 });
     }
 }
