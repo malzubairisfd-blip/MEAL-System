@@ -522,184 +522,137 @@ const sanitizeColumn = (col?: string) => (col ? col.replace(/[^a-zA-Z0-9_]/g, ""
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
-    const {
-      action,
-      projectId,
-      records,
-      uniqueIdCol,
-      uniqueIds,
-      mode,
-      uniqueIdDbCol,
-      columns,
-    } = body;
     await fs.mkdir(getDataPath(), { recursive: true });
+    const body = await req.json();
+    const { action, projectId, records, uniqueIdCol, uniqueIds, mode } = body;
 
     if (action === "get_schema") {
-      let db: Database.Database | null = null;
+      let dbInstance: Database.Database | null = null;
       try {
-        db = initializeDatabase();
-        const tableInfo = db.prepare("PRAGMA table_info(assessed_data)").all();
+        dbInstance = initializeDatabase();
+        const tableInfo = dbInstance.prepare("PRAGMA table_info(assessed_data)").all();
         const columns = tableInfo.map((c: any) => c.name);
         return NextResponse.json({ columns });
       } catch (error: any) {
-        if (error.code === 'SQLITE_CANTOPEN') {
-          const db = initializeDatabase();
-          const tableInfo = db.prepare("PRAGMA table_info(assessed_data)").all();
+        if (error.code === "SQLITE_CANTOPEN") {
+          const dbFallback = initializeDatabase();
+          const tableInfo = dbFallback.prepare("PRAGMA table_info(assessed_data)").all();
           const columns = tableInfo.map((c: any) => c.name);
-          db.close();
+          dbFallback.close();
           return NextResponse.json({ columns });
         }
         throw error;
       } finally {
-        if (db) db.close();
+        if (dbInstance) dbInstance.close();
       }
     }
 
     if (action === "check_duplicates") {
       if (!projectId || !uniqueIdCol || !Array.isArray(uniqueIds)) {
-        return NextResponse.json({ error: "Missing parameters" }, { status: 400 });
+        return NextResponse.json({ error: "Missing parameters for duplicate check." }, { status: 400 });
       }
-      let db: Database.Database | null = null;
+      let dbInstance: Database.Database | null = null;
       try {
-        db = new Database(getDbPath(), { fileMustExist: true });
-        const tableCols = db.prepare("PRAGMA table_info(assessed_data)").all().map((c: any) => c.name);
+        dbInstance = new Database(getDbPath(), { fileMustExist: true });
         const sanitizedColumn = sanitizeColumn(uniqueIdCol);
+        const tableCols = dbInstance.prepare("PRAGMA table_info(assessed_data)").all().map((c: any) => c.name);
         if (!tableCols.includes(sanitizedColumn)) {
-          return NextResponse.json({ error: `Invalid column ${uniqueIdCol}` }, { status: 400 });
+          return NextResponse.json({ error: `Invalid column: ${uniqueIdCol}` }, { status: 400 });
         }
-        const chunks = chunkArray(uniqueIds, 900);
+
         let totalCount = 0;
+        const chunks = chunkArray(uniqueIds, 900);
+        const tableTotalResult = dbInstance.prepare("SELECT COUNT(*) as total FROM assessed_data WHERE project_id = ?").get(projectId) as {total: number} | undefined;
+        const totalInDb = tableTotalResult?.total || 0;
         for (const chunk of chunks) {
-          if (!chunk.length) continue;
+          if (chunk.length === 0) continue;
           const placeholders = chunk.map(() => "?").join(",");
-          const stmt = db.prepare(
+          const stmt = dbInstance.prepare(
             `SELECT COUNT(*) as count FROM assessed_data WHERE project_id = ? AND ${sanitizedColumn} IN (${placeholders})`
           );
           const result: any = stmt.get(projectId, ...chunk);
           totalCount += result.count;
         }
-        return NextResponse.json({ count: totalCount });
+        return NextResponse.json({ count: totalCount, totalInDb });
       } catch (error: any) {
-        if (error.code === "SQLITE_CANTOPEN") return NextResponse.json({ count: 0 });
+        if (error.code === "SQLITE_CANTOPEN") return NextResponse.json({ count: 0, totalInDb: 0 });
         throw error;
+      } finally {
+        if (dbInstance) dbInstance.close();
+      }
+    }
+
+    if (action === "save") {
+      if (!projectId || !Array.isArray(records) || !mode || !uniqueIdCol) {
+        return NextResponse.json({ error: "Missing parameters for save." }, { status: 400 });
+      }
+
+      const db = initializeDatabase();
+      try {
+        const tableCols = db.prepare("PRAGMA table_info(assessed_data)").all().map((c: any) => c.name);
+        const sanitizedIdCol = sanitizeColumn(uniqueIdCol);
+        if (!sanitizedIdCol || !tableCols.includes(sanitizedIdCol)) throw new Error("Invalid unique ID column");
+
+        let saved = 0;
+        let skipped = 0;
+        let updated = 0;
+
+        const allRecordKeys = new Set(records.flatMap((r) => Object.keys(r)));
+        const insertCols = [...allRecordKeys].filter((col) => tableCols.includes(col) && col !== "id");
+        const updateCols = insertCols.filter((col) => col !== "id" && col !== sanitizedIdCol && col !== "project_id");
+
+        const insertStmt = db.prepare(
+          `INSERT INTO assessed_data (${insertCols.join(", ")}) VALUES (${insertCols.map((c) => `@${c}`).join(", ")})`
+        );
+        const updateStmt = db.prepare(
+          `UPDATE assessed_data SET ${updateCols.map((col) => `${col} = @${col}`).join(", ")} WHERE project_id = @project_id AND ${sanitizedIdCol} = @${sanitizedIdCol}`
+        );
+        const checkStmt = db.prepare(`SELECT id FROM assessed_data WHERE project_id = ? AND ${sanitizedIdCol} = ?`);
+
+        const transaction = db.transaction(() => {
+          for (const record of records) {
+            const uniqueValue = record[sanitizedIdCol];
+            if (uniqueValue === undefined || uniqueValue === null) {
+              skipped++;
+              continue;
+            }
+
+            const existing = checkStmt.get(projectId, String(uniqueValue));
+            
+            const fullRecord: Record<string, any> = { project_id: projectId };
+            insertCols.forEach((col) => {
+              fullRecord[col] = record.hasOwnProperty(col) ? record[col] : null;
+            });
+            fullRecord[sanitizedIdCol] = String(uniqueValue);
+
+
+            if (existing) {
+              if (mode === "replace") {
+                const updatePayload: Record<string, any> = { project_id: projectId, [sanitizedIdCol]: String(uniqueValue) };
+                 updateCols.forEach(col => {
+                    updatePayload[col] = record.hasOwnProperty(col) ? record[col] : null;
+                });
+                const info = updateStmt.run(updatePayload);
+                if (info.changes > 0) updated++;
+              } else {
+                skipped++;
+              }
+            } else {
+              insertStmt.run(fullRecord);
+              saved++;
+            }
+          }
+        });
+
+        transaction();
+
+        return NextResponse.json({ saved, skipped, updated, total: records.length, mode });
       } finally {
         if (db) db.close();
       }
     }
 
-    if (action === "add_columns") {
-        if (!Array.isArray(columns) || columns.length === 0) {
-            return NextResponse.json({ error: "Missing 'columns' array in payload" }, { status: 400 });
-        }
-        const db = initializeDatabase();
-        try {
-            const addTransaction = db.transaction((colsToAdd: any[]) => {
-                for (const col of colsToAdd) {
-                    const { name, type } = col;
-                    if (!name || !type) {
-                        throw new Error("Invalid column definition. Each must have a name and type.");
-                    }
-                    const sanitizedColumnName = name.replace(/[^a-zA-Z0-9_]/g, "");
-                    if (!sanitizedColumnName) {
-                        throw new Error(`Invalid column name provided: ${name}`);
-                    }
-                    if (!["TEXT", "INTEGER", "REAL"].includes(type.toUpperCase())) {
-                         throw new Error(`Invalid column type provided: ${type}`);
-                    }
-                    db.exec(`ALTER TABLE assessed_data ADD COLUMN "${sanitizedColumnName}" ${type.toUpperCase()}`);
-                }
-            });
-            
-            addTransaction(columns);
-            
-            return NextResponse.json({ message: `${columns.length} column(s) added successfully.` });
-        } finally {
-            db.close();
-        }
-    }
-
-    if (action === "save") {
-        if (!projectId || !Array.isArray(records) || !mode || !uniqueIdDbCol) {
-            return NextResponse.json({ error: "Missing parameters" }, { status: 400 });
-        }
-        const db = initializeDatabase();
-        try {
-            const tableCols = db.prepare("PRAGMA table_info(assessed_data)").all().map((c: any) => c.name);
-            const sanitizedUniqueIdDbCol = sanitizeColumn(uniqueIdDbCol);
-
-            if (!sanitizedUniqueIdDbCol || !tableCols.includes(sanitizedUniqueIdDbCol)) {
-                return NextResponse.json({ error: "Invalid unique ID DB column" }, { status: 400 });
-            }
-            
-            let savedCount = 0;
-            let skippedCount = 0;
-            let updatedCount = 0;
-            
-            const allColumns = Array.from(new Set(records.flatMap((record: any) => Object.keys(record)))).filter((col) => tableCols.includes(col));
-            const insertColumns = allColumns.filter(c => c !== 'id');
-            const updateColumns = allColumns.filter(c => c !== 'id' && c !== sanitizedUniqueIdDbCol);
-
-            const insertStmt = insertColumns.length > 0
-                ? db.prepare(`INSERT OR REPLACE INTO assessed_data (${insertColumns.join(", ")}) VALUES (${insertColumns.map(c => `@${c}`).join(", ")})`)
-                : null;
-            
-            const updateStmt = updateColumns.length > 0
-                ? db.prepare(`UPDATE assessed_data SET ${updateColumns.map(col => `${col} = ?`).join(", ")} WHERE project_id = ? AND ${sanitizedUniqueIdDbCol} = ?`)
-                : null;
-
-            const checkStmt = db.prepare(`SELECT id FROM assessed_data WHERE project_id = ? AND ${sanitizedUniqueIdDbCol} = ?`);
-
-            const transaction = db.transaction(() => {
-                for (const record of records) {
-                    const uniqueValue = record[sanitizedUniqueIdDbCol];
-                    if (uniqueValue === undefined || uniqueValue === null) {
-                        skippedCount++;
-                        continue;
-                    }
-                    const existing = checkStmt.get(projectId, String(uniqueValue));
-                    
-                    const recordWithProject = { ...record, project_id: projectId };
-
-                    if (mode === 'replace') {
-                        if (existing && updateStmt) {
-                            const updateValues = [
-                                ...updateColumns.map(col => record[col]),
-                                projectId,
-                                String(uniqueValue)
-                            ];
-                            const info = updateStmt.run(...updateValues);
-                            if (info.changes > 0) updatedCount++;
-                        } else if (!existing && insertStmt) {
-                            insertStmt.run(recordWithProject);
-                            savedCount++;
-                        }
-                    } else if (mode === 'skip') {
-                        if (!existing && insertStmt) {
-                           insertStmt.run(recordWithProject);
-                           savedCount++;
-                        } else {
-                           skippedCount++;
-                        }
-                    }
-                }
-            });
-
-            transaction();
-
-            return NextResponse.json({
-              saved: savedCount,
-              skipped: skippedCount,
-              updated: updatedCount,
-              total: records.length,
-              mode: mode,
-            });
-        } finally {
-            db.close();
-        }
-    }
-    
-     if (action === "update") {
+    if (action === "update") {
       if (!projectId || !Array.isArray(records)) {
         return NextResponse.json({ error: "Missing parameters for update" }, { status: 400 });
       }
@@ -747,21 +700,25 @@ export async function POST(req: Request) {
   }
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    await fs.mkdir(getDataPath(), { recursive: true });
     const db = new Database(getDbPath(), { fileMustExist: true });
-    const rows = db.prepare("SELECT * FROM assessed_data").all();
-    db.close();
-    return NextResponse.json(rows);
-  } catch (error: any) {
-    if (error.code === "SQLITE_CANTOPEN") {
-      return NextResponse.json([]);
+    const { searchParams } = new URL(req.url);
+    const projectId = searchParams.get('projectId');
+    
+    let records;
+    if (projectId && projectId !== 'all') {
+      records = db.prepare("SELECT * FROM assessed_data WHERE project_id = ?").all(projectId);
+    } else {
+      records = db.prepare("SELECT * FROM assessed_data").all();
     }
-    console.error("[BNF_ASSESSED_API_GET_ERROR]", error);
-    return NextResponse.json(
-      { error: "Failed to fetch assessed data.", details: error.message },
-      { status: 500 }
-    );
+    
+    db.close();
+    return NextResponse.json(records);
+  } catch (error: any) {
+    if (error.code === "SQLITE_CANTOPEN") return NextResponse.json([]);
+    return NextResponse.json({ error: "Failed to fetch assessed data.", details: error.message }, { status: 500 });
   }
 }
 
