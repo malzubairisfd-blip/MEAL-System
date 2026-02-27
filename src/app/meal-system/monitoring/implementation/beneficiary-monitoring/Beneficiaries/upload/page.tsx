@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -727,62 +726,64 @@ export default function UploadPage() {
     return { enrichedRecords, clusters };
   }, []);
 
-const executeSaveAndEnrich = useCallback(async (mode: "skip" | "replace", rawRecords: any[]) => {
+  const executeSave = useCallback(async (mode: "skip" | "replace") => {
     setDuplicateInfo(prev => ({...prev, isOpen: false}));
     setIsSaving(true);
 
     try {
-        setSaveStatus("saving_raw");
+        setSaveStatus("saving");
         setSaveProgress(0);
         let totalSaved = 0;
         let totalSkipped = 0;
         let totalUpdated = 0;
-        const totalToProcess = rawRecords.length;
-
-        for (let i = 0; i < totalToProcess; i += DB_SAVE_CHUNK_SIZE) {
-            const chunk = rawRecords.slice(i, i + DB_SAVE_CHUNK_SIZE);
-            const result = await apiRequest("/api/bnf-assessed", {
-              method: "POST",
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ action: "save", projectId: selectedProjectId, records: chunk, mode: mode, uniqueIdDbCol: uniqueIdMapping.dbCol })
-            });
-            totalSaved += result.saved || 0;
-            totalSkipped += result.skipped || 0;
-            totalUpdated += result.updated || 0;
-            setSaveStats({ saved: totalSaved, skipped: totalSkipped, updated: totalUpdated, total: totalToProcess });
-            setSaveProgress(((i + chunk.length) / totalToProcess) * 50);
-        }
-        toast({ title: "Raw Data Saved", description: `${totalSaved} new, ${totalUpdated} updated, ${totalSkipped} skipped.` });
-
-        setSaveStatus("saving_enriched");
+        
         const cachedData = await loadCachedResult();
         if (!cachedData) throw new Error("Could not load cached data for enrichment.");
         const { enrichedRecords } = enrichData(cachedData);
         
-        const enrichedPayload = enrichedRecords.map(record => {
-            const enrichment: Record<string, any> = { beneficiaryId: record.beneficiaryId! };
-            dbColumns.forEach(key => {
-                if (record.hasOwnProperty(key) && key !== '_internalId') {
-                    enrichment[key] = record[key];
-                }
-            });
-            return enrichment;
-        });
+        const totalToProcess = enrichedRecords.length;
 
-        const totalToEnrich = enrichedPayload.length;
-        for (let i = 0; i < totalToEnrich; i += DB_SAVE_CHUNK_SIZE) {
-            const chunk = enrichedPayload.slice(i, i + DB_SAVE_CHUNK_SIZE);
-            await apiRequest("/api/bnf-assessed", {
+        for (let i = 0; i < totalToProcess; i += DB_SAVE_CHUNK_SIZE) {
+            const chunk = enrichedRecords.slice(i, i + DB_SAVE_CHUNK_SIZE);
+            const payloadRecords = chunk.map(record => {
+                const newRecord: Record<string, any> = { project_id: selectedProjectId };
+
+                dbColumnMapping.forEach((dbCol, uiCol) => {
+                    if (record.hasOwnProperty(uiCol)) {
+                        newRecord[dbCol] = record[uiCol];
+                    }
+                });
+
+                if (uniqueIdMapping.dbCol && record.hasOwnProperty(uniqueIdMapping.fileCol)) {
+                    newRecord[uniqueIdMapping.dbCol] = record[uniqueIdMapping.fileCol];
+                }
+
+                // Add main mapping fields
+                MAPPING_FIELDS.forEach(field => {
+                    const mappedCol = mapping[field as keyof Mapping];
+                    if (mappedCol && record.hasOwnProperty(mappedCol)) {
+                        newRecord[field] = record[mappedCol];
+                    }
+                });
+
+                return newRecord;
+            });
+            
+            const result = await apiRequest("/api/bnf-assessed", {
               method: "POST",
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ action: "update", projectId: selectedProjectId, records: chunk })
+              body: JSON.stringify({ action: "save", projectId: selectedProjectId, records: payloadRecords, mode: mode, uniqueIdCol: uniqueIdMapping.dbCol })
             });
-            setSaveProgress(50 + ((i + chunk.length) / totalToEnrich) * 50);
+
+            totalSaved += result.saved || 0;
+            totalSkipped += result.skipped || 0;
+            totalUpdated += result.updated || 0;
+            setSaveStats({ saved: totalSaved, skipped: totalSkipped, updated: totalUpdated, total: totalToProcess });
+            setSaveProgress(((i + chunk.length) / totalToProcess) * 100);
         }
         
         setSaveStatus("done");
-        setSaveStats({ saved: totalSaved, skipped: totalSkipped, updated: totalUpdated, total: rawRowsRef.current.length });
-        toast({ title: "Save Complete!", description: `Successfully processed ${totalToProcess} records and enriched them.` });
+        toast({ title: "Save Complete!", description: `Successfully processed ${totalToProcess} records. Saved: ${totalSaved}, Updated: ${totalUpdated}, Skipped: ${totalSkipped}.` });
 
     } catch (error: any) {
         setSaveStatus("error");
@@ -790,58 +791,20 @@ const executeSaveAndEnrich = useCallback(async (mode: "skip" | "replace", rawRec
     } finally {
         setIsSaving(false);
     }
-}, [selectedProjectId, uniqueIdMapping.dbCol, enrichData, toast, dbColumns]);
+}, [selectedProjectId, uniqueIdMapping, dbColumnMapping, mapping, enrichData, toast]);
 
 
   const handleSaveToDatabase = useCallback(async () => {
     if (!selectedProjectId || !uniqueIdMapping.fileCol || !uniqueIdMapping.dbCol) {
-      toast({ title: "Incomplete Setup", description: "Select a project and map the unique ID column.", variant: "destructive" });
+      toast({ title: "Incomplete Setup", description: "Select a project and map the unique ID column for both file and database.", variant: "destructive" });
       return;
     }
-    const selectedProjectData = projects.find(p => p.projectId === selectedProjectId);
-    if (!selectedProjectData) {
-        toast({ title: "Project data not found.", description: "Please re-select the project.", variant: "destructive" });
-        return;
-    }
     setIsSaving(true);
-    setSaveStatus("preparing");
+    setSaveStatus("checking_duplicates");
 
     try {
-        const recordsToProcess = rawRowsRef.current.map((record) => {
-            const newRecord: Record<string, any> = { 
-                beneficiaryId: record.beneficiaryId,
-                project_id: selectedProjectId,
-                project_name: selectedProjectData.projectName,
-            };
-            
-            // Map main unique ID
-            if (record.hasOwnProperty(uniqueIdMapping.fileCol)) {
-              newRecord[uniqueIdMapping.dbCol] = record[uniqueIdMapping.fileCol];
-            } else {
-                 newRecord[uniqueIdMapping.dbCol] = null;
-            }
-
-            // Map all other explicitly defined mappings
-            for (const [uiCol, dbCol] of dbColumnMapping.entries()) {
-              if (record.hasOwnProperty(uiCol)) newRecord[dbCol] = record[uiCol];
-            }
-
-            // Also include all mapped fields from the main section
-            MAPPING_FIELDS.forEach(field => {
-                const mappedCol = mapping[field as keyof Mapping];
-                if(mappedCol && record.hasOwnProperty(mappedCol)) {
-                    newRecord[field] = record[mappedCol];
-                }
-            })
-
-            newRecord["data"] = JSON.stringify(record);
-
-            return newRecord;
-        });
-
-        setSaveStatus("checking_duplicates");
-        const uniqueIds = recordsToProcess.map((r) => r[uniqueIdMapping.dbCol]).filter(Boolean);
-        if (!uniqueIds.length) throw new Error("Unique ID column is empty in all records.");
+        const uniqueIds = rawRowsRef.current.map((r) => r[uniqueIdMapping.fileCol]).filter(Boolean);
+        if (!uniqueIds.length) throw new Error("Unique ID column is empty in all file records.");
 
         const dupResult = await apiRequest("/api/bnf-assessed", {
             method: "POST",
@@ -850,10 +813,10 @@ const executeSaveAndEnrich = useCallback(async (mode: "skip" | "replace", rawRec
         });
 
         if (dupResult.count > 0) {
-            setDuplicateInfo({ isOpen: true, count: dupResult.count, totalInFile: rawRowsRef.current.length, records: recordsToProcess });
+            setDuplicateInfo({ isOpen: true, count: dupResult.count, totalInFile: rawRowsRef.current.length, records: [] });
             setIsSaving(false);
         } else {
-            await executeSaveAndEnrich("skip", recordsToProcess);
+            await executeSave("skip");
         }
 
     } catch (error: any) {
@@ -861,7 +824,7 @@ const executeSaveAndEnrich = useCallback(async (mode: "skip" | "replace", rawRec
         toast({ title: "Preparation Failed", description: error.message, variant: "destructive" });
         setIsSaving(false);
     }
-  }, [selectedProjectId, uniqueIdMapping, dbColumnMapping, mapping, toast, executeSaveAndEnrich, projects]);
+  }, [selectedProjectId, uniqueIdMapping, executeSave, toast]);
 
   const isProcessing = workerStatus !== "idle" && workerStatus !== "done" && workerStatus !== "error";
 
@@ -1310,8 +1273,7 @@ const executeSaveAndEnrich = useCallback(async (mode: "skip" | "replace", rawRec
                     <Progress value={saveProgress} />
                     <p className="text-sm text-center mt-1 text-muted-foreground">
                       {saveStatus === "checking_duplicates" ? "Checking for existing records..."
-                        : saveStatus === 'saving_raw' ? `Saving raw data... ${Math.round(saveProgress)}%`
-                        : saveStatus === 'saving_enriched' ? `Saving enriched data... ${Math.round(saveProgress)}%`
+                        : saveStatus === 'saving' ? `Saving records... ${Math.round(saveProgress)}%`
                         : 'Preparing...'}
                       {` (Saved: ${saveStats.saved}, Skipped: ${saveStats.skipped}, Updated: ${saveStats.updated})`}
                     </p>
@@ -1356,10 +1318,10 @@ const executeSaveAndEnrich = useCallback(async (mode: "skip" | "replace", rawRec
               Cancel Saving
             </AlertDialogCancel>
             <div className="flex gap-2">
-              <Button variant="outline" onClick={() => executeSaveAndEnrich("skip", duplicateInfo.records)}>
+              <Button variant="outline" onClick={() => executeSave("skip")}>
                 Skip Duplicates & Insert New
               </Button>
-              <Button onClick={() => executeSaveAndEnrich("replace", duplicateInfo.records)}>
+              <Button onClick={() => executeSave("replace")}>
                 Update Existing & Insert New
               </Button>
             </div>
