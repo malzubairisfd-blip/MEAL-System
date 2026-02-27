@@ -244,10 +244,14 @@ export default function UploadPage() {
   const isDbMappingReady = useMemo(() => uniqueIdMapping.fileCol && uniqueIdMapping.dbCol, [uniqueIdMapping]);
   
   const sourceColumns = useMemo(() => {
-    const set = new Set<string>(enrichedColumns.length > 0 ? enrichedColumns : columns);
-    WORKER_COLUMN_KEYS.forEach((key) => set.add(key));
-    return Array.from(set);
-}, [enrichedColumns, columns]);
+    // Combine original file columns with the known keys that the worker adds.
+    // This ensures all possible source columns are available for mapping.
+    const allCols = new Set<string>([
+        ...columns,
+        ...WORKER_COLUMN_KEYS
+    ]);
+    return Array.from(allCols);
+  }, [columns]);
 
   const mappedUiColumns = useMemo(() => Array.from(dbColumnMapping.keys()), [dbColumnMapping]);
   const usedDbColumns = useMemo(() => new Set([...dbColumnMapping.values(), uniqueIdDbCol]), [dbColumnMapping, uniqueIdDbCol]);
