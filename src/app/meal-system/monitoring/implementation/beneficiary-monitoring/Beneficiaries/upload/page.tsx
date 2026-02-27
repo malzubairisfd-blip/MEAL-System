@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -347,6 +348,20 @@ export default function UploadPage() {
             setClusters(enrichedClusters);
             setWorkerStatus("caching");
             setProgressInfo({ status: "caching", progress: 99 });
+            
+            // Extract all unique keys from the enriched records
+            if (enrichedClusters && enrichedClusters.length > 0) {
+              const allKeys = new Set<string>();
+              enrichedClusters.forEach((cluster: any) => {
+                  if (cluster.records && Array.isArray(cluster.records)) {
+                      cluster.records.forEach((record: any) => {
+                          Object.keys(record).forEach(key => allKeys.add(key));
+                      });
+                  }
+              });
+              setEnrichedColumns(Array.from(allKeys));
+            }
+
             await cacheFinalResult({ clusters: enrichedClusters });
             setWorkerStatus("done");
             setProgressInfo({ status: "done", progress: 100 });
@@ -602,7 +617,7 @@ export default function UploadPage() {
   }, [workerStatus, toast]);
 
   useEffect(() => {
-    const mappingKey = `${LOCAL_STORAGE_KEY_PREFIX}${selectedProjectId}-${file?.name || "default"}`;
+    const mappingKey = `${LOCAL_STORAGE_MAPPING_PREFIX}${selectedProjectId}-${file?.name || "default"}`;
     setMapSavedKey(mappingKey);
     if (!selectedProjectId || !file || typeof window === "undefined") return;
     const stored = localStorage.getItem(mappingKey);
@@ -733,7 +748,7 @@ export default function UploadPage() {
   const executeSave = useCallback(
     async (mode: "skip" | "replace", duplicateContext?: { duplicates: number; totalInDb: number }) => {
       setDuplicateInfo((prev) => ({ ...prev, isOpen: false }));
-      setLoading((p) => ({ ...p, saving: true }));
+      setSaving(true);
       setSaveStatus("saving");
       let totalSaved = 0;
       let totalSkipped = 0;
@@ -746,7 +761,7 @@ export default function UploadPage() {
         
         if (mode === "skip" && duplicateContext?.duplicates === duplicateContext?.totalInDb && duplicateContext?.totalInDb) {
           toast({ title: "All records already exist", description: "No new records to save.", variant: "destructive" });
-          setLoading((p) => ({ ...p, saving: false }));
+          setSaving(false);
           setSaveStatus("idle");
           return;
         }
@@ -795,7 +810,7 @@ export default function UploadPage() {
         toast({ title: "Save Error", description: err.message, variant: "destructive" });
         setSaveStatus("error");
       } finally {
-        setLoading((p) => ({ ...p, saving: false }));
+        setSaving(false);
       }
     },
     [dbColumnMapping, selectedProjectId, uniqueIdDbCol, uniqueIdFileCol, toast, enrichData, mapping]
@@ -806,7 +821,7 @@ export default function UploadPage() {
       toast({ title: "Incomplete Setup", description: "Select a project and map the unique ID column for both file and database.", variant: "destructive" });
       return;
     }
-    setLoading((p) => ({ ...p, saving: true }));
+    setSaving(true);
     setSaveStatus("checking_duplicates");
     try {
       const cachedData = await loadCachedResult();
@@ -833,7 +848,7 @@ export default function UploadPage() {
     } catch (err: any) {
       toast({ title: "Duplicate Check Error", description: err.message, variant: "destructive" });
     } finally {
-        setLoading((p) => ({ ...p, saving: false }));
+        setSaving(false);
         setSaveStatus("idle");
     }
   }, [executeSave, selectedProjectId, uniqueIdDbCol, uniqueIdFileCol, toast]);
