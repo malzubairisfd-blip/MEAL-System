@@ -8,7 +8,7 @@ import { useForm } from "react-hook-form";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, Search, ArrowLeft, Users, FileDown, Filter, ArrowUpAZ, ArrowDownAZ, Trash2, Edit, Link2, Plus, ChevronLeft, ChevronRight, GitCompareArrows } from "lucide-react";
+import { Loader2, Search, ArrowLeft, Users, FileDown, Filter, ArrowUpAZ, ArrowDownAZ, Trash2, Edit, Link2, Plus, ChevronLeft, ChevronRight, GitCompareArrows, Save } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -20,7 +20,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from '@/hooks/use-toast';
 import { exportBnfToExcel } from "@/lib/exportBnfToExcel";
 
 interface BnfRecord {
@@ -296,7 +296,7 @@ export default function BeneficiaryDatabasePage() {
         
         let data = await res.json();
         // Always filter by project ID
-        data = data.filter((row: any) => row.project_id === selectedProjectId);
+        data = data.filter((row: any) => String(row.project_id) === String(selectedProjectId));
 
         setSourceData(data);
         if (data.length > 0) {
@@ -313,7 +313,7 @@ export default function BeneficiaryDatabasePage() {
       if (selectedProjectId === 'all' || !selectedProjectId) {
           return allRecords;
       }
-      return allRecords.filter(r => r.project_id === selectedProjectId);
+      return allRecords.filter(r => String(r.project_id) === String(selectedProjectId));
   }, [allRecords, selectedProjectId]);
 
 
@@ -681,68 +681,73 @@ export default function BeneficiaryDatabasePage() {
                 <p>No records found in the database.</p>
             </div>
         ) : (
-          <div className="border border-gray-800 bg-gray-800 rounded-[1rem] p-1">
-            <div className="bg-background rounded-[1rem] overflow-hidden">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6" ref={phonePanelRef}>
+            <div className="lg:col-span-3">
+              <div className="bg-background rounded-[1rem] overflow-hidden">
                 <div className="p-3 border-b text-center">
-                    <h3 className="font-bold">Beneficiary Records</h3>
+                  <h3 className="font-bold">Beneficiary Records</h3>
                 </div>
-                <div className="w-full overflow-x-auto">
-                    <Table>
+        
+                <div className="p-4 w-full overflow-x-auto">
+                  <Table>
                     <TableHeader>
-                        <TableRow>
+                      <TableRow>
                         <TableHead className="sticky left-0 bg-card z-10">
-                            Actions
+                          Actions
                         </TableHead>
+        
                         {allColumns.map((col) => (
-                            <TableHead key={col} className="whitespace-nowrap px-4">
+                          <TableHead key={col} className="whitespace-nowrap px-4">
                             <div className="flex items-center gap-2">
-                                {col.replace(/_/g, " ")}
-                                <ColumnFilter
+                              {col.replace(/_/g, " ")}
+                              <ColumnFilter
                                 column={col}
                                 onFilter={handleFilterChange}
                                 onSort={handleSortChange}
                                 onClear={handleClearFilter}
                                 uniqueValues={uniqueColumnValues[col] || []}
-                                />
+                              />
                             </div>
-                            </TableHead>
+                          </TableHead>
                         ))}
-                        </TableRow>
+                      </TableRow>
                     </TableHeader>
+        
                     <TableBody>
-                        {paginatedRecords.map((record) => (
+                      {paginatedRecords.map((record) => (
                         <TableRow key={record.id}>
-                            <TableCell className="sticky left-0 bg-card z-10">
+                          <TableCell className="sticky left-0 bg-card z-10">
                             <div className="flex gap-1">
-                                <Button
+                              <Button
                                 variant="outline"
                                 size="icon"
                                 className="h-8 w-8"
                                 onClick={() => setEditingRecord(record)}
-                                >
+                              >
                                 <Edit className="h-4 w-4" />
-                                </Button>
-                                <Button
+                              </Button>
+        
+                              <Button
                                 variant="destructive"
                                 size="icon"
                                 className="h-8 w-8"
                                 onClick={() => setDeletingRecord(record)}
-                                >
+                              >
                                 <Trash2 className="h-4 w-4" />
-                                </Button>
+                              </Button>
                             </div>
-                            </TableCell>
-                            {allColumns.map((col) => {
+                          </TableCell>
+        
+                          {allColumns.map((col) => {
                                 const value = record[col];
-                                let displayValue;
-                                if (typeof value === 'number' && Number.isInteger(value)) {
-                                    displayValue = String(value);
+                                let displayValue = String(value ?? "");
+                                // Check if it's a number and doesn't have a decimal part already
+                                if (typeof value === 'number' && value % 1 === 0 && String(value).includes('.')) {
+                                  displayValue = String(parseInt(String(value), 10));
                                 } else if (typeof value === 'number') {
-                                    displayValue = value.toFixed(2); // Keep decimals for scores etc.
+                                  displayValue = String(value);
                                 }
-                                else {
-                                    displayValue = String(value ?? "");
-                                }
+
                                 return (
                                     <TableCell key={col} className="whitespace-nowrap px-4">
                                         {displayValue}
@@ -750,38 +755,42 @@ export default function BeneficiaryDatabasePage() {
                                 );
                             })}
                         </TableRow>
-                        ))}
+                      ))}
                     </TableBody>
-                    </Table>
-                </div>
-                <div className="flex justify-between items-center mt-4 p-4">
+                  </Table>
+        
+                  <div className="flex justify-between items-center mt-4">
                     <span className="text-sm text-muted-foreground">
-                    Page {currentPage} of {totalPages}
+                      Page {currentPage} of {totalPages}
                     </span>
+        
                     <div className="flex gap-2">
-                    <Button
+                      <Button
                         onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                         disabled={currentPage === 1}
                         variant="outline"
-                    >
+                      >
                         <ChevronLeft className="mr-2 h-4 w-4" />
                         Previous
-                    </Button>
-                    <Button
+                      </Button>
+        
+                      <Button
                         onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                         disabled={currentPage === totalPages}
                         variant="outline"
-                    >
+                      >
                         Next
                         <ChevronRight className="ml-2 h-4 w-4" />
-                    </Button>
+                      </Button>
                     </div>
+                  </div>
                 </div>
+              </div>
             </div>
           </div>
         )}
         </CardContent>
-        </Card>
+      </Card>
       
        <AlertDialog open={!!deletingRecord} onOpenChange={() => setDeletingRecord(null)}>
         <AlertDialogContent>
