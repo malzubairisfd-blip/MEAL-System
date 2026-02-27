@@ -98,7 +98,26 @@ const LOCAL_STORAGE_KEY_PREFIX = "beneficiary-mapping-";
 const CHUNK_SIZE = 5000;
 const DB_SAVE_CHUNK_SIZE = 1000;
   
-const WORKER_COLUMN_KEYS: string[] = [];
+const WORKER_COLUMN_KEYS: string[] = [
+  "confidenceScore",
+  "avgWomanNameScore",
+  "avgHusbandNameScore",
+  "avgFinalScore",
+  "avgPairScore",
+  "avgFirstNameScore",
+  "avgFamilyNameScore",
+  "avgAdvancedNameScore",
+  "avgTokenReorderScore",
+  "reasons",
+  "womanName_normalized",
+  "husbandName_normalized",
+  "children_normalized",
+  "subdistrict_normalized",
+  "village_normalized",
+  "parts",
+  "husbandParts",
+];
+
 
 type WorkerProgress = {
   status: string;
@@ -617,7 +636,7 @@ export default function UploadPage() {
   }, [workerStatus, toast]);
 
   useEffect(() => {
-    const mappingKey = `${LOCAL_STORAGE_MAPPING_PREFIX}${selectedProjectId}-${file?.name || "default"}`;
+    const mappingKey = `${LOCAL_STORAGE_KEY_PREFIX}${selectedProjectId}-${file?.name || "default"}`;
     setMapSavedKey(mappingKey);
     if (!selectedProjectId || !file || typeof window === "undefined") return;
     const stored = localStorage.getItem(mappingKey);
@@ -748,20 +767,20 @@ export default function UploadPage() {
   const executeSave = useCallback(
     async (mode: "skip" | "replace", duplicateContext?: { duplicates: number; totalInDb: number }) => {
       setDuplicateInfo((prev) => ({ ...prev, isOpen: false }));
-      setSaving(true);
+      setIsSaving(true);
       setSaveStatus("saving");
       let totalSaved = 0;
       let totalSkipped = 0;
       let totalUpdated = 0;
       try {
-        const cachedRecords = await loadCachedResult();
-        if (!cachedRecords) throw new Error("No cached data to save.");
+        const cachedData = await loadCachedResult();
+        if (!cachedData) throw new Error("No cached data to save.");
 
-        const { enrichedRecords } = enrichData(cachedRecords);
+        const { enrichedRecords } = enrichData(cachedData);
         
         if (mode === "skip" && duplicateContext?.duplicates === duplicateContext?.totalInDb && duplicateContext?.totalInDb) {
           toast({ title: "All records already exist", description: "No new records to save.", variant: "destructive" });
-          setSaving(false);
+          setIsSaving(false);
           setSaveStatus("idle");
           return;
         }
@@ -810,7 +829,7 @@ export default function UploadPage() {
         toast({ title: "Save Error", description: err.message, variant: "destructive" });
         setSaveStatus("error");
       } finally {
-        setSaving(false);
+        setIsSaving(false);
       }
     },
     [dbColumnMapping, selectedProjectId, uniqueIdDbCol, uniqueIdFileCol, toast, enrichData, mapping]
@@ -821,7 +840,7 @@ export default function UploadPage() {
       toast({ title: "Incomplete Setup", description: "Select a project and map the unique ID column for both file and database.", variant: "destructive" });
       return;
     }
-    setSaving(true);
+    setIsSaving(true);
     setSaveStatus("checking_duplicates");
     try {
       const cachedData = await loadCachedResult();
@@ -848,7 +867,7 @@ export default function UploadPage() {
     } catch (err: any) {
       toast({ title: "Duplicate Check Error", description: err.message, variant: "destructive" });
     } finally {
-        setSaving(false);
+        setIsSaving(false);
         setSaveStatus("idle");
     }
   }, [executeSave, selectedProjectId, uniqueIdDbCol, uniqueIdFileCol, toast]);
@@ -1265,7 +1284,7 @@ export default function UploadPage() {
                         </TableHeader>
                         <TableBody>
                           {uniqueIdFileCol && (
-                            <TableRow className="bg-blue-50 dark:bg-blue-900/20">
+                            <TableRow className="bg-accent/10">
                               <TableCell className="font-bold">{uniqueIdFileCol}</TableCell>
                               <TableCell className="font-bold">{uniqueIdDbCol}</TableCell>
                               <TableCell></TableCell>
