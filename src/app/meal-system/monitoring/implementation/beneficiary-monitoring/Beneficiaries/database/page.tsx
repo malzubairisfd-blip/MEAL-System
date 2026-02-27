@@ -502,11 +502,11 @@ export default function BeneficiaryDatabasePage() {
     }
     setIsUpdatingFromSource(true);
     try {
-      const sourceMap = new Map(sourceData.map(row => [row[sourceUniqueIdCol], row]));
+      const sourceMap = new Map(sourceData.map(row => [String(row[sourceUniqueIdCol]), row]));
       
       const recordsToUpdate = records
         .map(targetRecord => {
-            const sourceRecord = sourceMap.get(targetRecord[targetUniqueIdCol]);
+            const sourceRecord = sourceMap.get(String(targetRecord[targetUniqueIdCol]));
             if (sourceRecord) {
                 const updatedRecord: Record<string, any> = { [targetUniqueIdCol]: targetRecord[targetUniqueIdCol] };
                 updateColumnMapping.forEach((targetCol, sourceCol) => {
@@ -521,6 +521,7 @@ export default function BeneficiaryDatabasePage() {
 
       if (recordsToUpdate.length === 0) {
         toast({ title: "No Matches Found", description: "No records could be matched between the two databases based on the selected IDs." });
+        setIsUpdatingFromSource(false);
         return;
       }
 
@@ -680,65 +681,66 @@ export default function BeneficiaryDatabasePage() {
                 <p>No records found in the database.</p>
             </div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6" ref={phonePanelRef}>
-            <div className="lg:col-span-3">
-              <div className="border border-gray-800 bg-gray-800 rounded-[1rem] p-1">
-                <div className="bg-background rounded-[1rem] overflow-hidden">
-                  <div className="p-3 border-b text-center">
+          <div className="border border-gray-800 bg-gray-800 rounded-[1rem] p-1">
+            <div className="bg-background rounded-[1rem] overflow-hidden">
+                <div className="p-3 border-b text-center">
                     <h3 className="font-bold">Beneficiary Records</h3>
-                  </div>
-                  <div className="w-full overflow-x-auto">
+                </div>
+                <div className="w-full overflow-x-auto">
                     <Table>
-                      <TableHeader>
+                    <TableHeader>
                         <TableRow>
-                          <TableHead className="sticky left-0 bg-card z-10">
+                        <TableHead className="sticky left-0 bg-card z-10">
                             Actions
-                          </TableHead>
-                          {allColumns.map((col) => (
+                        </TableHead>
+                        {allColumns.map((col) => (
                             <TableHead key={col} className="whitespace-nowrap px-4">
-                              <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2">
                                 {col.replace(/_/g, " ")}
                                 <ColumnFilter
-                                  column={col}
-                                  onFilter={handleFilterChange}
-                                  onSort={handleSortChange}
-                                  onClear={handleClearFilter}
-                                  uniqueValues={uniqueColumnValues[col] || []}
+                                column={col}
+                                onFilter={handleFilterChange}
+                                onSort={handleSortChange}
+                                onClear={handleClearFilter}
+                                uniqueValues={uniqueColumnValues[col] || []}
                                 />
-                              </div>
+                            </div>
                             </TableHead>
-                          ))}
+                        ))}
                         </TableRow>
-                      </TableHeader>
-                      <TableBody>
+                    </TableHeader>
+                    <TableBody>
                         {paginatedRecords.map((record) => (
-                          <TableRow key={record.id}>
+                        <TableRow key={record.id}>
                             <TableCell className="sticky left-0 bg-card z-10">
-                              <div className="flex gap-1">
+                            <div className="flex gap-1">
                                 <Button
-                                  variant="outline"
-                                  size="icon"
-                                  className="h-8 w-8"
-                                  onClick={() => setEditingRecord(record)}
+                                variant="outline"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => setEditingRecord(record)}
                                 >
-                                  <Edit className="h-4 w-4" />
+                                <Edit className="h-4 w-4" />
                                 </Button>
                                 <Button
-                                  variant="destructive"
-                                  size="icon"
-                                  className="h-8 w-8"
-                                  onClick={() => setDeletingRecord(record)}
+                                variant="destructive"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => setDeletingRecord(record)}
                                 >
-                                  <Trash2 className="h-4 w-4" />
+                                <Trash2 className="h-4 w-4" />
                                 </Button>
-                              </div>
+                            </div>
                             </TableCell>
                             {allColumns.map((col) => {
                                 const value = record[col];
                                 let displayValue;
-                                if (typeof value === 'number' && value % 1 === 0) {
-                                    displayValue = value.toFixed(0);
-                                } else {
+                                if (typeof value === 'number' && Number.isInteger(value)) {
+                                    displayValue = String(value);
+                                } else if (typeof value === 'number') {
+                                    displayValue = value.toFixed(2); // Keep decimals for scores etc.
+                                }
+                                else {
                                     displayValue = String(value ?? "");
                                 }
                                 return (
@@ -747,36 +749,34 @@ export default function BeneficiaryDatabasePage() {
                                     </TableCell>
                                 );
                             })}
-                          </TableRow>
+                        </TableRow>
                         ))}
-                      </TableBody>
+                    </TableBody>
                     </Table>
-                  </div>
-                  <div className="flex justify-between items-center mt-4 p-4">
+                </div>
+                <div className="flex justify-between items-center mt-4 p-4">
                     <span className="text-sm text-muted-foreground">
-                      Page {currentPage} of {totalPages}
+                    Page {currentPage} of {totalPages}
                     </span>
                     <div className="flex gap-2">
-                      <Button
+                    <Button
                         onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                         disabled={currentPage === 1}
                         variant="outline"
-                      >
+                    >
                         <ChevronLeft className="mr-2 h-4 w-4" />
                         Previous
-                      </Button>
-                      <Button
+                    </Button>
+                    <Button
                         onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                         disabled={currentPage === totalPages}
                         variant="outline"
-                      >
+                    >
                         Next
                         <ChevronRight className="ml-2 h-4 w-4" />
-                      </Button>
+                    </Button>
                     </div>
-                  </div>
                 </div>
-              </div>
             </div>
           </div>
         )}
