@@ -99,6 +99,18 @@ const CHUNK_SIZE = 5000;
 const DB_SAVE_CHUNK_SIZE = 1000;
   
 const WORKER_COLUMN_KEYS: string[] = [
+  "Generated_Cluster_ID",
+  "Flag",
+  "Size",
+  "Max_PairScore",
+  "pairScores",
+  "records",
+  "nameScore",
+  "husbandScore",
+  "childrenScore",
+  "idScore",
+  "phoneScore",
+  "locationScore",
   "confidenceScore",
   "avgWomanNameScore",
   "avgHusbandNameScore",
