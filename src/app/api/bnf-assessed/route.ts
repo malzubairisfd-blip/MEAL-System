@@ -425,40 +425,40 @@ const DB_COLUMNS_FOR_CREATION = `(
     please_select_the_alternative_educator TEXT,
     the_name_of_the_new_intellectual TEXT,
     comments TEXT,
-    diff_per_bnf1 TEXT,
+    diff_per__bnf1 TEXT,
     diff_level_bnf1 TEXT,
-    diff_per_bnf2 TEXT,
+    diff_per__bnf2 TEXT,
     diff_level_bnf2 TEXT,
-    diff_per_bnf3 TEXT,
+    diff_per__bnf3 TEXT,
     diff_level_bnf3 TEXT,
-    diff_per_bnf4 TEXT,
-    diff_level_bnf4 TEXT,
-    diff_per_bnf5 TEXT,
-    diff_level_bnf5 TEXT,
-    diff_per_bnf TEXT,
-    diff_level_bnf TEXT,
-    diff_per_hus1 TEXT,
-    diff_level_hus1 TEXT,
-    diff_per_hus2 TEXT,
-    diff_level_hus2 TEXT,
-    diff_per_hus3 TEXT,
-    diff_level_hus3 TEXT,
-    diff_per_hus4 TEXT,
-    diff_level_hus4 TEXT,
-    diff_per_hus5 TEXT,
-    diff_level_hus5 TEXT,
-    diff_per_hus TEXT,
-    diff_level_hus TEXT,
+    diff_per__bnf4 TEXT,
+    diff_level__bnf4 TEXT,
+    diff_per__bnf5 TEXT,
+    diff_level__bnf5 TEXT,
+    diff_per__bnf TEXT,
+    diff_level__bnf TEXT,
+    diff_per__hus1 TEXT,
+    diff_level__hus1 TEXT,
+    diff_per__hus2 TEXT,
+    diff_level__hus2 TEXT,
+    diff_per__hus3 TEXT,
+    diff_level__hus3 TEXT,
+    diff_per__hus4 TEXT,
+    diff_level__hus4 TEXT,
+    diff_per__hus5 TEXT,
+    diff_level__hus5 TEXT,
+    diff_per__hus TEXT,
+    diff_level__hus TEXT,
     enroll_sim_score TEXT,
     enroll_cluster_id TEXT,
     branch_recommendation TEXT,
     HQ_recommendation TEXT,
     enroll_recom TEXT,
-    weighted_damerau_score TEXT,
-    positional_similarity TEXT,
-    bigram_similarity TEXT,
-    lcs_ratio TEXT,
-    length_factor TEXT 
+    weighted_damerau_score REAL,
+    positional_similarity REAL,
+    bigram_similarity REAL,
+    lcs_ratio REAL,
+    length_factor REAL,
     structural_integrity TEXT,
     root_factor TEXT,
     internalId TEXT,
@@ -668,17 +668,19 @@ export async function POST(req: Request) {
              }
              const existing = checkStmt.get(projectId, uniqueValue);
 
+             const recordWithProject = { ...record, project_id: projectId };
+
              if (mode === 'replace' && updateStmt) {
                 if (existing) {
-                    const info = updateStmt.run(record);
+                    const info = updateStmt.run(recordWithProject);
                     if(info.changes > 0) updatedCount++;
                 } else if(insertStmt) {
-                    insertStmt.run(record);
+                    insertStmt.run(recordWithProject);
                     savedCount++;
                 }
              } else if (mode === 'skip' && insertStmt) { 
                 if (!existing) {
-                   insertStmt.run(record);
+                   insertStmt.run(recordWithProject);
                    savedCount++;
                 } else {
                    skippedCount++;
