@@ -1,7 +1,7 @@
 // src/app/meal-system/monitoring/implementation/beneficiary-monitoring/Beneficiaries/database/page.tsx
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useForm } from "react-hook-form";
 
@@ -248,6 +248,7 @@ export default function BeneficiaryDatabasePage() {
   const [updateColumnMapping, setUpdateColumnMapping] = useState<Map<string, string>>(new Map());
   const [manualUpdateMapping, setManualUpdateMapping] = useState({ source: '', target: '' });
   const [isUpdatingFromSource, setIsUpdatingFromSource] = useState(false);
+  const phonePanelRef = useRef<HTMLDivElement>(null);
 
 
   const itemsPerPage = 20;
@@ -548,7 +549,7 @@ export default function BeneficiaryDatabasePage() {
         <h1 className="text-3xl font-bold">Beneficiaries Database</h1>
          <div className="flex gap-2">
             <Button variant="outline" asChild>
-                <Link href="/meal-system/monitoring/implementation/beneficiary-monitoring/Beneficiaries">
+                <Link href="/meal-system/monitoring/implementation/beneficiary-monitoring">
                     <ArrowLeft className="mr-2 h-4 w-4" /> Back
                 </Link>
             </Button>
@@ -678,72 +679,109 @@ export default function BeneficiaryDatabasePage() {
              <div className="text-center text-muted-foreground py-10">
                 <p>No records found in the database.</p>
             </div>
-          ) : (
-            <div className="border border-gray-800 bg-gray-800 rounded-[1rem] p-1">
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6" ref={phonePanelRef}>
+            <div className="lg:col-span-3">
+              <div className="border border-gray-800 bg-gray-800 rounded-[1rem] p-1">
                 <div className="bg-background rounded-[1rem] overflow-hidden">
-                    <div className="p-3 border-b text-center"><h3 className="font-bold">Beneficiary Records</h3></div>
-                    <div className="p-4">
-                        <Table>
-                            <TableHeader>
-                              <TableRow>
-                                  <TableHead className="sticky left-0 bg-card z-10">Actions</TableHead>
-                                  {allColumns.map((col) => (
-                                  <TableHead key={col} className="whitespace-nowrap px-4">
-                                      <div className="flex items-center gap-2">
-                                          {col.replace(/_/g, ' ')}
-                                          <ColumnFilter
-                                              column={col}
-                                              onFilter={handleFilterChange}
-                                              onSort={handleSortChange}
-                                              onClear={handleClearFilter}
-                                              uniqueValues={uniqueColumnValues[col] || []}
-                                          />
-                                      </div>
-                                  </TableHead>
-                                  ))}
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {paginatedRecords.map((record) => (
-                                  <TableRow key={record.id}>
-                                  <TableCell className="sticky left-0 bg-card z-10">
-                                      <div className="flex gap-1">
-                                          <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setEditingRecord(record)}>
-                                          <Edit className="h-4 w-4" />
-                                          </Button>
-                                          <Button variant="destructive" size="icon" className="h-8 w-8" onClick={() => setDeletingRecord(record)}>
-                                              <Trash2 className="h-4 w-4" />
-                                          </Button>
-                                      </div>
-                                  </TableCell>
-                                  {allColumns.map((col) => (
-                                      <TableCell key={col} className="whitespace-nowrap px-4">
-                                          {String(record[col] ?? '')}
-                                      </TableCell>
-                                  ))}
-                                  </TableRow>
-                              ))}
-                            </TableBody>
-                        </Table>
-                        <div className="flex justify-between items-center mt-4">
-                            <span className="text-sm text-muted-foreground">
-                                Page {currentPage} of {totalPages}
-                            </span>
-                            <div className="flex gap-2">
-                                <Button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} variant="outline">
-                                    <ChevronLeft className="mr-2 h-4 w-4" /> Previous
+                  <div className="p-3 border-b text-center">
+                    <h3 className="font-bold">Beneficiary Records</h3>
+                  </div>
+                  <div className="w-full overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="sticky left-0 bg-card z-10">
+                            Actions
+                          </TableHead>
+                          {allColumns.map((col) => (
+                            <TableHead key={col} className="whitespace-nowrap px-4">
+                              <div className="flex items-center gap-2">
+                                {col.replace(/_/g, " ")}
+                                <ColumnFilter
+                                  column={col}
+                                  onFilter={handleFilterChange}
+                                  onSort={handleSortChange}
+                                  onClear={handleClearFilter}
+                                  uniqueValues={uniqueColumnValues[col] || []}
+                                />
+                              </div>
+                            </TableHead>
+                          ))}
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {paginatedRecords.map((record) => (
+                          <TableRow key={record.id}>
+                            <TableCell className="sticky left-0 bg-card z-10">
+                              <div className="flex gap-1">
+                                <Button
+                                  variant="outline"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  onClick={() => setEditingRecord(record)}
+                                >
+                                  <Edit className="h-4 w-4" />
                                 </Button>
-                                <Button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} variant="outline">
-                                    Next <ChevronRight className="ml-2 h-4 w-4" />
+                                <Button
+                                  variant="destructive"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  onClick={() => setDeletingRecord(record)}
+                                >
+                                  <Trash2 className="h-4 w-4" />
                                 </Button>
-                            </div>
-                        </div>
+                              </div>
+                            </TableCell>
+                            {allColumns.map((col) => {
+                                const value = record[col];
+                                let displayValue;
+                                if (typeof value === 'number' && value % 1 === 0) {
+                                    displayValue = value.toFixed(0);
+                                } else {
+                                    displayValue = String(value ?? "");
+                                }
+                                return (
+                                    <TableCell key={col} className="whitespace-nowrap px-4">
+                                        {displayValue}
+                                    </TableCell>
+                                );
+                            })}
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                  <div className="flex justify-between items-center mt-4 p-4">
+                    <span className="text-sm text-muted-foreground">
+                      Page {currentPage} of {totalPages}
+                    </span>
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                        disabled={currentPage === 1}
+                        variant="outline"
+                      >
+                        <ChevronLeft className="mr-2 h-4 w-4" />
+                        Previous
+                      </Button>
+                      <Button
+                        onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                        disabled={currentPage === totalPages}
+                        variant="outline"
+                      >
+                        Next
+                        <ChevronRight className="ml-2 h-4 w-4" />
+                      </Button>
                     </div>
+                  </div>
                 </div>
+              </div>
             </div>
-          )}
+          </div>
+        )}
         </CardContent>
-      </Card>
+        </Card>
       
        <AlertDialog open={!!deletingRecord} onOpenChange={() => setDeletingRecord(null)}>
         <AlertDialogContent>
