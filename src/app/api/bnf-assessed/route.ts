@@ -425,30 +425,30 @@ const DB_COLUMNS_FOR_CREATION = `(
     please_select_the_alternative_educator TEXT,
     the_name_of_the_new_intellectual TEXT,
     comments TEXT,
-    diff_per__bnf1 TEXT,
+    diff_per_bnf1 REAL,
     diff_level_bnf1 TEXT,
-    diff_per__bnf2 TEXT,
+    diff_per_bnf2 REAL,
     diff_level_bnf2 TEXT,
-    diff_per__bnf3 TEXT,
+    diff_per_bnf3 REAL,
     diff_level_bnf3 TEXT,
-    diff_per__bnf4 TEXT,
-    diff_level__bnf4 TEXT,
-    diff_per__bnf5 TEXT,
-    diff_level__bnf5 TEXT,
-    diff_per__bnf TEXT,
-    diff_level__bnf TEXT,
-    diff_per__hus1 TEXT,
-    diff_level__hus1 TEXT,
-    diff_per__hus2 TEXT,
-    diff_level__hus2 TEXT,
-    diff_per__hus3 TEXT,
-    diff_level__hus3 TEXT,
-    diff_per__hus4 TEXT,
-    diff_level__hus4 TEXT,
-    diff_per__hus5 TEXT,
-    diff_level__hus5 TEXT,
-    diff_per__hus TEXT,
-    diff_level__hus TEXT,
+    diff_per_bnf4 REAL,
+    diff_level_bnf4 TEXT,
+    diff_per_bnf5 REAL,
+    diff_level_bnf5 TEXT,
+    diff_per_bnf REAL,
+    diff_level_bnf TEXT,
+    diff_per_hus1 REAL,
+    diff_level_hus1 TEXT,
+    diff_per_hus2 REAL,
+    diff_level_hus2 TEXT,
+    diff_per_hus3 REAL,
+    diff_level_hus3 TEXT,
+    diff_per_hus4 REAL,
+    diff_level_hus4 TEXT,
+    diff_per_hus5 REAL,
+    diff_level_hus5 TEXT,
+    diff_per_hus REAL,
+    diff_level_hus TEXT,
     enroll_sim_score TEXT,
     enroll_cluster_id TEXT,
     branch_recommendation TEXT,
@@ -620,87 +620,83 @@ export async function POST(req: Request) {
     }
 
     if (action === "save") {
-      if (!projectId || !Array.isArray(records) || !mode || !uniqueIdDbCol) {
-        return NextResponse.json({ error: "Missing parameters" }, { status: 400 });
-      }
-      const db = initializeDatabase();
-      try {
-        const tableCols = db.prepare("PRAGMA table_info(assessed_data)").all().map((c: any) => c.name);
-        const sanitizedUniqueIdDbCol = sanitizeColumn(uniqueIdDbCol);
-
-        if (!sanitizedUniqueIdDbCol || !tableCols.includes(sanitizedUniqueIdDbCol)) {
-          return NextResponse.json({ error: "Invalid unique ID DB column" }, { status: 400 });
+        if (!projectId || !Array.isArray(records) || !mode || !uniqueIdDbCol) {
+            return NextResponse.json({ error: "Missing parameters" }, { status: 400 });
         }
-        
-        let savedCount = 0;
-        let skippedCount = 0;
-        let updatedCount = 0;
-        
-        const allColumns = Array.from(
-          new Set(records.flatMap((record: any) => Object.keys(record)))
-        ).filter((col) => tableCols.includes(col));
+        const db = initializeDatabase();
+        try {
+            const tableCols = db.prepare("PRAGMA table_info(assessed_data)").all().map((c: any) => c.name);
+            const sanitizedUniqueIdDbCol = sanitizeColumn(uniqueIdDbCol);
 
-        const insertColumns = allColumns.filter(c => c !== 'id');
-        const updateColumns = allColumns.filter(c => c !== 'id' && c !== sanitizedUniqueIdDbCol && c !== 'project_id');
-
-        const insertStmt =
-          insertColumns.length > 0
-            ? db.prepare(
-                `INSERT INTO assessed_data (${insertColumns.join(", ")}) VALUES (${insertColumns.map(c => `@${c}`).join(", ")})`
-              )
-            : null;
-
-        const updateStmt =
-          updateColumns.length > 0
-            ? db.prepare(
-                `UPDATE assessed_data SET ${updateColumns.map((col) => `${col} = @${col}`).join(", ")} WHERE project_id = @project_id AND ${sanitizedUniqueIdDbCol} = @${sanitizedUniqueIdDbCol}`
-              )
-            : null;
+            if (!sanitizedUniqueIdDbCol || !tableCols.includes(sanitizedUniqueIdDbCol)) {
+                return NextResponse.json({ error: "Invalid unique ID DB column" }, { status: 400 });
+            }
             
-        const checkStmt = db.prepare(`SELECT id FROM assessed_data WHERE project_id = ? AND ${sanitizedUniqueIdDbCol} = ?`);
+            let savedCount = 0;
+            let skippedCount = 0;
+            let updatedCount = 0;
+            
+            const allColumns = Array.from(new Set(records.flatMap((record: any) => Object.keys(record)))).filter((col) => tableCols.includes(col));
+            const insertColumns = allColumns.filter(c => c !== 'id');
+            const updateColumns = allColumns.filter(c => c !== 'id' && c !== sanitizedUniqueIdDbCol);
 
-        const transaction = db.transaction(() => {
-          for (const record of records) {
-             const uniqueValue = record[sanitizedUniqueIdDbCol];
-             if (uniqueValue === undefined || uniqueValue === null) {
-                 skippedCount++;
-                 continue;
-             }
-             const existing = checkStmt.get(projectId, uniqueValue);
+            const insertStmt = insertColumns.length > 0
+                ? db.prepare(`INSERT OR REPLACE INTO assessed_data (${insertColumns.join(", ")}) VALUES (${insertColumns.map(c => `@${c}`).join(", ")})`)
+                : null;
+            
+            const updateStmt = updateColumns.length > 0
+                ? db.prepare(`UPDATE assessed_data SET ${updateColumns.map(col => `${col} = ?`).join(", ")} WHERE project_id = ? AND ${sanitizedUniqueIdDbCol} = ?`)
+                : null;
 
-             const recordWithProject = { ...record, project_id: projectId };
+            const checkStmt = db.prepare(`SELECT id FROM assessed_data WHERE project_id = ? AND ${sanitizedUniqueIdDbCol} = ?`);
 
-             if (mode === 'replace' && updateStmt) {
-                if (existing) {
-                    const info = updateStmt.run(recordWithProject);
-                    if(info.changes > 0) updatedCount++;
-                } else if(insertStmt) {
-                    insertStmt.run(recordWithProject);
-                    savedCount++;
+            const transaction = db.transaction(() => {
+                for (const record of records) {
+                    const uniqueValue = record[sanitizedUniqueIdDbCol];
+                    if (uniqueValue === undefined || uniqueValue === null) {
+                        skippedCount++;
+                        continue;
+                    }
+                    const existing = checkStmt.get(projectId, String(uniqueValue));
+                    
+                    const recordWithProject = { ...record, project_id: projectId };
+
+                    if (mode === 'replace') {
+                        if (existing && updateStmt) {
+                            const updateValues = [
+                                ...updateColumns.map(col => record[col]),
+                                projectId,
+                                String(uniqueValue)
+                            ];
+                            const info = updateStmt.run(...updateValues);
+                            if (info.changes > 0) updatedCount++;
+                        } else if (!existing && insertStmt) {
+                            insertStmt.run(recordWithProject);
+                            savedCount++;
+                        }
+                    } else if (mode === 'skip') {
+                        if (!existing && insertStmt) {
+                           insertStmt.run(recordWithProject);
+                           savedCount++;
+                        } else {
+                           skippedCount++;
+                        }
+                    }
                 }
-             } else if (mode === 'skip' && insertStmt) { 
-                if (!existing) {
-                   insertStmt.run(recordWithProject);
-                   savedCount++;
-                } else {
-                   skippedCount++;
-                }
-             }
-          }
-        });
+            });
 
-        transaction();
+            transaction();
 
-        return NextResponse.json({
-          saved: savedCount,
-          skipped: skippedCount,
-          updated: updatedCount,
-          total: records.length,
-          mode: mode,
-        });
-      } finally {
-        db.close();
-      }
+            return NextResponse.json({
+              saved: savedCount,
+              skipped: skippedCount,
+              updated: updatedCount,
+              total: records.length,
+              mode: mode,
+            });
+        } finally {
+            db.close();
+        }
     }
     
      if (action === "update") {
