@@ -1125,9 +1125,6 @@ const runClustering = async (rows: PreprocessedRow[], edges: any[], opts: Worker
     .filter((cluster) => cluster.records.length > 1);
 
   // --- NEW: merge overlapping clusters and ensure no record appears in more than one final cluster ---
-  // This step only merges/deduplicates clusters that share records.
-  // It does not change scoring, rules, thresholds, or pairwise logic.
-
   let merged = mergeOverlappingClusters(clustersWithRecords);
 
   // Remap merged clusters to canonical row objects (defensive) and ensure uniqueness: each _internalId used once.
@@ -1284,13 +1281,16 @@ const mergeOverlappingClusters = (clusters: any[]) => {
   if (!clusters.length) return clusters;
   const clusterUF = new UF(clusters.length);
   const recordToCluster = new Map<string, number>();
+
   clusters.forEach((cluster, idx) => {
     cluster.records.forEach((record: any) => {
-      const existing = recordToCluster.get(record._internalId);
-      if (existing !== undefined) {
-        clusterUF.merge(existing, idx);
-      }
-      recordToCluster.set(record._internalId, idx);
+        const internalId = record._internalId;
+        if (recordToCluster.has(internalId)) {
+            const previousClusterIndex = recordToCluster.get(internalId)!;
+            clusterUF.merge(previousClusterIndex, idx);
+        } else {
+            recordToCluster.set(internalId, idx);
+        }
     });
   });
 
