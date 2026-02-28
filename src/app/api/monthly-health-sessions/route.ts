@@ -19,6 +19,12 @@ const DB_COLUMNS_FOR_CREATION = `(
     total_appear INTEGER, total_absence INTEGER, total_alternative INTEGER, data JSON
 )`;
 
+const allDbColumns = DB_COLUMNS_FOR_CREATION.replace(/[()]/g, "")
+  .split(",")
+  .map((s) => s.trim().split(/\s+/)[0])
+  .filter(Boolean);
+const validColumnsSet = new Set(allDbColumns);
+
 function initializeDatabase() {
   const db = new Database(getDbPath());
   db.exec(`CREATE TABLE IF NOT EXISTS monthly_sessions ${DB_COLUMNS_FOR_CREATION};`);
@@ -68,7 +74,7 @@ export async function POST(req: Request) {
             if (chunk.length === 0) continue;
             const placeholders = chunk.map(() => "?").join(",");
             const stmt = db.prepare(
-                `SELECT ${sanitizedColumn} FROM monthly_sessions WHERE project_id = ? AND ${sanitizedColumn} IN (${placeholders})`
+                `SELECT "${sanitizedColumn}" FROM monthly_sessions WHERE project_id = ? AND "${sanitizedColumn}" IN (${placeholders})`
             );
             const results: any[] = stmt.all(projectId, ...chunk);
             results.forEach(row => existingIds.add(String(row[sanitizedColumn])));
@@ -96,9 +102,9 @@ export async function POST(req: Request) {
 
         (async () => {
             const { projectId, sessionNumber, sessionDate, appearanceData, appearanceMapping, absenceData, absenceMapping, mode, duplicateIds = [] } = body;
-            const duplicateIdsSet = new Set(duplicateIds);
+            const duplicateIdsSet = new Set(duplicateIds.map(String));
 
-            let stats = { saved: 0, updated: 0, skipped: 0, total: (appearanceData?.length || 0) + (absenceData?.length || 0) };
+            let stats = { saved: 0, updated: 0, skipped: 0, total: 0 };
 
             if (!projectId || !sessionNumber || !sessionDate) {
                  send({ type: 'error', error: "Missing required parameters." });
@@ -116,37 +122,48 @@ export async function POST(req: Request) {
                 const existingProjectRecordsStmt = sessionDb.prepare('SELECT COUNT(*) as count FROM monthly_sessions WHERE project_id = ?');
                 const existingProjectRecords = existingProjectRecordsStmt.get(projectId) as {count: number};
 
-                if (existingProjectRecords.count === 0) {
-                    enrollmentDb = new Database(getEnrollmentDbPath(), { fileMustExist: true });
-                    const beneficiaries = enrollmentDb.prepare(`
-                        SELECT benef_id, bnf_name, bnf_vill, bnf_ozla, bnf_mud, ed_id, ed_name, project_name 
-                        FROM enrollment_data WHERE project_id = ?
-                    `).all(projectId);
-                    
-                    const insertStmt = sessionDb.prepare(`
-                        INSERT OR IGNORE INTO monthly_sessions (project_id, project_name, benef_id, bnf_name, bnf_vill, bnf_ozla, bnf_mud, ed_id, ed_name)
-                        VALUES (@project_id, @project_name, @benef_id, @bnf_name, @bnf_vill, @bnf_ozla, @bnf_mud, @ed_id, @ed_name)
-                    `);
-                    
-                    const insertMany = sessionDb.transaction((bnfs) => {
-                        for (const bnf of bnfs) {
-                           const info = insertStmt.run({...bnf, project_id: projectId});
-                           stats.saved += info.changes;
-                        }
-                    });
-                    
-                    insertMany(beneficiaries);
-                    send({ type: 'progress', status: 'FIRST_STEP_SAVING_FROM_ENROLLMENT_REVIEW_DATABASE', progress: 20, message: `Seeded ${stats.saved} base records.`, stats });
+                if (existingProjectRecords.count === 0 && mode !== 'skip') {
+                    try {
+                        enrollmentDb = new Database(getEnrollmentDbPath(), { fileMustExist: true });
+                        const beneficiaries = enrollmentDb.prepare(`
+                            SELECT benef_id, bnf_name, bnf_vill, bnf_ozla, bnf_mud, ed_id, ed_name, project_name 
+                            FROM enrollment_data WHERE project_id = ?
+                        `).all(projectId);
+                        
+                        const insertStmt = sessionDb.prepare(`
+                            INSERT OR IGNORE INTO monthly_sessions (project_id, project_name, benef_id, bnf_name, bnf_vill, bnf_ozla, bnf_mud, ed_id, ed_name)
+                            VALUES (@project_id, @project_name, @benef_id, @bnf_name, @bnf_vill, @bnf_ozla, @bnf_mud, @ed_id, @ed_name)
+                        `);
+                        
+                        const insertMany = sessionDb.transaction((bnfs) => {
+                            for (const bnf of bnfs) {
+                               const info = insertStmt.run({...bnf, project_id: projectId});
+                               stats.saved += info.changes;
+                            }
+                        });
+                        
+                        insertMany(beneficiaries);
+                        send({ type: 'progress', status: 'FIRST_STEP_SAVING_FROM_ENROLLMENT_REVIEW_DATABASE', progress: 20, message: `Seeded ${stats.saved} base records.`, stats });
+                    } catch (e: any) {
+                         send({ type: 'progress', status: 'FIRST_STEP_SAVING_FROM_ENROLLMENT_REVIEW_DATABASE', progress: 20, message: `Enrollment DB not found. Skipping seeding.`, stats });
+                    }
                 } else {
-                     send({ type: 'progress', status: 'FIRST_STEP_SAVING_FROM_ENROLLMENT_REVIEW_DATABASE', progress: 20, message: `Project already seeded. Skipping.`, stats });
+                     send({ type: 'progress', status: 'FIRST_STEP_SAVING_FROM_ENROLLMENT_REVIEW_DATABASE', progress: 20, message: `Project already seeded or skipping.`, stats });
                 }
 
                 send({ type: 'progress', status: 'SECOND_STEP_SAVING_BENEFICIARY_APPEARANCE', progress: 30, message: "Processing appearance data...", stats });
-                
+                stats.total = (appearanceData?.length || 0) + (absenceData?.length || 0);
+
                 if (appearanceData && appearanceMapping && appearanceData.length > 0) {
                   const appearCol = `bnf_appear_s${sessionNumber}`;
                   const dateCol = `date_of_general_s${sessionNumber}`;
-                  const updateStmt = sessionDb.prepare(`UPDATE monthly_sessions SET ${appearCol} = 1, ${dateCol} = ? WHERE benef_id = ? AND project_id = ?`);
+
+                  if (!validColumnsSet.has(appearCol) || !validColumnsSet.has(dateCol)) {
+                    throw new Error('Invalid session number resulted in invalid column names.');
+                  }
+
+                  const updateStmt = sessionDb.prepare(`UPDATE monthly_sessions SET "${appearCol}" = 1, "${dateCol}" = ? WHERE benef_id = ? AND project_id = ?`);
+                  
                   const transaction = sessionDb.transaction((rows) => {
                       for (const row of rows) {
                           const benefId = row[appearanceMapping.benef_id];
@@ -166,8 +183,16 @@ export async function POST(req: Request) {
 
                 if (absenceData && absenceMapping && absenceData.length > 0) {
                     send({ type: 'progress', status: 'FOURTH_STEP_SAVING_BENEFICIARY_ABSENCE', progress: 60, message: "Processing absence data...", stats });
-                    const colsToUpdate = Object.keys(absenceMapping).filter(fileCol => fileCol !== absenceMapping.benef_id);
-                    const setClause = colsToUpdate.map(fileCol => `${absenceMapping[fileCol]} = @${fileCol}`).join(', ');
+                    const colsToUpdate = Object.keys(absenceMapping).filter(fileCol => absenceMapping[fileCol] && fileCol !== 'benef_id');
+                    
+                    const setClause = colsToUpdate.map(fileCol => {
+                        const dbCol = absenceMapping[fileCol];
+                        if (!validColumnsSet.has(dbCol)) {
+                            throw new Error(`Mapping contains an invalid database column: ${dbCol}`);
+                        }
+                        return `"${dbCol}" = @${fileCol}`;
+                    }).join(', ');
+
 
                     if (setClause) {
                         const updateStmt = sessionDb.prepare(`UPDATE monthly_sessions SET ${setClause} WHERE benef_id = @benef_id AND project_id = @project_id`);
@@ -182,7 +207,8 @@ export async function POST(req: Request) {
                                 const payload: Record<string, any> = { benef_id: benefId, project_id: projectId };
                                 colsToUpdate.forEach(fileCol => payload[fileCol] = row[fileCol] ?? null);
                                 const info = updateStmt.run(payload);
-                                stats.updated += info.changes;
+                                if (info.changes > 0) stats.updated += info.changes;
+                                else stats.skipped++;
                             }
                         });
                         transaction(absenceData);
@@ -190,12 +216,11 @@ export async function POST(req: Request) {
                 }
                 
                 send({ type: 'progress', status: 'FIFTH_STEP_SAVING_ABSENTEES', progress: 80, message: "Marking absentees...", stats });
-                const absenteeInfo = sessionDb.prepare(`UPDATE monthly_sessions SET absent_s${sessionNumber} = 1 WHERE project_id = ? AND absence_code_s${sessionNumber} IS NOT NULL AND absence_code_s${sessionNumber} != ''`).run(projectId);
+                sessionDb.prepare(`UPDATE monthly_sessions SET "absent_s${sessionNumber}" = 1 WHERE project_id = ? AND "absence_code_s${sessionNumber}" IS NOT NULL AND "absence_code_s${sessionNumber}" != ''`).run(projectId);
                 
                 send({ type: 'progress', status: 'SIXTH_STEP_SAVING_ATTENDANCE', progress: 90, message: "Finalizing attendance...", stats });
-                const attendingInfo1 = sessionDb.prepare(`UPDATE monthly_sessions SET attending_s${sessionNumber} = 0 WHERE project_id = ? AND absent_s${sessionNumber} = 1`).run(projectId);
-
-                const attendingInfo2 = sessionDb.prepare(`UPDATE monthly_sessions SET attending_s${sessionNumber} = 1 WHERE project_id = ? AND bnf_appear_s${sessionNumber} = 1 AND (attending_s${sessionNumber} IS NULL OR attending_s${sessionNumber} != 0)`).run(projectId);
+                sessionDb.prepare(`UPDATE monthly_sessions SET "attending_s${sessionNumber}" = 0 WHERE project_id = ? AND "absent_s${sessionNumber}" = 1`).run(projectId);
+                sessionDb.prepare(`UPDATE monthly_sessions SET "attending_s${sessionNumber}" = 1 WHERE project_id = ? AND "bnf_appear_s${sessionNumber}" = 1 AND ("attending_s${sessionNumber}" IS NULL OR "attending_s${sessionNumber}" != 0)`).run(projectId);
                 
                 send({ type: 'done', message: "Processing complete!", stats });
 
