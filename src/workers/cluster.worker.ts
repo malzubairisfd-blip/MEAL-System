@@ -1133,6 +1133,33 @@ const runClustering = async (rows: PreprocessedRow[], edges: any[], opts: Worker
   const finalMerged: any[] = [];
   let clusterCounter = 1;
 
+  const deriveMaxBeneficiaryId = (records: PreprocessedRow[]) => {
+    const numericIds: number[] = [];
+    const stringIds: string[] = [];
+  
+    records.forEach((record) => {
+      const rawId = record.beneficiaryId ?? record.id ?? record.nationalId ?? "";
+      const normalized = String(rawId || "").trim();
+      if (!normalized) return;
+      const numeric = Number(normalized);
+      if (!Number.isNaN(numeric)) {
+        numericIds.push(numeric);
+        return;
+      }
+      stringIds.push(normalized);
+    });
+  
+    if (numericIds.length) {
+      return Math.max(...numericIds);
+    }
+  
+    if (stringIds.length) {
+      return stringIds.sort().pop();
+    }
+  
+    return null;
+  };
+
   for (const c of merged) {
     const remappedRecords = (c.records || [])
       .map((rec: any) => {
@@ -1140,7 +1167,7 @@ const runClustering = async (rows: PreprocessedRow[], edges: any[], opts: Worker
         return idx !== undefined && idx >= 0 ? rows[idx] : null;
       })
       .filter(Boolean);
-
+  
     const uniqueRecords: any[] = [];
     for (const r of remappedRecords) {
       if (!usedIds.has(r._internalId)) {
@@ -1148,33 +1175,26 @@ const runClustering = async (rows: PreprocessedRow[], edges: any[], opts: Worker
         uniqueRecords.push(r);
       }
     }
-
+  
     if (uniqueRecords.length > 1) {
-      // Rebuild pairScores to only include edges between remaining records (best-effort).
-      // We attempt to keep existing pairScores where possible by filtering by _internalId.
+      const bestClusterId = deriveMaxBeneficiaryId(uniqueRecords);
+      const generatedClusterId =
+        bestClusterId !== null ? bestClusterId : clusterCounter++;
+  
       const idSet = new Set(uniqueRecords.map((r) => r._internalId));
       const filteredPairScores =
         (c.pairScores || []).filter((edge: any) => {
           const aId = edge.aId ?? edge.a ?? edge.a?._internalId ?? "";
           const bId = edge.bId ?? edge.b ?? edge.b?._internalId ?? "";
-          // edge may not have _internalId fields — best-effort: allow if either matches a pair
           if (!aId && !edge.a && edge.aIndex !== undefined) {
-            // if edge stored indices, we leave it (can't reliably remap here)
             return true;
           }
-          // If stored as ids, ensure both endpoints are kept
           if (aId && bId) {
             return idSet.has(String(aId)) && idSet.has(String(bId));
           }
           return true;
         });
-      
-      const maxBeneficiaryId = uniqueRecords.reduce((max: number, r: RecordRow) => {
-          const currentId = Number(r.beneficiaryId);
-          return !isNaN(currentId) && currentId > max ? currentId : max;
-      }, 0);
-      const generatedClusterId = maxBeneficiaryId > 0 ? maxBeneficiaryId : clusterCounter++;
-
+  
       finalMerged.push({
         ...c,
         Generated_Cluster_ID: generatedClusterId,
@@ -1184,6 +1204,7 @@ const runClustering = async (rows: PreprocessedRow[], edges: any[], opts: Worker
       });
     }
   }
+
 
   postMessage({ type: "progress", status: "annotating", progress: 95 });
   postMessage({ type: "save_progress", key: progressKey, value: null });
