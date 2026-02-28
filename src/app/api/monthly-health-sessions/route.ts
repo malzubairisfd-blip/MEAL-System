@@ -61,23 +61,26 @@ export async function POST(req: Request) {
         db = new Database(getDbPath(), { fileMustExist: true });
         const sanitizedColumn = sanitizeColumn(uniqueIdCol);
         
-        let totalCount = 0;
+        let existingIds = new Set();
         const chunks = chunkArray(uniqueIds, 900);
-        const tableTotalResult = db.prepare("SELECT COUNT(*) as total FROM monthly_sessions WHERE project_id = ?").get(projectId) as {total: number} | undefined;
-        const totalInDb = tableTotalResult?.total || 0;
         
         for (const chunk of chunks) {
-          if (chunk.length === 0) continue;
-          const placeholders = chunk.map(() => "?").join(",");
-          const stmt = db.prepare(
-            `SELECT COUNT(*) as count FROM monthly_sessions WHERE project_id = ? AND ${sanitizedColumn} IN (${placeholders})`
-          );
-          const result: any = stmt.get(projectId, ...chunk);
-          totalCount += result.count;
+            if (chunk.length === 0) continue;
+            const placeholders = chunk.map(() => "?").join(",");
+            const stmt = db.prepare(
+                `SELECT ${sanitizedColumn} FROM monthly_sessions WHERE project_id = ? AND ${sanitizedColumn} IN (${placeholders})`
+            );
+            const results: any[] = stmt.all(projectId, ...chunk);
+            results.forEach(row => existingIds.add(String(row[sanitizedColumn])));
         }
-        return NextResponse.json({ count: totalCount, totalInDb });
+        
+        const tableTotalResult = db.prepare("SELECT COUNT(*) as total FROM monthly_sessions WHERE project_id = ?").get(projectId) as {total: number} | undefined;
+        const totalInDb = tableTotalResult?.total || 0;
+
+        return NextResponse.json({ count: existingIds.size, totalInDb, duplicateIds: Array.from(existingIds) });
+
       } catch (error: any) {
-        if (error.code === "SQLITE_CANTOPEN") return NextResponse.json({ count: 0, totalInDb: 0 });
+        if (error.code === "SQLITE_CANTOPEN") return NextResponse.json({ count: 0, totalInDb: 0, duplicateIds: [] });
         throw error;
       } finally {
         if (db) db.close();
@@ -92,8 +95,9 @@ export async function POST(req: Request) {
         const send = (data: any) => writer.write(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
 
         (async () => {
-            const { projectId, sessionNumber, sessionDate, appearanceData, appearanceMapping, absenceData, absenceMapping, mode, benefIdCol } = body;
-            
+            const { projectId, sessionNumber, sessionDate, appearanceData, appearanceMapping, absenceData, absenceMapping, mode, duplicateIds = [] } = body;
+            const duplicateIdsSet = new Set(duplicateIds);
+
             let stats = { saved: 0, updated: 0, skipped: 0, total: (appearanceData?.length || 0) + (absenceData?.length || 0) };
 
             if (!projectId || !sessionNumber || !sessionDate) {
@@ -108,7 +112,6 @@ export async function POST(req: Request) {
             try {
                 sessionDb = initializeDatabase();
                 
-                // STEP 1
                 send({ type: 'progress', status: 'FIRST_STEP_SAVING_FROM_ENROLLMENT_REVIEW_DATABASE', progress: 10, message: "Initializing databases...", stats });
                 const existingProjectRecordsStmt = sessionDb.prepare('SELECT COUNT(*) as count FROM monthly_sessions WHERE project_id = ?');
                 const existingProjectRecords = existingProjectRecordsStmt.get(projectId) as {count: number};
@@ -138,7 +141,6 @@ export async function POST(req: Request) {
                      send({ type: 'progress', status: 'FIRST_STEP_SAVING_FROM_ENROLLMENT_REVIEW_DATABASE', progress: 20, message: `Project already seeded. Skipping.`, stats });
                 }
 
-                // STEP 2 & 3
                 send({ type: 'progress', status: 'SECOND_STEP_SAVING_BENEFICIARY_APPEARANCE', progress: 30, message: "Processing appearance data...", stats });
                 
                 if (appearanceData && appearanceMapping && appearanceData.length > 0) {
@@ -149,6 +151,10 @@ export async function POST(req: Request) {
                       for (const row of rows) {
                           const benefId = row[appearanceMapping.benef_id];
                           if (benefId) {
+                            if (mode === 'skip' && duplicateIdsSet.has(String(benefId))) {
+                                stats.skipped++;
+                                continue;
+                            }
                             const info = updateStmt.run(sessionDate, benefId, projectId);
                             stats.updated += info.changes;
                           }
@@ -158,7 +164,6 @@ export async function POST(req: Request) {
                 }
                 send({ type: 'progress', status: 'THIRD_STEP_SAVING_GENERAL_SESSIONS_DATE', progress: 50, message: "Appearance data processed.", stats });
 
-                // STEP 4
                 if (absenceData && absenceMapping && absenceData.length > 0) {
                     send({ type: 'progress', status: 'FOURTH_STEP_SAVING_BENEFICIARY_ABSENCE', progress: 60, message: "Processing absence data...", stats });
                     const colsToUpdate = Object.keys(absenceMapping).filter(fileCol => fileCol !== absenceMapping.benef_id);
@@ -168,7 +173,13 @@ export async function POST(req: Request) {
                         const updateStmt = sessionDb.prepare(`UPDATE monthly_sessions SET ${setClause} WHERE benef_id = @benef_id AND project_id = @project_id`);
                         const transaction = sessionDb.transaction((rows) => {
                             for (const row of rows) {
-                                const payload: Record<string, any> = { benef_id: row[absenceMapping.benef_id], project_id: projectId };
+                                const benefId = row[absenceMapping.benef_id];
+                                if(!benefId) continue;
+                                 if (mode === 'skip' && duplicateIdsSet.has(String(benefId))) {
+                                    stats.skipped++;
+                                    continue;
+                                }
+                                const payload: Record<string, any> = { benef_id: benefId, project_id: projectId };
                                 colsToUpdate.forEach(fileCol => payload[fileCol] = row[fileCol] ?? null);
                                 const info = updateStmt.run(payload);
                                 stats.updated += info.changes;
@@ -178,18 +189,13 @@ export async function POST(req: Request) {
                     }
                 }
                 
-                // STEP 5
                 send({ type: 'progress', status: 'FIFTH_STEP_SAVING_ABSENTEES', progress: 80, message: "Marking absentees...", stats });
                 const absenteeInfo = sessionDb.prepare(`UPDATE monthly_sessions SET absent_s${sessionNumber} = 1 WHERE project_id = ? AND absence_code_s${sessionNumber} IS NOT NULL AND absence_code_s${sessionNumber} != ''`).run(projectId);
-                stats.updated += absenteeInfo.changes;
                 
-                // STEP 6
                 send({ type: 'progress', status: 'SIXTH_STEP_SAVING_ATTENDANCE', progress: 90, message: "Finalizing attendance...", stats });
                 const attendingInfo1 = sessionDb.prepare(`UPDATE monthly_sessions SET attending_s${sessionNumber} = 0 WHERE project_id = ? AND absent_s${sessionNumber} = 1`).run(projectId);
-                stats.updated += attendingInfo1.changes;
 
                 const attendingInfo2 = sessionDb.prepare(`UPDATE monthly_sessions SET attending_s${sessionNumber} = 1 WHERE project_id = ? AND bnf_appear_s${sessionNumber} = 1 AND (attending_s${sessionNumber} IS NULL OR attending_s${sessionNumber} != 0)`).run(projectId);
-                stats.updated += attendingInfo2.changes;
                 
                 send({ type: 'done', message: "Processing complete!", stats });
 

@@ -16,6 +16,16 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Upload, Save, GitCompareArrows, Plus, Trash2, ArrowLeft, CheckCircle, BarChart2, Database, Users } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface Project {
   projectId: string;
@@ -73,6 +83,8 @@ export default function MonthlySessionsUploadPage() {
     const [workerMessage, setWorkerMessage] = useState('');
     const [results, setResults] = useState<any>(null);
     const [saveStats, setSaveStats] = useState({ saved: 0, updated: 0, skipped: 0, total: 0 });
+    const [duplicateInfo, setDuplicateInfo] = useState({ isOpen: false, count: 0, totalInDb: 0, duplicateIds: [] });
+
 
     useEffect(() => {
         setLoading(p => ({...p, projects: true}));
@@ -193,13 +205,8 @@ export default function MonthlySessionsUploadPage() {
         }
     }, [selectedProjectId, file]);
 
-
-    const handleSave = async () => {
-        if(!Array.from(appearanceMapping.values()).includes('benef_id') && !Array.from(absenceMapping.values()).includes('benef_id')) {
-            toast({ title: "Mapping Incomplete", description: "You must map a column to 'benef_id' in either the appearance or absence sheet.", variant: 'destructive'});
-            return;
-        }
-
+    const executeSave = async (mode: 'skip' | 'replace') => {
+        setDuplicateInfo(prev => ({...prev, isOpen: false})); // Close dialog
         setLoading(prev => ({...prev, saving: true}));
         setWorkerStatus('initializing');
         setWorkerProgress(0);
@@ -216,7 +223,9 @@ export default function MonthlySessionsUploadPage() {
                     appearanceData,
                     appearanceMapping: Object.fromEntries(appearanceMapping),
                     absenceData,
-                    absenceMapping: Object.fromEntries(absenceMapping)
+                    absenceMapping: Object.fromEntries(absenceMapping),
+                    mode,
+                    duplicateIds: duplicateInfo.duplicateIds
                 }),
             });
 
@@ -262,6 +271,47 @@ export default function MonthlySessionsUploadPage() {
             toast({ title: "Error during processing", description: error.message, variant: "destructive" });
         } finally {
             setLoading(prev => ({...prev, saving: false}));
+        }
+    }
+
+
+    const handleSave = async () => {
+        const benefIdMappedCol = Array.from(appearanceMapping.values()).includes('benef_id') 
+            ? Array.from(appearanceMapping.entries()).find(([, dbCol]) => dbCol === 'benef_id')?.[0]
+            : Array.from(absenceMapping.entries()).find(([, dbCol]) => dbCol === 'benef_id')?.[0];
+
+        if(!benefIdMappedCol) {
+            toast({ title: "Mapping Incomplete", description: "You must map a column to 'benef_id' in either the appearance or absence sheet.", variant: 'destructive'});
+            return;
+        }
+
+        setLoading(prev => ({...prev, saving: true}));
+        try {
+            const uniqueIds = Array.from(new Set([
+                ...appearanceData.map(r => r[benefIdMappedCol]),
+                ...absenceData.map(r => r[benefIdMappedCol])
+            ])).filter(Boolean);
+
+            const res = await fetch('/api/monthly-health-sessions', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ action: 'check_duplicates', projectId: selectedProjectId, uniqueIds, uniqueIdCol: 'benef_id' })
+            });
+
+            if(!res.ok) throw new Error("Failed to check for duplicates.");
+            
+            const { count, totalInDb, duplicateIds } = await res.json();
+            
+            if(count > 0) {
+                setDuplicateInfo({ isOpen: true, count, totalInDb, duplicateIds });
+            } else {
+                await executeSave('replace'); // No duplicates, just save/update all
+            }
+
+        } catch (error: any) {
+             toast({ title: "Validation Error", description: error.message, variant: "destructive" });
+        } finally {
+             setLoading(prev => ({...prev, saving: false}));
         }
     };
     
@@ -373,6 +423,31 @@ export default function MonthlySessionsUploadPage() {
                     )}
                 </CardContent>
             </Card>
+
+            <AlertDialog open={duplicateInfo.isOpen} onOpenChange={(isOpen) => setDuplicateInfo(prev => ({...prev, isOpen}))}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Duplicate Records Found</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Found {duplicateInfo.count} record(s) in your uploaded file that already exist in the database for this project. How would you like to proceed?
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter className="flex flex-col gap-2">
+                         <Button
+                            variant="outline"
+                            onClick={() => executeSave("skip")}
+                            >
+                             Skip Existing & Save New Records
+                        </Button>
+                        <Button
+                            onClick={() => executeSave("replace")}
+                            >
+                             Update All Matching Records
+                        </Button>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
             
             {results && (
                 <Card>
