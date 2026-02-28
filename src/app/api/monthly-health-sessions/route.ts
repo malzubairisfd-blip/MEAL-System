@@ -6,6 +6,8 @@ import Database from "better-sqlite3";
 const getDataPath = () => path.join(process.cwd(), "src/data");
 const getDbPath = () => path.join(getDataPath(), "monthly-health-sessions.db");
 const getEnrollmentDbPath = () => path.join(getDataPath(), "enrollment-review.db");
+const getProjectsDbPath = () => path.join(getDataPath(), 'projects.db');
+
 
 const SESSION_BASE_COLUMNS = ["bnf_appear", "date_of_general", "attending", "absent", "absence_code", "absence_reason", "has_alternative", "date_of_alternative"];
 
@@ -143,6 +145,23 @@ export async function POST(req: Request) {
           fileLookupColumn,
           dbLookupColumn,
         } = body;
+        
+        let projectName = '';
+        try {
+            const projectsDbPath = getProjectsDbPath();
+            const projectsDb = new Database(projectsDbPath, { fileMustExist: true });
+            const project = projectsDb.prepare('SELECT projectName FROM projects WHERE projectId = ?').get(projectId);
+            projectsDb.close();
+            if (project) {
+                projectName = project.projectName;
+            } else {
+                throw new Error(`Project with ID ${projectId} not found.`);
+            }
+        } catch(e: any) {
+             send({ type: "error", error: `Could not retrieve project name: ${e.message}` });
+             writer.close();
+             return;
+        }
 
         const sanitizedSessionNumber = Number(rawSessionNumber);
         if (!projectId || !sanitizedSessionNumber || sanitizedSessionNumber < 1 || sanitizedSessionNumber > 100) {
@@ -201,7 +220,7 @@ export async function POST(req: Request) {
               const beneficiaries = enrollmentDb
                 .prepare(
                   `
-                  SELECT benef_id, bnf_name, bnf_vill, bnf_ozla, bnf_mud, ed_id, ed_name, ec_id, project_name
+                  SELECT benef_id, bnf_name, bnf_vill, bnf_ozla, bnf_mud, ed_id, ed_name
                   FROM enrollment_data WHERE project_id = ?
                 `
                 )
@@ -214,7 +233,7 @@ export async function POST(req: Request) {
 
               const insertMany = sessionDb.transaction((bnfs: any[]) => {
                 for (const bnf of bnfs) {
-                  const info = insertStmt.run({ ...bnf, project_id: projectId });
+                  const info = insertStmt.run({ ...bnf, project_id: projectId, project_name: projectName });
                   stats.saved += info.changes;
                 }
               });
