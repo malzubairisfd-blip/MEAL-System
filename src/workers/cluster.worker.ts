@@ -1,6 +1,7 @@
 
 // src/workers/cluster.worker.ts
 import { alignLineage, jaroWinkler, collapseDuplicateAncestors, nameOrderFreeScore, tokenJaccard } from '@/lib/similarity';
+import type { RecordRow } from "@/lib/types";
 
 // --- Preprocessing Logic (Copied from preprocess.ts) ---
 
@@ -1130,6 +1131,7 @@ const runClustering = async (rows: PreprocessedRow[], edges: any[], opts: Worker
   // Remap merged clusters to canonical row objects (defensive) and ensure uniqueness: each _internalId used once.
   const usedIds = new Set<string>();
   const finalMerged: any[] = [];
+  let clusterCounter = 1;
 
   for (const c of merged) {
     const remappedRecords = (c.records || [])
@@ -1166,9 +1168,16 @@ const runClustering = async (rows: PreprocessedRow[], edges: any[], opts: Worker
           }
           return true;
         });
+      
+      const maxBeneficiaryId = uniqueRecords.reduce((max: number, r: RecordRow) => {
+          const currentId = Number(r.beneficiaryId);
+          return !isNaN(currentId) && currentId > max ? currentId : max;
+      }, 0);
+      const generatedClusterId = maxBeneficiaryId > 0 ? maxBeneficiaryId : clusterCounter++;
 
       finalMerged.push({
         ...c,
+        Generated_Cluster_ID: generatedClusterId,
         records: uniqueRecords,
         pairScores: filteredPairScores,
         reasons: Array.from(new Set(c.reasons || [])),

@@ -211,12 +211,6 @@ self.onmessage = (event) => {
       }
 
       const records = (cluster.records || []) as PreprocessedRow[];
-      
-      const maxBeneficiaryId = records.reduce((max: number, r: RecordRow) => {
-          const currentId = Number(r.beneficiaryId);
-          return !isNaN(currentId) && currentId > max ? currentId : max;
-      }, 0);
-      const generatedClusterId = maxBeneficiaryId > 0 ? maxBeneficiaryId : index + 1;
 
       if (records.length < 2) {
         return {
@@ -229,7 +223,6 @@ self.onmessage = (event) => {
           avgFinalScore: 0,
           Max_PairScore: 0,
           Flag: '',
-          Generated_Cluster_ID: generatedClusterId,
         };
       }
       
@@ -296,7 +289,6 @@ self.onmessage = (event) => {
         avgFinalScore: confidenceResult.totalAverageScore,
         Max_PairScore: maxPairScore,
         Flag: flag,
-        Generated_Cluster_ID: generatedClusterId
       };
     });
 
