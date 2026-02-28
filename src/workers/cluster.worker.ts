@@ -112,6 +112,8 @@ const splitParts = (value: string) =>
 
 export type PreprocessedRow = {
   _internalId: string;
+  beneficiaryId?: string;
+  id?: string;
   womanName: string;
   husbandName: string;
   nationalId: string;
@@ -1027,7 +1029,7 @@ const runClustering = async (rows: PreprocessedRow[], edges: any[], opts: Worker
   // Precompute id -> index map to avoid repeated findIndex calls and to ensure correct mapping
   const idToIndex = new Map<string, number>();
   for (let i = 0; i < rows.length; i++) {
-    idToIndex.set(rows[i]._internalId, i);
+    idToIndex.set(rows[i]._internalId!, i);
   }
 
   // Sorting millions of edges is fast, but let's be safe
@@ -1170,8 +1172,8 @@ const runClustering = async (rows: PreprocessedRow[], edges: any[], opts: Worker
   
     const uniqueRecords: any[] = [];
     for (const r of remappedRecords) {
-      if (!usedIds.has(r._internalId)) {
-        usedIds.add(r._internalId);
+      if (!usedIds.has(r._internalId!)) {
+        usedIds.add(r._internalId!);
         uniqueRecords.push(r);
       }
     }
@@ -1255,9 +1257,15 @@ class UF {
   }
 }
 
-const splitCluster = (rowsSubset: PreprocessedRow[], minInternal: number, opts: WorkerOptions) => {
+const splitCluster = (
+  rowsSubset: PreprocessedRow[],
+  minInternal: number,
+  opts: WorkerOptions
+) => {
   if (!rowsSubset.length) return [];
+
   const localEdges: any[] = [];
+
   for (let i = 0; i < rowsSubset.length; i++) {
     for (let j = i + 1; j < rowsSubset.length; j++) {
       const result = pairwiseScore(rowsSubset[i], rowsSubset[j], opts);
@@ -1267,23 +1275,24 @@ const splitCluster = (rowsSubset: PreprocessedRow[], minInternal: number, opts: 
     }
   }
 
-  if (rowsSubset.length <= 4) {
-    const reasons = Array.from(new Set(localEdges.flatMap((edge) => edge.reasons || [])));
-    return [{ records: rowsSubset, reasons, pairScores: localEdges }];
-  }
-
   localEdges.sort((a, b) => b.score - a.score);
+
   const uf = new UF(rowsSubset.length);
-  localEdges.forEach((edge) => {
+
+  // 🔥 Merge by strongest similarity first
+  for (const edge of localEdges) {
     const ra = uf.find(edge.a);
     const rb = uf.find(edge.b);
-    if (ra === rb) return;
+    if (ra === rb) continue;
+
+    // allow merge only if result cluster will not exceed 4
     if (uf.size[ra] + uf.size[rb] <= 4) {
       uf.merge(ra, rb);
     }
-  });
+  }
 
   const groups = new Map<number, number[]>();
+
   for (let i = 0; i < rowsSubset.length; i++) {
     const root = uf.find(i);
     const arr = groups.get(root) || [];
@@ -1292,16 +1301,24 @@ const splitCluster = (rowsSubset: PreprocessedRow[], minInternal: number, opts: 
   }
 
   const result: any[] = [];
+
   groups.forEach((indices) => {
     if (indices.length <= 1) return;
+
     const subset = indices.map((idx) => rowsSubset[idx]);
-    const subEdges = localEdges.filter((edge) => indices.includes(edge.a) && indices.includes(edge.b));
-    const reasons = Array.from(new Set(subEdges.flatMap((edge) => edge.reasons || [])));
-    if (subset.length <= 4) {
-      result.push({ records: subset, reasons, pairScores: subEdges });
-    } else {
-      result.push(...splitCluster(subset, Math.max(minInternal, 0.45), opts));
-    }
+    const subEdges = localEdges.filter(
+      (edge) => indices.includes(edge.a) && indices.includes(edge.b)
+    );
+
+    const reasons = Array.from(
+      new Set(subEdges.flatMap((edge) => edge.reasons || []))
+    );
+
+    result.push({
+      records: subset,
+      reasons,
+      pairScores: subEdges,
+    });
   });
 
   return result;
@@ -1314,7 +1331,7 @@ const mergeOverlappingClusters = (clusters: any[]) => {
 
   clusters.forEach((cluster, idx) => {
     cluster.records.forEach((record: any) => {
-        const internalId = record._internalId;
+        const internalId = record._internalId!;
         if (recordToCluster.has(internalId)) {
             const previousClusterIndex = recordToCluster.get(internalId)!;
             clusterUF.merge(previousClusterIndex, idx);
