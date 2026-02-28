@@ -1,4 +1,3 @@
-
 // src/app/meal-system/monitoring/implementation/process/monthly-health-sessions/database/page.tsx
 "use client";
 
@@ -8,8 +7,10 @@ import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, Search, ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react";
+import { Loader2, Search, ArrowLeft, ChevronLeft, ChevronRight, FileDown } from "lucide-react";
 import { Input } from '@/components/ui/input';
+import { exportHealthSessionsToExcel } from '@/lib/exportHealthSessionsToExcel';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export default function HealthSessionsDatabasePage() {
     const [records, setRecords] = useState<any[]>([]);
@@ -17,8 +18,9 @@ export default function HealthSessionsDatabasePage() {
     const [error, setError] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState("");
     const [currentPage, setCurrentPage] = useState(1);
-    const itemsPerPage = 50;
+    const [selectedBeneficiaryId, setSelectedBeneficiaryId] = useState<string | null>(null);
 
+    const itemsPerPage = 50;
     const phonePanelRef = useRef<HTMLDivElement>(null);
     const { toast } = useToast();
 
@@ -52,21 +54,99 @@ export default function HealthSessionsDatabasePage() {
         const startIndex = (currentPage - 1) * itemsPerPage;
         return filteredRecords.slice(startIndex, startIndex + itemsPerPage);
     }, [filteredRecords, currentPage]);
+    
+    const beneficiarySummary = useMemo(() => {
+        if (!selectedBeneficiaryId) return null;
+        const record = records.find(r => r.benef_id === selectedBeneficiaryId);
+        if (!record) return null;
+
+        let total_appear = 0;
+        let total_absence = 0;
+        let total_alternative = 0;
+
+        for (let i = 1; i <= 76; i++) {
+            if (record[`bnf_appear_s${i}`] === 1) total_appear++;
+            if (record[`absent_s${i}`] === 1) total_absence++;
+            if (record[`has_alternative_s${i}`]) total_alternative++;
+        }
+        
+        const total_attending = total_appear - total_absence;
+
+        return { total_appear, total_attending, total_absence, total_alternative };
+    }, [selectedBeneficiaryId, records]);
 
     const totalPages = Math.ceil(filteredRecords.length / itemsPerPage);
     const allColumns = useMemo(() => (records.length > 0 ? Object.keys(records[0]) : []), [records]);
+    
+    const handleDownload = () => {
+        if (records.length === 0) {
+          toast({ title: "No Data", description: "There is no data to download.", variant: "destructive" });
+          return;
+        }
+        exportHealthSessionsToExcel(records, allColumns);
+        toast({ title: "Download Started", description: "Your Excel file is being generated." });
+    };
 
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center">
                 <h1 className="text-3xl font-bold">Health Sessions Database</h1>
-                <Button variant="outline" asChild>
-                    <Link href="/meal-system/monitoring/implementation/process/monthly-health-sessions">
-                        <ArrowLeft className="mr-2 h-4 w-4" /> Back to Hub
-                    </Link>
-                </Button>
+                <div className="flex gap-2">
+                    <Button variant="outline" asChild>
+                        <Link href="/meal-system/monitoring/implementation/process/monthly-health-sessions">
+                            <ArrowLeft className="mr-2 h-4 w-4" /> Back to Hub
+                        </Link>
+                    </Button>
+                    <Button onClick={handleDownload} disabled={loading}>
+                        <FileDown className="mr-2 h-4 w-4" /> Download as Excel
+                    </Button>
+                </div>
             </div>
             
+            <Card>
+                <CardHeader>
+                    <CardTitle>Beneficiary Summary</CardTitle>
+                    <CardDescription>Select a beneficiary to see their overall session summary.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <Select onValueChange={setSelectedBeneficiaryId} value={selectedBeneficiaryId || ''}>
+                        <SelectTrigger className="w-full md:w-1/2">
+                            <SelectValue placeholder="Select a beneficiary..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {records.map(r => (
+                                <SelectItem key={r.benef_id} value={r.benef_id}>
+                                    {r.bnf_name} ({r.benef_id})
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+
+                    {beneficiarySummary && (
+                        <div className="mt-4 border rounded-lg overflow-hidden">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Total Appearances</TableHead>
+                                        <TableHead>Total Attendance</TableHead>
+                                        <TableHead>Total Absence</TableHead>
+                                        <TableHead>Total Alternatives</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    <TableRow>
+                                        <TableCell>{beneficiarySummary.total_appear}</TableCell>
+                                        <TableCell>{beneficiarySummary.total_attending}</TableCell>
+                                        <TableCell>{beneficiarySummary.total_absence}</TableCell>
+                                        <TableCell>{beneficiarySummary.total_alternative}</TableCell>
+                                    </TableRow>
+                                </TableBody>
+                            </Table>
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+
             <Card>
                 <CardHeader>
                     <CardTitle>Session Records</CardTitle>
@@ -123,5 +203,3 @@ export default function HealthSessionsDatabasePage() {
         </div>
     );
 }
-
-    
