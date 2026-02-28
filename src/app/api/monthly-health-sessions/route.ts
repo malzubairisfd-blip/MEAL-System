@@ -93,6 +93,8 @@ export async function POST(req: Request) {
 
         (async () => {
             const { projectId, sessionNumber, sessionDate, appearanceData, appearanceMapping, absenceData, absenceMapping, mode, benefIdCol } = body;
+            
+            let stats = { saved: 0, updated: 0, skipped: 0, total: (appearanceData?.length || 0) + (absenceData?.length || 0) };
 
             if (!projectId || !sessionNumber || !sessionDate) {
                  send({ type: 'error', error: "Missing required parameters." });
@@ -107,7 +109,7 @@ export async function POST(req: Request) {
                 sessionDb = initializeDatabase();
                 
                 // STEP 1
-                send({ type: 'progress', status: 'FIRST_STEP_SAVING_FROM_ENROLLMENT_REVIEW_DATABASE', progress: 10, message: "Initializing databases..." });
+                send({ type: 'progress', status: 'FIRST_STEP_SAVING_FROM_ENROLLMENT_REVIEW_DATABASE', progress: 10, message: "Initializing databases...", stats });
                 const existingProjectRecordsStmt = sessionDb.prepare('SELECT COUNT(*) as count FROM monthly_sessions WHERE project_id = ?');
                 const existingProjectRecords = existingProjectRecordsStmt.get(projectId) as {count: number};
 
@@ -124,17 +126,20 @@ export async function POST(req: Request) {
                     `);
                     
                     const insertMany = sessionDb.transaction((bnfs) => {
-                        for (const bnf of bnfs) insertStmt.run({...bnf, project_id: projectId});
+                        for (const bnf of bnfs) {
+                           const info = insertStmt.run({...bnf, project_id: projectId});
+                           stats.saved += info.changes;
+                        }
                     });
                     
                     insertMany(beneficiaries);
-                    send({ type: 'progress', status: 'FIRST_STEP_SAVING_FROM_ENROLLMENT_REVIEW_DATABASE', progress: 20, message: `Seeded ${beneficiaries.length} base records.` });
+                    send({ type: 'progress', status: 'FIRST_STEP_SAVING_FROM_ENROLLMENT_REVIEW_DATABASE', progress: 20, message: `Seeded ${stats.saved} base records.`, stats });
                 } else {
-                     send({ type: 'progress', status: 'FIRST_STEP_SAVING_FROM_ENROLLMENT_REVIEW_DATABASE', progress: 20, message: `Project already seeded. Skipping.` });
+                     send({ type: 'progress', status: 'FIRST_STEP_SAVING_FROM_ENROLLMENT_REVIEW_DATABASE', progress: 20, message: `Project already seeded. Skipping.`, stats });
                 }
 
                 // STEP 2 & 3
-                send({ type: 'progress', status: 'SECOND_STEP_SAVING_BENEFICIARY_APPEARANCE', progress: 30, message: "Processing appearance data..." });
+                send({ type: 'progress', status: 'SECOND_STEP_SAVING_BENEFICIARY_APPEARANCE', progress: 30, message: "Processing appearance data...", stats });
                 
                 if (appearanceData && appearanceMapping && appearanceData.length > 0) {
                   const appearCol = `bnf_appear_s${sessionNumber}`;
@@ -144,17 +149,18 @@ export async function POST(req: Request) {
                       for (const row of rows) {
                           const benefId = row[appearanceMapping.benef_id];
                           if (benefId) {
-                            updateStmt.run(sessionDate, benefId, projectId);
+                            const info = updateStmt.run(sessionDate, benefId, projectId);
+                            stats.updated += info.changes;
                           }
                       }
                   });
                   transaction(appearanceData);
                 }
-                send({ type: 'progress', status: 'THIRD_STEP_SAVING_GENERAL_SESSIONS_DATE', progress: 50, message: "Appearance data processed." });
+                send({ type: 'progress', status: 'THIRD_STEP_SAVING_GENERAL_SESSIONS_DATE', progress: 50, message: "Appearance data processed.", stats });
 
                 // STEP 4
                 if (absenceData && absenceMapping && absenceData.length > 0) {
-                    send({ type: 'progress', status: 'FOURTH_STEP_SAVING_BENEFICIARY_ABSENCE', progress: 60, message: "Processing absence data..." });
+                    send({ type: 'progress', status: 'FOURTH_STEP_SAVING_BENEFICIARY_ABSENCE', progress: 60, message: "Processing absence data...", stats });
                     const colsToUpdate = Object.keys(absenceMapping).filter(fileCol => fileCol !== absenceMapping.benef_id);
                     const setClause = colsToUpdate.map(fileCol => `${absenceMapping[fileCol]} = @${fileCol}`).join(', ');
 
@@ -164,7 +170,8 @@ export async function POST(req: Request) {
                             for (const row of rows) {
                                 const payload: Record<string, any> = { benef_id: row[absenceMapping.benef_id], project_id: projectId };
                                 colsToUpdate.forEach(fileCol => payload[fileCol] = row[fileCol] ?? null);
-                                updateStmt.run(payload);
+                                const info = updateStmt.run(payload);
+                                stats.updated += info.changes;
                             }
                         });
                         transaction(absenceData);
@@ -172,15 +179,19 @@ export async function POST(req: Request) {
                 }
                 
                 // STEP 5
-                send({ type: 'progress', status: 'FIFTH_STEP_SAVING_ABSENTEES', progress: 80, message: "Marking absentees..." });
-                sessionDb.prepare(`UPDATE monthly_sessions SET absent_s${sessionNumber} = 1 WHERE project_id = ? AND absence_code_s${sessionNumber} IS NOT NULL AND absence_code_s${sessionNumber} != ''`).run(projectId);
+                send({ type: 'progress', status: 'FIFTH_STEP_SAVING_ABSENTEES', progress: 80, message: "Marking absentees...", stats });
+                const absenteeInfo = sessionDb.prepare(`UPDATE monthly_sessions SET absent_s${sessionNumber} = 1 WHERE project_id = ? AND absence_code_s${sessionNumber} IS NOT NULL AND absence_code_s${sessionNumber} != ''`).run(projectId);
+                stats.updated += absenteeInfo.changes;
                 
                 // STEP 6
-                send({ type: 'progress', status: 'SIXTH_STEP_SAVING_ATTENDANCE', progress: 90, message: "Finalizing attendance..." });
-                sessionDb.prepare(`UPDATE monthly_sessions SET attending_s${sessionNumber} = 0 WHERE project_id = ? AND absent_s${sessionNumber} = 1`).run(projectId);
-                sessionDb.prepare(`UPDATE monthly_sessions SET attending_s${sessionNumber} = 1 WHERE project_id = ? AND bnf_appear_s${sessionNumber} = 1 AND (attending_s${sessionNumber} IS NULL OR attending_s${sessionNumber} != 0)`).run(projectId);
+                send({ type: 'progress', status: 'SIXTH_STEP_SAVING_ATTENDANCE', progress: 90, message: "Finalizing attendance...", stats });
+                const attendingInfo1 = sessionDb.prepare(`UPDATE monthly_sessions SET attending_s${sessionNumber} = 0 WHERE project_id = ? AND absent_s${sessionNumber} = 1`).run(projectId);
+                stats.updated += attendingInfo1.changes;
+
+                const attendingInfo2 = sessionDb.prepare(`UPDATE monthly_sessions SET attending_s${sessionNumber} = 1 WHERE project_id = ? AND bnf_appear_s${sessionNumber} = 1 AND (attending_s${sessionNumber} IS NULL OR attending_s${sessionNumber} != 0)`).run(projectId);
+                stats.updated += attendingInfo2.changes;
                 
-                send({ type: 'done', message: "Processing complete!" });
+                send({ type: 'done', message: "Processing complete!", stats });
 
             } catch (e: any) {
                 send({ type: 'error', error: e.message || 'An unknown error occurred' });
@@ -231,5 +242,3 @@ export async function GET(req: Request) {
         return NextResponse.json({ error: "Failed to fetch session data", details: (err as any).message }, { status: 500 });
     }
 }
-
-    

@@ -72,6 +72,7 @@ export default function MonthlySessionsUploadPage() {
     const [workerProgress, setWorkerProgress] = useState(0);
     const [workerMessage, setWorkerMessage] = useState('');
     const [results, setResults] = useState<any>(null);
+    const [saveStats, setSaveStats] = useState({ saved: 0, updated: 0, skipped: 0, total: 0 });
 
     useEffect(() => {
         setLoading(p => ({...p, projects: true}));
@@ -181,11 +182,15 @@ export default function MonthlySessionsUploadPage() {
         if (!selectedProjectId || !file) return;
         const keyAppearance = `${LOCAL_STORAGE_MAPPING_PREFIX}${selectedProjectId}-appearance`;
         const storedAppearance = localStorage.getItem(keyAppearance);
-        if (storedAppearance) setAppearanceMapping(new Map(JSON.parse(storedAppearance)));
+        if (storedAppearance) {
+            try { setAppearanceMapping(new Map(JSON.parse(storedAppearance))); } catch {}
+        }
         
         const keyAbsence = `${LOCAL_STORAGE_MAPPING_PREFIX}${selectedProjectId}-absence`;
         const storedAbsence = localStorage.getItem(keyAbsence);
-        if (storedAbsence) setAbsenceMapping(new Map(JSON.parse(storedAbsence)));
+        if (storedAbsence) {
+            try { setAbsenceMapping(new Map(JSON.parse(storedAbsence))); } catch {}
+        }
     }, [selectedProjectId, file]);
 
 
@@ -234,14 +239,18 @@ export default function MonthlySessionsUploadPage() {
                         setWorkerStatus(data.status);
                         setWorkerProgress(data.progress);
                         setWorkerMessage(data.message);
+                        if (data.stats) {
+                            setSaveStats(data.stats);
+                        }
                     } else if (data.type === 'done') {
                         setWorkerStatus('done');
                         setWorkerProgress(100);
+                        if(data.stats) setSaveStats(data.stats);
                         toast({ title: "Success", description: data.message });
                         setResults({
                             totalAppearance: appearanceData.length,
                             totalAbsence: absenceData.length,
-                        })
+                        });
                         break;
                     } else if (data.type === 'error') {
                         throw new Error(data.error);
@@ -357,7 +366,9 @@ export default function MonthlySessionsUploadPage() {
                                 <span>{workerProgress}%</span>
                             </div>
                             <Progress value={workerProgress} />
-                            <p className="text-xs text-center mt-1 text-muted-foreground">{workerMessage}</p>
+                            <p className="text-xs text-center mt-1 text-muted-foreground">
+                                {workerMessage} (Saved: {saveStats.saved}, Updated: {saveStats.updated}, Skipped: {saveStats.skipped} / {saveStats.total})
+                            </p>
                         </div>
                     )}
                 </CardContent>
@@ -380,5 +391,3 @@ export default function MonthlySessionsUploadPage() {
         </div>
     );
 }
-
-    
