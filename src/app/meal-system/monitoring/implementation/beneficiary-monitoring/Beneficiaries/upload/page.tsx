@@ -781,7 +781,7 @@ export default function UploadPage() {
   }, []);
 
   const executeSave = useCallback(
-    async (mode: "skip" | "replace", duplicateContext?: { duplicates: number; totalInDb: number }) => {
+    async (mode: "skip" | "replace") => {
       setDuplicateInfo((prev) => ({ ...prev, isOpen: false }));
       setIsSaving(true);
       setSaveStatus("saving");
@@ -794,12 +794,6 @@ export default function UploadPage() {
 
         const { enrichedRecords } = enrichData(cachedData);
         
-        if (mode === "skip" && duplicateContext?.duplicates === duplicateContext?.totalInDb && duplicateContext?.totalInDb) {
-          toast({ title: "All records already exist", description: "No new records to save.", variant: "destructive" });
-          setIsSaving(false);
-          setSaveStatus("idle");
-          return;
-        }
         const totalToProcess = enrichedRecords.length;
         const CHUNK_SIZE = 500;
         for (let i = 0; i < totalToProcess; i += CHUNK_SIZE) {
@@ -878,7 +872,7 @@ export default function UploadPage() {
           totalInDb: result.totalInDb || 0,
         }));
       } else {
-        await executeSave("skip", { duplicates: 0, totalInDb: result.totalInDb || 0 });
+        await executeSave("skip");
       }
     } catch (err: any) {
       toast({ title: "Duplicate Check Error", description: err.message, variant: "destructive" });
@@ -1376,12 +1370,12 @@ export default function UploadPage() {
           <AlertDialogFooter className="flex flex-col gap-2">
              <Button
               variant="outline"
-              onClick={() => executeSave("skip", { duplicates: duplicateInfo.count, totalInDb: duplicateInfo.totalInDb })}
+              onClick={() => executeSave("skip")}
             >
               Skip duplicates and save new records
             </Button>
             <Button
-              onClick={() => executeSave("replace", { duplicates: duplicateInfo.count, totalInDb: duplicateInfo.totalInDb })}
+              onClick={() => executeSave("replace")}
             >
               Update existing and add new records
             </Button>
@@ -1392,3 +1386,5 @@ export default function UploadPage() {
     </div>
   );
 }
+
+    
