@@ -1,3 +1,4 @@
+
 // src/app/meal-system/monitoring/implementation/process/monthly-health-sessions/dashboard/page.tsx
 "use client";
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
@@ -10,7 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, ArrowLeft, Download, Camera, ChevronDown, CheckCircle, BarChart2, PieChart, Donut, Star } from "lucide-react";
+import { Loader2, ArrowLeft, Download, Camera, ChevronDown, CheckCircle, BarChart2, PieChart, Donut, Star, Users } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from "@/hooks/use-toast";
@@ -54,10 +55,10 @@ export default function SessionsDashboardPage() {
         }
         setLoading(p => ({ ...p, data: true }));
         try {
-            const res = await fetch(`/api/monthly-health-sessions`);
+            const res = await fetch(`/api/monthly-health-sessions?projectId=${projectId}`);
             if (!res.ok) throw new Error("Failed to load session data.");
             const data = await res.json();
-            setAllData(data.filter((r:any) => r.project_id === projectId));
+            setAllData(data);
         } catch (error: any) {
             toast({ title: "Error", description: error.message, variant: "destructive" });
         } finally {
@@ -163,7 +164,7 @@ export default function SessionsDashboardPage() {
                                     <KPICard title="Total Session Cycles" value={processedData.totalSessions} icon={<CheckCircle/>}/>
                                     <KPICard title="Total Appearance" value={processedData.totalAppearance} icon={<Users/>}/>
                                     <KPICard title="Total Attendance" value={processedData.totalAttendance} icon={<CheckCircle/>}/>
-                                    <KPICard title="Total Absence" value={processedData.totalAbsence} icon={<X/>}/>
+                                    <KPICard title="Total Absence" value={processedData.totalAbsence} icon={<Users color='red'/>}/>
                                     <KPICard title="Total Alternative" value={processedData.totalAlternative} icon={<Star/>}/>
                                 </div>
                             </CollapsibleContent>
@@ -175,3 +176,5 @@ export default function SessionsDashboardPage() {
         </div>
     );
 }
+
+    

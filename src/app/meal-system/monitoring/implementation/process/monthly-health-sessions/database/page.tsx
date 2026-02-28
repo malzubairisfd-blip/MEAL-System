@@ -1,3 +1,4 @@
+
 // src/app/meal-system/monitoring/implementation/process/monthly-health-sessions/database/page.tsx
 "use client";
 
@@ -122,3 +123,5 @@ export default function HealthSessionsDatabasePage() {
         </div>
     );
 }
+
+    

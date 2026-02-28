@@ -1,3 +1,4 @@
+
 // src/app/meal-system/monitoring/implementation/process/monthly-health-sessions/upload/page.tsx
 "use client";
 
@@ -203,6 +204,7 @@ export default function MonthlySessionsUploadPage() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
+                    action: 'save',
                     projectId: selectedProjectId,
                     sessionNumber,
                     sessionDate: `${sessionDate.year}-${sessionDate.month}-${sessionDate.day}`,
@@ -378,3 +380,5 @@ export default function MonthlySessionsUploadPage() {
         </div>
     );
 }
+
+    
