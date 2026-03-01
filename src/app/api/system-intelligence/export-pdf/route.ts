@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import chromium from "@sparticuz/chromium";
-import puppeteer from "puppeteer-core";
+import puppeteer from "puppeteer";
 import fs from "fs/promises";
 import path from "path";
 import { scanFiles } from "@/lib/systemScanner";
@@ -180,6 +179,7 @@ function generateHTML(data: any, logoBase64: string | null) {
 // --- Main API Route ---
 
 export async function POST() {
+  let browser = null;
   try {
     const files = await scanFiles();
     const schemas = readSchemas();
@@ -197,10 +197,8 @@ export async function POST() {
 
     const html = generateHTML({ files, schemas, apis, risks }, logoBase64);
 
-    const browser = await puppeteer.launch({
-      args: chromium.args,
-      executablePath: await chromium.executablePath(),
-      headless: chromium.headless,
+    browser = await puppeteer.launch({
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
     });
 
     const page = await browser.newPage();
@@ -215,8 +213,6 @@ export async function POST() {
       footerTemplate: `<div style="font-size:8px; width:100%; text-align:center; padding-bottom: 20px;">Page <span class="pageNumber"></span> of <span class="totalPages"></span></div>`,
     });
 
-    await browser.close();
-
     return new NextResponse(pdf, {
       headers: {
         "Content-Type": "application/pdf",
@@ -226,5 +222,9 @@ export async function POST() {
   } catch (error: any) {
     console.error("PDF Generation Error:", error);
     return NextResponse.json({ error: "PDF generation failed.", details: error.message }, { status: 500 });
+  } finally {
+    if (browser) {
+      await browser.close();
+    }
   }
 }
