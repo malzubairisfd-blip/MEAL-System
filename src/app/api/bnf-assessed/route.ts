@@ -7,6 +7,7 @@ import Database from "better-sqlite3";
 
 const getDataPath = () => path.join(process.cwd(), "src/data");
 const getDbPath = () => path.join(getDataPath(), "bnf-assessed.db");
+const getProjectsDbPath = () => path.join(getDataPath(), 'projects.db');
 
 
 const DB_COLUMNS_FOR_CREATION = `(
@@ -425,30 +426,30 @@ const DB_COLUMNS_FOR_CREATION = `(
     please_select_the_alternative_educator TEXT,
     the_name_of_the_new_intellectual TEXT,
     comments TEXT,
-    diff_per__bnf1 REAL,
+    diff_per_bnf1 REAL,
     diff_level_bnf1 TEXT,
-    diff_per__bnf2 REAL,
+    diff_per_bnf2 REAL,
     diff_level_bnf2 TEXT,
-    diff_per__bnf3 REAL,
+    diff_per_bnf3 REAL,
     diff_level_bnf3 TEXT,
-    diff_per__bnf4 REAL,
-    diff_level__bnf4 TEXT,
-    diff_per__bnf5 REAL,
-    diff_level__bnf5 TEXT,
-    diff_per__bnf REAL,
-    diff_level__bnf TEXT,
-    diff_per__hus1 REAL,
-    diff_level__hus1 TEXT,
-    diff_per__hus2 REAL,
-    diff_level__hus2 TEXT,
-    diff_per__hus3 REAL,
-    diff_level__hus3 TEXT,
-    diff_per__hus4 REAL,
-    diff_level__hus4 TEXT,
-    diff_per__hus5 REAL,
-    diff_level__hus5 TEXT,
-    diff_per__hus REAL,
-    diff_level__hus TEXT,
+    diff_per_bnf4 REAL,
+    diff_level_bnf4 TEXT,
+    diff_per_bnf5 REAL,
+    diff_level_bnf5 TEXT,
+    diff_per_bnf REAL,
+    diff_level_bnf TEXT,
+    diff_per_hus1 REAL,
+    diff_level_hus1 TEXT,
+    diff_per_hus2 REAL,
+    diff_level_hus2 TEXT,
+    diff_per_hus3 REAL,
+    diff_level_hus3 TEXT,
+    diff_per_hus4 REAL,
+    diff_level_hus4 TEXT,
+    diff_per_hus5 REAL,
+    diff_level_hus5 TEXT,
+    diff_per_hus REAL,
+    diff_level_hus TEXT,
     enroll_sim_score TEXT,
     enroll_cluster_id TEXT,
     branch_recommendation TEXT,
@@ -595,6 +596,21 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: "Missing parameters for save." }, { status: 400 });
       }
 
+      let projectsDb: Database.Database | null = null;
+      let projectName = '';
+      try {
+        projectsDb = new Database(getProjectsDbPath(), { fileMustExist: true });
+        const project = projectsDb.prepare('SELECT projectName FROM projects WHERE projectId = ?').get(projectId) as { projectName: string } | undefined;
+        if (!project || !project.projectName) {
+          throw new Error(`Project with ID ${projectId} not found or has no name in projects.db`);
+        }
+        projectName = project.projectName;
+      } catch (error: any) {
+         return NextResponse.json({ error: `Could not retrieve project name: ${error.message}` }, { status: 500 });
+      } finally {
+        if (projectsDb) projectsDb.close();
+      }
+
       const db = initializeDatabase();
       try {
         const tableCols = db.prepare("PRAGMA table_info(assessed_data)").all().map((c: any) => c.name);
@@ -606,16 +622,18 @@ export async function POST(req: Request) {
         let updated = 0;
 
         const allRecordKeys = new Set(records.flatMap((r) => Object.keys(r)));
+        allRecordKeys.add('project_name');
+
         const insertCols = [...allRecordKeys].filter((col) => tableCols.includes(col) && col !== "id");
         const updateCols = insertCols.filter((col) => col !== "id" && col !== sanitizedIdCol && col !== "project_id");
 
         const insertStmt = db.prepare(
-          `INSERT INTO assessed_data (${insertCols.join(", ")}) VALUES (${insertCols.map((c) => `@${c}`).join(", ")})`
+          `INSERT INTO assessed_data (${insertCols.map(c => `"${c}"`).join(", ")}) VALUES (${insertCols.map((c) => `@${c}`).join(", ")})`
         );
         const updateStmt = db.prepare(
-          `UPDATE assessed_data SET ${updateCols.map((col) => `${col} = @${col}`).join(", ")} WHERE project_id = @project_id AND ${sanitizedIdCol} = @${sanitizedIdCol}`
+          `UPDATE assessed_data SET ${updateCols.map((col) => `"${col}" = @${col}`).join(", ")} WHERE project_id = @project_id AND "${sanitizedIdCol}" = @${sanitizedIdCol}`
         );
-        const checkStmt = db.prepare(`SELECT id FROM assessed_data WHERE project_id = ? AND ${sanitizedIdCol} = ?`);
+        const checkStmt = db.prepare(`SELECT id FROM assessed_data WHERE project_id = ? AND "${sanitizedIdCol}" = ?`);
 
         const transaction = db.transaction(() => {
           for (const record of records) {
@@ -627,18 +645,22 @@ export async function POST(req: Request) {
 
             const existing = checkStmt.get(projectId, String(uniqueValue));
             
-            const fullRecord: Record<string, any> = { project_id: projectId };
+            const fullRecord: Record<string, any> = { project_id: projectId, project_name: projectName };
             insertCols.forEach((col) => {
-              fullRecord[col] = record.hasOwnProperty(col) ? record[col] : null;
+              if (col !== 'project_id' && col !== 'project_name') {
+                fullRecord[col] = record.hasOwnProperty(col) ? record[col] : null;
+              }
             });
             fullRecord[sanitizedIdCol] = String(uniqueValue);
 
 
             if (existing) {
               if (mode === "replace") {
-                const updatePayload: Record<string, any> = { project_id: projectId, [sanitizedIdCol]: String(uniqueValue) };
+                const updatePayload: Record<string, any> = { project_id: projectId, project_name: projectName, [sanitizedIdCol]: String(uniqueValue) };
                  updateCols.forEach(col => {
-                    updatePayload[col] = record.hasOwnProperty(col) ? record[col] : null;
+                    if (col !== 'project_id' && col !== 'project_name') {
+                      updatePayload[col] = record.hasOwnProperty(col) ? record[col] : null;
+                    }
                 });
                 const info = updateStmt.run(updatePayload);
                 if (info.changes > 0) updated++;
@@ -671,14 +693,14 @@ export async function POST(req: Request) {
         let updatedCount = 0;
         const transaction = db.transaction((recordsToUpdate) => {
           for (const record of recordsToUpdate) {
-            if(!record.beneficiaryId) continue;
+            if(!record.id) continue;
             
-            const colsToUpdate = Object.keys(record).filter(col => tableCols.includes(col) && col !== 'id' && col !== 'beneficiaryId' && col !== 'project_id');
+            const colsToUpdate = Object.keys(record).filter(col => tableCols.includes(col) && col !== 'id');
             if(colsToUpdate.length === 0) continue;
             
-            const setClause = colsToUpdate.map(col => `${col} = @${col}`).join(", ");
+            const setClause = colsToUpdate.map(col => `"${col}" = @${col}`).join(", ");
             const stmt = db.prepare(
-                `UPDATE assessed_data SET ${setClause} WHERE project_id = @project_id AND beneficiaryId = @beneficiaryId`
+                `UPDATE assessed_data SET ${setClause} WHERE id = @id`
               );
             
             const info = stmt.run({ ...record, project_id: projectId });
@@ -744,7 +766,7 @@ export async function PUT(req: Request) {
           if (!record.id) continue;
           const colsToUpdate = Object.keys(record).filter((col) => tableCols.includes(col) && col !== "id");
           if (!colsToUpdate.length) continue;
-          const setClause = colsToUpdate.map((col) => `${col} = ?`).join(", ");
+          const setClause = colsToUpdate.map((col) => `"${col}" = ?`).join(", ");
           const values = colsToUpdate.map((col) => record[col]);
           values.push(record.id);
           db.prepare(`UPDATE assessed_data SET ${setClause} WHERE id = ?`).run(...values);
