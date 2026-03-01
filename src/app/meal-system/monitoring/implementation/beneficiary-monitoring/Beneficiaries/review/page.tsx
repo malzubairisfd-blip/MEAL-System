@@ -168,16 +168,17 @@ export default function ReviewPage() {
     []
   );
 
- const validateAndSave = useCallback(async () => {
-    if (selectedClusterIndex === null || !selectedCluster) return false;
+ const validateAndSave = useCallback(async (clusterToSave?: Cluster) => {
+    const cluster = clusterToSave || selectedCluster;
+    if (selectedClusterIndex === null || !cluster) return false;
 
-    if (!selectedCluster.groupDecision) {
+    if (!cluster.groupDecision) {
       setValidationError("يجب تحديد قرار للمجموعة (تكرار أو ليست تكرار).");
       return false;
     }
 
-    if (selectedCluster.groupDecision === "تكرار") {
-      const recordDecisions = selectedCluster.recordDecisions || {};
+    if (cluster.groupDecision === "تكرار") {
+      const recordDecisions = cluster.recordDecisions || {};
       const decisionValues = Object.values(recordDecisions);
       const keptRecords = decisionValues.filter(d => d === "تبقى").length;
 
@@ -186,8 +187,8 @@ export default function ReviewPage() {
         return false;
       }
       
-      for(const record of selectedCluster.records) {
-        if (recordDecisions[record._internalId!] === 'مستبعدة' && !selectedCluster.decisionReasons?.[record._internalId!]) {
+      for(const record of cluster.records) {
+        if (recordDecisions[record._internalId!] === 'مستبعدة' && !cluster.decisionReasons?.[record._internalId!]) {
             setValidationError(`يجب تحديد سبب استبعاد للسجل: ${record.womanName}`);
             return false;
         }
@@ -196,11 +197,11 @@ export default function ReviewPage() {
     
     setIsSaving(true);
     
-    const recordsToUpdate = selectedCluster.records.map(r => ({
+    const recordsToUpdate = cluster.records.map(r => ({
         id: r.id, // THE DB ROW ID
-        groupDecision: selectedCluster.groupDecision,
-        recordDecisions: selectedCluster.recordDecisions?.[r._internalId!],
-        decisionReasons: selectedCluster.decisionReasons?.[r._internalId!],
+        groupDecision: cluster.groupDecision,
+        recordDecisions: cluster.recordDecisions?.[r._internalId!],
+        decisionReasons: cluster.decisionReasons?.[r._internalId!],
     }));
 
     try {
@@ -226,12 +227,9 @@ export default function ReviewPage() {
 
   }, [selectedClusterIndex, selectedCluster, toast]);
 
- const handleSaveAndNext = useCallback(async () => {
-    const success = await validateAndSave();
+ const handleSaveAndNext = useCallback(async (clusterToSave?: Cluster) => {
+    const success = await validateAndSave(clusterToSave);
     if (success) {
-      // Optimistically update local state before refetching
-      handleUpdateClusterDecision(selectedClusterIndex!, (c) => c);
-
       if (selectedClusterIndex !== null && selectedClusterIndex < allClusters.length - 1) {
         setSelectedClusterIndex(selectedClusterIndex + 1);
         setActiveRecordIndex(null);
@@ -239,59 +237,61 @@ export default function ReviewPage() {
         toast({ title: "اكتملت المراجعة", description: "لقد قمت بمراجعة جميع المجموعات.", });
       }
     }
-  }, [validateAndSave, selectedClusterIndex, allClusters.length, toast, handleUpdateClusterDecision]);
+  }, [validateAndSave, selectedClusterIndex, allClusters.length, toast]);
 
   const [updateQueue, setUpdateQueue] = useState<{ recordId: string, decision: string } | null>(null);
 
   useEffect(() => {
-    const performUpdate = async () => {
-        if (!updateQueue || selectedClusterIndex === null) return;
+    const performUpdate = () => {
+        if (!updateQueue || selectedClusterIndex === null || !selectedCluster) return;
       
         const { recordId, decision } = updateQueue;
       
-        handleUpdateClusterDecision(selectedClusterIndex, (currentCluster) => {
-          let newDecisions = { ...(currentCluster.recordDecisions || {}), [recordId]: decision };
-          const newReasons: { [key: string]: string } = {};
-      
-          const keptRecord = currentCluster.records.find(r => newDecisions[r._internalId!] === "تبقى");
-          const verifyRecords = currentCluster.records.filter(r => newDecisions[r._internalId!] === "تحقق");
-      
-          currentCluster.records.forEach(record => {
-            const currentDecision = newDecisions[record._internalId!];
-            if (currentDecision === "مكررة") {
-              const targetRecord = keptRecord || verifyRecords[0];
-              if (targetRecord) {
-                newReasons[record._internalId!] = `مستفيدة مكررة مع ${targetRecord.beneficiaryId} - ${targetRecord.womanName || ""}`;
+        const getUpdatedCluster = (currentCluster: Cluster): Cluster => {
+            let newDecisions = { ...(currentCluster.recordDecisions || {}), [recordId]: decision };
+            const newReasons: { [key: string]: string } = {};
+        
+            const keptRecord = currentCluster.records.find(r => newDecisions[r._internalId!] === "تبقى");
+            const verifyRecords = currentCluster.records.filter(r => newDecisions[r._internalId!] === "تحقق");
+        
+            currentCluster.records.forEach(record => {
+              const currentDecision = newDecisions[record._internalId!];
+              if (currentDecision === "مكررة") {
+                const targetRecord = keptRecord || verifyRecords[0];
+                if (targetRecord) {
+                  newReasons[record._internalId!] = `مستفيدة مكررة مع ${targetRecord.beneficiaryId} - ${targetRecord.womanName || ""}`;
+                }
+              } else if (currentDecision === "تحقق") {
+                const otherVerify = verifyRecords.find(r => r._internalId !== record._internalId);
+                const target = otherVerify || keptRecord || currentCluster.records.find(r => newDecisions[r._internalId!] === "ليست تكرار") || currentCluster.records.find(r => newDecisions[r._internalId!] === "مكررة");
+                if (target) {
+                  newReasons[record._internalId!] = `اشتباه تكرار مع ${target.beneficiaryId} - ${target.womanName || ""}`;
+                }
               }
-            } else if (currentDecision === "تحقق") {
-              const otherVerify = verifyRecords.find(r => r._internalId !== record._internalId);
-              const target = otherVerify || keptRecord || currentCluster.records.find(r => newDecisions[r._internalId!] === "ليست تكرار") || currentCluster.records.find(r => newDecisions[r._internalId!] === "مكررة");
-              if (target) {
-                newReasons[record._internalId!] = `اشتباه تكرار مع ${target.beneficiaryId} - ${target.womanName || ""}`;
-              }
-            }
-          });
-      
-          return { ...currentCluster, recordDecisions: newDecisions, decisionReasons: { ...(currentCluster.decisionReasons || {}), ...newReasons } };
-        });
-      
-        const reviewedCount = Object.keys(selectedCluster?.recordDecisions || {}).length + 1;
-        const totalRecords = selectedCluster?.records.length ?? 0;
+            });
+        
+            return { ...currentCluster, recordDecisions: newDecisions, decisionReasons: { ...(currentCluster.decisionReasons || {}), ...newReasons } };
+        };
+
+        const updatedCluster = getUpdatedCluster(selectedCluster);
+
+        handleUpdateClusterDecision(selectedClusterIndex, () => updatedCluster);
+    
+        const reviewedCount = Object.keys(updatedCluster.recordDecisions || {}).length;
+        const totalRecords = updatedCluster.records.length ?? 0;
 
         if (decision !== 'مستبعدة' && reviewedCount === totalRecords) {
-           setTimeout(() => handleSaveAndNext(), 100);
+            setTimeout(() => handleSaveAndNext(updatedCluster), 100);
         } else {
-             const currentIndex = selectedCluster?.records.findIndex(r => r._internalId === recordId) ?? -1;
-             if (decision !== 'مستبعدة' && currentIndex !== -1 && currentIndex < totalRecords - 1) {
+            const currentIndex = updatedCluster.records.findIndex(r => r._internalId === recordId) ?? -1;
+            if (decision !== 'مستبعدة' && currentIndex !== -1 && currentIndex < totalRecords - 1) {
                 setActiveRecordIndex(currentIndex + 1);
-             }
+            }
         }
-      
-        setUpdateQueue(null); // Clear the queue after processing
+    
+        setUpdateQueue(null);
     };
-
     performUpdate();
-
   }, [updateQueue, handleUpdateClusterDecision, selectedClusterIndex, selectedCluster, handleSaveAndNext]);
   
   const handleRecordDecisionChange = useCallback((recordId: string, decision: string) => {
@@ -304,27 +304,26 @@ export default function ReviewPage() {
     handleUpdateClusterDecision(selectedClusterIndex, (c) => ({
         ...c, 
         groupDecision: value, 
-        recordDecisions: {}, // Reset individual decisions
+        recordDecisions: {},
         decisionReasons: {},
     }));
-    // Start the workflow
     setActiveRecordIndex(0);
   }, [selectedClusterIndex, handleUpdateClusterDecision]);
 
   const handleExclusionReasonChange = useCallback((recordId: string, reason: string) => {
-      if (selectedClusterIndex === null) return;
+      if (selectedClusterIndex === null || !selectedCluster) return;
       
-      handleUpdateClusterDecision(selectedClusterIndex, c => ({ ...c, decisionReasons: { ...(c.decisionReasons || {}), [recordId]: reason } }));
+      const getUpdatedCluster = (c: Cluster) => ({ ...c, decisionReasons: { ...(c.decisionReasons || {}), [recordId]: reason } });
+      const updatedCluster = getUpdatedCluster(selectedCluster);
+
+      handleUpdateClusterDecision(selectedClusterIndex, () => updatedCluster);
       
-      // Auto-advance logic
-      const totalRecords = selectedCluster?.records.length ?? 0;
-      const currentIndex = selectedCluster?.records.findIndex(r => r._internalId === recordId) ?? -1;
+      const totalRecords = updatedCluster.records.length ?? 0;
+      const currentIndex = updatedCluster.records.findIndex(r => r._internalId === recordId) ?? -1;
 
       if (currentIndex === totalRecords - 1) {
-          // Last record, save and move to next cluster
-          setTimeout(() => handleSaveAndNext(), 100);
+          setTimeout(() => handleSaveAndNext(updatedCluster), 100);
       } else {
-          // Not the last record, move to next
           setActiveRecordIndex(currentIndex + 1);
       }
   }, [selectedClusterIndex, selectedCluster, handleUpdateClusterDecision, handleSaveAndNext]);
@@ -362,7 +361,7 @@ export default function ReviewPage() {
             <div className="space-y-2">
               {allClusters.map((cluster, index) => (
                 <button
-                  key={index}
+                  key={cluster.Generated_Cluster_ID || index}
                   onClick={() => {
                     setSelectedClusterIndex(index);
                     setActiveRecordIndex(null); // Reset active record on cluster change
