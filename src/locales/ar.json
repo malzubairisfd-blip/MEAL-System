@@ -17,7 +17,8 @@
     "logframe": "الإطار المنطقي",
     "prepareIndicators": "إعداد المؤشرات",
     "indicatorTracking": "تتبع المؤشرات",
-    "fileEditor": "محرر الملفات"
+    "fileEditor": "محرر الملفات",
+    "systemArchitecture": "هندسة النظام"
   },
   "header": {
     "dashboard": "لوحة التحكم",

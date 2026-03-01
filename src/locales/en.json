@@ -17,7 +17,8 @@
     "logframe": "Logical Framework",
     "prepareIndicators": "Prepare Indicators",
     "indicatorTracking": "Indicator Tracking",
-    "fileEditor": "File Editor"
+    "fileEditor": "File Editor",
+    "systemArchitecture": "System Architecture"
   },
   "header": {
     "dashboard": "Dashboard",

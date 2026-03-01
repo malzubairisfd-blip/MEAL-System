@@ -30,7 +30,8 @@
     },
     "types": [
       "node",
-      "@types/recharts"
+      "@types/recharts",
+      "@types/pdfkit"
     ]
   },
   "include": [
