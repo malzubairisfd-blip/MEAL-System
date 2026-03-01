@@ -1,3 +1,4 @@
+
 import { NextResponse } from "next/server";
 import {
   Document,
@@ -35,123 +36,84 @@ export async function POST() {
     },
   });
 
-  const MyDocument = (
-    <Document>
-      {/* Cover Page */}
-      <Page size="A4" style={styles.page}>
-        <Text style={styles.title}>
-          System Architecture & Governance Manual
-        </Text>
-        <Text style={styles.text}>
-          Enterprise System Intelligence Report
-        </Text>
-        <Text style={styles.text}>
-          Generated: {new Date().toLocaleString()}
-        </Text>
+  const MyDocument = React.createElement(Document, null,
+    // Cover Page
+    React.createElement(Page, { size: "A4", style: styles.page },
+      React.createElement(Text, { style: styles.title }, "System Architecture & Governance Manual"),
+      React.createElement(Text, { style: styles.text }, "Enterprise System Intelligence Report"),
+      React.createElement(Text, { style: styles.text }, `Generated: ${new Date().toLocaleString()}`),
+      React.createElement(Text, { style: styles.footer, fixed: true }, "Confidential - Page 1")
+    ),
 
-        <Text style={styles.footer} fixed>
-          Confidential - Page 1
-        </Text>
-      </Page>
+    // Source Code
+    React.createElement(Page, { size: "A4", style: styles.page },
+      React.createElement(Text, { style: styles.sectionTitle }, "Source Code Overview"),
+      ...files.map((f, i) =>
+        React.createElement(View, { key: i },
+          React.createElement(Text, { style: styles.text }, `File: ${f.file}`),
+          f.functions?.length > 0 && React.createElement(Text, { style: styles.text }, `Functions: ${f.functions.join(", ")}`)
+        )
+      ),
+      React.createElement(Text, {
+        style: styles.footer,
+        render: ({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`,
+        fixed: true,
+      })
+    ),
 
-      {/* Source Code */}
-      <Page size="A4" style={styles.page}>
-        <Text style={styles.sectionTitle}>Source Code Overview</Text>
+    // Database Schema
+    React.createElement(Page, { size: "A4", style: styles.page },
+      React.createElement(Text, { style: styles.sectionTitle }, "Database Schema"),
+      ...Object.keys(schemas).map((table, i) =>
+        React.createElement(View, { key: i },
+          React.createElement(Text, { style: styles.text }, `Table: ${table}`),
+          ...(schemas[table].map((col: any, idx: number) =>
+            React.createElement(Text, { key: idx, style: styles.text }, `- ${col.name} (${col.type})`)
+          ))
+        )
+      ),
+      React.createElement(Text, {
+        style: styles.footer,
+        render: ({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`,
+        fixed: true,
+      })
+    ),
 
-        {files.map((f, i) => (
-          <View key={i}>
-            <Text style={styles.text}>File: {f.file}</Text>
-            {f.functions?.length > 0 && (
-              <Text style={styles.text}>
-                Functions: {f.functions.join(", ")}
-              </Text>
-            )}
-          </View>
-        ))}
+    // API Endpoints
+    React.createElement(Page, { size: "A4", style: styles.page },
+      React.createElement(Text, { style: styles.sectionTitle }, "API Endpoints"),
+      ...apis.map((api, i) =>
+        React.createElement(View, { key: i },
+          React.createElement(Text, { style: styles.text }, `Route: ${api.route}`),
+          React.createElement(Text, { style: styles.text }, `Methods: ${api.methods.join(", ")}`)
+        )
+      ),
+      React.createElement(Text, {
+        style: styles.footer,
+        render: ({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`,
+        fixed: true,
+      })
+    ),
 
-        <Text
-          style={styles.footer}
-          render={({ pageNumber, totalPages }) =>
-            `Page ${pageNumber} of ${totalPages}`
-          }
-          fixed
-        />
-      </Page>
-
-      {/* Database Schema */}
-      <Page size="A4" style={styles.page}>
-        <Text style={styles.sectionTitle}>Database Schema</Text>
-
-        {Object.keys(schemas).map((table, i) => (
-          <View key={i}>
-            <Text style={styles.text}>Table: {table}</Text>
-            {schemas[table].map((col: any, idx: number) => (
-              <Text key={idx} style={styles.text}>
-                - {col.name} ({col.type})
-              </Text>
-            ))}
-          </View>
-        ))}
-
-        <Text
-          style={styles.footer}
-          render={({ pageNumber, totalPages }) =>
-            `Page ${pageNumber} of ${totalPages}`
-          }
-          fixed
-        />
-      </Page>
-
-      {/* API Endpoints */}
-      <Page size="A4" style={styles.page}>
-        <Text style={styles.sectionTitle}>API Endpoints</Text>
-
-        {apis.map((api, i) => (
-          <View key={i}>
-            <Text style={styles.text}>Route: {api.route}</Text>
-            <Text style={styles.text}>
-              Methods: {api.methods.join(", ")}
-            </Text>
-          </View>
-        ))}
-
-        <Text
-          style={styles.footer}
-          render={({ pageNumber, totalPages }) =>
-            `Page ${pageNumber} of ${totalPages}`
-          }
-          fixed
-        />
-      </Page>
-
-      {/* Risk Governance */}
-      <Page size="A4" style={styles.page}>
-        <Text style={styles.sectionTitle}>Risk Governance</Text>
-
-        {risks.risks.map((risk, i) => (
-          <View key={i}>
-            <Text style={styles.text}>{risk.category}</Text>
-            <Text style={styles.text}>
-              Description: {risk.description}
-            </Text>
-            <Text style={styles.text}>
-              Mitigation: {risk.mitigation}
-            </Text>
-          </View>
-        ))}
-
-        <Text
-          style={styles.footer}
-          render={({ pageNumber, totalPages }) =>
-            `Page ${pageNumber} of ${totalPages}`
-          }
-          fixed
-        />
-      </Page>
-    </Document>
+    // Risk Governance
+    React.createElement(Page, { size: "A4", style: styles.page },
+      React.createElement(Text, { style: styles.sectionTitle }, "Risk Governance"),
+      ...risks.risks.map((risk, i) =>
+        React.createElement(View, { key: i },
+          React.createElement(Text, { style: styles.text }, risk.category),
+          React.createElement(Text, { style: styles.text }, `Description: ${risk.description}`),
+          React.createElement(Text, { style: styles.text }, `Mitigation: ${risk.mitigation}`)
+        )
+      ),
+      React.createElement(Text, {
+        style: styles.footer,
+        render: ({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`,
+        fixed: true,
+      })
+    )
   );
 
-  const stream = await renderToStream(MyDocument);
+  const stream = await renderToStream(MyDocument as React.ReactElement);
 
   return new NextResponse(stream as any, {
     headers: {
