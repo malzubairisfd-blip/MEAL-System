@@ -425,30 +425,30 @@ const DB_COLUMNS_FOR_CREATION = `(
     please_select_the_alternative_educator TEXT,
     the_name_of_the_new_intellectual TEXT,
     comments TEXT,
-    diff_per_bnf1 REAL,
+    diff_per__bnf1 REAL,
     diff_level_bnf1 TEXT,
-    diff_per_bnf2 REAL,
+    diff_per__bnf2 REAL,
     diff_level_bnf2 TEXT,
-    diff_per_bnf3 REAL,
+    diff_per__bnf3 REAL,
     diff_level_bnf3 TEXT,
-    diff_per_bnf4 REAL,
-    diff_level_bnf4 TEXT,
-    diff_per_bnf5 REAL,
-    diff_level_bnf5 TEXT,
-    diff_per_bnf REAL,
-    diff_level_bnf TEXT,
-    diff_per_hus1 REAL,
-    diff_level_hus1 TEXT,
-    diff_per_hus2 REAL,
-    diff_level_hus2 TEXT,
-    diff_per_hus3 REAL,
-    diff_level_hus3 TEXT,
-    diff_per_hus4 REAL,
-    diff_level_hus4 TEXT,
-    diff_per_hus5 REAL,
-    diff_level_hus5 TEXT,
-    diff_per_hus REAL,
-    diff_level_hus TEXT,
+    diff_per__bnf4 REAL,
+    diff_level__bnf4 TEXT,
+    diff_per__bnf5 REAL,
+    diff_level__bnf5 TEXT,
+    diff_per__bnf REAL,
+    diff_level__bnf TEXT,
+    diff_per__hus1 REAL,
+    diff_level__hus1 TEXT,
+    diff_per__hus2 REAL,
+    diff_level__hus2 TEXT,
+    diff_per__hus3 REAL,
+    diff_level__hus3 TEXT,
+    diff_per__hus4 REAL,
+    diff_level__hus4 TEXT,
+    diff_per__hus5 REAL,
+    diff_level__hus5 TEXT,
+    diff_per__hus REAL,
+    diff_level__hus TEXT,
     enroll_sim_score TEXT,
     enroll_cluster_id TEXT,
     branch_recommendation TEXT,
@@ -560,22 +560,30 @@ export async function POST(req: Request) {
           return NextResponse.json({ error: `Invalid column: ${uniqueIdCol}` }, { status: 400 });
         }
 
-        let totalCount = 0;
-        const chunks = chunkArray(uniqueIds, 900);
-        const tableTotalResult = dbInstance.prepare("SELECT COUNT(*) as total FROM assessed_data WHERE project_id = ?").get(projectId) as {total: number} | undefined;
-        const totalInDb = tableTotalResult?.total || 0;
+        const existingIds = new Set<string>();
+        const chunks = chunkArray(uniqueIds.map(String), 900);
+        
         for (const chunk of chunks) {
           if (chunk.length === 0) continue;
           const placeholders = chunk.map(() => "?").join(",");
           const stmt = dbInstance.prepare(
-            `SELECT COUNT(*) as count FROM assessed_data WHERE project_id = ? AND ${sanitizedColumn} IN (${placeholders})`
+            `SELECT "${sanitizedColumn}" FROM assessed_data WHERE project_id = ? AND "${sanitizedColumn}" IN (${placeholders})`
           );
-          const result: any = stmt.get(projectId, ...chunk);
-          totalCount += result.count;
+          const results: any[] = stmt.all(projectId, ...chunk);
+          results.forEach((row) => {
+            const value = row[sanitizedColumn];
+            if (value !== undefined && value !== null) {
+              existingIds.add(String(value));
+            }
+          });
         }
-        return NextResponse.json({ count: totalCount, totalInDb });
+        
+        const tableTotalResult = dbInstance.prepare("SELECT COUNT(*) as total FROM assessed_data WHERE project_id = ?").get(projectId) as {total: number} | undefined;
+        const totalInDb = tableTotalResult?.total || 0;
+
+        return NextResponse.json({ count: existingIds.size, totalInDb, duplicateIds: Array.from(existingIds) });
       } catch (error: any) {
-        if (error.code === "SQLITE_CANTOPEN") return NextResponse.json({ count: 0, totalInDb: 0 });
+        if (error.code === "SQLITE_CANTOPEN") return NextResponse.json({ count: 0, totalInDb: 0, duplicateIds: [] });
         throw error;
       } finally {
         if (dbInstance) dbInstance.close();
