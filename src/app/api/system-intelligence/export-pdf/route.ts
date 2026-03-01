@@ -1,11 +1,18 @@
 import { NextResponse } from "next/server";
-import PDFDocument from "pdfkit";
-import fs from "fs";
-import path from "path";
+import {
+  Document,
+  Page,
+  Text,
+  View,
+  StyleSheet,
+  PDFRenderer,
+} from "@react-pdf/renderer";
+import React from "react";
 import { scanFiles } from "@/lib/systemScanner";
 import { readSchemas } from "@/lib/schemaReader";
 import { analyzeAPIs } from "@/lib/apiAnalyzer";
 import { buildRiskDocumentation } from "@/lib/riskBuilder";
+import { renderToStream } from "@react-pdf/renderer";
 
 export async function POST() {
   const files = await scanFiles();
@@ -13,212 +20,144 @@ export async function POST() {
   const apis = await analyzeAPIs();
   const risks = buildRiskDocumentation();
 
-  const doc = new PDFDocument({
-    size: "A4",
-    margin: 50,
-    bufferPages: true,
+  const styles = StyleSheet.create({
+    page: { padding: 40, fontSize: 10 },
+    title: { fontSize: 20, marginBottom: 20 },
+    sectionTitle: { fontSize: 14, marginTop: 20, marginBottom: 10 },
+    text: { marginBottom: 4 },
+    footer: {
+      position: "absolute",
+      bottom: 20,
+      left: 0,
+      right: 0,
+      textAlign: "center",
+      fontSize: 8,
+    },
   });
 
-  const chunks: Buffer[] = [];
-  doc.on("data", (chunk) => chunks.push(chunk));
+  const MyDocument = (
+    <Document>
+      {/* Cover Page */}
+      <Page size="A4" style={styles.page}>
+        <Text style={styles.title}>
+          System Architecture & Governance Manual
+        </Text>
+        <Text style={styles.text}>
+          Enterprise System Intelligence Report
+        </Text>
+        <Text style={styles.text}>
+          Generated: {new Date().toLocaleString()}
+        </Text>
 
-  const logoPath = path.join(process.cwd(), "public/logo.png");
+        <Text style={styles.footer} fixed>
+          Confidential - Page 1
+        </Text>
+      </Page>
 
-  /*
-  =====================================================
-  COVER PAGE
-  =====================================================
-  */
+      {/* Source Code */}
+      <Page size="A4" style={styles.page}>
+        <Text style={styles.sectionTitle}>Source Code Overview</Text>
 
-  // Since we cannot generate images, we will just add a text placeholder for the logo
-  doc.fontSize(10).text("[Project Logo]", doc.page.width / 2 - 60, 120, { width: 120, align: 'center' });
+        {files.map((f, i) => (
+          <View key={i}>
+            <Text style={styles.text}>File: {f.file}</Text>
+            {f.functions?.length > 0 && (
+              <Text style={styles.text}>
+                Functions: {f.functions.join(", ")}
+              </Text>
+            )}
+          </View>
+        ))}
 
+        <Text
+          style={styles.footer}
+          render={({ pageNumber, totalPages }) =>
+            `Page ${pageNumber} of ${totalPages}`
+          }
+          fixed
+        />
+      </Page>
 
-  doc.moveDown(8);
-  doc
-    .fontSize(24)
-    .text("System Architecture & Governance Manual", {
-      align: "center",
-    });
+      {/* Database Schema */}
+      <Page size="A4" style={styles.page}>
+        <Text style={styles.sectionTitle}>Database Schema</Text>
 
-  doc.moveDown();
-  doc
-    .fontSize(14)
-    .text("Enterprise System Intelligence Report", {
-      align: "center",
-    });
+        {Object.keys(schemas).map((table, i) => (
+          <View key={i}>
+            <Text style={styles.text}>Table: {table}</Text>
+            {schemas[table].map((col: any, idx: number) => (
+              <Text key={idx} style={styles.text}>
+                - {col.name} ({col.type})
+              </Text>
+            ))}
+          </View>
+        ))}
 
-  doc.moveDown(2);
-  doc
-    .fontSize(10)
-    .text(`Generated: ${new Date().toLocaleString()}`, {
-      align: "center",
-    });
+        <Text
+          style={styles.footer}
+          render={({ pageNumber, totalPages }) =>
+            `Page ${pageNumber} of ${totalPages}`
+          }
+          fixed
+        />
+      </Page>
 
-  doc.addPage();
+      {/* API Endpoints */}
+      <Page size="A4" style={styles.page}>
+        <Text style={styles.sectionTitle}>API Endpoints</Text>
 
-  /*
-  =====================================================
-  TABLE OF CONTENTS
-  =====================================================
-  */
+        {apis.map((api, i) => (
+          <View key={i}>
+            <Text style={styles.text}>Route: {api.route}</Text>
+            <Text style={styles.text}>
+              Methods: {api.methods.join(", ")}
+            </Text>
+          </View>
+        ))}
 
-  const tocEntries: { title: string; page: number }[] = [];
+        <Text
+          style={styles.footer}
+          render={({ pageNumber, totalPages }) =>
+            `Page ${pageNumber} of ${totalPages}`
+          }
+          fixed
+        />
+      </Page>
 
-  const addSection = (title: string) => {
-    tocEntries.push({ title, page: doc.bufferedPageRange().count + 1 });
-    doc.fontSize(18).text(title, { underline: true });
-    doc.moveDown();
-  };
+      {/* Risk Governance */}
+      <Page size="A4" style={styles.page}>
+        <Text style={styles.sectionTitle}>Risk Governance</Text>
 
-  doc.fontSize(20).text("Table of Contents", { align: "left" });
-  doc.moveDown(2);
+        {risks.risks.map((risk, i) => (
+          <View key={i}>
+            <Text style={styles.text}>{risk.category}</Text>
+            <Text style={styles.text}>
+              Description: {risk.description}
+            </Text>
+            <Text style={styles.text}>
+              Mitigation: {risk.mitigation}
+            </Text>
+          </View>
+        ))}
 
-  const tocPageIndex = doc.bufferedPageRange().count;
-  doc.addPage();
+        <Text
+          style={styles.footer}
+          render={({ pageNumber, totalPages }) =>
+            `Page ${pageNumber} of ${totalPages}`
+          }
+          fixed
+        />
+      </Page>
+    </Document>
+  );
 
-  /*
-  =====================================================
-  EXECUTIVE SUMMARY
-  =====================================================
-  */
+  const stream = await renderToStream(MyDocument);
 
-  addSection("1. Executive Summary");
-
-  doc
-    .fontSize(11)
-    .text(
-      "This system ensures fraud detection, structured data governance, and ISO 27001-aligned security architecture."
-    );
-
-  doc.addPage();
-
-  /*
-  =====================================================
-  SOURCE CODE OVERVIEW
-  =====================================================
-  */
-
-  addSection("2. Source Code Overview");
-
-  files.forEach((f) => {
-    doc.fontSize(12).text(`File: ${f.file}`);
-    if (f.functions?.length) {
-      doc.fontSize(10).text(`Functions: ${f.functions.join(", ")}`);
-    }
-    doc.moveDown();
-  });
-
-  doc.addPage();
-
-  /*
-  =====================================================
-  DATABASE SCHEMA
-  =====================================================
-  */
-
-  addSection("3. Database Schema");
-
-  Object.keys(schemas).forEach((table) => {
-    doc.fontSize(13).text(`Table: ${table}`);
-    schemas[table].forEach((col: any) => {
-      doc.fontSize(10).text(` - ${col.name} (${col.type})`);
-    });
-    doc.moveDown();
-  });
-
-  doc.addPage();
-
-  /*
-  =====================================================
-  ER DIAGRAM PAGE
-  =====================================================
-  */
-
-  addSection("4. Entity Relationship Diagram");
-
-  let y = doc.y + 20;
-  Object.keys(schemas).forEach((table, i) => {
-    doc.rect(100, y, 400, 25).stroke();
-    doc.text(table, 110, y + 7);
-
-    y += 40;
-  });
-
-  doc.moveDown(2);
-  doc.fontSize(10).text("Entities derived from SQLite schema tables.");
-
-  doc.addPage();
-
-  /*
-  =====================================================
-  API ENDPOINTS
-  =====================================================
-  */
-
-  addSection("5. API Endpoints");
-
-  apis.forEach((api) => {
-    doc.fontSize(12).text(`Route: ${api.route}`);
-    doc.fontSize(10).text(`Methods: ${api.methods.join(", ")}`);
-    doc.moveDown();
-  });
-
-  doc.addPage();
-
-  /*
-  =====================================================
-  RISK GOVERNANCE
-  =====================================================
-  */
-
-  addSection("6. Risk Governance");
-
-  risks.risks.forEach((risk) => {
-    doc.fontSize(12).text(risk.category);
-    doc.fontSize(10).text(`Description: ${risk.description}`);
-    doc.fontSize(10).text(`Mitigation: ${risk.mitigation}`);
-    doc.moveDown();
-  });
-  
-    // This is a placeholder, as generating the TOC properly requires knowing page numbers in advance
-    // which is complex. This just lists the sections.
-    doc.switchToPage(tocPageIndex);
-    doc.fontSize(12).text('Table of Contents');
-    doc.moveDown();
-    tocEntries.forEach(entry => {
-        doc.fontSize(10).text(`${entry.title} .................... Page ${entry.page}`);
-    });
-
-
-  /*
-  =====================================================
-  PAGINATION FOOTER
-  =====================================================
-  */
-
-  const range = doc.bufferedPageRange();
-
-  for (let i = 0; i < range.count; i++) {
-    doc.switchToPage(i);
-    doc.fontSize(8).text(
-      `Page ${i + 1} of ${range.count}`,
-      0,
-      doc.page.height - 40,
-      { align: "center" }
-    );
-  }
-
-  doc.end();
-
-  const buffer = await new Promise<Buffer>((resolve) => {
-    doc.on("end", () => resolve(Buffer.concat(chunks)));
-  });
-
-  return new NextResponse(buffer, {
+  return new NextResponse(stream as any, {
     headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": "attachment; filename=Enterprise_System_Manual.pdf",
+      "Content-Disposition":
+        "attachment; filename=Enterprise_System_Manual.pdf",
     },
   });
 }
