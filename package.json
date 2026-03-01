@@ -11,6 +11,9 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit"
   },
+  "overrides": {
+    "@swc/helpers": "0.4.14"
+  },
   "dependencies": {
     "@genkit-ai/google-genai": "^1.0.0",
     "@hookform/resolvers": "^4.1.3",
