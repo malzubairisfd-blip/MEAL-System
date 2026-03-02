@@ -4,7 +4,7 @@
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ArrowRight, Users, UsersCog } from "lucide-react";
+import { ArrowLeft, ArrowRight, Users, UserCog } from "lucide-react";
 
 export default function CashAssistanceDisturbancePage() {
   const features = [
@@ -18,7 +18,7 @@ export default function CashAssistanceDisturbancePage() {
       title: "Community Educators Disturbance",
       description: "Manage disturbance information for community educators.",
       href: "#", // Placeholder, can be updated later
-      icon: <UsersCog className="h-8 w-8 text-green-500" />,
+      icon: <UserCog className="h-8 w-8 text-green-500" />,
     },
   ];
 
