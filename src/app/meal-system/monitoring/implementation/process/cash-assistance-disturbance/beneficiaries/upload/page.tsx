@@ -110,13 +110,13 @@ const DEFAULT_DB_COLUMNS = [
 const LOCAL_STORAGE_MAPPING_PREFIX = "bnf-cash-disturbance-mapping";
 const STATUS_LABELS: Record<string, string> = {
   idle: "Idle",
-  STEP_ONE: "Step 1 · Enrollment Review",
-  STEP_TWO: "Step 2 · Payment Cycle List",
-  STEP_THREE: "Step 3 · Payment Cycle Count",
-  STEP_FOUR: "Step 4 · Payment Cycle Months",
-  STEP_FIVE: "Step 5 · Uncashed List",
-  STEP_SIX: "Step 6 · Cashed Data",
-  STEP_SEVEN: "Step 7 · Totals",
+  FIRST_STEP_SAVING_FROM_ENROLLMENT_REVIEW_DATABASE: "Step 1 · Enrollment Review",
+  SECOND_STEP_SAVING_PAYMENT_CYCLE_LIST: "Step 2 · Payment Cycle List",
+  THIRD_STEP_SAVING_PAYMENT_CYCLE_COUNT: "Step 3 · Payment Cycle Count",
+  FOURTH_STEP_SAVING_PAYMENT_CYCLE_MONTHS: "Step 4 · Payment Cycle Months",
+  FIFTH_STEP_SAVING_UNCASHED_LIST: "Step 5 · Uncashed List",
+  SIXTH_STEP_SAVING_CASHED_DATA: "Step 6 · Cashed Data",
+  SEVENTH_STEP_SAVING_TOTAL_VALUES: "Step 7 · Totals",
   done: "Completed",
   error: "Error",
 };
@@ -143,7 +143,7 @@ const safeNumber = (value: any) => {
 const KeyFiguresCard = ({ title, value, icon }: { title: string; value: string | number; icon: React.ReactNode }) => (
   <Card>
     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-      <CardTitle className="text-xs font-medium text-muted-foreground">{title}</CardTitle>
+      <CardTitle className="text-sm font-medium">{title}</CardTitle>
       {icon}
     </CardHeader>
     <CardContent>
@@ -186,8 +186,24 @@ export default function BeneficiariesCashDisturbanceUploadPage() {
     isOpen: false,
     count: 0,
     totalInDb: 0,
-    ids: [] as string[],
+    duplicateIds: [] as string[],
   });
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const f = e.target.files[0];
+      setFile(f);
+      setSheets([]);
+      setPaymentSheet("");
+      setUncashedSheet("");
+      setPaymentData([]);
+      setUncashedData([]);
+      setPaymentColumns([]);
+      setUncashedColumns([]);
+      setFileUniqueIdColumn("");
+      setResults(null);
+    }
+  };
 
   const fetchDbColumns = async () => {
     try {
@@ -244,10 +260,11 @@ export default function BeneficiariesCashDisturbanceUploadPage() {
     localStorage.setItem(key, JSON.stringify(uncashedMapping));
   }, [uncashedMapping, selectedProjectId, file?.name, paymentCycle]);
 
-  const loadSheet = (sheetName: string, type: "payment" | "uncashed") => {
+  const loadSheet = (type: "payment" | "uncashed", sheetName: string) => {
     if (!file) return;
     if (type === "payment") setPaymentSheet(sheetName);
-    if (type === "absence") setUncashedSheet(sheetName);
+    else setUncashedSheet(sheetName);
+
     const reader = new FileReader();
     reader.onload = (event) => {
       const workbook = XLSX.read(event.target?.result, { type: "binary" });
@@ -268,22 +285,23 @@ export default function BeneficiariesCashDisturbanceUploadPage() {
     setResults(null);
   };
 
-  const cycleMappedColumns = useMemo(() => {
+  const cycleDbColumns = useMemo(() => {
+    if (!dbColumns.length) return [];
     const cycleColumns = getCycleColumns(paymentCycle);
-    return Array.from(new Set([...GENERAL_COLUMNS, ...cycleColumns, "pc_id", "pc_name"]));
-  }, [paymentCycle]);
+    return Array.from(new Set([...GENERAL_COLUMNS, ...cycleColumns]));
+  }, [dbColumns, paymentCycle]);
 
   const combinedFileColumns = useMemo(() => {
     return Array.from(new Set([...paymentColumns, ...uncashedColumns]));
   }, [paymentColumns, uncashedColumns]);
 
   const unmappedPaymentFileColumns = paymentColumns.filter((col) => !paymentMapping[col]);
-  const unmappedPaymentDbColumns = cycleMappedColumns.filter(
+  const unmappedPaymentDbColumns = cycleDbColumns.filter(
     (col) => col !== "Id" && !Object.values(paymentMapping).includes(col)
   );
 
   const unmappedUncashedFileColumns = uncashedColumns.filter((col) => !uncashedMapping[col]);
-  const unmappedUncashedDbColumns = cycleMappedColumns.filter(
+  const unmappedUncashedDbColumns = cycleDbColumns.filter(
     (col) => col !== "Id" && !Object.values(uncashedMapping).includes(col)
   );
 
@@ -293,18 +311,18 @@ export default function BeneficiariesCashDisturbanceUploadPage() {
     setManualPayment({ fileCol: "", dbCol: "" });
   };
 
-  const handleAddUncashedMapping = () => {
-    if (!manualUncashed.fileCol || !manualUncashed.dbCol) return;
-    setUncashedMapping((prev) => ({ ...prev, [manualUncashed.fileCol]: manualUncashed.dbCol }));
-    setManualUncashed({ fileCol: "", dbCol: "" });
-  };
-
   const handleRemovePaymentMapping = (fileCol: string) => {
     setPaymentMapping((prev) => {
       const next = { ...prev };
       delete next[fileCol];
       return next;
     });
+  };
+
+  const handleAddUncashedMapping = () => {
+    if (!manualUncashed.fileCol || !manualUncashed.dbCol) return;
+    setUncashedMapping((prev) => ({ ...prev, [manualUncashed.fileCol]: manualUncashed.dbCol }));
+    setManualUncashed({ fileCol: "", dbCol: "" });
   };
 
   const handleRemoveUncashedMapping = (fileCol: string) => {
@@ -393,6 +411,7 @@ export default function BeneficiariesCashDisturbanceUploadPage() {
   };
 
   const executeSave = useCallback(async (mode: "skip" | "replace") => {
+    setDuplicateInfo((prev) => ({ ...prev, isOpen: false }));
     setLoading(prev => ({ ...prev, saving: true }));
     setWorkerStatus("initializing");
     setWorkerProgress(0);
@@ -419,7 +438,7 @@ export default function BeneficiariesCashDisturbanceUploadPage() {
           uniqueFileColumn: fileUniqueIdCol,
           uniqueDbColumn: dbUniqueIdCol,
           mode,
-          duplicateIds: duplicateInfo.ids,
+          duplicateIds: duplicateInfo.duplicateIds,
         }),
       });
 
@@ -462,7 +481,7 @@ export default function BeneficiariesCashDisturbanceUploadPage() {
       toast({ title: "Error during processing", description: error.message, variant: "destructive" });
       setLoading(prev => ({ ...prev, saving: false }));
     }
-  }, [projects, selectedProjectId, paymentCycle, paymentCycleCount, paymentMonths, paymentData, uncashedData, paymentMapping, uncashedMapping, fileUniqueIdCol, dbUniqueIdCol, duplicateInfo.ids, toast]);
+  }, [projects, selectedProjectId, paymentCycle, paymentCycleCount, paymentMonths, paymentData, uncashedData, paymentMapping, uncashedMapping, fileUniqueIdCol, dbUniqueIdCol, duplicateInfo.duplicateIds, toast]);
 
   const handleSave = useCallback(async () => {
     if (!paymentReady) {
@@ -497,10 +516,10 @@ export default function BeneficiariesCashDisturbanceUploadPage() {
 
       if (data.count > 0) {
         setDuplicateInfo({
-          open: true,
+          isOpen: true,
           count: data.count,
           totalInDb: data.totalInDb,
-          ids: data.duplicateIds || [],
+          duplicateIds: data.duplicateIds || [],
         });
         setLoading(p => ({ ...p, saving: false }));
       } else {
@@ -537,7 +556,7 @@ export default function BeneficiariesCashDisturbanceUploadPage() {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">Beneficiaries Disturbance Upload</h1>
+        <h1 className="text-3xl font-bold">Beneficiaries Cash Disturbance Upload</h1>
         <Button variant="outline" asChild>
           <Link href="/meal-system/monitoring/implementation/process/cash-assistance-disturbance/beneficiaries">
             <ArrowLeft className="mr-2 h-4 w-4" />
@@ -573,17 +592,17 @@ export default function BeneficiariesCashDisturbanceUploadPage() {
             <CardTitle>2. Configure Sheets & Session</CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
-             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="space-y-2">
                 <Label>Payment List Sheet</Label>
-                <Select value={paymentSheet} onValueChange={(value) => handleSheetSelect("payment", value)}>
+                <Select value={paymentSheet} onValueChange={(value) => loadSheet("payment", value)}>
                   <SelectTrigger><SelectValue placeholder="Select sheet..." /></SelectTrigger>
                   <SelectContent>{sheets.map((name) => (<SelectItem key={name} value={name}>{name}</SelectItem>))}</SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
                 <Label>Uncashed List Sheet</Label>
-                <Select value={uncashedSheet} onValueChange={(value) => handleSheetSelect("absence", value)}>
+                <Select value={uncashedSheet} onValueChange={(value) => loadSheet("absence", value)}>
                   <SelectTrigger><SelectValue placeholder="Select sheet..." /></SelectTrigger>
                   <SelectContent>{sheets.map((name) => (<SelectItem key={name} value={name}>{name}</SelectItem>))}</SelectContent>
                 </Select>
@@ -688,7 +707,7 @@ export default function BeneficiariesCashDisturbanceUploadPage() {
             </div>
             <div className="space-y-2">
               <Label>Unique ID in DB</Label>
-              <Select value={dbUniqueIdCol} onValueChange={setDbUniqueIdCol}>
+              <Select value={dbUniqueIdColumn} onValueChange={setDbUniqueIdCol}>
                 <SelectTrigger><SelectValue placeholder="Select db column"/></SelectTrigger>
                 <SelectContent>{dbColumns.map((col) => <SelectItem key={col} value={col}>{col}</SelectItem>)}</SelectContent>
               </Select>
@@ -699,33 +718,6 @@ export default function BeneficiariesCashDisturbanceUploadPage() {
               {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Save className="mr-2 h-4 w-4"/>}
               Save to Database
             </Button>
-            {duplicateInfo.isOpen && (
-              <AlertDialog open={duplicateInfo.isOpen} onOpenChange={(isOpen) => setDuplicateInfo(prev => ({...prev, isOpen}))}>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>Duplicate Records Found</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            Found {duplicateInfo.count} record(s) that already exist in the database out of {duplicateInfo.totalInDb}. How would you like to proceed?
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter className="flex flex-col gap-2">
-                        <Button variant="outline" onClick={() => { setDuplicateInfo(prev => ({ ...prev, isOpen: false })); executeSave("skip"); }}>
-                            Skip Existing & Save New Records
-                        </Button>
-                        <AlertDialogAction asChild>
-                            <Button onClick={() => { setDuplicateInfo(prev => ({ ...prev, isOpen: false })); executeSave("replace"); }}>
-                                Update All Matching Records
-                            </Button>
-                        </AlertDialogAction>
-                        <AlertDialogCancel asChild>
-                            <Button variant="ghost" onClick={() => setDuplicateInfo((prev) => ({ ...prev, isOpen: false }))}>
-                                Cancel Import
-                            </Button>
-                        </AlertDialogCancel>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            )}
             {isProcessing && (
               <div className="space-y-1 text-sm text-muted-foreground">
                 <p>Status: {statusLabel}</p>
@@ -736,7 +728,33 @@ export default function BeneficiariesCashDisturbanceUploadPage() {
           </div>
         </CardContent>
       </Card>
-      
+
+      <AlertDialog open={duplicateInfo.isOpen} onOpenChange={(isOpen) => setDuplicateInfo(prev => ({...prev, isOpen}))}>
+          <AlertDialogContent>
+              <AlertDialogHeader>
+                  <AlertDialogTitle>Duplicate Records Found</AlertDialogTitle>
+                  <AlertDialogDescription>
+                      Found {duplicateInfo.count} record(s) that already exist in the database out of {duplicateInfo.totalInDb}. How would you like to proceed?
+                  </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter className="flex flex-col gap-2">
+                  <Button variant="outline" onClick={() => { executeSave("skip"); setDuplicateInfo(prev => ({...prev, isOpen: false})); }}>
+                      Skip Existing & Save New Records
+                  </Button>
+                  <AlertDialogAction asChild>
+                      <Button onClick={() => { executeSave("replace"); setDuplicateInfo(prev => ({...prev, isOpen: false})); }}>
+                          Update All Matching Records
+                      </Button>
+                  </AlertDialogAction>
+                  <AlertDialogCancel asChild>
+                      <Button variant="ghost" onClick={() => setDuplicateInfo((prev) => ({ ...prev, isOpen: false }))}>
+                          Cancel Import
+                      </Button>
+                  </AlertDialogCancel>
+              </AlertDialogFooter>
+          </AlertDialogContent>
+      </AlertDialog>
+
       {results && (
         <Card>
             <CardHeader><CardTitle>Results Summary</CardTitle></CardHeader>
@@ -744,8 +762,8 @@ export default function BeneficiariesCashDisturbanceUploadPage() {
                 {resultKeyFigures.map(fig => <KeyFiguresCard key={fig.title} {...fig} />)}
             </CardContent>
              <CardContent className="flex gap-2">
-                <Button asChild><Link href="/meal-system/monitoring/implementation/process/cash-assistance-disturbance/dashboard">Dashboard</Link></Button>
-                <Button asChild><Link href="/meal-system/monitoring/implementation/process/cash-assistance-disturbance/database">Database</Link></Button>
+                <Button asChild><Link href="/meal-system/monitoring/implementation/process/cash-assistance-disturbance/beneficiaries/dashboard">Dashboard</Link></Button>
+                <Button asChild><Link href="/meal-system/monitoring/implementation/process/cash-assistance-disturbance/beneficiaries/database">Database</Link></Button>
              </CardContent>
         </Card>
       )}
