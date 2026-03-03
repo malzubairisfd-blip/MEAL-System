@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useEffect, useMemo, useState, useCallback } from "react";
@@ -51,7 +50,7 @@ const MONTHS = [
   "January", "February", "March", "April", "May", "June", 
   "July", "August", "September", "October", "November", "December"
 ];
-const YEARS = Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - 3 + idx);
+const YEARS = Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - 3 + i);
 
 const CYCLE_FIELDS: { name: string; type: 'TEXT' | 'INTEGER' | 'REAL' }[] = [
   { name: "is_pay_list", type: "INTEGER" },
@@ -67,7 +66,7 @@ const CYCLE_FIELDS: { name: string; type: 'TEXT' | 'INTEGER' | 'REAL' }[] = [
   { name: "recom", type: "TEXT" },
 ];
 
-const LOCAL_STORAGE_MAPPING_PREFIX = "bnf-cash-disturbance-mapping";
+const LOCAL_STORAGE_MAPPING_PREFIX = "bnf-cash-disturbance-mapping-";
 const STATUS_LABELS: Record<string, string> = {
   idle: "Idle",
   initializing: "Initializing...",
@@ -87,7 +86,7 @@ const safeNumber = (value: any) => { const num = Number(value); return Number.is
 
 const KeyFigureCard = ({ title, value, icon }: { title: string; value: string | number; icon: React.ReactNode }) => (
   <Card>
-    <CardHeader className="flex items-center justify-between space-y-0 pb-2">
+    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
       <CardTitle className="text-xs font-medium text-muted-foreground">{title}</CardTitle>
       {icon}
     </CardHeader>
@@ -426,7 +425,7 @@ const handleSave = useCallback(async () => {
         </CardContent>
       </Card>
 
-      <AlertDialog open={duplicateInfo.isOpen} onOpenChange={(isOpen) => setDuplicateInfo((prev) => ({...prev, isOpen}))}>
+      <AlertDialog open={duplicateInfo.isOpen} onOpenChange={(isOpen) => setDuplicateInfo((prev) => ({ ...prev, isOpen }))}>
         <AlertDialogContent>
             <AlertDialogHeader>
                 <AlertDialogTitle>Duplicate Records Found</AlertDialogTitle>
@@ -434,10 +433,10 @@ const handleSave = useCallback(async () => {
                     Found {duplicateInfo.count} record(s) that already exist in the database for this project (total in DB: {duplicateInfo.totalInDb}). How would you like to proceed?
                 </AlertDialogDescription>
             </AlertDialogHeader>
-            <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogFooter className="flex flex-col gap-2">
                 <Button variant="outline" onClick={() => executeSave('skip')}>Skip Duplicates</Button>
                 <AlertDialogAction onClick={() => executeSave('replace')}>Update Existing</AlertDialogAction>
+                <AlertDialogCancel asChild><Button variant="ghost">Cancel Import</Button></AlertDialogCancel>
             </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -447,9 +446,12 @@ const handleSave = useCallback(async () => {
             <CardHeader><CardTitle>Results Summary</CardTitle></CardHeader>
             <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <KeyFigureCard title="Payment Cycle" value={paymentCycle} icon={<FileText />} />
-              <KeyFigureCard title="Beneficiaries Paid" value={results.totalAttend} icon={<Users />} />
-              <KeyFigureCard title="Beneficiaries Unpaid" value={results.totalAbsence} icon={<UserMinus />} />
-              <KeyFigureCard title="Alternative Sessions" value={results.totalAlternative} icon={<Activity />} />
+              <KeyFigureCard title="Beneficiaries in List" value={aggregatedStats.payCount} icon={<Users />} />
+              <KeyFigureCard title="Beneficiaries Cashed" value={results.totalAttend} icon={<UserCheck />} />
+              <KeyFigureCard title="Beneficiaries Uncashed" value={results.totalAbsence} icon={<UserMinus />} />
+              <KeyFigureCard title="Payment Amount" value={`$${aggregatedStats.payAmount.toLocaleString()}`} icon={<Wallet />} />
+              <KeyFigureCard title="Cashed Amount" value={`$${results.totalAlternative.toLocaleString()}`} icon={<DollarSign />} />
+              <KeyFigureCard title="Uncashed Amount" value={`$${aggregatedStats.uncashedAmount.toLocaleString()}`} icon={<CreditCard />} />
             </CardContent>
         </Card>
       )}
