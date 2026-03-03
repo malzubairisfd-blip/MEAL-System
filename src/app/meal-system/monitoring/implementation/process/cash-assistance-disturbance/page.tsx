@@ -9,14 +9,14 @@ import { ArrowLeft, ArrowRight, Users, UserCog } from "lucide-react";
 export default function CashAssistanceDisturbancePage() {
   const features = [
     {
-      title: "Beneficiaries Disturbance",
-      description: "Manage disturbance information related to beneficiaries.",
+      title: "Beneficiaries Disbursement",
+      description: "Manage disbursement information related to beneficiaries.",
       href: "/meal-system/monitoring/implementation/process/cash-assistance-disturbance/beneficiaries",
       icon: <Users className="h-8 w-8 text-blue-500" />,
     },
     {
-      title: "Community Educators Disturbance",
-      description: "Manage disturbance information for community educators.",
+      title: "Community Educators Disbursement",
+      description: "Manage disbursement information for community educators.",
       href: "#", // Placeholder, can be updated later
       icon: <UserCog className="h-8 w-8 text-green-500" />,
     },
@@ -25,7 +25,7 @@ export default function CashAssistanceDisturbancePage() {
   return (
     <div className="space-y-8">
       <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">Cash Assistance Disturbance</h1>
+        <h1 className="text-3xl font-bold">Cash Assistance Disbursement</h1>
         <Button variant="outline" asChild>
           <Link href="/meal-system/monitoring/implementation/process">
             <ArrowLeft className="mr-2 h-4 w-4" />
