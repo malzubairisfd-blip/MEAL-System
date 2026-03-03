@@ -209,6 +209,36 @@ export default function BeneficiariesCashDistrubanceUploadPage() {
   const isProcessing = loading.saving;
   const statusLabel = STATUS_LABELS[workerStatus] || workerStatus;
 
+  const handleAddPaymentMapping = () => {
+    if (manualPayment.fileCol && manualPayment.dbCol) {
+      setPaymentMapping(prev => ({...prev, [manualPayment.fileCol]: manualPayment.dbCol}));
+      setManualPayment({ fileCol: "", dbCol: "" });
+    }
+  };
+
+  const handleRemovePaymentMapping = (fileCol: string) => {
+    setPaymentMapping(prev => {
+      const newMap = {...prev};
+      delete newMap[fileCol];
+      return newMap;
+    });
+  };
+
+  const handleAddUncashedMapping = () => {
+    if (manualUncashed.fileCol && manualUncashed.dbCol) {
+      setUncashedMapping(prev => ({...prev, [manualUncashed.fileCol]: manualUncashed.dbCol}));
+      setManualUncashed({ fileCol: "", dbCol: "" });
+    }
+  };
+
+  const handleRemoveUncashedMapping = (fileCol: string) => {
+    setUncashedMapping(prev => {
+      const newMap = {...prev};
+      delete newMap[fileCol];
+      return newMap;
+    });
+  };
+
   const executeSave = useCallback(async (mode: 'skip' | 'replace') => {
         setDuplicateInfo(prev => ({...prev, isOpen: false}));
         setLoading(prev => ({...prev, saving: true}));
@@ -419,7 +449,7 @@ const handleSave = useCallback(async () => {
                     <span>{workerProgress}%</span>
                 </div>
                 <Progress value={workerProgress}/>
-                <p className="text-xs text-center text-muted-foreground">{workerMessage}</p>
+                <p className="text-xs text-center mt-1 text-muted-foreground">{workerMessage} (Saved: {saveStats.saved} / {saveStats.total} · Updated: {saveStats.updated} · Skipped: {saveStats.skipped})</p>
             </div>
           )}
         </CardContent>
@@ -436,7 +466,7 @@ const handleSave = useCallback(async () => {
             <AlertDialogFooter className="flex flex-col gap-2">
                 <Button variant="outline" onClick={() => executeSave('skip')}>Skip Duplicates</Button>
                 <AlertDialogAction onClick={() => executeSave('replace')}>Update Existing</AlertDialogAction>
-                <AlertDialogCancel asChild><Button variant="ghost">Cancel Import</Button></AlertDialogCancel>
+                <AlertDialogCancel asChild><Button variant="ghost" onClick={() => setDuplicateInfo((prev) => ({ ...prev, isOpen: false }))}>Cancel Import</Button></AlertDialogCancel>
             </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
