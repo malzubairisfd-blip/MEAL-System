@@ -64,29 +64,25 @@ export default function FileEditor() {
 
   async function empty() {
     if (!file || !editorRef.current) return;
-    if (window.confirm(`Are you sure you want to empty the content of ${file}?`)) {
-        try {
-            editorRef.current.setValue("");
-            await api({ action: "empty", filePath: file });
-            toast({ title: "File Emptied", description: `Emptied content of ${file}` });
-        } catch (e: any) {
-            toast({ title: "Error", description: e.message, variant: "destructive" });
-        }
+    try {
+        editorRef.current.setValue("");
+        await api({ action: "empty", filePath: file });
+        toast({ title: "File Emptied", description: `Emptied content of ${file}` });
+    } catch (e: any) {
+        toast({ title: "Error", description: e.message, variant: "destructive" });
     }
   }
 
   async function del() {
     if (!file) return;
-    if (window.confirm(`Are you sure you want to delete ${file}? This action cannot be undone.`)) {
-        try {
-            await api({ action: "delete", filePath: file });
-            toast({ title: "File Deleted", description: `${file} has been removed.` });
-            setFile(null);
-            editorRef.current?.setValue("");
-            loadTree();
-        } catch (e: any) {
-            toast({ title: "Delete Failed", description: e.message, variant: "destructive" });
-        }
+    try {
+        await api({ action: "delete", filePath: file });
+        toast({ title: "File Deleted", description: `${file} has been removed.` });
+        setFile(null);
+        editorRef.current?.setValue("");
+        loadTree();
+    } catch (e: any) {
+        toast({ title: "Delete Failed", description: e.message, variant: "destructive" });
     }
   }
 
@@ -320,4 +316,3 @@ export default function FileEditor() {
     </div>
   );
 }
-    
