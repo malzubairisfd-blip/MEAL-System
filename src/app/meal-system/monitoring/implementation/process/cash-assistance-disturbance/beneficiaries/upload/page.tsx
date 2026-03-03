@@ -1,6 +1,7 @@
+
 "use client";
 
-import React, { useEffect, useMemo, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import * as XLSX from "xlsx";
 import { Button } from "@/components/ui/button";
@@ -33,6 +34,8 @@ import {
   Wallet,
   CreditCard,
   CheckCircle,
+  UserMinus,
+  UserCheck,
 } from "lucide-react";
 import {
   AlertDialog,
@@ -139,10 +142,13 @@ export default function BeneficiariesCashDistrubanceUploadPage() {
   });
 
   useEffect(() => {
+    setLoading((p) => ({ ...p, projects: true }));
     fetch("/api/projects")
       .then((res) => res.json())
-      .then((data) => setProjects(data || []));
-  }, []);
+      .then((data) => setProjects(data || []))
+      .catch((err) => toast({ title: "Error", description: "Failed to load projects.", variant: "destructive" }))
+      .finally(() => setLoading((p) => ({ ...p, projects: false })));
+  }, [toast]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -362,7 +368,7 @@ const handleSave = useCallback(async () => {
       </div>
 
       <Card>
-        <CardHeader><CardTitle>1. Select Project & File</CardTitle></CardHeader>
+        <CardHeader><CardTitle>1. Select Project & Upload File</CardTitle></CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Select value={selectedProjectId} onValueChange={setSelectedProjectId} disabled={loading.projects}>
             <SelectTrigger><SelectValue placeholder="Select project..." /></SelectTrigger>
