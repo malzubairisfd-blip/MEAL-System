@@ -20,7 +20,7 @@ const cycleFields = (prefix: string) => Array.from({ length: 76 }, (_, idx) => `
 
 const captureKeys = ["keyFigures", "monthsTable", "cycleBar", "cashedPie", "uncashedPie"];
 
-export default function BeneficiariesCashDisturbanceDashboardPage() {
+export default function BeneficiariesCashdisbursementDashboardPage() {
   const { toast } = useToast();
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState("");
@@ -40,7 +40,7 @@ export default function BeneficiariesCashDisturbanceDashboardPage() {
       return;
     }
     setLoading(true);
-    fetch(`/api/bnf-cash-distrubance?projectId=${selectedProjectId}`)
+    fetch(`/api/bnf-cash-disbursement?projectId=${selectedProjectId}`)
       .then((res) => res.json())
       .then((data) => setRecords(Array.isArray(data) ? data : []))
       .finally(() => setLoading(false));
@@ -202,7 +202,7 @@ export default function BeneficiariesCashDisturbanceDashboardPage() {
       const imageSheet = Object.entries(cachedImages).map(([key, dataUrl]) => ({ Key: key, ImageBase64: dataUrl }));
       XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(imageSheet), "Images");
     }
-    XLSX.writeFile(workbook, `bnf-cash-distrubance-dashboard-${selectedProjectId || "all"}.xlsx`);
+    XLSX.writeFile(workbook, `bnf-cash-disbursement-dashboard-${selectedProjectId || "all"}.xlsx`);
   };
 
   const cyclePieOptions = cycleTotals.map((entry) => ({
@@ -228,13 +228,13 @@ export default function BeneficiariesCashDisturbanceDashboardPage() {
     <div className="space-y-6 pb-10">
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold">Beneficiaries Cash Distrubance Dashboard</h1>
+          <h1 className="text-3xl font-bold">Beneficiaries Cash disbursement Dashboard</h1>
           <p className="text-sm text-muted-foreground">Visualize payment cycle performance.</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" asChild><Link href="/meal-system/monitoring/implementation/process/bnf-cash-distrubance/upload"><Upload className="mr-2 h-4 w-4"/>Upload</Link></Button>
-          <Button variant="outline" asChild><Link href="/meal-system/monitoring/implementation/process/bnf-cash-distrubance/database"><Database className="mr-2 h-4 w-4"/>Database</Link></Button>
-          <Button variant="outline" asChild><Link href="/meal-system/monitoring/implementation/process/bnf-cash-distrubance"><ArrowLeft className="mr-2 h-4 w-4"/>Back to Hub</Link></Button>
+          <Button variant="outline" asChild><Link href="/meal-system/monitoring/implementation/process/bnf-cash-disbursement/upload"><Upload className="mr-2 h-4 w-4"/>Upload</Link></Button>
+          <Button variant="outline" asChild><Link href="/meal-system/monitoring/implementation/process/bnf-cash-disbursement/database"><Database className="mr-2 h-4 w-4"/>Database</Link></Button>
+          <Button variant="outline" asChild><Link href="/meal-system/monitoring/implementation/process/bnf-cash-disbursement"><ArrowLeft className="mr-2 h-4 w-4"/>Back to Hub</Link></Button>
         </div>
       </div>
 

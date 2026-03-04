@@ -1,6 +1,7 @@
+
 "use client";
 
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -27,7 +28,7 @@ const SUMMARY_COLUMNS = [
   "final_comments",
 ];
 
-export default function BeneficiariesCashDisturbanceDatabasePage() {
+export default function BeneficiariesCashdisbursementDatabasePage() {
   const { toast } = useToast();
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState("");
@@ -51,7 +52,7 @@ export default function BeneficiariesCashDisturbanceDatabasePage() {
       return;
     }
     setLoading(true);
-    fetch(`/api/bnf-cash-distrubance?projectId=${selectedProjectId}`)
+    fetch(`/api/bnf-cash-disbursement?projectId=${selectedProjectId}`)
       .then((res) => res.json())
       .then((data) => setRecords(Array.isArray(data) ? data : []))
       .finally(() => setLoading(false));
@@ -101,7 +102,7 @@ export default function BeneficiariesCashDisturbanceDatabasePage() {
     if (!editingRecord) return;
     try {
       const payload = JSON.parse(editPayload);
-      await fetch("/api/bnf-cash-distrubance", {
+      await fetch("/api/bnf-cash-disbursement", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "update_record", id: editingRecord.Id, payload }),
@@ -110,7 +111,7 @@ export default function BeneficiariesCashDisturbanceDatabasePage() {
       setEditPayload("");
       toast({ title: "Updated", description: "Record updated successfully." });
       if (selectedProjectId) {
-        const res = await fetch(`/api/bnf-cash-distrubance?projectId=${selectedProjectId}`);
+        const res = await fetch(`/api/bnf-cash-disbursement?projectId=${selectedProjectId}`);
         const data = await res.json();
         setRecords(Array.isArray(data) ? data : []);
       }
@@ -122,7 +123,7 @@ export default function BeneficiariesCashDisturbanceDatabasePage() {
   const confirmDelete = async () => {
     if (!deletingRecord) return;
     try {
-      await fetch("/api/bnf-cash-distrubance", {
+      await fetch("/api/bnf-cash-disbursement", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "delete_record", id: deletingRecord.Id }),
@@ -130,7 +131,7 @@ export default function BeneficiariesCashDisturbanceDatabasePage() {
       setDeletingRecord(null);
       toast({ title: "Deleted", description: "Record removed." });
       if (selectedProjectId) {
-        const res = await fetch(`/api/bnf-cash-distrubance?projectId=${selectedProjectId}`);
+        const res = await fetch(`/api/bnf-cash-disbursement?projectId=${selectedProjectId}`);
         const data = await res.json();
         setRecords(Array.isArray(data) ? data : []);
       }
@@ -145,13 +146,13 @@ export default function BeneficiariesCashDisturbanceDatabasePage() {
     <div className="space-y-6 pb-8">
       <div className="flex flex-col md:flex-row items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold">Beneficiaries Cash Distrubance Database</h1>
-          <p className="text-sm text-muted-foreground">Inspect and maintain payment disturbance records.</p>
+          <h1 className="text-3xl font-bold">Beneficiaries Cash disbursement Database</h1>
+          <p className="text-sm text-muted-foreground">Inspect and maintain payment disbursement records.</p>
         </div>
         <div className="flex gap-2">
-          <Button asChild><Link href="/meal-system/monitoring/implementation/process/bnf-cash-distrubance/upload"><Upload className="mr-2 h-4 w-4"/>Upload</Link></Button>
-          <Button asChild><Link href="/meal-system/monitoring/implementation/process/bnf-cash-distrubance/dashboard"><Archive className="mr-2 h-4 w-4"/>Dashboard</Link></Button>
-          <Button variant="outline" asChild><Link href="/meal-system/monitoring/implementation/process/bnf-cash-distrubance"><ArrowLeft className="mr-2 h-4 w-4"/>Back to Hub</Link></Button>
+          <Button asChild><Link href="/meal-system/monitoring/implementation/process/bnf-cash-disbursement/upload"><Upload className="mr-2 h-4 w-4"/>Upload</Link></Button>
+          <Button asChild><Link href="/meal-system/monitoring/implementation/process/bnf-cash-disbursement/dashboard"><Archive className="mr-2 h-4 w-4"/>Dashboard</Link></Button>
+          <Button variant="outline" asChild><Link href="/meal-system/monitoring/implementation/process/bnf-cash-disbursement"><ArrowLeft className="mr-2 h-4 w-4"/>Back to Hub</Link></Button>
         </div>
       </div>
       <Card>
@@ -310,15 +311,11 @@ export default function BeneficiariesCashDisturbanceDatabasePage() {
 
       <Card>
         <CardContent className="flex gap-2">
-          <Button asChild><Link href="/meal-system/monitoring/implementation/process/bnf-cash-distrubance/dashboard"><Archive className="mr-2 h-4 w-4"/>Dashboard</Link></Button>
-          <Button variant="outline" asChild><Link href="/meal-system/monitoring/implementation/process/bnf-cash-distrubance/upload"><Upload className="mr-2 h-4 w-4"/>Upload</Link></Button>
-          <Button variant="outline" asChild><Link href="/meal-system/monitoring/implementation/process/bnf-cash-distrubance"><ArrowLeft className="mr-2 h-4 w-4"/>Back to Hub</Link></Button>
+          <Button asChild><Link href="/meal-system/monitoring/implementation/process/bnf-cash-disbursement/dashboard"><Archive className="mr-2 h-4 w-4"/>Dashboard</Link></Button>
+          <Button variant="outline" asChild><Link href="/meal-system/monitoring/implementation/process/bnf-cash-disbursement/upload"><Upload className="mr-2 h-4 w-4"/>Upload</Link></Button>
+          <Button variant="outline" asChild><Link href="/meal-system/monitoring/implementation/process/bnf-cash-disbursement"><ArrowLeft className="mr-2 h-4 w-4"/>Back to Hub</Link></Button>
         </CardContent>
       </Card>
     </div>
   );
-}
-
-function ScrollArea({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <div className={`overflow-auto ${className}`}>{children}</div>;
 }
