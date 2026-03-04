@@ -6,6 +6,8 @@ import Database from "better-sqlite3";
 const getDataPath = () => path.join(process.cwd(), "src/data");
 const getDbPath = () => path.join(getDataPath(), "bnf-cash-disbursement.db");
 const getEnrollmentDbPath = () => path.join(getDataPath(), "enrollment-review.db");
+const getProjectsDbPath = () => path.join(getDataPath(), 'projects.db');
+
 
 const CYCLE_COUNT = 76;
 const cycleFields = [
@@ -90,14 +92,21 @@ const normalizeLookupValue = (value: any) => {
   return String(value).trim();
 };
 const getCycleColumn = (field: string, cycle: number) => `${field}_s${cycle}`;
-const prepareMappingEntries = (mapping: Record<string, string> = {}, allowed: Set<string>) => {
+const prepareMappingEntries = (mapping: Record<string, string> = {}, allowed: Set<string>, excluded: Set<string>) => {
   const entries: { fileCol: string; dbCol: string; param: string }[] = [];
+  if (!mapping) return entries;
   let counter = 0;
   for (const [fileCol, dbColRaw] of Object.entries(mapping)) {
-    const sanitized = sanitizeColumn(dbColRaw);
-    if (!sanitized) continue;
-    if (!allowed.has(sanitized)) continue;
-    entries.push({ fileCol, dbCol: sanitized, param: `param_${counter++}` });
+    if (!fileCol) continue;
+    const sanitizedDbCol = sanitizeColumn(dbColRaw);
+    if (!sanitizedDbCol) continue;
+    if (excluded.has(sanitizedDbCol)) continue;
+    if (!allowed.has(sanitizedDbCol)) continue;
+    entries.push({
+      fileCol,
+      dbCol: sanitizedDbCol,
+      param: `param_${counter++}`,
+    });
   }
   return entries;
 };
@@ -172,7 +181,7 @@ export async function POST(req: Request) {
 
   if (action === "schema") {
     const db = initializeDatabase();
-    const columns = db.prepare("PRAGMA table_info(bnf_cash_disbursement)").all().map((col) => col.name);
+    const columns = db.prepare("PRAGMA table_info(bnf_cash_disbursement)").all().map((col: any) => col.name);
     db.close();
     return NextResponse.json({ columns });
   }
@@ -195,15 +204,16 @@ export async function POST(req: Request) {
       const stmt = db.prepare(
         `SELECT "${lookupColumn}" FROM bnf_cash_disbursement WHERE project_id = ? AND "${lookupColumn}" IN (${placeholders})`
       );
-      const rows = stmt.all(projectId, ...chunk);
+      const rows = stmt.all(projectId, ...chunk) as any[];
       rows.forEach((row) => {
         const value = row[lookupColumn];
         if (value !== undefined && value !== null) existing.add(String(value));
       });
     }
-    const totalInDb = db
+    const totalInDbResult = db
       .prepare("SELECT COUNT(*) as total FROM bnf_cash_disbursement WHERE project_id = ?")
-      .get(projectId)?.total || 0;
+      .get(projectId) as {total: number} | undefined;
+    const totalInDb = totalInDbResult?.total || 0;
     db.close();
     return NextResponse.json({ count: existing.size, totalInDb, duplicateIds: Array.from(existing) });
   }
@@ -239,8 +249,13 @@ export async function POST(req: Request) {
         return;
       }
       const lookupColumn = sanitizeColumn(uniqueDbColumn) || "benef_id";
+      if (!lookupColumn) {
+          sendProgress(writer, { type: "error", error: "Fatal: DB lookup column is empty or invalid." });
+          writer.close();
+          return;
+      }
       if (!VALID_COLUMNS_SET.has(lookupColumn.toLowerCase())) {
-        sendProgress(writer, { type: "error", error: "Invalid lookup column." });
+        sendProgress(writer, { type: "error", error: `Invalid lookup column: "${lookupColumn}"` });
         writer.close();
         return;
       }
@@ -264,8 +279,8 @@ export async function POST(req: Request) {
       };
 
       const allowedColumns = new Set([...BASE_COLUMNS, ...cycleColumnNames, "pc_id", "pc_name", "project_id", "project_name"]);
-      const paymentEntries = prepareMappingEntries(paymentMapping, allowedColumns);
-      const uncashedEntries = prepareMappingEntries(uncashedMapping, allowedColumns);
+      const paymentEntries = prepareMappingEntries(paymentMapping, allowedColumns, new Set([lookupColumn, 'project_id', 'project_name']));
+      const uncashedEntries = prepareMappingEntries(uncashedMapping, allowedColumns, new Set([lookupColumn, 'project_id', 'project_name']));
 
       let sessionDb: Database.Database | null = null;
       try {
@@ -277,8 +292,9 @@ export async function POST(req: Request) {
           message: "Preparing enrollment base data",
           stats,
         });
-        const existingProjectRecords =
-          sessionDb.prepare("SELECT COUNT(*) as count FROM bnf_cash_disbursement WHERE project_id = ?").get(projectId)?.count || 0;
+        const existingProjectRecordsResult =
+          sessionDb.prepare("SELECT COUNT(*) as count FROM bnf_cash_disbursement WHERE project_id = ?").get(projectId) as {count: number}|undefined;
+        const existingProjectRecords = existingProjectRecordsResult?.count || 0;
         if (existingProjectRecords === 0 && mode !== "skip") {
           seedEnrollment(sessionDb, projectId, projectName || "");
           sendProgress(writer, {
@@ -298,7 +314,6 @@ export async function POST(req: Request) {
           });
         }
 
-        const cycleSuffix = `s${cycleNumber}`;
         const payStmt = sessionDb.prepare(
           `UPDATE bnf_cash_disbursement SET project_id = @projectId, project_name = @projectName, "${getCycleColumn("is_pay_list", cycleNumber)}" = 1, "${getCycleColumn(
             "pay_cyc_cnt",
@@ -376,12 +391,44 @@ export async function POST(req: Request) {
             "cashed_amt",
             cycleNumber
           )}" = COALESCE("${getCycleColumn("pay_amt", cycleNumber)}", 0)
-           WHERE project_id = ? AND "${getCycleColumn("is_pay_list", cycleNumber)}" = 1 AND COALESCE("${getCycleColumn("is_uncashed", cycleNumber)}", "") = ""`
+           WHERE project_id = ? AND "${getCycleColumn("is_pay_list", cycleNumber)}" = 1 AND COALESCE("${getCycleColumn("is_uncashed", cycleNumber)}", '') != 1`
         );
         const cashedInfo = markCashedStmt.run(projectId);
         stats.updated += cashedInfo.changes;
 
         const rows = sessionDb.prepare("SELECT * FROM bnf_cash_disbursement WHERE project_id = ?").all(projectId);
+        const calculateTotals = (record: any) => {
+            let total_pay_list = 0;
+            let total_pay_cyc_cnt = 0;
+            let total_pay_amt = 0;
+            let total_cashed_cnt = 0;
+            let total_cashed_amt = 0;
+            let total_uncashed_cnt = 0;
+            let total_uncashed_amt = 0;
+            let final_comments = '';
+
+            for (let i = 1; i <= CYCLE_COUNT; i++) {
+                total_pay_list += Number(record[`is_pay_list_s${i}`] || 0);
+                total_pay_cyc_cnt += Number(record[`pay_cyc_cnt_s${i}`] || 0);
+                total_pay_amt += Number(record[`pay_amt_s${i}`] || 0);
+                total_cashed_cnt += Number(record[`is_cashed_s${i}`] || 0);
+                total_cashed_amt += Number(record[`cashed_amt_s${i}`] || 0);
+                const recom = record[`recom_s${i}`] || '';
+                const uncashed = Number(record[`is_uncashed_s${i}`] || 0);
+                if (uncashed === 1 && recom !== 'تورد الى حساب الممول') {
+                    total_uncashed_cnt += 1;
+                    total_uncashed_amt += Number(record[`uncashed_amt_s${i}`] || 0);
+                }
+                if (recom === 'تورد الى حساب الممول') {
+                   final_comments = `تم توريد مرتجع المستفيدة إلى حساب الممول في دفعة شهر ${record[`pay_cyc_mon_list_s${i}`] || ''} وذلك بسبب ${record[`uncashed_reason_s${i}`] || ''}`;
+                }
+            }
+             if (total_pay_list === total_cashed_cnt) total_uncashed_cnt = 0;
+             if (total_pay_amt === total_cashed_amt) total_uncashed_amt = 0;
+
+            return { total_pay_list, total_pay_cyc_cnt, total_pay_amt, total_cashed_cnt, total_cashed_amt, total_uncashed_cnt, total_uncashed_amt, final_comments };
+        };
+
         const updateTotals = sessionDb.prepare(
           `UPDATE bnf_cash_disbursement SET 
              total_pay_list = @total_pay_list,
@@ -403,17 +450,19 @@ export async function POST(req: Request) {
         totalsTx(rows);
         stats.updated += rows.length;
 
-        const metrics = {
-          paymentCycles: Array.from({ length: CYCLE_COUNT }, (_, idx) => idx + 1).filter((cycle) =>
-            rows.some((row) => Number(row[getCycleColumn("is_pay_list", cycle)] ?? 0) === 1)
-          ).length,
-          totalBeneficiariesInList: rows.filter((row) => Number(row.total_pay_list ?? 0) > 0).length,
-          totalBeneficiariesCashed: rows.filter((row) => Number(row.total_cashed_cnt ?? 0) > 0).length,
-          totalBeneficiariesUncashed: rows.filter((row) => Number(row.total_uncashed_cnt ?? 0) > 0).length,
-          totalPaymentAmount: rows.reduce((acc, row) => acc + Number(row.total_pay_amt ?? 0), 0),
-          totalCashedAmount: rows.reduce((acc, row) => acc + Number(row.total_cashed_amt ?? 0), 0),
-          totalUncashedAmount: rows.reduce((acc, row) => acc + Number(row.total_uncashed_amt ?? 0), 0),
-        };
+        const metricsResult = sessionDb
+          .prepare(
+            `
+            SELECT
+              COUNT(CASE WHEN "${getCycleColumn("is_pay_list", cycleNumber)}" = 1 THEN 1 END) AS totalAppearance,
+              SUM(CASE WHEN "${getCycleColumn("is_cashed", cycleNumber)}" = 1 THEN 1 ELSE 0 END) AS totalAttend,
+              SUM(CASE WHEN "${getCycleColumn("is_uncashed", cycleNumber)}" = 1 AND COALESCE("${getCycleColumn("recom", cycleNumber)}", '') != 'تورد الى حساب الممول' THEN 1 ELSE 0 END) AS totalAbsence,
+              SUM(CASE WHEN "${getCycleColumn("has_alternative", cycleNumber)}" = 1 THEN 1 ELSE 0 END) AS totalAlternative
+            FROM bnf_cash_disbursement
+            WHERE project_id = @projectId
+          `
+          )
+          .get({ projectId }) as any;
 
         sendProgress(writer, {
           type: "progress",
@@ -425,7 +474,12 @@ export async function POST(req: Request) {
         sendProgress(writer, {
           type: "done",
           stats,
-          metrics,
+          metrics: {
+            totalAppearance: metricsResult?.totalAppearance || 0,
+            totalAttend: metricsResult?.totalAttend || 0,
+            totalAbsence: metricsResult?.totalAbsence || 0,
+            totalAlternative: metricsResult?.totalAlternative || 0,
+          },
           message: "Processing complete!",
         });
       } catch (error: any) {

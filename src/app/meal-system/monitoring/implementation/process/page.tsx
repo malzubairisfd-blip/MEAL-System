@@ -23,7 +23,7 @@ export default function ProcessMonitoringPage() {
     {
       title: "Cash Assistance Disbursement",
       description: "Track and verify the disbursement of monthly cash payments.",
-      href: "/meal-system/monitoring/implementation/process/cash-assistance-disturbance",
+      href: "/meal-system/monitoring/implementation/process/cash-assistance-disbursement",
       icon: <CircleDollarSign className="h-8 w-8 text-purple-500" />,
     },
     {

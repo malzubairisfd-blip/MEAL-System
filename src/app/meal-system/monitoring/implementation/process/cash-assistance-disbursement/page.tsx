@@ -11,7 +11,7 @@ export default function CashAssistanceDisturbancePage() {
     {
       title: "Beneficiaries Disbursement",
       description: "Manage disbursement information related to beneficiaries.",
-      href: "/meal-system/monitoring/implementation/process/cash-assistance-disturbance/beneficiaries",
+      href: "/meal-system/monitoring/implementation/process/cash-assistance-disbursement/beneficiaries",
       icon: <Users className="h-8 w-8 text-blue-500" />,
     },
     {

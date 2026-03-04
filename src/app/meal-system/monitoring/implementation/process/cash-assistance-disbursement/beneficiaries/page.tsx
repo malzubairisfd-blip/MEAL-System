@@ -11,19 +11,19 @@ export default function BeneficiaryDisturbancePage() {
     {
       title: "Beneficiaries Upload Disturbance Information Page",
       description: "Upload payment and uncashed list files for processing.",
-      href: "/meal-system/monitoring/implementation/process/cash-assistance-disturbance/beneficiaries/upload",
+      href: "/meal-system/monitoring/implementation/process/cash-assistance-disbursement/beneficiaries/upload",
       icon: <Upload className="h-8 w-8 text-blue-500" />,
     },
     {
       title: "Beneficiaries Disturbance Dashboard Page",
       description: "Visualize cash disturbance data and key metrics.",
-      href: "/meal-system/monitoring/implementation/process/cash-assistance-disturbance/beneficiaries/dashboard",
+      href: "/meal-system/monitoring/implementation/process/cash-assistance-disbursement/beneficiaries/dashboard",
       icon: <LayoutDashboard className="h-8 w-8 text-purple-500" />,
     },
     {
       title: "Beneficiaries Disturbance Database Page",
       description: "Browse and manage the complete disturbance database.",
-      href: "/meal-system/monitoring/implementation/process/cash-assistance-disturbance/beneficiaries/database",
+      href: "/meal-system/monitoring/implementation/process/cash-assistance-disbursement/beneficiaries/database",
       icon: <Database className="h-8 w-8 text-cyan-500" />,
     },
   ];
@@ -33,7 +33,7 @@ export default function BeneficiaryDisturbancePage() {
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">Beneficiaries Disturbance</h1>
         <Button variant="outline" asChild>
-          <Link href="/meal-system/monitoring/implementation/process/cash-assistance-disturbance">
+          <Link href="/meal-system/monitoring/implementation/process/cash-assistance-disbursement">
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back to Cash Assistance Disturbance
           </Link>

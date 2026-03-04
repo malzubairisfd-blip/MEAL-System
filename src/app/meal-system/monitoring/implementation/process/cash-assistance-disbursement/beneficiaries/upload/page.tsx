@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import Link from "next/link";
 import * as XLSX from "xlsx";
 import { Button } from "@/components/ui/button";
@@ -34,6 +34,16 @@ import {
   CreditCard,
   CheckCircle,
 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const MONTHS = [
   "January",
@@ -51,19 +61,20 @@ const MONTHS = [
 ];
 const YEARS = Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - 3 + i);
 
-const CYCLE_FIELDS = [
-  "is_pay_list",
-  "pay_cyc_cnt",
-  "pay_cyc_mon_list",
-  "pay_amt",
-  "is_cashed",
-  "cashed_amt",
-  "is_uncashed",
-  "uncashed_amt",
-  "uncashed_code",
-  "uncashed_reason",
-  "recom",
+const CYCLE_FIELDS: { name: string; type: "TEXT" | "INTEGER" | "REAL" }[] = [
+  { name: "is_pay_list", type: "INTEGER" },
+  { name: "pay_cyc_cnt", type: "INTEGER" },
+  { name: "pay_cyc_mon_list", type: "TEXT" },
+  { name: "pay_amt", type: "INTEGER" },
+  { name: "is_cashed", type: "INTEGER" },
+  { name: "cashed_amt", type: "INTEGER" },
+  { name: "is_uncashed", type: "INTEGER" },
+  { name: "uncashed_amt", type: "INTEGER" },
+  { name: "uncashed_code", type: "INTEGER" },
+  { name: "uncashed_reason", type: "TEXT" },
+  { name: "recom", type: "TEXT" },
 ];
+
 const GENERAL_COLUMNS = ["benef_id", "pc_id", "pc_name", "project_id", "project_name"];
 const DEFAULT_DB_COLUMNS = [
   "Id",
@@ -79,7 +90,7 @@ const DEFAULT_DB_COLUMNS = [
   "pc_id",
   "pc_name",
   ...Array.from({ length: 76 }, (_, idx) =>
-    CYCLE_FIELDS.map((field) => `${field}_s${idx + 1}`)
+    CYCLE_FIELDS.map((field) => `${field.name}_s${idx + 1}`)
   ).flat(),
   "total_pay_list",
   "total_pay_cyc_cnt",
@@ -91,7 +102,8 @@ const DEFAULT_DB_COLUMNS = [
   "final_comments",
   "data",
 ];
-const LOCAL_STORAGE_PREFIX = "bnf-cash-disturbance-mapping";
+
+const LOCAL_STORAGE_MAPPING_PREFIX = "bnf-cash-disturbance-mapping";
 const STATUS_LABELS: Record<string, string> = {
   idle: "Idle",
   STEP_ONE: "Step 1 · Enrollment Review",
@@ -105,7 +117,7 @@ const STATUS_LABELS: Record<string, string> = {
   error: "Error",
 };
 
-const getCycleColumns = (cycle: number) => CYCLE_FIELDS.map((field) => `${field}_s${cycle}`);
+const getCycleColumns = (cycle: number) => CYCLE_FIELDS.map((field) => `${field.name}_s${cycle}`);
 const getMappingStorageKey = (
   projectId: string,
   fileName: string,
@@ -116,6 +128,7 @@ const getMappingStorageKey = (
 const findFileColumn = (mapping: Record<string, string>, target: string) => {
   return Object.entries(mapping).find(([, dbCol]) => dbCol === target)?.[0] || "";
 };
+
 const safeNumber = (value: any) => {
   const num = Number(value);
   return Number.isFinite(num) ? num : 0;
@@ -169,7 +182,6 @@ export default function BeneficiariesCashDisturbanceUploadPage() {
   });
   const [resultMetrics, setResultMetrics] = useState<any>(null);
   const [workerMessage, setWorkerMessage] = useState("");
-
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       setFile(e.target.files[0]);
@@ -376,52 +388,7 @@ export default function BeneficiariesCashDisturbanceUploadPage() {
       .filter(Boolean);
     return Array.from(new Set(ids));
   };
-
-  const handleCheckDuplicates = async () => {
-    if (!paymentReady) {
-      toast({
-        title: "Missing mapping",
-        description: "Map benef_id and select unique identifier before checking duplicates.",
-        variant: "destructive",
-      });
-      return;
-    }
-    const ids = computeUniqueIds();
-    if (!ids.length) {
-      toast({ title: "No identifiers", description: "Upload data with unique IDs first.", variant: "destructive" });
-      return;
-    }
-    setStatus("STEP_ONE");
-    setProgress(10);
-    const response = await fetch("/api/bnf-cash-disbursement", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "check_duplicates",
-        projectId: selectedProjectId,
-        uniqueIds: ids,
-        uniqueIdCol: dbUniqueIdCol,
-      }),
-    });
-    const data = await response.json();
-    if (!response.ok) {
-      toast({ title: "Duplicate check failed", description: data.error || "Unable to check duplicates.", variant: "destructive" });
-      setStatus("error");
-      return;
-    }
-    setStats((prev) => ({ ...prev, total: ids.length }));
-    if (data.count > 0) {
-      setDuplicateState({
-        open: true,
-        count: data.count,
-        totalInDb: data.totalInDb,
-        ids: data.duplicateIds || [],
-      });
-    } else {
-      await executeSave("replace");
-    }
-  };
-
+  
   const processEventStream = async (response: Response) => {
     const reader = response.body?.getReader();
     const decoder = new TextDecoder();
@@ -434,19 +401,17 @@ export default function BeneficiariesCashDisturbanceUploadPage() {
       const chunks = buffer.split("\n\n");
       buffer = chunks.pop() || "";
       for (const chunk of chunks) {
-        const trimmed = chunk.trim();
-        if (!trimmed) continue;
-        const dataLine = trimmed.split("\n").find((line) => line.startsWith("data: "));
-        if (!dataLine) continue;
+        if (!chunk.startsWith("data: ")) continue;
         try {
-          const payload = JSON.parse(dataLine.replace("data: ", ""));
+          const jsonStr = chunk.substring(6);
+          const payload = JSON.parse(jsonStr);
           if (payload.type === "progress") {
             setStatus(payload.status || status);
             setProgress(payload.progress ?? progress);
             setWorkerMessage(payload.message || "");
             if (payload.stats) setStats(payload.stats);
           } else if (payload.type === "done") {
-            setWorkerProgress(100);
+            setProgress(100);
             setStatus("done");
             if (payload.stats) setStats(payload.stats);
             if (payload.metrics) setResultMetrics(payload.metrics);
@@ -461,7 +426,7 @@ export default function BeneficiariesCashDisturbanceUploadPage() {
     }
   };
 
-  const executeSave = async (mode: "skip" | "replace") => {
+  const executeSave = useCallback(async (mode: "skip" | "replace") => {
     if (!paymentReady) {
       toast({ title: "Incomplete", description: "Finish mapping and identifiers before saving.", variant: "destructive" });
       return;
@@ -483,8 +448,8 @@ export default function BeneficiariesCashDisturbanceUploadPage() {
           paymentMonths,
           paymentData,
           uncashedData,
-          paymentMapping,
-          uncashedMapping,
+          paymentMapping: Object.fromEntries(paymentMapping),
+          uncashedMapping: Object.fromEntries(uncashedMapping),
           uniqueFileColumn: fileUniqueIdCol,
           uniqueDbColumn: dbUniqueIdCol,
           mode,
@@ -497,7 +462,7 @@ export default function BeneficiariesCashDisturbanceUploadPage() {
       } else {
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || "Unable to save data.");
-        setWorkerProgress(100);
+        setProgress(100);
         setStatus("done");
         setStats(data.stats || stats);
         setResultMetrics(data.metrics || null);
@@ -508,8 +473,68 @@ export default function BeneficiariesCashDisturbanceUploadPage() {
       toast({ title: "Save failed", description: error.message || "An error occurred.", variant: "destructive" });
     } finally {
       setSaving(false);
+      setDuplicateState(prev => ({ ...prev, isOpen: false }));
     }
-  };
+  }, [
+      paymentReady, 
+      projects, 
+      selectedProjectId, 
+      paymentCycle, 
+      paymentCycleCount, 
+      paymentMonths, 
+      paymentData, 
+      uncashedData, 
+      paymentMapping, 
+      uncashedMapping, 
+      fileUniqueIdCol, 
+      dbUniqueIdCol, 
+      duplicateState.ids, 
+      toast
+  ]);
+  
+  const handleSave = useCallback(async () => {
+    if (!selectedProjectId || !file || !fileUniqueIdCol || !dbUniqueIdCol) {
+        toast({ title: "Incomplete Configuration", description: "Please select a project, upload a file, and map the unique ID columns.", variant: "destructive" });
+        return;
+    }
+
+    setSaving(true);
+    try {
+      const uniqueIds = computeUniqueIds();
+      if (!uniqueIds.length) throw new Error("No unique identifiers found in the selected file column.");
+
+      const res = await fetch("/api/bnf-cash-disbursement", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "check_duplicates",
+          projectId: selectedProjectId,
+          uniqueIds,
+          uniqueIdCol: dbUniqueIdCol,
+        }),
+      });
+      
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "Failed to check duplicates.");
+
+      if (result.count > 0) {
+        setDuplicateState({
+            isOpen: true,
+            count: result.count,
+            totalInDb: result.totalInDb,
+            ids: result.duplicateIds,
+        });
+      } else {
+        await executeSave("replace");
+      }
+
+    } catch (error: any) {
+        toast({ title: "Error", description: error.message, variant: "destructive" });
+    } finally {
+        setSaving(false);
+    }
+  }, [selectedProjectId, file, fileUniqueIdCol, dbUniqueIdCol, computeUniqueIds, executeSave, toast]);
+  
 
   const statusLabel = STATUS_LABELS[status] || status;
   const duplicatePanel = duplicateState.open && (
@@ -524,19 +549,13 @@ export default function BeneficiariesCashDisturbanceUploadPage() {
         <div className="flex flex-wrap gap-2">
           <Button
             variant="outline"
-            onClick={async () => {
-              setDuplicateState((prev) => ({ ...prev, open: false }));
-              await executeSave("skip");
-            }}
+            onClick={() => executeSave("skip")}
           >
             Skip duplicates & save new
           </Button>
           <Button
             variant="secondary"
-            onClick={async () => {
-              setDuplicateState((prev) => ({ ...prev, open: false }));
-              await executeSave("replace");
-            }}
+            onClick={() => executeSave("replace")}
           >
             Update duplicates & save new
           </Button>
@@ -595,26 +614,26 @@ export default function BeneficiariesCashDisturbanceUploadPage() {
     <div className="space-y-6 pb-10">
       <div className="flex flex-col md:flex-row items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold">Beneficiaries Disturbance Upload</h1>
+          <h1 className="text-3xl font-bold">Beneficiaries Disbursement Upload</h1>
           <p className="text-sm text-muted-foreground">
-            Map your upload file to the disturbance database and follow the seven-step saving process.
+            Map your upload file to the disbursement database and follow the seven-step saving process.
           </p>
         </div>
         <div className="flex gap-2">
           <Button asChild>
-            <Link href="/meal-system/monitoring/implementation/process/bnf-cash-distrubance/dashboard">
+            <Link href="/meal-system/monitoring/implementation/process/cash-assistance-disbursement/dashboard">
               <Upload className="mr-2 h-4 w-4" />
               Dashboard
             </Link>
           </Button>
           <Button asChild>
-            <Link href="/meal-system/monitoring/implementation/process/bnf-cash-distrubance/database">
+            <Link href="/meal-system/monitoring/implementation/process/cash-assistance-disbursement/database">
               <Database className="mr-2 h-4 w-4" />
               Database
             </Link>
           </Button>
           <Button variant="outline" asChild>
-            <Link href="/meal-system/monitoring/implementation/process/bnf-cash-distrubance">
+            <Link href="/meal-system/monitoring/implementation/process/cash-assistance-disbursement">
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back to Hub
             </Link>
@@ -891,10 +910,9 @@ export default function BeneficiariesCashDisturbanceUploadPage() {
         </Card>
       )}
 
-
       <Card>
         <CardHeader>
-        <CardTitle>Unique Identifiers & Saving</CardTitle>
+          <CardTitle>Unique Identifiers & Saving</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -931,7 +949,7 @@ export default function BeneficiariesCashDisturbanceUploadPage() {
           </div>
           <div className="flex flex-col gap-3">
             <Button
-              onClick={handleCheckDuplicates}
+              onClick={handleSave}
               disabled={!paymentReady || saving}
               className="w-full"
             >
@@ -950,7 +968,7 @@ export default function BeneficiariesCashDisturbanceUploadPage() {
           </div>
         </CardContent>
       </Card>
-            <Card>
+      <Card>
         <CardHeader>
           <CardTitle>Result Snapshot</CardTitle>
         </CardHeader>
@@ -964,19 +982,19 @@ export default function BeneficiariesCashDisturbanceUploadPage() {
       <Card>
         <CardContent className="flex flex-wrap gap-2">
           <Button asChild>
-            <Link href="/meal-system/monitoring/implementation/process/bnf-cash-distrubance/dashboard">
+            <Link href="/meal-system/monitoring/implementation/process/bnf-cash-disbursement/dashboard">
               <Upload className="mr-2 h-4 w-4" />
               Go to Dashboard
             </Link>
           </Button>
           <Button asChild>
-            <Link href="/meal-system/monitoring/implementation/process/bnf-cash-distrubance/database">
+            <Link href="/meal-system/monitoring/implementation/process/bnf-cash-disbursement/database">
               <Database className="mr-2 h-4 w-4" />
               Go to Database
             </Link>
           </Button>
           <Button variant="outline" asChild>
-            <Link href="/meal-system/monitoring/implementation/process/bnf-cash-distrubance">
+            <Link href="/meal-system/monitoring/implementation/process/bnf-cash-disbursement">
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back to Hub
             </Link>
