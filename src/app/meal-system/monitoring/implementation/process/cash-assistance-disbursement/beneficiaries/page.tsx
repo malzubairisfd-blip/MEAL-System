@@ -1,4 +1,4 @@
-// src/app/meal-system/monitoring/implementation/process/cash-assistance-disturbance/beneficiaries/page.tsx
+// src/app/meal-system/monitoring/implementation/process/cash-assistance-disbursement/beneficiaries/page.tsx
 "use client";
 
 import Link from "next/link";
@@ -6,23 +6,23 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, ArrowRight, Upload, LayoutDashboard, Database } from "lucide-react";
 
-export default function BeneficiaryDisturbancePage() {
+export default function BeneficiaryDisbursementPage() {
   const features = [
     {
-      title: "Beneficiaries Upload Disturbance Information Page",
+      title: "Beneficiaries Disbursement Upload",
       description: "Upload payment and uncashed list files for processing.",
       href: "/meal-system/monitoring/implementation/process/cash-assistance-disbursement/beneficiaries/upload",
       icon: <Upload className="h-8 w-8 text-blue-500" />,
     },
     {
-      title: "Beneficiaries Disturbance Dashboard Page",
-      description: "Visualize cash disturbance data and key metrics.",
+      title: "Beneficiaries Disbursement Dashboard",
+      description: "Visualize cash disbursement data and key metrics.",
       href: "/meal-system/monitoring/implementation/process/cash-assistance-disbursement/beneficiaries/dashboard",
       icon: <LayoutDashboard className="h-8 w-8 text-purple-500" />,
     },
     {
-      title: "Beneficiaries Disturbance Database Page",
-      description: "Browse and manage the complete disturbance database.",
+      title: "Beneficiaries Disbursement Database",
+      description: "Browse and manage the complete disbursement database.",
       href: "/meal-system/monitoring/implementation/process/cash-assistance-disbursement/beneficiaries/database",
       icon: <Database className="h-8 w-8 text-cyan-500" />,
     },
@@ -31,11 +31,11 @@ export default function BeneficiaryDisturbancePage() {
   return (
     <div className="space-y-8">
       <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">Beneficiaries Disturbance</h1>
+        <h1 className="text-3xl font-bold">Beneficiaries Disbursement</h1>
         <Button variant="outline" asChild>
           <Link href="/meal-system/monitoring/implementation/process/cash-assistance-disbursement">
             <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Cash Assistance Disturbance
+            Back to Cash Assistance Disbursement
           </Link>
         </Button>
       </div>

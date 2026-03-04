@@ -1,4 +1,4 @@
-// src/app/meal-system/monitoring/implementation/process/cash-assistance-disturbance/page.tsx
+// src/app/meal-system/monitoring/implementation/process/cash-assistance-disbursement/page.tsx
 "use client";
 
 import Link from "next/link";
@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, ArrowRight, Users, UserCog } from "lucide-react";
 
-export default function CashAssistanceDisturbancePage() {
+export default function CashAssistanceDisbursementPage() {
   const features = [
     {
       title: "Beneficiaries Disbursement",
