@@ -1,8 +1,9 @@
+
 // src/app/meal-system/monitoring/implementation/process/cash-assistance-disbursement/beneficiaries/dashboard/page.tsx
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import Link from "next/link";
+import Link from 'next/link';
 import ReactECharts from "echarts-for-react";
 import * as XLSX from "xlsx";
 import { toPng } from "html-to-image";
@@ -11,10 +12,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Archive, Database, Download, Upload, Users, Wallet, DollarSign, Activity, BarChart2, Camera, ChevronDown } from "lucide-react";
+import { ArrowLeft, Archive, Database, Download, Upload, Users, Wallet, DollarSign, Activity, BarChart2, Camera, ChevronDown, Loader2, UserCheck, UserMinus } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { ScrollArea } from '@/components/ui/scroll-area';
 import ExcelJS from 'exceljs';
 
 interface Project {
@@ -40,6 +41,7 @@ export default function BeneficiariesCashdisbursementDashboardPage() {
   const [selectedProjectId, setSelectedProjectId] = useState("");
   const [records, setRecords] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isCapturing, setIsCapturing] = useState(false);
   
   const keyFiguresRef = useRef<HTMLDivElement>(null);
   const monthsTableRef = useRef<HTMLDivElement>(null);
@@ -295,3 +297,6 @@ export default function BeneficiariesCashdisbursementDashboardPage() {
   );
 }
 
+function ScrollArea({ children, className }: { children: React.ReactNode, className?: string }) {
+  return <div className={`overflow-auto ${className}`}>{children}</div>;
+}
