@@ -1,15 +1,14 @@
-// src/app/api/bnf-cash-disbursement/route.ts
 import { NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
 import Database from "better-sqlite3";
 
-// --- Database Setup ---
 const getDataPath = () => path.join(process.cwd(), "src/data");
 const getDbPath = () => path.join(getDataPath(), "bnf-cash-disbursement.db");
 const getEnrollmentDbPath = () => path.join(getDataPath(), "enrollment-review.db");
 
-const CYCLE_FIELDS: { name: string; type: string }[] = [
+const CYCLE_COUNT = 76;
+const cycleFields = [
   { name: "is_pay_list", type: "INTEGER" },
   { name: "pay_cyc_cnt", type: "INTEGER" },
   { name: "pay_cyc_mon_list", type: "TEXT" },
@@ -22,13 +21,10 @@ const CYCLE_FIELDS: { name: string; type: string }[] = [
   { name: "uncashed_reason", type: "TEXT" },
   { name: "recom", type: "TEXT" },
 ];
-
-const CYCLE_COUNT = 76;
 const cycleColumnEntries = Array.from({ length: CYCLE_COUNT }, (_, idx) => {
   const cycle = idx + 1;
-  return CYCLE_FIELDS.map(field => `  "${field.name}_s${cycle}" ${field.type}`).join(",\n");
+  return cycleFields.map((field) => `  ${field.name}_s${cycle} ${field.type}`).join(",\n");
 });
-
 const TABLE_SCHEMA = `(
   Id INTEGER PRIMARY KEY AUTOINCREMENT,
   project_id TEXT,
@@ -53,13 +49,58 @@ ${cycleColumnEntries.join(",\n")},
   final_comments TEXT,
   data JSON
 )`;
-
-const ALL_COLUMNS = [
-  "Id", "project_id", "project_name", "benef_id", "bnf_name", "bnf_vill", "bnf_ozla", "bnf_mud", "ed_id", "ed_name", "pc_id", "pc_name",
-  ...cycleColumnEntries.map(e => e.trim().split(' ')[0].replace(/"/g, '')),
-  "total_pay_list", "total_pay_cyc_cnt", "total_pay_amt", "total_cashed_cnt", "total_cashed_amt", "total_uncashed_cnt", "total_uncashed_amt", "final_comments", "data"
+const BASE_COLUMNS = [
+  "project_id",
+  "project_name",
+  "benef_id",
+  "bnf_name",
+  "bnf_vill",
+  "bnf_ozla",
+  "bnf_mud",
+  "ed_id",
+  "ed_name",
+  "pc_id",
+  "pc_name",
+  "total_pay_list",
+  "total_pay_cyc_cnt",
+  "total_pay_amt",
+  "total_cashed_cnt",
+  "total_cashed_amt",
+  "total_uncashed_cnt",
+  "total_uncashed_amt",
+  "final_comments",
+  "data",
 ];
-const VALID_COLUMNS_SET = new Set(ALL_COLUMNS);
+const cycleColumnNames = Array.from({ length: CYCLE_COUNT }, (_, idx) => {
+  const cycle = idx + 1;
+  return cycleFields.map((field) => `${field.name}_s${cycle}`);
+}).flat();
+const ALL_COLUMNS = ["Id", ...BASE_COLUMNS, ...cycleColumnNames];
+const VALID_COLUMNS_SET = new Set(ALL_COLUMNS.map((col) => col.toLowerCase()));
+const sanitizeColumn = (col?: string) => (col ? col.replace(/[^a-zA-Z0-9_]/g, "") : "");
+const chunkArray = <T,>(arr: T[], size: number): T[][] => {
+  const chunks: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) {
+    chunks.push(arr.slice(i, i + size));
+  }
+  return chunks;
+};
+const normalizeLookupValue = (value: any) => {
+  if (value === null || value === undefined) return "";
+  return String(value).trim();
+};
+const getCycleColumn = (field: string, cycle: number) => `${field}_s${cycle}`;
+const prepareMappingEntries = (mapping: Record<string, string> = {}, allowed: Set<string>) => {
+  const entries: { fileCol: string; dbCol: string; param: string }[] = [];
+  let counter = 0;
+  for (const [fileCol, dbColRaw] of Object.entries(mapping)) {
+    const sanitized = sanitizeColumn(dbColRaw);
+    if (!sanitized) continue;
+    if (!allowed.has(sanitized)) continue;
+    entries.push({ fileCol, dbCol: sanitized, param: `param_${counter++}` });
+  }
+  return entries;
+};
 
 function initializeDatabase() {
   const db = new Database(getDbPath());
@@ -67,215 +108,336 @@ function initializeDatabase() {
   return db;
 }
 
-// --- Helper Functions ---
-const sanitizeColumn = (col?: string) => (col ? col.replace(/[^a-zA-Z0-9_]/g, "") : "");
-const chunkArray = <T,>(arr: T[], size: number): T[][] => {
-  const chunks: T[][] = [];
-  for (let i = 0; i < arr.length; i += size) chunks.push(arr.slice(i, i + size));
-  return chunks;
-};
-const normalizeLookupValue = (value: any) => String(value ?? '').trim();
-const getCycleColumn = (field: string, cycle: number) => `"${field}_s${cycle}"`;
-const prepareMappingEntries = (mapping: Record<string, string>, allowedCols: Set<string>) => {
-  const entries: { fileCol: string; dbCol: string; param: string }[] = [];
-  let counter = 0;
-  for (const [fileCol, dbColRaw] of Object.entries(mapping)) {
-    const sanitized = sanitizeColumn(dbColRaw);
-    if (sanitized && allowedCols.has(sanitized)) {
-      entries.push({ fileCol, dbCol: `"${sanitized}"`, param: `@param_${counter++}` });
-    }
-  }
-  return entries;
+const sendProgress = (writer: WritableStreamDefaultWriter<Uint8Array>, payload: any) => {
+  const encoder = new TextEncoder();
+  writer.write(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`));
 };
 
-
-// --- API Handlers ---
-export async function GET(req: Request) {
+const seedEnrollment = (db: Database.Database, projectId: string, projectName: string) => {
   try {
-    await fs.mkdir(getDataPath(), { recursive: true });
-    const db = new Database(getDbPath(), { fileMustExist: true });
-    const { searchParams } = new URL(req.url);
-    const projectId = searchParams.get("projectId");
-    let records;
-    if (projectId && projectId !== "all") {
-      records = db.prepare("SELECT * FROM bnf_cash_disbursement WHERE project_id = ?").all(projectId);
-    } else {
-      records = db.prepare("SELECT * FROM bnf_cash_disbursement").all();
-    }
-    db.close();
-    return NextResponse.json(records);
-  } catch (err: any) {
-    if (err?.code === "SQLITE_CANTOPEN") return NextResponse.json([]);
-    return NextResponse.json({ error: "Failed to fetch data", details: err?.message }, { status: 500 });
+    const enrollmentDb = new Database(getEnrollmentDbPath(), { fileMustExist: true });
+    const rows = enrollmentDb
+      .prepare(
+        `
+        SELECT benef_id, bnf_name, bnf_vill, bnf_ozla, bnf_mud, ed_id, ed_name, project_name
+        FROM enrollment_data
+        WHERE project_id = ?
+      `
+      )
+      .all(projectId);
+    const insertStmt = db.prepare(
+      `
+      INSERT OR IGNORE INTO bnf_cash_disbursement
+      (project_id, project_name, benef_id, bnf_name, bnf_vill, bnf_ozla, bnf_mud, ed_id, ed_name)
+      VALUES (@projectId, @projectName, @benef_id, @bnf_name, @bnf_vill, @bnf_ozla, @bnf_mud, @ed_id, @ed_name)
+    `
+    );
+    const transaction = db.transaction((records: any[]) => {
+      records.forEach((record) =>
+        insertStmt.run({
+          projectId,
+          projectName,
+          benef_id: record.benef_id,
+          bnf_name: record.bnf_name,
+          bnf_vill: record.bnf_vill,
+          bnf_ozla: record.bnf_ozla,
+          bnf_mud: record.bnf_mud,
+          ed_id: record.ed_id,
+          ed_name: record.ed_name,
+        })
+      );
+    });
+    transaction(rows);
+  } catch {
+    // Enrollment DB missing; ignore
   }
+};
+
+export async function GET(req: Request) {
+  await fs.mkdir(getDataPath(), { recursive: true });
+  const db = initializeDatabase();
+  const { searchParams } = new URL(req.url);
+  const projectId = searchParams.get("projectId");
+  const records = projectId && projectId !== "all"
+    ? db.prepare("SELECT * FROM bnf_cash_disbursement WHERE project_id = ?").all(projectId)
+    : db.prepare("SELECT * FROM bnf_cash_disbursement").all();
+  db.close();
+  return NextResponse.json(records);
 }
 
 export async function POST(req: Request) {
-    const body = await req.json();
-    const { action } = body;
+  const body = await req.json();
+  const { action } = body;
+  await fs.mkdir(getDataPath(), { recursive: true });
 
-    try {
-        await fs.mkdir(getDataPath(), { recursive: true });
-        
-        if (action === "schema") {
-            const db = initializeDatabase();
-            const tableInfo = db.prepare("PRAGMA table_info(bnf_cash_disbursement)").all();
-            db.close();
-            return NextResponse.json({ columns: tableInfo.map((col: any) => col.name) });
-        }
-        
-        if (action === "check_duplicates") {
-            const { projectId, uniqueIds, uniqueIdCol } = body;
-            const lookupColumn = sanitizeColumn(uniqueIdCol);
-            if (!projectId || !lookupColumn || !Array.isArray(uniqueIds)) return NextResponse.json({ error: "Missing parameters" }, { status: 400 });
+  if (action === "schema") {
+    const db = initializeDatabase();
+    const columns = db.prepare("PRAGMA table_info(bnf_cash_disbursement)").all().map((col) => col.name);
+    db.close();
+    return NextResponse.json({ columns });
+  }
 
-            let db: Database.Database | null = null;
-            try {
-                db = new Database(getDbPath(), { fileMustExist: true });
-                const existingIds = new Set<string>();
-                const chunks = chunkArray(uniqueIds.map(String), 900);
-                for (const chunk of chunks) {
-                    const placeholders = chunk.map(() => "?").join(",");
-                    const stmt = db.prepare(`SELECT "${lookupColumn}" FROM bnf_cash_disbursement WHERE project_id = ? AND "${lookupColumn}" IN (${placeholders})`);
-                    stmt.all(projectId, ...chunk).forEach((row: any) => existingIds.add(String(row[lookupColumn])));
-                }
-                const totalInDb = db.prepare("SELECT COUNT(*) as total FROM bnf_cash_disbursement WHERE project_id = ?").get(projectId)?.total || 0;
-                return NextResponse.json({ count: existingIds.size, totalInDb, duplicateIds: Array.from(existingIds) });
-            } catch (error: any) {
-                if (error.code === 'SQLITE_CANTOPEN') return NextResponse.json({ count: 0, totalInDb: 0, duplicateIds: [] });
-                throw error;
-            } finally {
-                if (db) db.close();
-            }
-        }
-
-        if (action === "save") {
-            const stream = new TransformStream();
-            const writer = stream.writable.getWriter();
-            const encoder = new TextEncoder();
-            const send = (data: any) => writer.write(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
-
-            // Run the save logic asynchronously and stream progress
-            (async () => {
-                const { projectId, projectName, paymentCycle, paymentCycleCount, paymentMonths = [], paymentData = [], uncashedData = [], paymentMapping = {}, uncashedMapping = {}, uniqueFileColumn, uniqueDbColumn, mode, duplicateIds = [] } = body;
-                const cycle = Number(paymentCycle);
-                
-                let sessionDb: Database.Database | null = null;
-                try {
-                    sessionDb = initializeDatabase();
-                    
-                    // STEP 1
-                    send({ type: "progress", status: "FIRST_STEP_SAVING_FROM_ENROLLMENT_REVIEW_DATABASE", progress: 10, message: "Seeding data..." });
-                    const existingCount = sessionDb.prepare("SELECT COUNT(*) as count FROM bnf_cash_disbursement WHERE project_id = ?").get(projectId)?.count || 0;
-                    if (existingCount === 0 && mode !== 'skip') {
-                        try {
-                           const enrollDb = new Database(getEnrollmentDbPath(), { fileMustExist: true });
-                           const beneficiaries = enrollDb.prepare("SELECT benef_id, bnf_name, bnf_vill, bnf_ozla, bnf_mud, ed_id, ed_name, pc_id, pc_name FROM enrollment_data WHERE project_id = ?").all(projectId);
-                           const insertStmt = sessionDb.prepare(`INSERT OR IGNORE INTO bnf_cash_disbursement (project_id, project_name, benef_id, bnf_name, bnf_vill, bnf_ozla, bnf_mud, ed_id, ed_name, pc_id, pc_name) VALUES (@project_id, @project_name, @benef_id, @bnf_name, @bnf_vill, @bnf_ozla, @bnf_mud, @ed_id, @ed_name, @pc_id, @pc_name)`);
-                           sessionDb.transaction((bnfs: any[]) => bnfs.forEach(b => insertStmt.run({ ...b, project_id: projectId, project_name: projectName })))(beneficiaries);
-                           enrollDb.close();
-                        } catch { /* ignore if enroll DB not found */ }
-                    }
-
-                    // STEP 2, 3, 4
-                    send({ type: "progress", status: "SECOND_STEP_SAVING_PAYMENT_CYCLE_LIST", progress: 25, message: "Processing payment list..." });
-                    const cycleSuffix = `s${cycle}`;
-                    const paymentEntries = prepareMappingEntries(paymentMapping, new Set([...ALL_COLUMNS]));
-                    const updatePaymentStmt = sessionDb.prepare(`UPDATE bnf_cash_disbursement SET ${getCycleColumn("is_pay_list", cycle)} = 1, ${getCycleColumn("pay_cyc_cnt", cycle)} = @cycleCount, ${getCycleColumn("pay_cyc_mon_list", cycle)} = @cycleMonths, ${paymentEntries.map(e => `${e.dbCol} = ${e.param}`).join(', ')} WHERE "${sanitizeColumn(uniqueDbColumn)}" = @lookupValue AND project_id = @projectId`);
-                    sessionDb.transaction((rows: any[]) => {
-                        for(const row of rows) {
-                           const lookupValue = normalizeLookupValue(row[uniqueFileColumn]);
-                           if (!lookupValue || (mode === 'skip' && duplicateIds.includes(lookupValue))) continue;
-                           const params: Record<string,any> = { projectId, lookupValue, cycleCount: paymentCycleCount, cycleMonths: paymentMonths.join(', ') };
-                           paymentEntries.forEach(entry => params[entry.param.substring(1)] = row[entry.fileCol]);
-                           updatePaymentStmt.run(params);
-                        }
-                    })(paymentData);
-                    
-                    // STEP 5
-                    send({ type: "progress", status: "FIFTH_STEP_SAVING_UNCASHED_LIST", progress: 50, message: "Processing uncashed list..." });
-                    const uncashedEntries = prepareMappingEntries(uncashedMapping, new Set([...ALL_COLUMNS]));
-                    if (uncashedEntries.length > 0) {
-                        const updateUncashedStmt = sessionDb.prepare(`UPDATE bnf_cash_disbursement SET ${uncashedEntries.map(e => `${e.dbCol} = ${e.param}`).join(', ')} WHERE "${sanitizeColumn(uniqueDbColumn)}" = @lookupValue AND project_id = @projectId`);
-                         sessionDb.transaction((rows: any[]) => {
-                            for(const row of rows) {
-                               const lookupValue = normalizeLookupValue(row[uniqueFileColumn]);
-                               if (!lookupValue || (mode === 'skip' && duplicateIds.includes(lookupValue))) continue;
-                               const params: Record<string,any> = { projectId, lookupValue };
-                               uncashedEntries.forEach(entry => params[entry.param.substring(1)] = row[entry.fileCol]);
-                               updateUncashedStmt.run(params);
-                            }
-                        })(uncashedData);
-                    }
-                    
-                    // STEP 6
-                    send({ type: "progress", status: "SIXTH_STEP_SAVING_CASHED_DATA", progress: 75, message: "Calculating cashed data..." });
-                    const isUncashedCol = getCycleColumn("is_uncashed", cycle);
-                    sessionDb.prepare(`UPDATE bnf_cash_disbursement SET ${getCycleColumn("is_cashed", cycle)} = 1, ${getCycleColumn("cashed_amt", cycle)} = COALESCE(${getCycleColumn("pay_amt", cycle)}, 0) WHERE project_id = ? AND ${getCycleColumn("is_pay_list", cycle)} = 1 AND (${isUncashedCol} IS NULL OR ${isUncashedCol} = '')`).run(projectId);
-                    
-                    // STEP 7
-                    send({ type: "progress", status: "SEVENTH_STEP_SAVING_TOTAL_VALUES", progress: 90, message: "Aggregating totals..." });
-                    const allProjectRows = sessionDb.prepare('SELECT * FROM bnf_cash_disbursement WHERE project_id = ?').all(projectId);
-                    const updateTotalsStmt = sessionDb.prepare(`UPDATE bnf_cash_disbursement SET total_pay_list = @total_pay_list, total_pay_cyc_cnt = @total_pay_cyc_cnt, total_pay_amt = @total_pay_amt, total_cashed_cnt = @total_cashed_cnt, total_cashed_amt = @total_cashed_amt, total_uncashed_cnt = @total_uncashed_cnt, total_uncashed_amt = @total_uncashed_amt, final_comments = @final_comments WHERE Id = @Id`);
-                    sessionDb.transaction((rows: any[]) => {
-                        for (const row of rows) {
-                           let total_pay_list = 0, total_pay_cyc_cnt = 0, total_pay_amt = 0, total_cashed_cnt = 0, total_cashed_amt = 0, total_uncashed_cnt = 0, total_uncashed_amt = 0, final_comments = row.final_comments || "";
-                           let hasTawrid = false;
-                           for (let c = 1; c <= CYCLE_COUNT; c++) {
-                               const suf = `_s${c}`;
-                               if (row[`recom${suf}`] === 'تورد الى حساب الممول') hasTawrid = true;
-                               total_pay_list += Number(row[`is_pay_list${suf}`] ?? 0);
-                               total_pay_cyc_cnt += Number(row[`pay_cyc_cnt${suf}`] ?? 0);
-                               total_pay_amt += Number(row[`pay_amt${suf}`] ?? 0);
-                               total_cashed_cnt += Number(row[`is_cashed${suf}`] ?? 0);
-                               total_cashed_amt += Number(row[`cashed_amt${suf}`] ?? 0);
-                               const recomAllowed = !row[`recom${suf}`] || row[`recom${suf}`] === 'يعاد الصرف للحالة';
-                               if(recomAllowed && !hasTawrid) {
-                                   total_uncashed_cnt += Number(row[`is_uncashed${suf}`] ?? 0);
-                                   total_uncashed_amt += Number(row[`uncashed_amt${suf}`] ?? 0);
-                               }
-                           }
-                           if(hasTawrid) {
-                               total_uncashed_cnt = 0;
-                               total_uncashed_amt = 0;
-                               const tawridCycle = Array.from({length: 76}, (_, i) => i+1).find(c => row[`recom_s${c}`] === 'تورد الى حساب الممول');
-                               if(tawridCycle && !final_comments) {
-                                  final_comments = `تم توريد مرتجع المستفيدة إلى حساب الممول في دفعة شهر ${row[`pay_cyc_mon_list_s${tawridCycle}`] || ''} وذلك بسبب ${row[`uncashed_reason_s${tawridCycle}`] || ''}`;
-                               }
-                           }
-                           if (total_pay_list === total_cashed_cnt) { total_uncashed_cnt = 0; total_uncashed_amt = 0; }
-                           updateTotalsStmt.run({Id: row.Id, total_pay_list, total_pay_cyc_cnt, total_pay_amt, total_cashed_cnt, total_cashed_amt, total_uncashed_cnt, total_uncashed_amt, final_comments });
-                        }
-                    })(allProjectRows);
-
-                    const metrics = {
-                        totalAppearance: allProjectRows.filter(r => r[`is_pay_list_s${cycle}`] === 1).length,
-                        totalAttend: allProjectRows.reduce((sum, r) => sum + (r[`is_cashed_s${cycle}`] || 0), 0),
-                        totalAbsence: allProjectRows.reduce((sum, r) => sum + (r[`is_uncashed_s${cycle}`] || 0), 0),
-                        totalAlternative: 0,
-                        totalPaymentAmount: allProjectRows.reduce((sum, r) => sum + (r[`pay_amt_s${cycle}`] || 0), 0),
-                        totalCashedAmount: allProjectRows.reduce((sum, r) => sum + (r[`cashed_amt_s${cycle}`] || 0), 0),
-                        totalUncashedAmount: allProjectRows.reduce((sum, r) => sum + (r[`uncashed_amt_s${cycle}`] || 0), 0)
-                    };
-                    
-                    send({ type: "done", message: "Processing complete!", metrics });
-
-                } catch(error: any) {
-                    send({ type: "error", error: error.message });
-                } finally {
-                    if (sessionDb) sessionDb.close();
-                    writer.close();
-                }
-            })();
-
-            return new Response(stream.readable, {
-                headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" },
-            });
-        }
-        
-        return NextResponse.json({ error: "Unsupported action" }, { status: 400 });
-    } catch (error: any) {
-        console.error("[BNF_CASH_DISBURSEMENT_ERROR]", error);
-        return NextResponse.json({ error: "Failed to process request", details: error.message }, { status: 500 });
+  if (action === "check_duplicates") {
+    const { projectId, uniqueIds, uniqueIdCol } = body;
+    if (!projectId || !Array.isArray(uniqueIds)) {
+      return NextResponse.json({ error: "Missing duplicate parameters" }, { status: 400 });
     }
+    const lookupColumn = sanitizeColumn(uniqueIdCol) || "benef_id";
+    if (!VALID_COLUMNS_SET.has(lookupColumn.toLowerCase())) {
+      return NextResponse.json({ error: "Invalid unique column" }, { status: 400 });
+    }
+    const db = initializeDatabase();
+    const chunks = chunkArray(uniqueIds, 900);
+    const existing = new Set<string>();
+    for (const chunk of chunks) {
+      if (!chunk.length) continue;
+      const placeholders = chunk.map(() => "?").join(",");
+      const stmt = db.prepare(
+        `SELECT "${lookupColumn}" FROM bnf_cash_disbursement WHERE project_id = ? AND "${lookupColumn}" IN (${placeholders})`
+      );
+      const rows = stmt.all(projectId, ...chunk);
+      rows.forEach((row) => {
+        const value = row[lookupColumn];
+        if (value !== undefined && value !== null) existing.add(String(value));
+      });
+    }
+    const totalInDb = db
+      .prepare("SELECT COUNT(*) as total FROM bnf_cash_disbursement WHERE project_id = ?")
+      .get(projectId)?.total || 0;
+    db.close();
+    return NextResponse.json({ count: existing.size, totalInDb, duplicateIds: Array.from(existing) });
+  }
+
+  if (action === "save") {
+    const stream = new TransformStream<Uint8Array, Uint8Array>();
+    const writer = stream.writable.getWriter();
+    const response = new Response(stream.readable, {
+      headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" },
+    });
+
+    (async () => {
+      const {
+        projectId,
+        projectName,
+        paymentCycle,
+        paymentCycleCount,
+        paymentMonths = [],
+        paymentData = [],
+        uncashedData = [],
+        paymentMapping = {},
+        uncashedMapping = {},
+        uniqueFileColumn,
+        uniqueDbColumn,
+        mode = "replace",
+        duplicateIds = [],
+      } = body;
+
+      const cycleNumber = Number(paymentCycle);
+      if (!projectId || !cycleNumber || cycleNumber < 1 || cycleNumber > CYCLE_COUNT) {
+        sendProgress(writer, { type: "error", error: "Missing project or invalid cycle." });
+        writer.close();
+        return;
+      }
+      const lookupColumn = sanitizeColumn(uniqueDbColumn) || "benef_id";
+      if (!VALID_COLUMNS_SET.has(lookupColumn.toLowerCase())) {
+        sendProgress(writer, { type: "error", error: "Invalid lookup column." });
+        writer.close();
+        return;
+      }
+      const lookupFileColumn = typeof uniqueFileColumn === "string" ? uniqueFileColumn : "";
+      if (!lookupFileColumn) {
+        sendProgress(writer, { type: "error", error: "Missing lookup column from uploaded file." });
+        writer.close();
+        return;
+      }
+
+      const duplicatesSet = new Set(
+        Array.isArray(duplicateIds)
+          ? duplicateIds.map((id: any) => normalizeLookupValue(id)).filter(Boolean)
+          : []
+      );
+      const stats = {
+        saved: 0,
+        updated: 0,
+        skipped: 0,
+        total: (Array.isArray(paymentData) ? paymentData.length : 0) + (Array.isArray(uncashedData) ? uncashedData.length : 0),
+      };
+
+      const allowedColumns = new Set([...BASE_COLUMNS, ...cycleColumnNames, "pc_id", "pc_name", "project_id", "project_name"]);
+      const paymentEntries = prepareMappingEntries(paymentMapping, allowedColumns);
+      const uncashedEntries = prepareMappingEntries(uncashedMapping, allowedColumns);
+
+      let sessionDb: Database.Database | null = null;
+      try {
+        sessionDb = initializeDatabase();
+        sendProgress(writer, {
+          type: "progress",
+          status: "STEP_ONE",
+          progress: 10,
+          message: "Preparing enrollment base data",
+          stats,
+        });
+        const existingProjectRecords =
+          sessionDb.prepare("SELECT COUNT(*) as count FROM bnf_cash_disbursement WHERE project_id = ?").get(projectId)?.count || 0;
+        if (existingProjectRecords === 0 && mode !== "skip") {
+          seedEnrollment(sessionDb, projectId, projectName || "");
+          sendProgress(writer, {
+            type: "progress",
+            status: "STEP_ONE",
+            progress: 20,
+            message: "Seeded enrollment data",
+            stats,
+          });
+        } else {
+          sendProgress(writer, {
+            type: "progress",
+            status: "STEP_ONE",
+            progress: 20,
+            message: "Existing project records found or skip mode active.",
+            stats,
+          });
+        }
+
+        const cycleSuffix = `s${cycleNumber}`;
+        const payStmt = sessionDb.prepare(
+          `UPDATE bnf_cash_disbursement SET project_id = @projectId, project_name = @projectName, "${getCycleColumn("is_pay_list", cycleNumber)}" = 1, "${getCycleColumn(
+            "pay_cyc_cnt",
+            cycleNumber
+          )}" = @cycleCount, "${getCycleColumn("pay_cyc_mon_list", cycleNumber)}" = @cycleMonths${paymentEntries
+            .map((entry) => `, "${entry.dbCol}" = @${entry.param}`)
+            .join("")} WHERE "${lookupColumn}" = @lookupValue AND project_id = @projectId`
+        );
+        const payTransaction = sessionDb.transaction((rows: any[]) => {
+          for (const row of rows) {
+            const lookupValue = normalizeLookupValue(row[lookupFileColumn]);
+            if (!lookupValue) continue;
+            if (mode === "skip" && duplicatesSet.has(lookupValue)) {
+              stats.skipped++;
+              continue;
+            }
+            const params: Record<string, any> = {
+              projectId,
+              projectName: projectName || "",
+              cycleCount: paymentCycleCount,
+              cycleMonths: Array.isArray(paymentMonths) ? paymentMonths.join(", ") : paymentMonths,
+              lookupValue,
+            };
+            paymentEntries.forEach((entry) => {
+              params[entry.param] = row[entry.fileCol] ?? null;
+            });
+            const info = payStmt.run(params);
+            stats.updated += info.changes;
+          }
+        });
+        payTransaction(paymentData);
+        sendProgress(writer, {
+          type: "progress",
+          status: "STEP_TWO",
+          progress: 40,
+          message: "Processed payment list",
+          stats,
+        });
+
+        if (uncashedEntries.length) {
+          const uncashedStmt = sessionDb.prepare(
+            `UPDATE bnf_cash_disbursement SET project_id = @projectId, project_name = @projectName${uncashedEntries
+              .map((entry) => `, "${entry.dbCol}" = @${entry.param}`)
+              .join("")} WHERE "${lookupColumn}" = @lookupValue AND project_id = @projectId`
+          );
+          const uncashedTransaction = sessionDb.transaction((rows: any[]) => {
+            for (const row of rows) {
+              const lookupValue = normalizeLookupValue(row[lookupFileColumn]);
+              if (!lookupValue) continue;
+              if (mode === "skip" && duplicatesSet.has(lookupValue)) {
+                stats.skipped++;
+                continue;
+              }
+              const params: Record<string, any> = { projectId, projectName: projectName || "", lookupValue };
+              uncashedEntries.forEach((entry) => {
+                params[entry.param] = row[entry.fileCol] ?? null;
+              });
+              const info = uncashedStmt.run(params);
+              stats.updated += info.changes;
+            }
+          });
+          uncashedTransaction(uncashedData);
+        }
+
+        sendProgress(writer, {
+          type: "progress",
+          status: "STEP_FOUR",
+          progress: 60,
+          message: "Uncashed list stored",
+          stats,
+        });
+
+        const markCashedStmt = sessionDb.prepare(
+          `UPDATE bnf_cash_disbursement SET "${getCycleColumn("is_cashed", cycleNumber)}" = 1, "${getCycleColumn(
+            "cashed_amt",
+            cycleNumber
+          )}" = COALESCE("${getCycleColumn("pay_amt", cycleNumber)}", 0)
+           WHERE project_id = ? AND "${getCycleColumn("is_pay_list", cycleNumber)}" = 1 AND COALESCE("${getCycleColumn("is_uncashed", cycleNumber)}", "") = ""`
+        );
+        const cashedInfo = markCashedStmt.run(projectId);
+        stats.updated += cashedInfo.changes;
+
+        const rows = sessionDb.prepare("SELECT * FROM bnf_cash_disbursement WHERE project_id = ?").all(projectId);
+        const updateTotals = sessionDb.prepare(
+          `UPDATE bnf_cash_disbursement SET 
+             total_pay_list = @total_pay_list,
+             total_pay_cyc_cnt = @total_pay_cyc_cnt,
+             total_pay_amt = @total_pay_amt,
+             total_cashed_cnt = @total_cashed_cnt,
+             total_cashed_amt = @total_cashed_amt,
+             total_uncashed_cnt = @total_uncashed_cnt,
+             total_uncashed_amt = @total_uncashed_amt,
+             final_comments = @final_comments
+           WHERE Id = @Id`
+        );
+        const totalsTx = sessionDb.transaction((records: any[]) => {
+          records.forEach((record) => {
+            const totals = calculateTotals(record);
+            updateTotals.run({ ...totals, Id: record.Id });
+          });
+        });
+        totalsTx(rows);
+        stats.updated += rows.length;
+
+        const metrics = {
+          paymentCycles: Array.from({ length: CYCLE_COUNT }, (_, idx) => idx + 1).filter((cycle) =>
+            rows.some((row) => Number(row[getCycleColumn("is_pay_list", cycle)] ?? 0) === 1)
+          ).length,
+          totalBeneficiariesInList: rows.filter((row) => Number(row.total_pay_list ?? 0) > 0).length,
+          totalBeneficiariesCashed: rows.filter((row) => Number(row.total_cashed_cnt ?? 0) > 0).length,
+          totalBeneficiariesUncashed: rows.filter((row) => Number(row.total_uncashed_cnt ?? 0) > 0).length,
+          totalPaymentAmount: rows.reduce((acc, row) => acc + Number(row.total_pay_amt ?? 0), 0),
+          totalCashedAmount: rows.reduce((acc, row) => acc + Number(row.total_cashed_amt ?? 0), 0),
+          totalUncashedAmount: rows.reduce((acc, row) => acc + Number(row.total_uncashed_amt ?? 0), 0),
+        };
+
+        sendProgress(writer, {
+          type: "progress",
+          status: "STEP_SEVEN",
+          progress: 95,
+          message: "Totals calculated",
+          stats,
+        });
+        sendProgress(writer, {
+          type: "done",
+          stats,
+          metrics,
+          message: "Processing complete!",
+        });
+      } catch (error: any) {
+        sendProgress(writer, { type: "error", error: error.message || "Unknown error occurred" });
+      } finally {
+        if (sessionDb) sessionDb.close();
+        writer.close();
+      }
+    })();
+
+    return response;
+  }
+
+  return NextResponse.json({ error: "Unsupported action" }, { status: 400 });
 }
