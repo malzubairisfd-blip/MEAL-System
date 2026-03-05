@@ -398,7 +398,7 @@ export async function POST(req: Request) {
                "${getCycleColumn("cashed_amt", cycleNumber)}" = COALESCE("${getCycleColumn("pay_amt", cycleNumber)}", 0)
              WHERE project_id = ? 
                AND "${getCycleColumn("is_pay_list", cycleNumber)}" = 1 
-               AND COALESCE("${getCycleColumn("is_uncashed", cycleNumber)}", '') != 1`
+               AND (${getCycleColumn("is_uncashed", cycleNumber)} IS NULL OR ${getCycleColumn("is_uncashed", cycleNumber)} != 1)`
           );
           markCashedStmt.run(projectId);
 
