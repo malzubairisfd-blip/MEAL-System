@@ -395,7 +395,7 @@ export async function POST(req: Request) {
           const markCashedStmt = sessionDb.prepare(
             `UPDATE bnf_cash_disbursement SET 
                "${getCycleColumn("is_cashed", cycleNumber)}" = 1,
-               "${getCycleColumn("cashed_amt", cycleNumber)}" = COALESCE("${getCycleColumn("pay_amt", cycleNumber)}", 0)
+               "${getCycleColumn("cashed_amt", cycleNumber)}" = "${getCycleColumn("pay_amt", cycleNumber)}"
              WHERE project_id = ? 
                AND "${getCycleColumn("is_pay_list", cycleNumber)}" = 1 
                AND (${getCycleColumn("is_uncashed", cycleNumber)} IS NULL OR ${getCycleColumn("is_uncashed", cycleNumber)} != 1)`
