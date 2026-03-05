@@ -15,7 +15,7 @@ import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Database, DollarSign, FilePlus, FileText, Loader2, Plus, Save, Trash2, Upload, Users, Wallet, CreditCard, CheckCircle } from "lucide-react";
 
-const MONTHS = [ "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December" ];
+const MONTHS = [ "يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر" ];
 const YEARS = Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - 3 + i);
 
 const CYCLE_FIELDS: { name: string; type: "TEXT" | "INTEGER" | "REAL" }[] = [
@@ -281,9 +281,9 @@ export default function BeneficiariesCashDisturbanceUploadPage() {
           <p className="text-sm text-muted-foreground">Map data lists to database fields via a strict 7-step saving process.</p>
         </div>
         <div className="flex gap-2">
-          <Button asChild><Link href="/meal-system/monitoring/implementation/process/cash-assistance-disbursement/dashboard"><Upload className="mr-2 h-4 w-4" />Dashboard</Link></Button>
-          <Button asChild><Link href="/meal-system/monitoring/implementation/process/cash-assistance-disbursement/database"><Database className="mr-2 h-4 w-4" />Database</Link></Button>
-          <Button variant="outline" asChild><Link href="/meal-system/monitoring/implementation/process/cash-assistance-disbursement"><ArrowLeft className="mr-2 h-4 w-4" />Back to Hub</Link></Button>
+          <Button asChild><Link href="/meal-system/monitoring/implementation/process/cash-assistance-disbursement/beneficiaries/dashboard"><Upload className="mr-2 h-4 w-4" />Dashboard</Link></Button>
+          <Button asChild><Link href="/meal-system/monitoring/implementation/process/cash-assistance-disbursement/beneficiaries/database"><Database className="mr-2 h-4 w-4" />Database</Link></Button>
+          <Button variant="outline" asChild><Link href="/meal-system/monitoring/implementation/process/cash-assistance-disbursement/beneficiaries/"><ArrowLeft className="mr-2 h-4 w-4" />Back to Hub</Link></Button>
         </div>
       </div>
 
