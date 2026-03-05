@@ -256,7 +256,7 @@ export async function POST(req: Request) {
           projectId, projectName, paymentCycle, paymentCycleCount,
           paymentMonths = [], paymentData = [], uncashedData = [],
           paymentMapping = {}, uncashedMapping = {},
-          uniqueFileIdColumn, uniqueDbColumn,
+          uniqueFileColumn, uniqueDbColumn,
           mode = "replace", duplicateIds = [],
         } = body;
 
@@ -274,7 +274,7 @@ export async function POST(req: Request) {
           return;
         }
         
-        const lookupFileColumn = typeof uniqueFileIdColumn === "string" ? uniqueFileIdColumn : "";
+        const lookupFileColumn = typeof uniqueFileColumn === "string" ? uniqueFileColumn : "";
         if (!lookupFileColumn) {
           sendProgress(writer, { type: "error", error: "Missing lookup column from uploaded file." });
           writer.close();
@@ -384,7 +384,8 @@ export async function POST(req: Request) {
                     conditionalUpdateStmt.run({ projectId, lookupValue });
                   }
                 }
-              });
+              }
+            });
             conditionalTx(uncashedData);
           }
 
@@ -439,7 +440,7 @@ export async function POST(req: Request) {
                   const uncashedAmt = Number(record[`uncashed_amt_s${i}`] || 0);
                   
                   const recomAllowed = !recom || recom === "يعاد الصرف للحالة";
-                  const recomBlocked = recom === "تورد الى حساب الممول";
+                  const recomBlocked = recom === "تورد الى حساب الممول" || recom === "تورد لحساب الممول";
 
                   if (uncashed === 1 && recomAllowed && !recomBlocked) {
                       total_uncashed_cnt += 1;
@@ -495,5 +496,3 @@ export async function POST(req: Request) {
     )
   }
 }
-
-    
