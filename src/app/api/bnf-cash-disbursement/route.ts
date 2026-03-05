@@ -256,7 +256,7 @@ export async function POST(req: Request) {
           projectId, projectName, paymentCycle, paymentCycleCount,
           paymentMonths = [], paymentData = [], uncashedData = [],
           paymentMapping = {}, uncashedMapping = {},
-          uniqueFileColumn, uniqueDbColumn,
+          uniqueFileIdColumn, uniqueDbColumn,
           mode = "replace", duplicateIds = [],
         } = body;
 
@@ -274,7 +274,7 @@ export async function POST(req: Request) {
           return;
         }
         
-        const lookupFileColumn = typeof uniqueFileColumn === "string" ? uniqueFileColumn : "";
+        const lookupFileColumn = typeof uniqueFileIdColumn === "string" ? uniqueFileIdColumn : "";
         if (!lookupFileColumn) {
           sendProgress(writer, { type: "error", error: "Missing lookup column from uploaded file." });
           writer.close();
@@ -384,23 +384,34 @@ export async function POST(req: Request) {
                     conditionalUpdateStmt.run({ projectId, lookupValue });
                   }
                 }
-              }
-            });
+              });
             conditionalTx(uncashedData);
           }
 
 
           // STEP 6: SAVING CASHED DATA
           sendProgress(writer, { type: "progress", status: "STEP_SIX", progress: 70, message: "Saving Cashed Data", stats });
+          
           const markCashedStmt = sessionDb.prepare(
-             `UPDATE bnf_cash_disbursement SET 
-                "${getCycleColumn("is_cashed", cycleNumber)}" = 1,
-                "${getCycleColumn("cashed_amt", cycleNumber)}" = "${getCycleColumn("pay_amt", cycleNumber)}"
-              WHERE project_id = @projectId
-                AND "${getCycleColumn("is_pay_list", cycleNumber)}" = 1
-                AND COALESCE("${getCycleColumn("is_uncashed", cycleNumber)}", 0) != 1`
+            `UPDATE bnf_cash_disbursement SET 
+               "${getCycleColumn("is_cashed", cycleNumber)}" = 1,
+               "${getCycleColumn("cashed_amt", cycleNumber)}" = COALESCE("${getCycleColumn("pay_amt", cycleNumber)}", 0)
+             WHERE project_id = @projectId
+               AND "${getCycleColumn("is_pay_list", cycleNumber)}" = 1
+               AND COALESCE("${getCycleColumn("is_uncashed", cycleNumber)}", 0) != 1
+            `
           );
           markCashedStmt.run({ projectId });
+          
+          // Ensure cashed_amt is 0 for uncashed records, even if they were in the pay list
+          const zeroUncashedStmt = sessionDb.prepare(
+            `UPDATE bnf_cash_disbursement SET
+                "${getCycleColumn("cashed_amt", cycleNumber)}" = 0
+             WHERE project_id = @projectId
+                AND "${getCycleColumn("is_uncashed", cycleNumber)}" = 1
+            `
+          );
+          zeroUncashedStmt.run({ projectId });
 
           // STEP 7: SAVING TOTAL VALUES
           sendProgress(writer, { type: "progress", status: "STEP_SEVEN", progress: 85, message: "Calculating Total Values", stats });
@@ -481,6 +492,8 @@ export async function POST(req: Request) {
     return NextResponse.json(
       { error: "Failed to process request.", details: error.message },
       { status: 500 }
-    );
+    )
   }
 }
+
+    
