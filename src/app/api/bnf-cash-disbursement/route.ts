@@ -1,3 +1,4 @@
+
 // app/api/bnf-cash-disbursement/route.ts
 import { NextResponse } from "next/server";
 import fs from "fs/promises";
@@ -392,14 +393,14 @@ export async function POST(req: Request) {
           // STEP 6: SAVING CASHED DATA
           sendProgress(writer, { type: "progress", status: "STEP_SIX", progress: 70, message: "Saving Cashed Data", stats });
           const markCashedStmt = sessionDb.prepare(
-            `UPDATE bnf_cash_disbursement SET 
-               "${getCycleColumn("is_cashed", cycleNumber)}" = 1,
-               "${getCycleColumn("cashed_amt", cycleNumber)}" = "${getCycleColumn("pay_amt", cycleNumber)}"
-             WHERE project_id = ? 
-               AND "${getCycleColumn("is_pay_list", cycleNumber)}" = 1 
-               AND ("${getCycleColumn("is_uncashed", cycleNumber)}" IS NULL OR "${getCycleColumn("is_uncashed", cycleNumber)}" != 1)`
+             `UPDATE bnf_cash_disbursement SET 
+                "${getCycleColumn("is_cashed", cycleNumber)}" = 1,
+                "${getCycleColumn("cashed_amt", cycleNumber)}" = "${getCycleColumn("pay_amt", cycleNumber)}"
+              WHERE project_id = @projectId
+                AND "${getCycleColumn("is_pay_list", cycleNumber)}" = 1
+                AND COALESCE("${getCycleColumn("is_uncashed", cycleNumber)}", 0) != 1`
           );
-          markCashedStmt.run(projectId);
+          markCashedStmt.run({ projectId });
 
           // STEP 7: SAVING TOTAL VALUES
           sendProgress(writer, { type: "progress", status: "STEP_SEVEN", progress: 85, message: "Calculating Total Values", stats });
@@ -483,5 +484,3 @@ export async function POST(req: Request) {
     );
   }
 }
-      
-    
