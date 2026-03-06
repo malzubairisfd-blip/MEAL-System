@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
@@ -37,11 +38,22 @@ export default function FileEditor() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
     });
-    const data = await res.json();
+    
     if (!res.ok) {
-        throw new Error(data.error || 'API request failed');
+        const errorText = await res.text();
+        try {
+            // Try to parse as JSON, as our API should return JSON errors
+            const errorJson = JSON.parse(errorText);
+            throw new Error(errorJson.error || `API request failed with status ${res.status}`);
+        } catch {
+            // If it's not JSON, it might be an HTML error page
+            throw new Error(errorText || `API request failed with status ${res.status}`);
+        }
     }
-    return data;
+    
+    // Handle cases where API might return an empty success response (e.g., on delete)
+    const text = await res.text();
+    return text ? JSON.parse(text) : {};
   }
 
   const loadTree = useCallback(async () => {
