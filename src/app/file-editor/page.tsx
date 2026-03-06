@@ -39,20 +39,20 @@ export default function FileEditor() {
         body: JSON.stringify(body),
     });
     
+    const text = await res.text();
+
     if (!res.ok) {
-        const errorText = await res.text();
+        // Try to parse the error text as JSON, otherwise use the text itself.
         try {
-            // Try to parse as JSON, as our API should return JSON errors
-            const errorJson = JSON.parse(errorText);
+            const errorJson = JSON.parse(text);
             throw new Error(errorJson.error || `API request failed with status ${res.status}`);
         } catch {
-            // If it's not JSON, it might be an HTML error page
-            throw new Error(errorText || `API request failed with status ${res.status}`);
+            throw new Error(text || `API request failed with status ${res.status}`);
         }
     }
     
-    // Handle cases where API might return an empty success response (e.g., on delete)
-    const text = await res.text();
+    // If the response is OK and the text is not empty, parse it.
+    // Otherwise, return an empty object for success with no content (e.g., delete).
     return text ? JSON.parse(text) : {};
   }
 
@@ -418,3 +418,5 @@ export default function FileEditor() {
     </div>
   );
 }
+
+    
