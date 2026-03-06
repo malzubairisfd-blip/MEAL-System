@@ -27,9 +27,9 @@ export default function ProcessMonitoringPage() {
       icon: <CircleDollarSign className="h-8 w-8 text-purple-500" />,
     },
     {
-      title: "Filtering of CMAM Cases",
+      title: "Screening, Confirmation, and Referral of CMAM Cases",
       description: "Analyze and filter Community Management of Acute Malnutrition cases.",
-      href: "#",
+      href: "/meal-system/monitoring/implementation/process/CMAM-cases",
       icon: <Filter className="h-8 w-8 text-orange-500" />,
     },
   ];
