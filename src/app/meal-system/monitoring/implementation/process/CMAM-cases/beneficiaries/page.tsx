@@ -1,41 +1,41 @@
-// src/app/meal-system/monitoring/implementation/process/CMAM-cases/page.tsx
+// src/app/meal-system/monitoring/implementation/process/CMAM-cases/beneficiaries/page.tsx
 "use client";
 
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ArrowRight, Users, HeartPulse, Stethoscope } from "lucide-react";
+import { ArrowLeft, ArrowRight, ScanSearch, ClipboardCheck, Send } from "lucide-react";
 
-export default function CMAMCasesPage() {
+export default function BeneficiaryCMAMPage() {
   const features = [
     {
-      title: "Beneficiaries CMAM",
-      description: "Manage CMAM data for beneficiaries.",
-      href: "/meal-system/monitoring/implementation/process/CMAM-cases/beneficiaries",
-      icon: <Users className="h-8 w-8 text-blue-500" />,
-    },
-    {
-      title: "Children CMAM",
-      description: "Manage CMAM data specifically for children.",
-      href: "/meal-system/monitoring/implementation/process/CMAM-cases/children",
-      icon: <HeartPulse className="h-8 w-8 text-green-500" />,
-    },
-    {
-      title: "Health Worker Data",
-      description: "Data related to health workers involved in CMAM.",
+      title: "Screening Malnutrition Cases",
+      description: "Screen beneficiaries for signs of malnutrition.",
       href: "#", // Placeholder
-      icon: <Stethoscope className="h-8 w-8 text-purple-500" />,
+      icon: <ScanSearch className="h-8 w-8 text-blue-500" />,
+    },
+    {
+      title: "Confirmation Malnutrition Cases",
+      description: "Confirm and document cases of malnutrition.",
+      href: "#", // Placeholder
+      icon: <ClipboardCheck className="h-8 w-8 text-green-500" />,
+    },
+    {
+      title: "Referral Malnourished Cases",
+      description: "Refer confirmed cases for appropriate treatment.",
+      href: "#", // Placeholder
+      icon: <Send className="h-8 w-8 text-purple-500" />,
     },
   ];
 
   return (
     <div className="space-y-8">
       <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">CMAM Cases Management</h1>
+        <h1 className="text-3xl font-bold">Beneficiaries CMAM</h1>
         <Button variant="outline" asChild>
-          <Link href="/meal-system/monitoring/implementation/process">
+          <Link href="/meal-system/monitoring/implementation/process/CMAM-cases">
             <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Process Monitoring
+            Back to CMAM Cases
           </Link>
         </Button>
       </div>
@@ -53,7 +53,7 @@ export default function CMAMCasesPage() {
             <CardContent className="p-4 mt-auto">
               <Button variant="secondary" size="sm" className="group" asChild>
                 <Link href={feature.href}>
-                  View Details <ArrowRight className="ml-1 h-4 w-4 transition-transform group-hover:translate-x-1" />
+                  Proceed <ArrowRight className="ml-1 h-4 w-4 transition-transform group-hover:translate-x-1" />
                 </Link>
               </Button>
             </CardContent>
