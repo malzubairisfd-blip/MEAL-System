@@ -1,9 +1,14 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { useToast } from "@/hooks/use-toast";
-import { ClipboardPaste, Search } from "lucide-react";
+import { ClipboardPaste, Search, Plus, FolderPlus, File as FileIcon } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+
 
 const MonacoEditor = dynamic(() => import("@monaco-editor/react"), {
   ssr: false,
@@ -17,8 +22,14 @@ export default function FileEditor() {
 
   const [tree, setTree] = useState<any[]>([]);
   const [file, setFile] = useState<string | null>(null);
+  const [selectedFolder, setSelectedFolder] = useState<string | null>('src');
   const [search, setSearch] = useState("");
   const [results, setResults] = useState<any[]>([]);
+
+  // State for creating new files/folders
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [newItemType, setNewItemType] = useState<'file' | 'folder' | null>(null);
+  const [newItemName, setNewItemName] = useState("");
 
   async function api(body: any) {
     const res = await fetch("/api/file-manager", {
@@ -33,18 +44,20 @@ export default function FileEditor() {
     return data;
   }
 
-  async function loadTree() {
+  const loadTree = useCallback(async () => {
     try {
         setTree(await api({ action: "tree" }));
     } catch (e: any) {
         toast({ title: "Error", description: `Could not load file tree: ${e.message}`, variant: "destructive" });
     }
-  }
+  }, [toast]);
+
 
   async function openFile(p: string) {
     try {
         const r = await api({ action: "read", filePath: p });
         setFile(p);
+        setSelectedFolder(p.substring(0, p.lastIndexOf('/')));
         editorRef.current?.setValue(r.content || "");
     } catch(e: any) {
         toast({ title: "Error", description: `Could not read file ${p}: ${e.message}`, variant: "destructive" });
@@ -75,6 +88,7 @@ export default function FileEditor() {
 
   async function del() {
     if (!file) return;
+    if(!confirm(`Are you sure you want to delete ${file}?`)) return;
     try {
         await api({ action: "delete", filePath: file });
         toast({ title: "File Deleted", description: `${file} has been removed.` });
@@ -148,33 +162,63 @@ export default function FileEditor() {
     }
   };
 
-    async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
-        if (!file || !editorRef.current) {
-            toast({ title: "No file selected", description: "Please select a file from the tree to overwrite.", variant: "destructive" });
-            e.target.value = ""; // Reset input
-            return;
-        }
+  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
+      if (!file || !editorRef.current) {
+          toast({ title: "No file selected", description: "Please select a file from the tree to overwrite.", variant: "destructive" });
+          e.target.value = ""; // Reset input
+          return;
+      }
 
-        const uploaded = e.target.files?.[0];
-        if (!uploaded) return;
+      const uploaded = e.target.files?.[0];
+      if (!uploaded) return;
 
-        try {
-            const text = await uploaded.text();
-            editorRef.current.setValue(text);
-            await save(text); 
-            toast({ title: "Content Replaced", description: `The content of ${file} has been updated and saved.`});
-        } catch (err: any) {
-             toast({ title: "Upload Failed", description: err.message, variant: "destructive" });
-        } finally {
-            e.target.value = ""; 
-        }
+      try {
+          const text = await uploaded.text();
+          editorRef.current.setValue(text);
+          await save(text); 
+          toast({ title: "Content Replaced", description: `The content of ${file} has been updated and saved.`});
+      } catch (err: any) {
+           toast({ title: "Upload Failed", description: err.message, variant: "destructive" });
+      } finally {
+          e.target.value = ""; 
+      }
+  }
+
+  const openCreateDialog = (type: 'file' | 'folder') => {
+      if (!selectedFolder) {
+          toast({ title: "No Folder Selected", description: "Please select a folder from the tree to create items in.", variant: "destructive" });
+          return;
+      }
+      setNewItemType(type);
+      setIsCreateDialogOpen(true);
+  };
+  
+  const handleCreateItem = async () => {
+    if (!newItemType || !newItemName || !selectedFolder) {
+        toast({ title: "Error", description: "Please select a folder and provide a name.", variant: "destructive" });
+        return;
     }
+    try {
+        await api({
+            action: newItemType === 'file' ? 'createFile' : 'createFolder',
+            filePath: selectedFolder,
+            name: newItemName,
+            content: '', // New file content is handled by saving the editor
+        });
+        toast({ title: "Success", description: `${newItemType} '${newItemName}' created in ${selectedFolder}.` });
+        setIsCreateDialogOpen(false);
+        setNewItemName('');
+        await loadTree();
+    } catch (e: any) {
+        toast({ title: "Creation Failed", description: e.message, variant: "destructive" });
+    }
+  };
 
   useEffect(() => {
     loadTree();
   }, [loadTree]);
 
-  const renderTree = (nodes: any[]) =>
+  const renderTree = (nodes: any[], level = 0) =>
     nodes.map((n) => (
       <div key={n.path} className="ml-3">
         {n.type === "file" ? (
@@ -184,12 +228,17 @@ export default function FileEditor() {
             }`}
             onClick={() => openFile(n.path)}
           >
-            📄 {n.name}
+            <FileIcon className="h-4 w-4 inline-block mr-1" /> {n.name}
           </div>
         ) : (
           <div>
-            <div className="font-semibold">📁 {n.name}</div>
-            {renderTree(n.children || [])}
+            <div
+                className={`font-semibold cursor-pointer flex items-center gap-1 ${selectedFolder === n.path ? 'text-amber-400' : ''}`}
+                onClick={() => setSelectedFolder(n.path)}
+            >
+                <FolderPlus className="h-4 w-4 inline-block" /> {n.name}
+            </div>
+            {n.children && renderTree(n.children, level + 1)}
           </div>
         )}
       </div>
@@ -198,64 +247,76 @@ export default function FileEditor() {
   return (
     <div className="flex h-screen bg-slate-950 text-white">
       {/* LEFT PANEL */}
-      <div className="w-72 border-r border-slate-800 p-2 overflow-auto">
-        <button
-          className="mb-2 bg-green-600 w-full py-1"
-          onClick={loadTree}
-        >
-          Refresh
-        </button>
+      <div className="w-72 border-r border-slate-800 p-2 flex flex-col">
+        <div className="flex-shrink-0 space-y-2">
+            <button
+                className="mb-2 bg-green-600 w-full py-1"
+                onClick={loadTree}
+            >
+                Refresh Tree
+            </button>
+             <div className="flex gap-2">
+                <Button onClick={() => openCreateDialog('file')} className="flex-1" variant="outline" size="sm" disabled={!selectedFolder}>
+                    <Plus className="h-4 w-4 mr-1"/> New File
+                </Button>
+                <Button onClick={() => openCreateDialog('folder')} className="flex-1" variant="outline" size="sm" disabled={!selectedFolder}>
+                    <FolderPlus className="h-4 w-4 mr-1"/> New Folder
+                </Button>
+            </div>
 
-        <div className="relative">
-            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <input
-              className="border border-slate-700 bg-slate-900 w-full mb-2 pl-8 pr-2 py-1"
-              placeholder="Search..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && runSearch()}
-            />
+            <div className="relative">
+                <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <input
+                className="border border-slate-700 bg-slate-900 w-full mb-2 pl-8 pr-2 py-1"
+                placeholder="Search file content..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && runSearch()}
+                />
+            </div>
+
+            <button
+                className="bg-blue-600 w-full mb-2 py-1"
+                onClick={runSearch}
+            >
+                Search
+            </button>
         </div>
 
-        <button
-          className="bg-blue-600 w-full mb-2 py-1"
-          onClick={runSearch}
-        >
-          Search
-        </button>
+        <div className="flex-1 overflow-y-auto mt-2">
+            {results.map((r, i) => (
+            <div
+                key={i}
+                className="text-xs cursor-pointer hover:text-blue-400"
+                onClick={() => openFile(r.file)}
+            >
+                {r.file}:{r.line}
+            </div>
+            ))}
 
-        {results.map((r, i) => (
-          <div
-            key={i}
-            className="text-xs cursor-pointer hover:text-blue-400"
-            onClick={() => openFile(r.file)}
-          >
-            {r.file}:{r.line}
-          </div>
-        ))}
-
-        {renderTree(tree)}
+            {renderTree(tree)}
+        </div>
       </div>
 
       {/* EDITOR */}
       <div className="flex-1 flex flex-col">
         {/* TOOLBAR */}
         <div className="p-2 border-b border-slate-800 flex gap-2 items-center">
-          <button onClick={() => save()} className="bg-blue-600 px-3 py-1">
+          <Button onClick={() => save()} className="bg-blue-600 px-3 py-1" disabled={!file}>
             Save
-          </button>
-           <button onClick={handlePaste} className="bg-teal-600 px-3 py-1 flex items-center gap-2">
+          </Button>
+           <Button onClick={handlePaste} className="bg-teal-600 px-3 py-1 flex items-center gap-2" disabled={!file}>
             <ClipboardPaste className="h-4 w-4"/> Paste
-          </button>
-          <button onClick={empty} className="bg-yellow-600 px-3 py-1">
+          </Button>
+          <Button onClick={empty} className="bg-yellow-600 px-3 py-1" disabled={!file}>
             Empty
-          </button>
-          <button onClick={del} className="bg-red-600 px-3 py-1">
+          </Button>
+          <Button onClick={del} className="bg-red-600 px-3 py-1" disabled={!file}>
             Delete
-          </button>
-          <button onClick={downloadFile} className="bg-green-600 px-3 py-1">
+          </Button>
+          <Button onClick={downloadFile} className="bg-green-600 px-3 py-1" disabled={!file}>
             Download
-          </button>
+          </Button>
           <input
             ref={fileInputRef}
             type="file"
@@ -266,6 +327,7 @@ export default function FileEditor() {
           <button
             onClick={() => fileInputRef.current?.click()}
             className="bg-purple-600 px-3 py-1 ml-auto"
+            disabled={!file}
           >
             Upload & Replace
           </button>
@@ -274,6 +336,7 @@ export default function FileEditor() {
         {/* MONACO */}
         <div className="flex-1">
           <MonacoEditor
+            path={file || 'untitled'}
             defaultLanguage="typescript"
             theme="vs-dark"
             onMount={(editor, monaco) => {
@@ -313,6 +376,33 @@ export default function FileEditor() {
           />
         </div>
       </div>
+
+       <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Create New {newItemType}</DialogTitle>
+                    <DialogDescription>
+                        Creating in folder: <span className="font-mono">{selectedFolder}</span>
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="new-item-name">{newItemType === 'file' ? 'File' : 'Folder'} Name</Label>
+                        <Input 
+                            id="new-item-name" 
+                            value={newItemName} 
+                            onChange={(e) => setNewItemName(e.target.value)}
+                            placeholder={newItemType === 'file' ? 'e.g., new-component.tsx' : 'e.g., new-folder'}
+                        />
+                    </div>
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>Cancel</Button>
+                    <Button onClick={handleCreateItem}>Create</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+
     </div>
   );
 }
