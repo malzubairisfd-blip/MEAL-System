@@ -28,7 +28,7 @@ type Cluster = {
 };
 
 async function saveAuditFindings(auditFindings: AuditFinding[]) {
-  const db = await openDB('beneficiary-insights-cache', 1);
+  const db = await openDB('beneficiary-insights-cache', 2);
   const tx = db.transaction('results', 'readwrite');
   const store = tx.objectStore('results');
   const currentData = await store.get('FULL_RESULT');
