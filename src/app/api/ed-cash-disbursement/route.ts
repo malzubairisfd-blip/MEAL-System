@@ -35,11 +35,14 @@ const TABLE_SCHEMA = `(
   project_name TEXT,
   ed_id TEXT,
   ed_name TEXT,
-  ed_phone TEXT,
+  ed_id_type TEXT,
   ed_idNum REAL,
+  ed_phone TEXT,
   ed_vill TEXT,
   ed_ozla TEXT,
   ed_mud TEXT,
+  bnf_cnt REAL,
+  bnf_active REAL,
   pc_id TEXT,
   pc_name TEXT,
   total_bnf REAL,
@@ -61,11 +64,14 @@ const BASE_COLUMNS = [
   "project_name",
   "ed_id",
   "ed_name",
-  "ed_phone",
+  "ed_id_type",
   "ed_idNum",
+  "ed_phone",
   "ed_vill",
   "ed_ozla",
   "ed_mud",
+  "bnf_cnt",
+  "bnf_active",
   "pc_id",
   "pc_name",
   "total_bnf",
@@ -140,44 +146,41 @@ const sendProgress = (writer: WritableStreamDefaultWriter<Uint8Array>, payload: 
 };
 
 const seedEducators = (db: Database.Database, projectId: string, projectName: string) => {
-  try {
-    const educatorsDb = new Database(getEducatorsDbPath(), { fileMustExist: true });
-    const rows = educatorsDb
-      .prepare(
-        `SELECT ed_id, applicant_name, phone_no, id_no, loc_name, ozla_name, mud_name, pc_id, pc_name, ed_bnf_cnt 
-         FROM educators WHERE project_id = ? AND contract_type = 'مثقفة مجتمعية'`
-      )
-      .all(projectId);
-      
-    const insertStmt = db.prepare(
-      `INSERT OR IGNORE INTO ed_cash_disbursement
-      (project_id, project_name, ed_id, ed_name, ed_phone, ed_idNum, ed_vill, ed_ozla, ed_mud, pc_id, pc_name, total_bnf)
-      VALUES (@projectId, @projectName, @ed_id, @ed_name, @ed_phone, @ed_idNum, @ed_vill, @ed_ozla, @ed_mud, @pc_id, @pc_name, @total_bnf)`
-    );
+    try {
+        const educatorsDb = new Database(getEducatorsDbPath(), { fileMustExist: true });
+        const rows = educatorsDb
+          .prepare(
+            `SELECT applicant_name, phone_no, id_no, loc_name, ozla_name, mud_name 
+             FROM educators WHERE project_id = ?`
+          )
+          .all(projectId);
 
-    const transaction = db.transaction((records: any[]) => {
-      records.forEach((record) =>
-        insertStmt.run({
-          projectId, projectName,
-          ed_id: record.ed_id,
-          ed_name: record.applicant_name,
-          ed_phone: record.phone_no,
-          ed_idNum: record.id_no,
-          ed_vill: record.loc_name,
-          ed_ozla: record.ozla_name,
-          ed_mud: record.mud_name,
-          pc_id: record.pc_id,
-          pc_name: record.pc_name,
-          total_bnf: record.ed_bnf_cnt,
-        })
-      );
-    });
-    transaction(rows);
-    educatorsDb.close();
-  } catch(e) {
-    console.warn("Could not seed from educators.db, it might not exist.", e);
-    // Graceful fallback if educators db doesn't exist
-  }
+        const insertStmt = db.prepare(
+            `INSERT OR IGNORE INTO ed_cash_disbursement
+            (project_id, project_name, ed_name, ed_idNum, ed_phone, ed_vill, ed_ozla, ed_mud)
+            VALUES (@projectId, @projectName, @ed_name, @ed_phone, @ed_idNum, @ed_vill, @ed_ozla, @ed_mud)`
+        );
+
+        const transaction = db.transaction((records: any[]) => {
+            for (const record of records) {
+                insertStmt.run({
+                    projectId,
+                    projectName,
+                    ed_name: record.applicant_name,
+                    ed_phone: record.phone_no,
+                    ed_idNum: record.id_no,
+                    ed_vill: record.loc_name,
+                    ed_ozla: record.ozla_name,
+                    ed_mud: record.mud_name,
+                });
+            }
+        });
+        transaction(rows);
+        educatorsDb.close();
+    } catch (e) {
+        console.warn("Could not seed from educators.db, it might not exist.", e);
+        // Graceful fallback if educators db doesn't exist
+    }
 };
 
 
@@ -218,7 +221,7 @@ export async function POST(req: Request) {
       if (!projectId || !Array.isArray(uniqueIds)) {
         return NextResponse.json({ error: "Missing duplicate parameters" }, { status: 400 });
       }
-      const lookupColumn = sanitizeColumn(uniqueIdCol) || "ed_id";
+      const lookupColumn = sanitizeColumn(uniqueIdCol) || "ed_name";
       if (!VALID_COLUMNS_SET.has(lookupColumn.toLowerCase())) {
         return NextResponse.json({ error: "Invalid unique column" }, { status: 400 });
       }
@@ -280,7 +283,7 @@ export async function POST(req: Request) {
           return;
         }
         
-        const lookupColumn = sanitizeColumn(uniqueDbColumn) || "ed_id";
+        const lookupColumn = sanitizeColumn(uniqueDbColumn) || "ed_name";
         if (!lookupColumn || !VALID_COLUMNS_SET.has(lookupColumn.toLowerCase())) {
           sendProgress(writer, { type: "error", error: `Invalid DB lookup column: "${lookupColumn}"` });
           writer.close();
@@ -312,6 +315,7 @@ export async function POST(req: Request) {
         try {
           sessionDb = initializeDatabase();
           
+          // STEP 1: LOAD FROM Educstors
           sendProgress(writer, { type: "progress", status: "STEP_ONE", progress: 10, message: "Preparing educators base data", stats });
           
           const existingProjectRecordsResult = sessionDb.prepare("SELECT COUNT(*) as count FROM ed_cash_disbursement WHERE project_id = ?").get(projectId) as {count: number}|undefined;

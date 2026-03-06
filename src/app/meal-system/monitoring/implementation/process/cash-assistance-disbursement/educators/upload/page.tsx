@@ -18,16 +18,18 @@ import { ArrowLeft, Database, DollarSign, FilePlus, FileText, Loader2, Plus, Sav
 const MONTHS = [ "يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر" ];
 const YEARS = Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - 3 + i);
 
-const CYCLE_FIELDS: { name: string; type: "TEXT" | "INTEGER" | "REAL" }[] = [
-  { name: "is_pay_list", type: "INTEGER" }, { name: "pay_cyc_cnt", type: "INTEGER" },
+const CYCLE_FIELDS: { name: string; type: "TEXT" | "INTEGER" | "REAL" }[] = [ 
+ { name: "is_pay_list", type: "INTEGER" }, { name: "pay_cyc_cnt", type: "INTEGER" },
   { name: "pay_cyc_mon_list", type: "TEXT" }, { name: "pay_amt", type: "INTEGER" },
   { name: "is_cashed", type: "INTEGER" }, { name: "cashed_amt", type: "INTEGER" },
   { name: "is_uncashed", type: "INTEGER" }, { name: "uncashed_amt", type: "INTEGER" },
   { name: "uncashed_code", type: "INTEGER" }, { name: "uncashed_reason", type: "TEXT" },
-  { name: "recom", type: "TEXT" },
-];
+  { name: "recom", type: "TEXT" }, 
+  ];
 
-const GENERAL_COLUMNS = ["ed_id", "pc_id", "pc_name", "project_id", "project_name"];
+const GENERAL_COLUMNS = [
+    "ed_id", "ed_name", "ed_id_type", "ed_idNum", "ed_phone", "ed_vill", "ed_ozla", "ed_mud", "bnf_cnt", "bnf_active", "pc_id", "pc_name", "project_id", "project_name"
+    ];
 
 const LOCAL_STORAGE_MAPPING_PREFIX = "ed-cash-disturbance-mapping";
 const STATUS_LABELS: Record<string, string> = {
