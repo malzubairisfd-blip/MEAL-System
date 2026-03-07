@@ -1,3 +1,4 @@
+
 //src/app/api/bnf-cmam/route.ts
 
 import { NextResponse } from "next/server";
@@ -201,7 +202,7 @@ const normalizeMapping = (mapping: Record<string, string>) => {
 const fetchProjectNameFromDb = (projectId: string) => {
   try {
     const projectsDb = new Database(getProjectsDbPath(), { fileMustExist: true });
-    const project = projectsDb.prepare("SELECT project_name FROM projects WHERE project_id = ?").get(projectId);
+    const project = projectsDb.prepare("SELECT project_name FROM projects WHERE project_id = ?").get(projectId) as { project_name: string } | undefined;
     projectsDb.close();
     return project?.project_name || "";
   } catch {
@@ -277,15 +278,17 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: "Invalid lookup column" }, { status: 400 });
       }
       const idsToCheck = Array.isArray(uniqueIds) ? uniqueIds.filter((id) => id !== null && id !== undefined) : [];
-      const db = initializeDatabase();
-      const totalExisting =
-        (db.prepare("SELECT COUNT(*) as total FROM bnf_cmam WHERE project_id = ?").get(projectId) as { total: number }).total ||
-        0;
-      if (totalExisting === 0) {
-        db.close();
-        return NextResponse.json({ count: 0, totalInDb: 0, duplicateIds: [] });
-      }
+      let db;
       try {
+        db = initializeDatabase();
+        const totalExisting =
+          (db.prepare("SELECT COUNT(*) as total FROM bnf_cmam WHERE project_id = ?").get(projectId) as { total: number })?.total ||
+          0;
+        if (totalExisting === 0) {
+          db.close();
+          return NextResponse.json({ count: 0, totalInDb: 0, duplicateIds: [] });
+        }
+        
         const existingIds = new Set<string>();
         const stmt = db.prepare(`SELECT "${lookupColumn}" FROM bnf_cmam WHERE project_id = ?`);
         const rows = stmt.all(projectId) as any[];
@@ -296,14 +299,15 @@ export async function POST(req: Request) {
           }
         });
         const duplicates = idsToCheck.filter((id: string) => existingIds.has(String(id)));
-        db.close();
+        
         return NextResponse.json({ count: duplicates.length, totalInDb: totalExisting, duplicateIds: duplicates });
       } catch (error: any) {
-        db.close();
-        if (error.code === "SQLITE_CANTOPEN") {
+        if ((error as any).code === "SQLITE_CANTOPEN") {
           return NextResponse.json({ count: 0, totalInDb: 0, duplicateIds: [] });
         }
-        return NextResponse.json({ error: "Duplicate check failed", details: error.message }, { status: 500 });
+        throw error;
+      } finally {
+        if(db) db.close();
       }
     }
 
@@ -347,9 +351,9 @@ export async function POST(req: Request) {
         }
 
         const finalProjectName = projectName || fetchProjectNameFromDb(projectId) || "";
-
-        const db = initializeDatabase();
+        let db: Database.Database | null = null;
         try {
+          db = initializeDatabase();
           sendProgress(writer, {
             type: "progress",
             status: "STEP_ONE",
@@ -362,7 +366,7 @@ export async function POST(req: Request) {
           const insertColumns = Array.from(new Set([...mappedColumns, "project_id", "project_name"]));
           const placeholders = insertColumns.map((col) => `@${col}`).join(", ");
           const insertStmt = db.prepare(
-            `INSERT INTO bnf_cmam (${insertColumns.join(", ")}) VALUES (${placeholders})`
+            `INSERT INTO bnf_cmam (${insertColumns.map(c => `"${c}"`).join(',')}) VALUES (${placeholders})`
           );
 
           const updateColumns = mappedColumns.filter(
@@ -425,7 +429,7 @@ export async function POST(req: Request) {
             const educators = educatorsDb
               .prepare("SELECT applicant_name, phone_no FROM educators WHERE project_id = ?")
               .all(projectId);
-            educators.forEach((row: any) => educatorsMap.set(row.applicant_name, row.phone_no));
+            (educators as any[]).forEach((row: any) => educatorsMap.set(row.applicant_name, row.phone_no));
             educatorsDb.close();
           } catch {
             /* ignore missing educators database */
@@ -529,37 +533,28 @@ export async function POST(req: Request) {
             stats,
           });
 
-          const finalCounts = {
-            totalBeneficiaries:
-              db.prepare("SELECT COUNT(*) as count FROM bnf_cmam WHERE project_id = ?").get(projectId).count,
-            qualifiedBeneficiaries:
-              db
-                .prepare("SELECT COUNT(*) as count FROM bnf_cmam WHERE project_id = ? AND BENEF_CLASS_DESC = 'مستفيدة'")
-                .get(projectId).count,
-            cmamQualified:
-              db
-                .prepare("SELECT COUNT(*) as count FROM bnf_cmam WHERE project_id = ? AND cmam_qualify = 'Qualified'")
-                .get(projectId).count,
-            disqualifiedBeneficiaries:
-              db
-                .prepare("SELECT COUNT(*) as count FROM bnf_cmam WHERE project_id = ? AND BENEF_CLASS_DESC != 'مستفيدة'")
-                .get(projectId).count,
-            cmamDisqualified:
-              db
-                .prepare("SELECT COUNT(*) as count FROM bnf_cmam WHERE project_id = ? AND cmam_qualify = 'Disqualified'")
-                .get(projectId).count,
-          };
+          const totalBeneficiaries = (db.prepare("SELECT COUNT(*) as count FROM bnf_cmam WHERE project_id = ?").get(projectId) as {count: number}).count;
+          const qualifiedBeneficiaries = (db.prepare("SELECT COUNT(*) as count FROM bnf_cmam WHERE project_id = ? AND BENEF_CLASS_DESC = 'مستفيدة'").get(projectId) as {count: number}).count;
+          const cmamQualified = (db.prepare("SELECT COUNT(*) as count FROM bnf_cmam WHERE project_id = ? AND cmam_qualify = 'Qualified'").get(projectId) as {count: number}).count;
+          const disqualifiedBeneficiaries = (db.prepare("SELECT COUNT(*) as count FROM bnf_cmam WHERE project_id = ? AND BENEF_CLASS_DESC != 'مستفيدة'").get(projectId) as {count: number}).count;
+          const cmamDisqualified = (db.prepare("SELECT COUNT(*) as count FROM bnf_cmam WHERE project_id = ? AND cmam_qualify = 'Disqualified'").get(projectId) as {count: number}).count;
 
           sendProgress(writer, {
             type: "done",
             message: "Processing complete!",
             stats,
-            results: finalCounts,
+            results: {
+                totalBeneficiaries,
+                qualifiedBeneficiaries,
+                cmamQualified,
+                disqualifiedBeneficiaries,
+                cmamDisqualified,
+            },
           });
         } catch (error: any) {
           sendProgress(writer, { type: "error", error: error.message || "Unknown error" });
         } finally {
-          db.close();
+          if (db) db.close();
           writer.close();
         }
       })();
@@ -576,5 +571,3 @@ export async function POST(req: Request) {
     );
   }
 }
-
-    
