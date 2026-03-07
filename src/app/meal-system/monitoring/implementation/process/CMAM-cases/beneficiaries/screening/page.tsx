@@ -1,46 +1,52 @@
-// src/app/meal-system/monitoring/implementation/process/CMAM-cases/beneficiaries/page.tsx
+// src/app/meal-system/monitoring/implementation/process/CMAM-cases/beneficiaries/screening/page.tsx
 "use client";
 
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ArrowRight, ScanSearch, ClipboardCheck, Send } from "lucide-react";
+import { ArrowLeft, ArrowRight, ListChecks, Database, FileDown, FileEdit } from "lucide-react";
 
-export default function BeneficiaryCMAMPage() {
+export default function BeneficiaryScreeningPage() {
   const features = [
     {
-      title: "Screening Malnutrition Cases",
-      description: "Screen beneficiaries for signs of malnutrition.",
-      href: "/meal-system/monitoring/implementation/process/CMAM-cases/beneficiaries/screening",
-      icon: <ScanSearch className="h-8 w-8 text-blue-500" />,
+      title: "Preparing Beneficiaries CMAM List",
+      description: "Prepare and manage the list of beneficiaries for CMAM screening.",
+      href: "#", // Placeholder
+      icon: <ListChecks className="h-8 w-8 text-blue-500" />,
     },
     {
-      title: "Confirmation Malnutrition Cases",
-      description: "Confirm and document cases of malnutrition.",
+      title: "Beneficiaries CMAM Database",
+      description: "View and manage the CMAM screening database.",
       href: "#", // Placeholder
-      icon: <ClipboardCheck className="h-8 w-8 text-green-500" />,
+      icon: <Database className="h-8 w-8 text-green-500" />,
     },
     {
-      title: "Referral Malnourished Cases",
-      description: "Refer confirmed cases for appropriate treatment.",
+      title: "Exporting Beneficiaries CMAM Statements",
+      description: "Export statements and reports related to CMAM screening.",
       href: "#", // Placeholder
-      icon: <Send className="h-8 w-8 text-purple-500" />,
+      icon: <FileDown className="h-8 w-8 text-purple-500" />,
+    },
+    {
+      title: "Beneficiaries CMAM Screening Results Data Entry",
+      description: "Enter the results from the screening process.",
+      href: "#", // Placeholder
+      icon: <FileEdit className="h-8 w-8 text-orange-500" />,
     },
   ];
 
   return (
     <div className="space-y-8">
       <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">Beneficiaries CMAM</h1>
+        <h1 className="text-3xl font-bold">Screening Malnutrition Cases</h1>
         <Button variant="outline" asChild>
-          <Link href="/meal-system/monitoring/implementation/process/CMAM-cases">
+          <Link href="/meal-system/monitoring/implementation/process/CMAM-cases/beneficiaries">
             <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to CMAM Cases
+            Back to Beneficiaries CMAM
           </Link>
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {features.map((feature) => (
           <Card key={feature.title} className="flex flex-col text-center items-center justify-center p-6 transition-all duration-300 hover:shadow-xl hover:-translate-y-2">
             <div className="p-4 bg-muted rounded-full mb-4">
