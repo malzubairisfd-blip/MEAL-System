@@ -28,12 +28,14 @@ const DB_COLUMNS_FOR_CREATION = `(
     disc_date TEXT, near_health_center TEXT, comments TEXT, hw_id TEXT, hw_name TEXT, hc_id TEXT, hc_name TEXT,
     attend_hc TEXT, conf_date TEXT, bnf_has_cmam_hc TEXT, hc_card_no TEXT, bnf_cmam_cond TEXT, bnf_preg_mon TEXT,
     bnf_child_age TEXT, hc_muac TEXT, exp_start_treat_date TEXT, exp_end_treat_date TEXT, not_attend_reason TEXT,
-    bnf_attend_c1 TEXT, bnf_isprev_ref_c1 TEXT, date_attend_c1 TEXT, bnf_cmam_cond_c1 TEXT, bnf_preg_mon_c1 TEXT,
+    bnf_attend_c1 TEXT, bnf_isprev_ref_c1 TEXT, date_attend_c1 TEXT,
+    bnf_cmam_cond_c1 TEXT, bnf_preg_mon_c1 TEXT,
     bnf_child_age_c1 TEXT, hc_muac_c1 TEXT, cmam_result_c1 TEXT, not_attend_reason_c1 TEXT, cure_rate_c1 TEXT,
     positive_c1 TEXT, negative_c1 TEXT, next_cycle_c1 TEXT, bnf_isprev_ref_c2 TEXT, date_attend_c2 TEXT,
-    bnf_cmam_cond_c2 TEXT, bnf_preg_mon_c2 TEXT, bnf_child_age_c2 TEXT, hc_muac_c2 TEXT, cmam_result_c2 TEXT,
-    not_attend_reason_c2 TEXT, cure_rate_c2 TEXT, positive_c2 TEXT, negative_c2 TEXT, next_cycle_c2 TEXT,
-    bnf_isprev_ref_c3 TEXT, date_attend_c3 TEXT, bnf_cmam_cond_c3 TEXT, bnf_preg_mon_c3 TEXT,
+    bnf_cmam_cond_c2 TEXT, bnf_preg_mon_c2 TEXT,
+    bnf_child_age_c2 TEXT, hc_muac_c2 TEXT, cmam_result_c2 TEXT, not_attend_reason_c2 TEXT, cure_rate_c2 TEXT,
+    positive_c2 TEXT, negative_c2 TEXT, next_cycle_c2 TEXT, bnf_isprev_ref_c3 TEXT, date_attend_c3 TEXT,
+    bnf_cmam_cond_c3 TEXT, bnf_preg_mon_c3 TEXT,
     bnf_child_age_c3 TEXT, hc_muac_c3 TEXT, cmam_result_c3 TEXT, not_attend_reason_c3 TEXT, cure_rate_c3 TEXT,
     positive_c3 TEXT, negative_c3 TEXT, next_cycle_c3 TEXT, data JSON
 )`;
