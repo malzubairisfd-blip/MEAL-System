@@ -4,15 +4,15 @@
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ArrowRight, ScanSearch, ClipboardCheck, Send, ListChecks } from "lucide-react";
+import { ArrowLeft, ArrowRight, ScanSearch, ClipboardCheck, Send } from "lucide-react";
 
 export default function BeneficiaryCMAMPage() {
   const features = [
     {
-      title: "Preparing Beneficiaries CMAM List",
-      description: "Prepare, upload, and process the list of beneficiaries for CMAM screening.",
+      title: "Screening Malnutrition Cases",
+      description: "Screen beneficiaries for signs of malnutrition.",
       href: "/meal-system/monitoring/implementation/process/CMAM-cases/beneficiaries/screening",
-      icon: <ListChecks className="h-8 w-8 text-blue-500" />,
+      icon: <ScanSearch className="h-8 w-8 text-blue-500" />,
     },
     {
       title: "Confirmation Malnutrition Cases",
