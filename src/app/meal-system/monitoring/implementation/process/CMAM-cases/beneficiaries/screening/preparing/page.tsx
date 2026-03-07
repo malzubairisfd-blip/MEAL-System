@@ -15,6 +15,16 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, FileSpreadsheet, GitCompareArrows, Loader2, Plus, Save, Trash2, UserCheck, UserX, Users } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface Project {
   projectId: string;
@@ -32,6 +42,9 @@ const STATUS_LABELS: Record<string, string> = {
   STEP_SIX: "Step Six · CMAM qualification",
   done: "Completed",
   error: "Error",
+  saving: "Saving to database",
+  initializing: "Preparing worker",
+  checking_duplicates: "Validating duplicates",
 };
 
 const KeyFigureCard = ({
@@ -301,7 +314,20 @@ export default function PreparingBeneficiariesCMAMListPage() {
     }
     setLoading((prev) => ({ ...prev, saving: true }));
     try {
-      const uniqueIds = rawData.map((row) => row[Array.from(columnMapping.entries()).find(([, db]) => db === uniqueIdCol)?.[0]]).filter(Boolean);
+      const uiColForUniqueId = Array.from(columnMapping.entries()).find(([, dbCol]) => dbCol === uniqueIdCol)?.[0];
+
+      if (!uiColForUniqueId) {
+        toast({
+            title: "Mapping Error",
+            description: `The mapped unique ID column "${uniqueIdCol}" could not be found in the file mappings.`,
+            variant: "destructive"
+        });
+        setLoading(prev => ({ ...prev, saving: false }));
+        return;
+      }
+      
+      const uniqueIds = rawData.map((row) => row[uiColForUniqueId]).filter(Boolean);
+
       const response = await fetch("/api/bnf-cmam", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -418,7 +444,7 @@ export default function PreparingBeneficiariesCMAMListPage() {
             <Input type="file" accept=".xls,.xlsx,.xlsm,.xlsb,.csv,.txt" onChange={handleFileChange} className="mx-auto w-full max-w-md" />
           </div>
           {sheets.length > 0 && (
-            <Select value={selectedSheet} onValueChange={setSelectedSheet}>
+            <Select value={selectedSheet} onValueChange={handleSheetSelect}>
               <SelectTrigger>
                 <SelectValue placeholder="Select sheet..." />
               </SelectTrigger>
