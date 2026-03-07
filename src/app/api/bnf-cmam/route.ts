@@ -1,3 +1,4 @@
+
 // src/app/api/bnf-cmam/route.ts
 import { NextResponse } from "next/server";
 import fs from "fs/promises";
@@ -26,10 +27,7 @@ const DB_COLUMNS_FOR_CREATION = `(
     curr_date TEXT, reg_curr_days REAL, reg_curr_mon REAL, bnf_age_mon REAL, new_bnf_age_mon REAL, new_bnf_age_years REAL,
     cmam_qualify TEXT, bnf_has_cmam TEXT, bnf_preg_lec TEXT, preg_mon TEXT, child_age TEXT, muac TEXT, go_health_center TEXT,
     disc_date TEXT, near_health_center TEXT, comments TEXT, hw_id TEXT, hw_name TEXT, hc_id TEXT, hc_name TEXT,
-    attend_hc TEXT, conf_date TEXT, bnf_has_cmam_hc TEXT, hc_card_no TEXT, bnf_cmam_cond TEXT, bnf_preg_mon TEXT,
-    bnf_child_age TEXT, hc_muac TEXT, exp_start_treat_date TEXT, exp_end_treat_date TEXT, not_attend_reason TEXT,
-    bnf_attend_c1 TEXT, bnf_isprev_ref_c1 TEXT, date_attend_c1 TEXT,
-    bnf_cmam_cond_c1 TEXT, bnf_preg_mon_c1 TEXT,
+    attend_hc TEXT, conf_date TEXT, bnf_has_cmam_hc TEXT, hc_card_no TEXT, bnf_cmam_cond_c1 TEXT, bnf_preg_mon_c1 TEXT,
     bnf_child_age_c1 TEXT, hc_muac_c1 TEXT, cmam_result_c1 TEXT, not_attend_reason_c1 TEXT, cure_rate_c1 TEXT,
     positive_c1 TEXT, negative_c1 TEXT, next_cycle_c1 TEXT, bnf_isprev_ref_c2 TEXT, date_attend_c2 TEXT,
     bnf_cmam_cond_c2 TEXT, bnf_preg_mon_c2 TEXT,
@@ -76,10 +74,27 @@ export async function POST(req: Request) {
         const { action } = body;
 
         if (action === "get_schema") {
-            const db = initializeDatabase();
-            const columns = db.prepare("PRAGMA table_info(bnf_cmam)").all().map((c: any) => c.name);
-            db.close();
-            return NextResponse.json({ columns });
+            try {
+                const db = initializeDatabase();
+        
+                let columns = db
+                    .prepare("PRAGMA table_info(bnf_cmam)")
+                    .all()
+                    .map((c: any) => c.name);
+        
+                db.close();
+        
+                // If DB exists but table info returned empty
+                if (!columns || columns.length === 0) {
+                    columns = ALL_COLUMNS;
+                }
+        
+                return NextResponse.json({ columns });
+        
+            } catch (err) {
+                // If DB file does not exist yet
+                return NextResponse.json({ columns: ALL_COLUMNS });
+            }
         }
 
         if (action === "check_duplicates") {
@@ -131,7 +146,7 @@ export async function POST(req: Request) {
                         educatorsDb.close();
                     } catch { /* if educators.db doesn't exist, we just skip this enrichment */ }
 
-                    const insertCols = Object.values(mapping).filter(col => ALL_COLUMNS.includes(col));
+                    const insertCols = Object.values(mapping).filter(col => ALL_COLUMNS.includes(col as string));
                     const insertPlaceholders = insertCols.map(c => `@${c}`).join(', ');
                     const insertStmt = db.prepare(`INSERT INTO bnf_cmam (${insertCols.join(', ')}) VALUES (${insertPlaceholders})`);
                     const updateStmt = db.prepare(`UPDATE bnf_cmam SET ${insertCols.map(c => `${c} = @${c}`).join(', ')} WHERE ${uniqueIdCol} = @${uniqueIdCol} AND project_id = @project_id`);

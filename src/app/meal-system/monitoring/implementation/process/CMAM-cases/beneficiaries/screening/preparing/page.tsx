@@ -1,3 +1,4 @@
+
 // src/app/meal-system/monitoring/implementation/process/CMAM-cases/beneficiaries/screening/preparing/page.tsx
 "use client";
 
@@ -246,7 +247,7 @@ export default function PreparingBeneficiariesCMAMListPage() {
                         <SelectContent>{projects.map(p => <SelectItem key={p.projectId} value={p.projectId}>{p.projectName}</SelectItem>)}</SelectContent>
                     </Select>
                     <Input type="file" onChange={handleFileChange} />
-                    {sheets.length > 0 && <Select value={selectedSheet} onValueChange={sheet => handleSheetSelect('payment', sheet)}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent>{sheets.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select>}
+                    {sheets.length > 0 && <Select value={selectedSheet} onValueChange={handleSheetSelect}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent>{sheets.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select>}
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                            <Label>Registration Date</Label>
