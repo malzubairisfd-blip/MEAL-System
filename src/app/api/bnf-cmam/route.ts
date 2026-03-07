@@ -244,14 +244,14 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { action } = body;
     if (action === "get_schema") {
-      try {
-        const db = initializeDatabase();
-        const columns = db.prepare("PRAGMA table_info(bnf_cmam)").all().map((col: any) => col.name);
-        db.close();
-        return NextResponse.json({ columns: columns.length ? columns : ALL_COLUMNS });
-      } catch {
-        return NextResponse.json({ columns: ALL_COLUMNS });
-      }
+        try {
+            const db = initializeDatabase();
+            const columns = db.prepare("PRAGMA table_info(bnf_cmam)").all().map((col: any) => col.name);
+            db.close();
+            return NextResponse.json({ columns: columns.length ? columns : ALL_COLUMNS });
+        } catch {
+            return NextResponse.json({ columns: ALL_COLUMNS });
+        }
     }
 
     if (action === "check_duplicates") {
