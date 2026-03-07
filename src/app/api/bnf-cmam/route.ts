@@ -1,4 +1,3 @@
-
 // src/app/api/bnf-cmam/route.ts
 import { NextResponse } from "next/server";
 import fs from "fs/promises";
@@ -27,7 +26,10 @@ const DB_COLUMNS_FOR_CREATION = `(
     curr_date TEXT, reg_curr_days REAL, reg_curr_mon REAL, bnf_age_mon REAL, new_bnf_age_mon REAL, new_bnf_age_years REAL,
     cmam_qualify TEXT, bnf_has_cmam TEXT, bnf_preg_lec TEXT, preg_mon TEXT, child_age TEXT, muac TEXT, go_health_center TEXT,
     disc_date TEXT, near_health_center TEXT, comments TEXT, hw_id TEXT, hw_name TEXT, hc_id TEXT, hc_name TEXT,
-    attend_hc TEXT, conf_date TEXT, bnf_has_cmam_hc TEXT, hc_card_no TEXT, bnf_cmam_cond_c1 TEXT, bnf_preg_mon_c1 TEXT,
+    attend_hc TEXT, conf_date TEXT, bnf_has_cmam_hc TEXT, hc_card_no TEXT, bnf_cmam_cond TEXT, bnf_preg_mon TEXT,
+    bnf_child_age TEXT, hc_muac TEXT, exp_start_treat_date TEXT, exp_end_treat_date TEXT, not_attend_reason TEXT,
+    bnf_attend_c1 TEXT, bnf_isprev_ref_c1 TEXT, date_attend_c1 TEXT,
+    bnf_cmam_cond_c1 TEXT, bnf_preg_mon_c1 TEXT,
     bnf_child_age_c1 TEXT, hc_muac_c1 TEXT, cmam_result_c1 TEXT, not_attend_reason_c1 TEXT, cure_rate_c1 TEXT,
     positive_c1 TEXT, negative_c1 TEXT, next_cycle_c1 TEXT, bnf_isprev_ref_c2 TEXT, date_attend_c2 TEXT,
     bnf_cmam_cond_c2 TEXT, bnf_preg_mon_c2 TEXT,
@@ -76,23 +78,11 @@ export async function POST(req: Request) {
         if (action === "get_schema") {
             try {
                 const db = initializeDatabase();
-        
-                let columns = db
-                    .prepare("PRAGMA table_info(bnf_cmam)")
-                    .all()
-                    .map((c: any) => c.name);
-        
+                let columns = db.prepare("PRAGMA table_info(bnf_cmam)").all().map((c: any) => c.name);
                 db.close();
-        
-                // If DB exists but table info returned empty
-                if (!columns || columns.length === 0) {
-                    columns = ALL_COLUMNS;
-                }
-        
+                if (!columns || columns.length === 0) columns = ALL_COLUMNS;
                 return NextResponse.json({ columns });
-        
             } catch (err) {
-                // If DB file does not exist yet
                 return NextResponse.json({ columns: ALL_COLUMNS });
             }
         }
@@ -100,12 +90,14 @@ export async function POST(req: Request) {
         if (action === "check_duplicates") {
             const { projectId, uniqueIds, uniqueIdCol } = body;
             const lookupColumn = sanitizeColumn(uniqueIdCol);
+            
             if (!lookupColumn || !VALID_COLUMNS_SET.has(lookupColumn.toLowerCase())) {
                 return NextResponse.json({ error: "Invalid unique column" }, { status: 400 });
             }
+            
             let db: Database.Database | null = null;
             try {
-                db = new Database(getDbPath(), { fileMustExist: true });
+                db = initializeDatabase(); // Fix 1: Ensure table exists so the SELECT COUNT won't crash
                 const existingIds = new Set<string>();
                 const stmt = db.prepare(`SELECT "${lookupColumn}" FROM bnf_cmam WHERE project_id = ?`);
                 const rows = stmt.all(projectId) as any[];
@@ -123,7 +115,6 @@ export async function POST(req: Request) {
         }
         
         if(action === "save") {
-            // This is a long process, so we use a streaming response
              const stream = new TransformStream();
             const writer = stream.writable.getWriter();
             const response = new Response(stream.readable, {
@@ -132,11 +123,10 @@ export async function POST(req: Request) {
             
              (async () => {
                 const { projectId, projectName, records, mapping, uniqueIdCol, regDate, currDate, mode } = body;
-                const db = initializeDatabase();
+                const db = initializeDatabase(); 
                 
                 try {
-                    // Step 1 - Handled by initializeDatabase
-                    sendProgress(writer, { type: 'progress', status: 'saving', progress: 10, message: 'Saving initial records...' });
+                    sendProgress(writer, { type: 'progress', status: 'saving', progress: 10, message: 'Second: Saving mapping columns and project details...' });
 
                     let educatorsMap = new Map();
                     try {
@@ -144,12 +134,17 @@ export async function POST(req: Request) {
                         const educators = educatorsDb.prepare('SELECT applicant_name, phone_no FROM educators WHERE project_id = ?').all(projectId);
                         educators.forEach((e: any) => educatorsMap.set(e.applicant_name, e.phone_no));
                         educatorsDb.close();
-                    } catch { /* if educators.db doesn't exist, we just skip this enrichment */ }
+                    } catch { /* proceed if missing */ }
 
-                    const insertCols = Object.values(mapping).filter(col => ALL_COLUMNS.includes(col as string));
-                    const insertPlaceholders = insertCols.map(c => `@${c}`).join(', ');
-                    const insertStmt = db.prepare(`INSERT INTO bnf_cmam (${insertCols.join(', ')}) VALUES (${insertPlaceholders})`);
-                    const updateStmt = db.prepare(`UPDATE bnf_cmam SET ${insertCols.map(c => `${c} = @${c}`).join(', ')} WHERE ${uniqueIdCol} = @${uniqueIdCol} AND project_id = @project_id`);
+                    // Fix 2: Explicitly include project_id and project_name in the inserts!
+                    const mappedDbCols = Object.values(mapping).filter(col => ALL_COLUMNS.includes(col as string));
+                    const finalInsertCols = [...new Set([...mappedDbCols as string[], 'project_id', 'project_name'])];
+                    
+                    const insertPlaceholders = finalInsertCols.map(c => `@${c}`).join(', ');
+                    const insertStmt = db.prepare(`INSERT INTO bnf_cmam (${finalInsertCols.join(', ')}) VALUES (${insertPlaceholders})`);
+                    
+                    const updateCols = mappedDbCols.filter(c => c !== uniqueIdCol);
+                    const updateStmt = db.prepare(`UPDATE bnf_cmam SET ${updateCols.map(c => `${c} = @${c}`).join(', ')} WHERE ${uniqueIdCol} = @${uniqueIdCol} AND project_id = @project_id`);
                     
                     const transaction = db.transaction((rows: any[], mode: 'skip' | 'replace') => {
                         let saved = 0, updated = 0, skipped = 0;
@@ -175,13 +170,13 @@ export async function POST(req: Request) {
                                 saved++;
                             }
                         }
-                        return { saved, updated, skipped };
+                        return { saved, updated, skipped, total: rows.length };
                     });
 
                     const stats = transaction(records, mode);
-                    sendProgress(writer, { type: 'progress', status: 'enriching_phones', progress: 40, message: 'Enriching educator phones...', stats });
+                    sendProgress(writer, { type: 'progress', status: 'enriching_phones', progress: 40, message: 'Third: Enriching educator phones...', stats });
                     
-                    // Step 3 - Enrich phone numbers
+                    // Third: Enrich phone numbers
                     const allCmamRecords = db.prepare('SELECT id, ED_NAME FROM bnf_cmam WHERE project_id = ?').all(projectId);
                     const updatePhoneStmt = db.prepare('UPDATE bnf_cmam SET ed_phone = ? WHERE id = ?');
                     db.transaction((cmamRecords: any[]) => {
@@ -192,19 +187,19 @@ export async function POST(req: Request) {
                         });
                     })(allCmamRecords);
 
-                    sendProgress(writer, { type: 'progress', status: 'calculating_dates', progress: 60, message: 'Calculating dates...', stats });
+                    sendProgress(writer, { type: 'progress', status: 'calculating_dates', progress: 60, message: 'Fourth & Fifth: Calculating dates and ages...', stats });
 
-                    // Steps 4, 5, 6
+                    // Fourth, Fifth, Sixth: Dates, Ages, Qualifications for BENEF_CLASS_DESC = مستفيدة
                     const recordsToUpdate = db.prepare("SELECT id, AGE_YEARS FROM bnf_cmam WHERE project_id = ? AND BENEF_CLASS_DESC = 'مستفيدة'").all(projectId);
                     const updateCalcStmt = db.prepare('UPDATE bnf_cmam SET reg_date=?, curr_date=?, reg_curr_days=?, reg_curr_mon=?, bnf_age_mon=?, new_bnf_age_mon=?, new_bnf_age_years=?, cmam_qualify=? WHERE id = ?');
                     
                     db.transaction((updateRecords: any[]) => {
                         for (const rec of updateRecords) {
-                            const reg_date = new Date(regDate);
-                            const curr_date = new Date(currDate);
-                            const reg_curr_days = (curr_date.getTime() - reg_date.getTime()) / (1000 * 3600 * 24);
+                            const reg_date_val = new Date(regDate);
+                            const curr_date_val = new Date(currDate);
+                            const reg_curr_days = (curr_date_val.getTime() - reg_date_val.getTime()) / (1000 * 3600 * 24);
                             const reg_curr_mon = reg_curr_days / 30;
-                            const bnf_age_mon = Number(rec.AGE_YEARS) * 12;
+                            const bnf_age_mon = Number(rec.AGE_YEARS || 0) * 12;
                             const new_bnf_age_mon = bnf_age_mon + reg_curr_mon;
                             const new_bnf_age_years = new_bnf_age_mon / 12;
                             const cmam_qualify = new_bnf_age_years <= 49 ? 'Qualified' : 'Disqualified';
