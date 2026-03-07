@@ -246,10 +246,23 @@ export async function POST(req: Request) {
     if (action === "get_schema") {
         try {
             const db = initializeDatabase();
-            const columns = db.prepare("PRAGMA table_info(bnf_cmam)").all().map((col: any) => col.name);
+    
+            let columns = db
+                .prepare("PRAGMA table_info(bnf_cmam)")
+                .all()
+                .map((c: any) => c.name);
+    
             db.close();
-            return NextResponse.json({ columns: columns.length ? columns : ALL_COLUMNS });
-        } catch {
+    
+            // If DB exists but table info returned empty
+            if (!columns || columns.length === 0) {
+                columns = ALL_COLUMNS;
+            }
+    
+            return NextResponse.json({ columns });
+    
+        } catch (err) {
+            // If DB file does not exist yet
             return NextResponse.json({ columns: ALL_COLUMNS });
         }
     }
@@ -563,3 +576,5 @@ export async function POST(req: Request) {
     );
   }
 }
+
+    
