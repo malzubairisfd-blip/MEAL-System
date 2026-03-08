@@ -1,4 +1,3 @@
-
 //src/app/api/bnf-cmam/route.ts
 
 import { NextResponse } from "next/server";
@@ -11,7 +10,7 @@ const getDbPath = () => path.join(getDataPath(), "bnf-cmam.db");
 const getProjectsDbPath = () => path.join(getDataPath(), "projects.db");
 const getEducatorsDbPath = () => path.join(getDataPath(), "educators.db");
 
-const TABLE_SCHEMA = `(
+const DB_COLUMNS_FOR_CREATION = `(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   project_id TEXT,
   project_name TEXT,
@@ -163,25 +162,65 @@ const TABLE_SCHEMA = `(
   data JSON
 )`;
 
-const ALL_COLUMNS =
-  TABLE_SCHEMA.match(/\b[a-zA-Z_][a-zA-Z0-9_]*\b/g)
-    ?.filter(
-      (word) =>
-        !["id", "primary", "autoincrement", "integer", "text", "real", "json", "key"].includes(word.toLowerCase())
-    )
-    .map((word) => word.toUpperCase()) || [];
+const columnDefs = DB_COLUMNS_FOR_CREATION.replace(/^\(|\)$/g, "") // remove parentheses
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
 
+const columnTypeMap = new Map<string, string>();
+const DB_COLUMNS = columnDefs.map(def => {
+    const parts = def.split(/\s+/);
+    const name = parts[0].replace(/"/g, "");
+    const type = parts[1] || 'TEXT';
+    columnTypeMap.set(name, type);
+    return name;
+});
+
+const ALL_COLUMNS = DB_COLUMNS;
 const VALID_COLUMNS_SET = new Set(ALL_COLUMNS.map((column) => column.toLowerCase()));
+
+
+const chunkArray = <T,>(arr: T[], size: number): T[][] => {
+  const chunks: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) {
+    chunks.push(arr.slice(i, i + size));
+  }
+  return chunks;
+};
+
+function initializeDatabase() {
+  const db = new Database(getDbPath());
+  db.exec(`CREATE TABLE IF NOT EXISTS bnf_cmam ${DB_COLUMNS_FOR_CREATION};`);
+  
+  // --- Dynamic Column Addition ---
+  const tableCols = db.prepare("PRAGMA table_info(bnf_cmam)").all().map((c: any) => c.name);
+  
+  DB_COLUMNS.forEach(colName => {
+    if (!tableCols.includes(colName)) {
+      try {
+        const type = columnTypeMap.get(colName) || 'TEXT'; // Get type or default to TEXT
+        db.exec(`ALTER TABLE bnf_cmam ADD COLUMN "${colName}" ${type}`);
+        console.log(`Added missing column: ${colName} with type ${type}`);
+      } catch (error) {
+        // This might fail if another process adds the column concurrently, which is fine.
+        console.warn(`Could not add column ${colName}:`, error);
+      }
+    }
+  });
+
+  try {
+      db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_project_benef_id ON bnf_cmam (project_id, BENEF_ID);`);
+  } catch (error) {
+      console.warn('Could not create unique index, it might already exist.', error);
+  }
+
+  return db;
+}
+
 
 const sanitizeColumn = (value?: string) => (value ? value.replace(/[^a-zA-Z0-9_]/g, "") : "");
 
 const ensureDirectory = () => fs.mkdir(getDataPath(), { recursive: true });
-
-function initializeDatabase() {
-  const db = new Database(getDbPath());
-  db.exec(`CREATE TABLE IF NOT EXISTS bnf_cmam ${TABLE_SCHEMA};`);
-  return db;
-}
 
 const sendProgress = (writer: WritableStreamDefaultWriter<Uint8Array>, payload: any) => {
   const encoder = new TextEncoder();
@@ -231,11 +270,11 @@ export async function GET(req: Request) {
     db.close();
     return NextResponse.json(records);
   } catch (error: any) {
-    if (error?.code === "SQLITE_CANTOPEN") {
+    if ((error as any).code === "SQLITE_CANTOPEN") {
       return NextResponse.json([]);
     }
     console.error("[BNF_CMAM_API_GET_ERROR]", error);
-    return NextResponse.json({ error: "Failed to fetch bnf-cmam data.", details: error?.message }, { status: 500 });
+    return NextResponse.json({ error: "Failed to fetch bnf-cmam data.", details: (error as any)?.message }, { status: 500 });
   }
 }
 
@@ -255,7 +294,6 @@ export async function POST(req: Request) {
     
             db.close();
     
-            // If DB exists but table info returned empty
             if (!columns || columns.length === 0) {
                 columns = ALL_COLUMNS;
             }
@@ -263,7 +301,6 @@ export async function POST(req: Request) {
             return NextResponse.json({ columns });
     
         } catch (err) {
-            // If DB file does not exist yet
             return NextResponse.json({ columns: ALL_COLUMNS });
         }
     }
@@ -566,7 +603,7 @@ export async function POST(req: Request) {
   } catch (error: any) {
     console.error("[BNF_CMAM_API_ERROR]", error);
     return NextResponse.json(
-      { error: "Failed to process bnf-cmam request.", details: error.message },
+      { error: "Failed to process bnf-cmam request.", details: (error as any).message },
       { status: 500 }
     );
   }
