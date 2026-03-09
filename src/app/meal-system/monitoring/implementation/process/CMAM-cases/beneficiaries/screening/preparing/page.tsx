@@ -1,4 +1,3 @@
-
 // src/app/meal-system/monitoring/implementation/process/CMAM-cases/beneficiaries/screening/preparing/page.tsx
 "use client";
 
@@ -214,6 +213,7 @@ export default function PreparingCmamPage() {
             setIsSaving(false);
         }
     };
+    const statusLabel = STATUS_LABELS[saveStatus.step] || saveStatus.step;
 
     return (
         <div className="space-y-6 pb-12">
@@ -227,7 +227,7 @@ export default function PreparingCmamPage() {
                 <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     <Select onValueChange={setSelectedProjectId} value={selectedProjectId}><SelectTrigger><SelectValue placeholder="Select Project..." /></SelectTrigger><SelectContent>{projects.map(p => <SelectItem key={p.projectId} value={p.projectId}>{p.projectName}</SelectItem>)}</SelectContent></Select>
                     <Input type="file" onChange={handleFileChange} />
-                    {sheets.length > 0 && <Select onValueChange={v => handleSheetSelect(v, file)} value={selectedSheet}><SelectTrigger><SelectValue placeholder="Select Sheet..." /></SelectTrigger><SelectContent>{sheets.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select>}
+                    {sheets.length > 0 && <Select onValueChange={v => handleSheetSelect(v, file!)} value={selectedSheet}><SelectTrigger><SelectValue placeholder="Select Sheet..." /></SelectTrigger><SelectContent>{sheets.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select>}
                     <div className="space-y-2"><Label>Registration Date</Label><div className="flex gap-1"><Input type="number" placeholder="DD" value={registrationDate.day} onChange={e => setRegistrationDate(d => ({ ...d, day: e.target.value }))} /><Input type="number" placeholder="MM" value={registrationDate.month} onChange={e => setRegistrationDate(d => ({ ...d, month: e.target.value }))} /><Input type="number" placeholder="YYYY" value={registrationDate.year} onChange={e => setRegistrationDate(d => ({ ...d, year: e.target.value }))} /></div></div>
                     <div className="space-y-2"><Label>Current Date</Label><div className="flex gap-1"><Input type="number" placeholder="DD" value={currentDate.day} onChange={e => setCurrentDate(d => ({ ...d, day: e.target.value }))} /><Input type="number" placeholder="MM" value={currentDate.month} onChange={e => setCurrentDate(d => ({ ...d, month: e.target.value }))} /><Input type="number" placeholder="YYYY" value={currentDate.year} onChange={e => setCurrentDate(d => ({ ...d, year: e.target.value }))} /></div></div>
                 </CardContent>
@@ -237,7 +237,7 @@ export default function PreparingCmamPage() {
                 <Card>
                     <CardHeader><CardTitle>2. Column Mapping</CardTitle></CardHeader>
                     <CardContent className="space-y-4">
-                        <div className="flex gap-2"><Button onClick={handleAutoMatch}><GitCompareArrows className="mr-2 h-4 w-4"/>Auto-match</Button><Button onClick={() => localStorage.setItem(`cmam-mapping-${file?.name}`, JSON.stringify(Object.fromEntries(columnMapping)))}><Save className="mr-2 h-4 w-4" />Save Mapping</Button></div>
+                        <Button onClick={handleAutoMatch}><GitCompareArrows className="mr-2 h-4 w-4"/>Auto-match</Button>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div className="space-y-2"><Label>Unique ID (from File)</Label><Select value={uniqueIdFileCol} onValueChange={setUniqueIdFileCol}><SelectTrigger><SelectValue placeholder="Select..."/></SelectTrigger><SelectContent>{columns.map(c=><SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent></Select></div><div className="space-y-2"><Label>Unique ID (in DB)</Label><Select value={uniqueIdDbCol} onValueChange={setUniqueIdDbCol}><SelectTrigger><SelectValue placeholder="Select..."/></SelectTrigger><SelectContent>{dbColumns.map(c=><SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent></Select></div></div>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end"><div className="space-y-2"><Label>Unmapped File Column</Label><Select value={manualMapping.ui} onValueChange={v => setManualMapping(p => ({...p, ui: v}))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><ScrollArea className="h-60">{unmappedUiColumns.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</ScrollArea></SelectContent></Select></div><div className="space-y-2"><Label>Unmapped DB Column</Label><Select value={manualMapping.db} onValueChange={v => setManualMapping(p => ({...p, db: v}))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><ScrollArea className="h-60">{unmappedDbColumns.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</ScrollArea></SelectContent></Select></div><Button onClick={handleAddMapping}><Plus className="mr-2 h-4 w-4"/>Add Mapping</Button></div>
                         <ScrollArea className="h-48 border rounded-md"><Table><TableHeader><TableRow><TableHead>File Column</TableHead><TableHead>DB Column</TableHead><TableHead>Action</TableHead></TableRow></TableHeader><TableBody>{Array.from(columnMapping.entries()).map(([ui, db]) => <TableRow key={ui}><TableCell>{ui}</TableCell><TableCell>{db}</TableCell><TableCell><Button variant="ghost" size="icon" onClick={() => handleRemoveMapping(ui)}><Trash2 className="h-4 w-4 text-destructive"/></Button></TableCell></TableRow>)}</TableBody></Table></ScrollArea>
@@ -255,8 +255,8 @@ export default function PreparingCmamPage() {
                      {isSaving && (
                         <div className="space-y-2">
                              <Progress value={saveStatus.progress} />
-                            <p className="text-sm text-center text-muted-foreground">
-                                {STATUS_LABELS[saveStatus.step] || saveStatus.step}... ({saveStatus.progress}%)
+                            <p className="text-sm text-center mt-1 text-muted-foreground">
+                                {statusLabel}... ({saveStatus.progress}%)
                             </p>
                         </div>
                      )}
@@ -297,4 +297,3 @@ export default function PreparingCmamPage() {
         </div>
     );
 }
-

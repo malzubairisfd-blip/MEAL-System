@@ -1,4 +1,3 @@
-
 // src/app/api/bnf-cmam/route.ts
 import { NextResponse } from "next/server";
 import fs from "fs/promises";
@@ -28,14 +27,14 @@ const DB_COLUMNS_FOR_CREATION = `(
     reg_date TEXT, curr_date TEXT, reg_curr_days REAL, reg_curr_mon REAL, bnf_age_mon REAL, new_bnf_age_mon REAL, new_bnf_age_years REAL,
     cmam_qualify TEXT, bnf_has_cmam TEXT, bnf_preg_lec TEXT, preg_mon TEXT, child_age TEXT, muac TEXT, go_health_center TEXT, disc_date TEXT,
     near_health_center TEXT, comments TEXT, hw_id TEXT, hw_name TEXT, hc_id TEXT, hc_name TEXT, attend_hc TEXT, conf_date TEXT,
-    bnf_has_cmam_hc TEXT, hc_card_no TEXT, bnf_cmam_cond TEXT, bnf_preg_mon TEXT, bnf_child_age TEXT, hc_muac TEXT, exp_start_treat_date TEXT,
-    exp_end_treat_date TEXT, not_attend_reason TEXT, bnf_attend_c1 TEXT, bnf_isprev_ref_c1 TEXT, date_attend_c1 TEXT, bnf_cmam_cond_c1 TEXT,
-    bnf_preg_mon_c1 TEXT, bnf_child_age_c1 TEXT, hc_muac_c1 TEXT, cmam_result_c1 TEXT, not_attend_reason_c1 TEXT, cure_rate_c1 TEXT,
-    positive_c1 TEXT, negative_c1 TEXT, next_cycle_c1 TEXT, bnf_isprev_ref_c2 TEXT, date_attend_c2 TEXT, bnf_cmam_cond_c2 TEXT,
-    bnf_preg_mon_c2 TEXT, bnf_child_age_c2 TEXT, hc_muac_c2 TEXT, cmam_result_c2 TEXT, not_attend_reason_c2 TEXT, cure_rate_c2 TEXT,
-    positive_c2 TEXT, negative_c2 TEXT, next_cycle_c2 TEXT, bnf_isprev_ref_c3 TEXT, date_attend_c3 TEXT, bnf_cmam_cond_c3 TEXT,
-    bnf_preg_mon_c3 TEXT, bnf_child_age_c3 TEXT, hc_muac_c3 TEXT, cmam_result_c3 TEXT, not_attend_reason_c3 TEXT, cure_rate_c3 TEXT,
-    positive_c3 TEXT, negative_c3 TEXT, next_cycle_c3 TEXT, data JSON
+    bnf_has_cmam_hc TEXT, hc_card_no TEXT, bnf_cmam_cond TEXT, bnf_preg_mon TEXT, bnf_child_age TEXT, hc_muac TEXT,
+    exp_start_treat_date TEXT, exp_end_treat_date TEXT, not_attend_reason TEXT, bnf_attend_c1 TEXT, bnf_isprev_ref_c1 TEXT, date_attend_c1 TEXT,
+    bnf_cmam_cond_c1 TEXT, bnf_preg_mon_c1 TEXT, bnf_child_age_c1 TEXT, hc_muac_c1 TEXT, cmam_result_c1 TEXT, not_attend_reason_c1 TEXT,
+    cure_rate_c1 TEXT, positive_c1 TEXT, negative_c1 TEXT, next_cycle_c1 TEXT, bnf_isprev_ref_c2 TEXT, date_attend_c2 TEXT,
+    bnf_cmam_cond_c2 TEXT, bnf_preg_mon_c2 TEXT, bnf_child_age_c2 TEXT, hc_muac_c2 TEXT, cmam_result_c2 TEXT, not_attend_reason_c2 TEXT,
+    cure_rate_c2 TEXT, positive_c2 TEXT, negative_c2 TEXT, next_cycle_c2 TEXT, bnf_isprev_ref_c3 TEXT, date_attend_c3 TEXT,
+    bnf_cmam_cond_c3 TEXT, bnf_preg_mon_c3 TEXT, bnf_child_age_c3 TEXT, hc_muac_c3 TEXT, cmam_result_c3 TEXT,
+    not_attend_reason_c3 TEXT, cure_rate_c3 TEXT, positive_c3 TEXT, negative_c3 TEXT, next_cycle_c3 TEXT, data JSON
 )`;
 
 const columnDefs = DB_COLUMNS_FOR_CREATION.replace(/^\(|\)$/g, "").split(",").map(s => s.trim()).filter(Boolean);
@@ -76,6 +75,10 @@ function initializeDatabase() {
   return db;
 }
 
+const normalizeName = (name: string): string => {
+    return (name || '').trim().replace(/\s+/g, ' ');
+}
+
 // --- Main API Handler ---
 export async function POST(req: Request) {
   try {
@@ -92,14 +95,15 @@ export async function POST(req: Request) {
           const columns = tableInfo.map((c: any) => c.name);
           return NextResponse.json({ columns });
         } catch (error: any) {
-          if ((error as any).code === "SQLITE_CANTOPEN") {
-            const dbFallback = initializeDatabase();
-            const tableInfo = dbFallback.prepare("PRAGMA table_info(bnf_cmam)").all();
-            const columns = tableInfo.map((c: any) => c.name);
-            dbFallback.close();
-            return NextResponse.json({ columns });
-          }
-          throw error;
+            // If the DB can't be opened, it might not exist. Try creating it.
+            if ((error as any).code === "SQLITE_CANTOPEN") {
+                const dbFallback = initializeDatabase();
+                const tableInfo = dbFallback.prepare("PRAGMA table_info(bnf_cmam)").all();
+                const columns = tableInfo.map((c: any) => c.name);
+                dbFallback.close();
+                return NextResponse.json({ columns });
+            }
+            throw error; // Re-throw other errors
         } finally {
           if (dbInstance) dbInstance.close();
         }
@@ -174,12 +178,16 @@ export async function POST(req: Request) {
             projectDb.close();
             if (!project) throw new Error("Project not found");
 
-            const educatorsDb = new Database(getEducatorsDbPath(), { fileMustExist: true });
-            const educatorPhoneMap = new Map<string, string>();
-            educatorsDb.prepare('SELECT applicant_name, phone_no FROM educators WHERE project_id = ?').all(projectId).forEach((edu: any) => {
-                educatorPhoneMap.set((edu.applicant_name || '').trim(), edu.phone_no || '');
-            });
-            educatorsDb.close();
+            let educatorPhoneMap = new Map<string, string>();
+            try {
+              const educatorsDb = new Database(getEducatorsDbPath(), { fileMustExist: true });
+              educatorsDb.prepare('SELECT applicant_name, phone_no FROM educators WHERE project_id = ?').all(projectId).forEach((edu: any) => {
+                  educatorPhoneMap.set(normalizeName(edu.applicant_name), edu.phone_no || '');
+              });
+              educatorsDb.close();
+            } catch {
+              send({ type: 'progress', status: 'enriching', progress: 10, message: "Educators database not found, skipping phone enrichment." });
+            }
 
             db = initializeDatabase();
             
@@ -191,7 +199,7 @@ export async function POST(req: Request) {
                   if (row.hasOwnProperty(fileCol)) mapped[dbCol as string] = row[fileCol];
               }
               if (mapped.ED_NAME) {
-                  mapped.ed_phone = educatorPhoneMap.get((mapped.ED_NAME).trim()) || null;
+                  mapped.ed_phone = educatorPhoneMap.get(normalizeName(mapped.ED_NAME)) || null;
               }
               if (mapped.BENEF_CLASS_DESC === 'مستفيدة') {
                   const regDateObj = dayjs(regDate);
