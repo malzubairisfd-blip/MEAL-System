@@ -4,7 +4,7 @@
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ArrowRight, ListChecks, Database, FileDown, FileEdit } from "lucide-react";
+import { ArrowLeft, ArrowRight, ScanSearch, Database, FileDown, FileEdit } from "lucide-react";
 
 export default function BeneficiaryScreeningPage() {
   const features = [
@@ -12,12 +12,12 @@ export default function BeneficiaryScreeningPage() {
       title: "Preparing Beneficiaries CMAM List",
       description: "Prepare and manage the list of beneficiaries for CMAM screening.",
       href: "/meal-system/monitoring/implementation/process/CMAM-cases/beneficiaries/screening/preparing",
-      icon: <ListChecks className="h-8 w-8 text-blue-500" />,
+      icon: <ScanSearch className="h-8 w-8 text-blue-500" />,
     },
     {
       title: "Beneficiaries CMAM Database",
       description: "View and manage the CMAM screening database.",
-      href: "#", // Placeholder
+      href: "/meal-system/monitoring/implementation/process/CMAM-cases/beneficiaries/screening/database",
       icon: <Database className="h-8 w-8 text-green-500" />,
     },
     {
