@@ -223,15 +223,14 @@ export async function POST(req: Request) {
           const columns = tableInfo.map((c: any) => c.name);
           return NextResponse.json({ columns });
         } catch (error: any) {
-            // If the DB can't be opened, it might not exist. Try creating it.
-            if ((error as any).code === "SQLITE_CANTOPEN") {
-                const dbFallback = initializeDatabase();
-                const tableInfo = dbFallback.prepare("PRAGMA table_info(bnf_cmam)").all();
-                const columns = tableInfo.map((c: any) => c.name);
-                dbFallback.close();
-                return NextResponse.json({ columns });
-            }
-            throw error; // Re-throw other errors
+          if ((error as any).code === "SQLITE_CANTOPEN") {
+            const dbFallback = initializeDatabase();
+            const tableInfo = dbFallback.prepare("PRAGMA table_info(bnf_cmam)").all();
+            const columns = tableInfo.map((c: any) => c.name);
+            dbFallback.close();
+            return NextResponse.json({ columns });
+          }
+          throw error;
         } finally {
           if (dbInstance) dbInstance.close();
         }
