@@ -1,4 +1,3 @@
-
 // src/app/meal-system/monitoring/implementation/process/CMAM-cases/beneficiaries/database/page.tsx
 "use client";
 
@@ -388,7 +387,7 @@ export default function BeneficiaryCMAMDatabasePage() {
         </div>
       </div>
       
-      <Card>
+      <Card className="w-full">
         <CardHeader>
           <CardTitle>CMAM Records</CardTitle>
           <CardDescription>
@@ -399,7 +398,10 @@ export default function BeneficiaryCMAMDatabasePage() {
             <Input
               placeholder="Search by ID or name..."
               value={globalSearchTerm}
-              onChange={(e) => { setGlobalSearchTerm(e.target.value); setCurrentPage(1); }}
+              onChange={(e) => {
+                setGlobalSearchTerm(e.target.value);
+                setCurrentPage(1);
+              }}
               className="pl-10"
             />
           </div>
@@ -418,9 +420,9 @@ export default function BeneficiaryCMAMDatabasePage() {
                   <TableRow>
                     <TableHead className="sticky left-0 bg-card z-10">Actions</TableHead>
                     {allColumns.map((col) => (
-                      <TableHead key={col} className="whitespace-nowrap">
+                      <TableHead key={col} className="whitespace-nowrap px-4">
                         <div className="flex items-center gap-2">
-                          {col.replace(/_/g, " ")}
+                          {col.replace(/_/g, ' ')}
                           <ColumnFilter
                             column={col}
                             onFilter={handleFilterChange}
@@ -442,7 +444,7 @@ export default function BeneficiaryCMAMDatabasePage() {
                           <Button variant="destructive" size="icon" className="h-8 w-8" onClick={() => setDeletingRecord(record)}><Trash2 className="h-4 w-4" /></Button>
                         </div>
                       </TableCell>
-                      {allColumns.map((col) => <TableCell key={col} className="whitespace-nowrap">{String(record[col] ?? "")}</TableCell>)}
+                      {allColumns.map((col) => <TableCell key={col} className="whitespace-nowrap px-4">{String(record[col] ?? '')}</TableCell>)}
                     </TableRow>
                   ))}
                 </TableBody>
@@ -489,6 +491,3 @@ export default function BeneficiaryCMAMDatabasePage() {
     </div>
   );
 }
-
-
-    
