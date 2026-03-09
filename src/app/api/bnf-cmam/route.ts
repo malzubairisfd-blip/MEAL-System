@@ -85,10 +85,24 @@ export async function POST(req: Request) {
 
     switch (action) {
       case 'get_schema': {
-        const db = initializeDatabase();
-        const columns = db.prepare("PRAGMA table_info(bnf_cmam)").all().map((c: any) => c.name);
-        db.close();
-        return NextResponse.json({ columns });
+        let dbInstance: Database.Database | null = null;
+        try {
+          dbInstance = initializeDatabase();
+          const tableInfo = dbInstance.prepare("PRAGMA table_info(bnf_cmam)").all();
+          const columns = tableInfo.map((c: any) => c.name);
+          return NextResponse.json({ columns });
+        } catch (error: any) {
+          if ((error as any).code === "SQLITE_CANTOPEN") {
+            const dbFallback = initializeDatabase();
+            const tableInfo = dbFallback.prepare("PRAGMA table_info(bnf_cmam)").all();
+            const columns = tableInfo.map((c: any) => c.name);
+            dbFallback.close();
+            return NextResponse.json({ columns });
+          }
+          throw error;
+        } finally {
+          if (dbInstance) dbInstance.close();
+        }
       }
 
       case 'get_record_count': {
@@ -96,9 +110,9 @@ export async function POST(req: Request) {
         try {
           db = new Database(getDbPath(), { fileMustExist: true });
           const result = db.prepare('SELECT COUNT(*) as count FROM bnf_cmam WHERE project_id = ?').get(projectId) as { count: number };
-          return NextResponse.json({ count: result.count });
+          return NextResponse.json({ count: result?.count || 0 });
         } catch (error: any) {
-          if (error.code === 'SQLITE_CANTOPEN') return NextResponse.json({ count: 0 });
+          if ((error as any).code === 'SQLITE_CANTOPEN') return NextResponse.json({ count: 0 });
           throw error;
         } finally {
           db?.close();
@@ -152,26 +166,24 @@ export async function POST(req: Request) {
 
         (async () => {
           let db: Database.Database | null = null;
-          let educatorsDb: Database.Database | null = null;
           try {
             send({ type: 'progress', status: 'initializing', progress: 5, message: "Starting process..." });
             
-            // Step 1: Initialize databases and get project name
             const projectDb = new Database(getProjectsDbPath(), { fileMustExist: true });
             const project = projectDb.prepare('SELECT projectName FROM projects WHERE projectId = ?').get(projectId) as { projectName: string };
             projectDb.close();
             if (!project) throw new Error("Project not found");
 
-            educatorsDb = new Database(getEducatorsDbPath(), { fileMustExist: true });
+            const educatorsDb = new Database(getEducatorsDbPath(), { fileMustExist: true });
             const educatorPhoneMap = new Map<string, string>();
             educatorsDb.prepare('SELECT applicant_name, phone_no FROM educators WHERE project_id = ?').all(projectId).forEach((edu: any) => {
                 educatorPhoneMap.set((edu.applicant_name || '').trim(), edu.phone_no || '');
             });
+            educatorsDb.close();
 
             db = initializeDatabase();
             
-            // Step 2: Map columns and enrich data
-            send({ type: 'progress', status: 'enriching', progress: 15, message: "Enriching and calculating data..." });
+            send({ type: 'progress', status: 'processing_records', progress: 15, message: "Enriching and calculating data..." });
 
             const enrichedRecords = records.map((row: any) => {
               const mapped: { [key: string]: any } = { project_id: projectId, project_name: project.projectName };
@@ -206,7 +218,6 @@ export async function POST(req: Request) {
               return mapped;
             });
             
-            // Step 3: Save to database
             send({ type: 'progress', status: 'saving', progress: 80, message: `Preparing to save ${enrichedRecords.length} records...` });
             let saved = 0, updated = 0, skipped = 0;
 
@@ -215,7 +226,7 @@ export async function POST(req: Request) {
             const updateCols = insertCols.filter(col => col !== 'id' && col !== uniqueIdCol && col !== 'project_id');
 
             const insertStmt = db.prepare(`INSERT INTO bnf_cmam (${insertCols.map(c => `"${c}"`).join(', ')}) VALUES (${insertCols.map(c => `@${c}`).join(', ')})`);
-            const updateStmt = db.prepare(`UPDATE bnf_cmam SET ${updateCols.map(col => `"${col}" = @${col}`).join(', ')} WHERE project_id = @project_id AND "${uniqueIdCol}" = @${uniqueIdCol}`);
+            const updateStmt = db.prepare(`UPDATE bnf_cmam SET ${updateCols.map(col => `"${col}" = @${col}`).join(', ')} WHERE project_id = @project_id AND "${uniqueIdCol}" = @uniqueValue`);
             const checkStmt = db.prepare(`SELECT id FROM bnf_cmam WHERE project_id = ? AND "${uniqueIdCol}" = ?`);
 
             const transaction = db.transaction(() => {
@@ -229,7 +240,7 @@ export async function POST(req: Request) {
 
                     if (existing) {
                         if (mode === 'replace') {
-                           const info = updateStmt.run({ ...record, project_id: projectId });
+                           const info = updateStmt.run({ ...record, project_id: projectId, uniqueValue: uniqueValue });
                            if (info.changes > 0) updated++;
                         } else {
                            skipped++;
@@ -245,8 +256,7 @@ export async function POST(req: Request) {
           } catch(err: any) {
               send({ type: 'error', error: err.message });
           } finally {
-              db?.close();
-              educatorsDb?.close();
+              if (db) db.close();
               writer.close();
           }
         })();
