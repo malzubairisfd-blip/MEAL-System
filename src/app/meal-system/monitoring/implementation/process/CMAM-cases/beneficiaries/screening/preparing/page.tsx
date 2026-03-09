@@ -1,7 +1,7 @@
 // src/app/meal-system/monitoring/implementation/process/CMAM-cases/beneficiaries/screening/preparing/page.tsx
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import * as XLSX from 'xlsx';
 
@@ -75,6 +75,7 @@ export default function PreparingCmamPage() {
     
     // --- Data Fetching ---
     useEffect(() => {
+        setLoading(p => ({...p, projects: true, dbSchema: true}));
         Promise.all([
             fetch('/api/projects').then(res => res.json()),
             fetch('/api/bnf-cmam', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'get_schema' }) }).then(res => res.json())
@@ -276,9 +277,9 @@ export default function PreparingCmamPage() {
             )}
             
             <div className="flex justify-end gap-2">
-                 <Button variant="secondary" asChild><Link href="#">Beneficiaries CMAM Database</Link></Button>
-                 <Button variant="secondary" asChild><Link href="#">Exporting CMAM Statements</Link></Button>
-                 <Button variant="secondary" asChild><Link href="#">CMAM Screening Results</Link></Button>
+                 <Button variant="secondary" asChild><Link href="/meal-system/monitoring/implementation/process/CMAM-cases/beneficiaries/screening/database">Beneficiaries CMAM Database</Link></Button>
+                 <Button variant="secondary" asChild><Link href="#">Exporting Beneficiaries CMAM Statements</Link></Button>
+                 <Button variant="secondary" asChild><Link href="#">Beneficiaries CMAM Screening Results</Link></Button>
             </div>
             
             <AlertDialog open={duplicateInfo.isOpen} onOpenChange={(isOpen) => setDuplicateInfo(p => ({...p, isOpen}))}>

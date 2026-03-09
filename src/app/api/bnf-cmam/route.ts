@@ -1,4 +1,3 @@
-
 // src/app/api/bnf-cmam/route.ts
 import { NextResponse } from "next/server";
 import fs from "fs/promises";
@@ -203,10 +202,6 @@ function initializeDatabase() {
   return db;
 }
 
-const normalizeName = (name: string): string => {
-    return (name || '').trim().replace(/\s+/g, ' ');
-}
-
 // --- Main API Handler ---
 export async function POST(req: Request) {
   try {
@@ -214,8 +209,7 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { action, projectId, records, uniqueIdCol, uniqueIds, mode, mapping, regDate, currDate } = body;
 
-    switch (action) {
-      case 'get_schema': {
+    if (action === 'get_schema') {
         let dbInstance: Database.Database | null = null;
         try {
           dbInstance = initializeDatabase();
@@ -226,7 +220,7 @@ export async function POST(req: Request) {
           if ((error as any).code === "SQLITE_CANTOPEN") {
             const dbFallback = initializeDatabase();
             const tableInfo = dbFallback.prepare("PRAGMA table_info(bnf_cmam)").all();
-            const columns = tableInfo.map((c: any) => c.name);
+            const columns = dbFallback.prepare("PRAGMA table_info(bnf_cmam)").all().map((c: any) => c.name);
             dbFallback.close();
             return NextResponse.json({ columns });
           }
@@ -234,9 +228,9 @@ export async function POST(req: Request) {
         } finally {
           if (dbInstance) dbInstance.close();
         }
-      }
+    }
 
-      case 'get_record_count': {
+    if (action === 'get_record_count') {
         let db: Database.Database | null = null;
         try {
           db = new Database(getDbPath(), { fileMustExist: true });
@@ -248,9 +242,9 @@ export async function POST(req: Request) {
         } finally {
           db?.close();
         }
-      }
+    }
 
-      case 'check_duplicates': {
+      if (action === 'check_duplicates') {
          if (!projectId || !uniqueIdCol || !Array.isArray(uniqueIds)) {
             return NextResponse.json({ error: "Missing parameters for duplicate check." }, { status: 400 });
         }
@@ -263,18 +257,18 @@ export async function POST(req: Request) {
             const chunks = chunkArray(uniqueIds.map(String), 900);
             
             for (const chunk of chunks) {
-            if (chunk.length === 0) continue;
-            const placeholders = chunk.map(() => "?").join(",");
-            const stmt = dbInstance.prepare(
-                `SELECT "${sanitizedColumn}" FROM bnf_cmam WHERE project_id = ? AND "${sanitizedColumn}" IN (${placeholders})`
-            );
-            const results: any[] = stmt.all(projectId, ...chunk);
-            results.forEach((row) => {
-                const value = row[sanitizedColumn];
-                if (value !== undefined && value !== null) {
-                existingIds.add(String(value));
-                }
-            });
+                if (chunk.length === 0) continue;
+                const placeholders = chunk.map(() => "?").join(",");
+                const stmt = dbInstance.prepare(
+                    `SELECT "${sanitizedColumn}" FROM bnf_cmam WHERE project_id = ? AND "${sanitizedColumn}" IN (${placeholders})`
+                );
+                const results: any[] = stmt.all(projectId, ...chunk);
+                results.forEach((row) => {
+                    const value = row[sanitizedColumn];
+                    if (value !== undefined && value !== null) {
+                        existingIds.add(String(value));
+                    }
+                });
             }
             
             const tableTotalResult = dbInstance.prepare("SELECT COUNT(*) as total FROM bnf_cmam WHERE project_id = ?").get(projectId) as {total: number} | undefined;
@@ -289,7 +283,7 @@ export async function POST(req: Request) {
         }
       }
 
-      case 'save': {
+      if (action === "save") {
         const stream = new TransformStream();
         const writer = stream.writable.getWriter();
         const encoder = new TextEncoder();
@@ -298,22 +292,23 @@ export async function POST(req: Request) {
         (async () => {
           let db: Database.Database | null = null;
           try {
-            send({ type: 'progress', status: 'initializing', progress: 5, message: "Starting process..." });
+            send({ type: 'progress', status: 'initializing', progress: 5, message: "Starting save process..." });
             
             const projectDb = new Database(getProjectsDbPath(), { fileMustExist: true });
             const project = projectDb.prepare('SELECT projectName FROM projects WHERE projectId = ?').get(projectId) as { projectName: string };
             projectDb.close();
             if (!project) throw new Error("Project not found");
 
+            let educatorsDb;
             let educatorPhoneMap = new Map<string, string>();
             try {
-              const educatorsDb = new Database(getEducatorsDbPath(), { fileMustExist: true });
+              educatorsDb = new Database(getEducatorsDbPath(), { fileMustExist: true });
               educatorsDb.prepare('SELECT applicant_name, phone_no FROM educators WHERE project_id = ?').all(projectId).forEach((edu: any) => {
-                  educatorPhoneMap.set(normalizeName(edu.applicant_name), edu.phone_no || '');
+                  educatorPhoneMap.set((edu.applicant_name || '').trim().replace(/\s+/g, ' '), edu.phone_no || '');
               });
               educatorsDb.close();
             } catch {
-              send({ type: 'progress', status: 'enriching', progress: 10, message: "Educators database not found, skipping phone enrichment." });
+              send({ type: 'progress', status: 'enriching', progress: 10, message: "Educators DB not found, skipping phone enrichment." });
             }
 
             db = initializeDatabase();
@@ -326,7 +321,8 @@ export async function POST(req: Request) {
                   if (row.hasOwnProperty(fileCol)) mapped[dbCol as string] = row[fileCol];
               }
               if (mapped.ED_NAME) {
-                  mapped.ed_phone = educatorPhoneMap.get(normalizeName(mapped.ED_NAME)) || null;
+                  const phone = educatorPhoneMap.get((mapped.ED_NAME || '').trim().replace(/\s+/g, ' '));
+                  if(phone) mapped.ed_phone = phone;
               }
               if (mapped.BENEF_CLASS_DESC === 'مستفيدة') {
                   const regDateObj = dayjs(regDate);
@@ -401,9 +397,7 @@ export async function POST(req: Request) {
         });
       }
 
-      default:
-        return NextResponse.json({ error: "Invalid action" }, { status: 400 });
-    }
+    return NextResponse.json({ error: "Invalid action" }, { status: 400 });
   } catch (error: any) {
     console.error("[BNF_CMAM_API_ERROR]", error);
     return NextResponse.json({ error: "Failed to process request.", details: error.message }, { status: 500 });
@@ -431,5 +425,3 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Failed to fetch CMAM data.", details: error.message }, { status: 500 });
   }
 }
-
-    
