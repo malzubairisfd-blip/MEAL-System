@@ -219,7 +219,6 @@ export async function POST(req: Request) {
         } catch (error: any) {
           if ((error as any).code === "SQLITE_CANTOPEN") {
             const dbFallback = initializeDatabase();
-            const tableInfo = dbFallback.prepare("PRAGMA table_info(bnf_cmam)").all();
             const columns = dbFallback.prepare("PRAGMA table_info(bnf_cmam)").all().map((c: any) => c.name);
             dbFallback.close();
             return NextResponse.json({ columns });

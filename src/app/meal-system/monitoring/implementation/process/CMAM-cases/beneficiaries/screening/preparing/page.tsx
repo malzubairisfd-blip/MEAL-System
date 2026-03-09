@@ -9,13 +9,22 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { Label } from '@/components/ui/label';
+import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, ArrowLeft, Save, Upload, Database, UserCheck, UserX, GitCompareArrows, Plus, Trash2, CheckCircle, FileQuestion, BarChart } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 
 interface Project {
@@ -47,6 +56,25 @@ const KeyFigureCard = ({ title, value, icon }: { title: string; value: string | 
     </Card>
 );
 
+const apiRequest = async (url: string, options: RequestInit) => {
+  const res = await fetch(url, options);
+  const text = await res.text();
+  if (!text) {
+      if(!res.ok) throw new Error(`Request failed with status ${res.status}`);
+      return {};
+  };
+  try {
+    const data = JSON.parse(text);
+    if (!res.ok) {
+      throw new Error(data.error || data.details || `Request failed with status ${res.status}`);
+    }
+    return data;
+  } catch (e) {
+    console.error("Failed to parse API response:", text);
+    throw new Error(`The server returned an unexpected response (status ${res.status}).`);
+  }
+};
+
 export default function PreparingCmamPage() {
     const { toast } = useToast();
     const [projects, setProjects] = useState<Project[]>([]);
@@ -73,6 +101,34 @@ export default function PreparingCmamPage() {
     const [saveStats, setSaveStats] = useState({ saved: 0, updated: 0, skipped: 0, total: 0 });
     const [duplicateInfo, setDuplicateInfo] = useState({ isOpen: false, count: 0, totalInDb: 0, duplicateIds: [] as string[] });
     
+    useEffect(() => {
+        const fetchDbSchema = async () => {
+          setLoading(p => ({...p, dbSchema: true}));
+          try {
+            const data = await apiRequest("/api/bnf-cmam", {
+              method: "POST",
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: "get_schema" })
+            });
+            if (data.columns && Array.isArray(data.columns)) {
+              setDbColumns(data.columns);
+            } else {
+              throw new Error("Invalid schema response from API.");
+            }
+          } catch (error: any) {
+            toast({
+              title: "Could not load database schema",
+              description: error.message,
+              variant: "destructive",
+            });
+          } finally {
+            setLoading(p => ({...p, dbSchema: false}));
+          }
+        };
+        fetchDbSchema();
+      }, [toast]);
+      
+
     // --- Data Fetching ---
     useEffect(() => {
         setLoading(p => ({...p, projects: true, dbSchema: true}));
