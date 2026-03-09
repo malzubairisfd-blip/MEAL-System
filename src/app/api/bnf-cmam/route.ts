@@ -165,75 +165,63 @@ const DB_COLUMNS_FOR_CREATION = `(
 )`;
 
 const columnDefs = DB_COLUMNS_FOR_CREATION.replace(/^\(|\)$/g, "").split(",").map(s => s.trim()).filter(Boolean);
-const columnTypeMap = new Map<string, string>();
-const DB_COLUMNS = columnDefs.map(def => {
-    const parts = def.split(/\s+/);
-    const name = parts[0].replace(/"/g, "");
-    const type = parts[1] || 'TEXT';
-    columnTypeMap.set(name, type);
-    return name;
-});
-
-// --- Utility Functions ---
-const chunkArray = <T>(arr: T[], size: number): T[][] => {
-  const chunks: T[][] = [];
-  for (let i = 0; i < arr.length; i += size) {
-    chunks.push(arr.slice(i, i + size));
-  }
-  return chunks;
-};
-
-const sanitizeColumn = (col?: string) => (col ? col.replace(/[^a-zA-Z0-9_]/g, "") : "");
+const DB_COLUMNS_SET = new Set(columnDefs.map(def => def.split(/\s+/)[0].replace(/"/g, "")));
 
 function initializeDatabase() {
   const db = new Database(getDbPath());
   db.exec(`CREATE TABLE IF NOT EXISTS bnf_cmam ${DB_COLUMNS_FOR_CREATION};`);
-  const tableCols = db.prepare("PRAGMA table_info(bnf_cmam)").all().map((c: any) => c.name);
-  DB_COLUMNS.forEach(colName => {
-    if (!tableCols.includes(colName)) {
-      try {
-        const type = columnTypeMap.get(colName) || 'TEXT';
-        db.exec(`ALTER TABLE bnf_cmam ADD COLUMN "${colName}" ${type}`);
-      } catch (error) {
-        console.warn(`Could not add column ${colName}:`, error);
+  const tableInfo = db.prepare("PRAGMA table_info(bnf_cmam)").all();
+  const existingColumns = tableInfo.map((c: any) => c.name);
+  
+  const columnDefs = DB_COLUMNS_FOR_CREATION.replace(/^\(|\)$/g, "").split(",").map(s => s.trim()).filter(Boolean);
+  columnDefs.forEach(def => {
+      const [name, type] = def.split(/\s+/);
+      if (!existingColumns.includes(name)) {
+          try {
+              db.exec(`ALTER TABLE bnf_cmam ADD COLUMN "${name}" ${type || 'TEXT'}`);
+          } catch(e) {
+              console.warn(`Could not add column ${name}:`, e);
+          }
       }
-    }
   });
+
   return db;
 }
 
-// --- Main API Handler ---
+
+// --- API Handler ---
 export async function POST(req: Request) {
   try {
     await fs.mkdir(getDataPath(), { recursive: true });
     const body = await req.json();
-    const { action, projectId, records, uniqueIdCol, uniqueIds, mode, mapping, regDate, currDate } = body;
+    const { action } = body;
 
     if (action === 'get_schema') {
-        let dbInstance: Database.Database | null = null;
-        try {
-          dbInstance = initializeDatabase();
-          const tableInfo = dbInstance.prepare("PRAGMA table_info(bnf_cmam)").all();
-          const columns = tableInfo.map((c: any) => c.name);
+      let dbInstance: Database.Database | null = null;
+      try {
+        dbInstance = initializeDatabase();
+        const tableInfo = dbInstance.prepare("PRAGMA table_info(bnf_cmam)").all();
+        const columns = tableInfo.map((c: any) => c.name);
+        return NextResponse.json({ columns });
+      } catch (error: any) {
+        if ((error as any).code === "SQLITE_CANTOPEN") {
+          const dbFallback = initializeDatabase();
+          const tableInfo = dbFallback.prepare("PRAGMA table_info(bnf_cmam)").all();
+          const columns = dbFallback.prepare("PRAGMA table_info(bnf_cmam)").all().map((c: any) => c.name);
+          dbFallback.close();
           return NextResponse.json({ columns });
-        } catch (error: any) {
-          if ((error as any).code === "SQLITE_CANTOPEN") {
-            const dbFallback = initializeDatabase();
-            const columns = dbFallback.prepare("PRAGMA table_info(bnf_cmam)").all().map((c: any) => c.name);
-            dbFallback.close();
-            return NextResponse.json({ columns });
-          }
-          throw error;
-        } finally {
-          if (dbInstance) dbInstance.close();
         }
+        throw error;
+      } finally {
+        if (dbInstance) dbInstance.close();
+      }
     }
-
+    
     if (action === 'get_record_count') {
         let db: Database.Database | null = null;
         try {
           db = new Database(getDbPath(), { fileMustExist: true });
-          const result = db.prepare('SELECT COUNT(*) as count FROM bnf_cmam WHERE project_id = ?').get(projectId) as { count: number };
+          const result = db.prepare('SELECT COUNT(*) as count FROM bnf_cmam').get() as { count: number };
           return NextResponse.json({ count: result?.count || 0 });
         } catch (error: any) {
           if ((error as any).code === 'SQLITE_CANTOPEN') return NextResponse.json({ count: 0 });
@@ -244,16 +232,22 @@ export async function POST(req: Request) {
     }
 
       if (action === 'check_duplicates') {
-         if (!projectId || !uniqueIdCol || !Array.isArray(uniqueIds)) {
+        const { projectId, uniqueIds, uniqueIdCol } = body;
+        if (!projectId || !uniqueIdCol || !Array.isArray(uniqueIds)) {
             return NextResponse.json({ error: "Missing parameters for duplicate check." }, { status: 400 });
         }
         let dbInstance: Database.Database | null = null;
         try {
             dbInstance = initializeDatabase();
-            const sanitizedColumn = sanitizeColumn(uniqueIdCol);
+            const sanitizedColumn = uniqueIdCol.replace(/[^a-zA-Z0-9_]/g, "");
             
             const existingIds = new Set<string>();
-            const chunks = chunkArray(uniqueIds.map(String), 900);
+            const chunks = uniqueIds.map(String).reduce((acc: string[][], id, i) => {
+                const chunkIndex = Math.floor(i / 900);
+                if (!acc[chunkIndex]) acc[chunkIndex] = [];
+                acc[chunkIndex].push(id);
+                return acc;
+            }, []);
             
             for (const chunk of chunks) {
                 if (chunk.length === 0) continue;
@@ -283,117 +277,16 @@ export async function POST(req: Request) {
       }
 
       if (action === "save") {
-        const stream = new TransformStream();
-        const writer = stream.writable.getWriter();
-        const encoder = new TextEncoder();
-        const send = (data: any) => writer.write(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+          const stream = new TransformStream();
+          const writer = stream.writable.getWriter();
+          const encoder = new TextEncoder();
+          const send = (data: any) => writer.write(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+      
+          processAndSaveRecords(body, send).finally(() => writer.close());
 
-        (async () => {
-          let db: Database.Database | null = null;
-          try {
-            send({ type: 'progress', status: 'initializing', progress: 5, message: "Starting save process..." });
-            
-            const projectDb = new Database(getProjectsDbPath(), { fileMustExist: true });
-            const project = projectDb.prepare('SELECT projectName FROM projects WHERE projectId = ?').get(projectId) as { projectName: string };
-            projectDb.close();
-            if (!project) throw new Error("Project not found");
-
-            let educatorsDb;
-            let educatorPhoneMap = new Map<string, string>();
-            try {
-              educatorsDb = new Database(getEducatorsDbPath(), { fileMustExist: true });
-              educatorsDb.prepare('SELECT applicant_name, phone_no FROM educators WHERE project_id = ?').all(projectId).forEach((edu: any) => {
-                  educatorPhoneMap.set((edu.applicant_name || '').trim().replace(/\s+/g, ' '), edu.phone_no || '');
-              });
-              educatorsDb.close();
-            } catch {
-              send({ type: 'progress', status: 'enriching', progress: 10, message: "Educators DB not found, skipping phone enrichment." });
-            }
-
-            db = initializeDatabase();
-            
-            send({ type: 'progress', status: 'processing_records', progress: 15, message: "Enriching and calculating data..." });
-
-            const enrichedRecords = records.map((row: any) => {
-              const mapped: { [key: string]: any } = { project_id: projectId, project_name: project.projectName };
-              for (const [fileCol, dbCol] of Object.entries(mapping)) {
-                  if (row.hasOwnProperty(fileCol)) mapped[dbCol as string] = row[fileCol];
-              }
-              if (mapped.ED_NAME) {
-                  const phone = educatorPhoneMap.get((mapped.ED_NAME || '').trim().replace(/\s+/g, ' '));
-                  if(phone) mapped.ed_phone = phone;
-              }
-              if (mapped.BENEF_CLASS_DESC === 'مستفيدة') {
-                  const regDateObj = dayjs(regDate);
-                  const currDateObj = dayjs(currDate);
-                  if (regDateObj.isValid() && currDateObj.isValid()) {
-                    mapped.reg_date = regDateObj.format('YYYY-MM-DD');
-                    mapped.curr_date = currDateObj.format('YYYY-MM-DD');
-                    const regCurrDays = currDateObj.diff(regDateObj, 'day');
-                    const regCurrMonths = regCurrDays / 30.4375;
-                    mapped.reg_curr_days = regCurrDays;
-                    mapped.reg_curr_mon = regCurrMonths;
-                    
-                    const ageYears = Number(mapped.AGE_YEARS) || 0;
-                    const bnfAgeMonths = ageYears * 12;
-                    const newBnfAgeMonths = bnfAgeMonths + regCurrMonths;
-                    const newBnfAgeYears = newBnfAgeMonths / 12;
-                    
-                    mapped.bnf_age_mon = bnfAgeMonths;
-                    mapped.new_bnf_age_mon = newBnfAgeMonths;
-                    mapped.new_bnf_age_years = newBnfAgeYears;
-                    mapped.cmam_qualify = newBnfAgeYears <= 49 ? 'Qualified' : 'Disqualified';
-                  }
-              }
-              return mapped;
-            });
-            
-            send({ type: 'progress', status: 'saving', progress: 80, message: `Preparing to save ${enrichedRecords.length} records...` });
-            let saved = 0, updated = 0, skipped = 0;
-
-            const allRecordKeys = new Set(enrichedRecords.flatMap(r => Object.keys(r)));
-            const insertCols = [...allRecordKeys].filter(col => DB_COLUMNS.includes(col) && col !== 'id');
-            const updateCols = insertCols.filter(col => col !== 'id' && col !== uniqueIdCol && col !== 'project_id');
-
-            const insertStmt = db.prepare(`INSERT INTO bnf_cmam (${insertCols.map(c => `"${c}"`).join(', ')}) VALUES (${insertCols.map(c => `@${c}`).join(', ')})`);
-            const updateStmt = db.prepare(`UPDATE bnf_cmam SET ${updateCols.map(col => `"${col}" = @${col}`).join(', ')} WHERE project_id = @project_id AND "${uniqueIdCol}" = @uniqueValue`);
-            const checkStmt = db.prepare(`SELECT id FROM bnf_cmam WHERE project_id = ? AND "${uniqueIdCol}" = ?`);
-
-            const transaction = db.transaction(() => {
-                for (const record of enrichedRecords) {
-                    const uniqueValue = record[uniqueIdCol];
-                    if (uniqueValue === undefined || uniqueValue === null) {
-                        skipped++;
-                        continue;
-                    }
-                    const existing = checkStmt.get(projectId, uniqueValue);
-
-                    if (existing) {
-                        if (mode === 'replace') {
-                           const info = updateStmt.run({ ...record, project_id: projectId, uniqueValue: uniqueValue });
-                           if (info.changes > 0) updated++;
-                        } else {
-                           skipped++;
-                        }
-                    } else {
-                        insertStmt.run(record);
-                        saved++;
-                    }
-                }
-            });
-            transaction();
-            send({ type: 'done', message: 'Process complete.', stats: { saved, updated, skipped, total: enrichedRecords.length } });
-          } catch(err: any) {
-              send({ type: 'error', error: err.message });
-          } finally {
-              if (db) db.close();
-              writer.close();
-          }
-        })();
-
-        return new Response(stream.readable, {
-          headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" },
-        });
+          return new Response(stream.readable, {
+            headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" },
+          });
       }
 
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });
@@ -402,6 +295,101 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Failed to process request.", details: error.message }, { status: 500 });
   }
 }
+
+async function processAndSaveRecords(body: any, send: (data: any) => void) {
+    const { projectId, records, mapping, regDate, currDate, mode, uniqueIdCol } = body;
+    const db = initializeDatabase();
+    
+    try {
+        const projectDb = new Database(getProjectsDbPath(), { fileMustExist: true });
+        const project = projectDb.prepare('SELECT projectName FROM projects WHERE projectId = ?').get(projectId) as { projectName: string };
+        projectDb.close();
+        if (!project) throw new Error("Project not found");
+        
+        let educatorsDb;
+        let educatorPhoneMap = new Map<string, string>();
+        try {
+          educatorsDb = new Database(getEducatorsDbPath(), { fileMustExist: true });
+          educatorsDb.prepare('SELECT applicant_name, phone_no FROM educators WHERE project_id = ?').all(projectId).forEach((edu: any) => {
+              educatorPhoneMap.set((edu.applicant_name || '').trim().replace(/\s+/g, ' '), edu.phone_no || '');
+          });
+          educatorsDb.close();
+        } catch {
+          send({ type: 'progress', status: 'enriching', progress: 10, message: "Educators DB not found, skipping phone enrichment." });
+        }
+
+        send({ type: 'progress', status: 'processing_records', progress: 15, message: `Processing ${records.length} records...` });
+
+        const enrichedRecords = records.map((row: any) => {
+          const mappedRecord: { [key: string]: any } = { project_id: projectId, project_name: project.projectName };
+          for (const [fileCol, dbCol] of Object.entries(mapping)) {
+              if (row.hasOwnProperty(fileCol)) mappedRecord[dbCol as string] = row[fileCol];
+          }
+          if (mappedRecord.ED_NAME && educatorPhoneMap.has((mappedRecord.ED_NAME || '').trim().replace(/\s+/g, ' '))) {
+              mappedRecord.ed_phone = educatorPhoneMap.get((mappedRecord.ED_NAME || '').trim().replace(/\s+/g, ' '));
+          }
+          if(mappedRecord.BENEF_CLASS_DESC === 'مستفيدة') {
+              const regDateObj = dayjs(regDate);
+              const currDateObj = dayjs(currDate);
+              if (regDateObj.isValid() && currDateObj.isValid()) {
+                mappedRecord.reg_date = regDateObj.format('YYYY-MM-DD');
+                mappedRecord.curr_date = currDateObj.format('YYYY-MM-DD');
+                const regCurrDays = currDateObj.diff(regDateObj, 'day');
+                const regCurrMonths = regCurrDays / 30.4375;
+                mappedRecord.reg_curr_days = regCurrDays;
+                mappedRecord.reg_curr_mon = regCurrMonths;
+                const ageYears = Number(mappedRecord.AGE_YEARS) || 0;
+                const bnfAgeMonths = ageYears * 12;
+                const newBnfAgeMonths = bnfAgeMonths + regCurrMonths;
+                const newBnfAgeYears = newBnfAgeMonths / 12;
+                mappedRecord.bnf_age_mon = bnfAgeMonths;
+                mappedRecord.new_bnf_age_mon = newBnfAgeMonths;
+                mappedRecord.new_bnf_age_years = newBnfAgeYears;
+                mappedRecord.cmam_qualify = newBnfAgeYears <= 49 ? 'Qualified' : 'Disqualified';
+              }
+          }
+          return mappedRecord;
+        });
+
+        send({ type: 'progress', status: 'saving', progress: 80, message: `Saving ${enrichedRecords.length} records...` });
+        
+        const allRecordKeys = new Set(enrichedRecords.flatMap(r => Object.keys(r)));
+        const insertCols = [...allRecordKeys].filter(col => DB_COLUMNS_SET.has(col) && col !== 'id');
+        const updateCols = insertCols.filter(col => col !== 'id' && col !== uniqueIdCol && col !== 'project_id');
+
+        const insertStmt = db.prepare(`INSERT INTO bnf_cmam (${insertCols.map(c => `"${c}"`).join(', ')}) VALUES (${insertCols.map(c => `@${c}`).join(', ')})`);
+        const updateStmt = db.prepare(`UPDATE bnf_cmam SET ${updateCols.map(col => `"${col}" = @${col}`).join(', ')} WHERE project_id = @project_id AND "${uniqueIdCol}" = @uniqueValue`);
+        const checkStmt = db.prepare(`SELECT id FROM bnf_cmam WHERE project_id = ? AND "${uniqueIdCol}" = ?`);
+
+        let saved = 0, updated = 0, skipped = 0;
+        const transaction = db.transaction(() => {
+            for (const record of enrichedRecords) {
+                const uniqueValue = record[uniqueIdCol];
+                if (uniqueValue === undefined || uniqueValue === null) {
+                    skipped++; continue;
+                }
+                const existing = checkStmt.get(projectId, uniqueValue);
+                if (existing) {
+                    if (mode === 'replace') {
+                       const info = updateStmt.run({ ...record, project_id: projectId, uniqueValue: uniqueValue });
+                       if (info.changes > 0) updated++;
+                    } else skipped++;
+                } else {
+                    insertStmt.run(record);
+                    saved++;
+                }
+            }
+        });
+        transaction();
+
+        send({ type: 'done', message: 'Process complete.', stats: { saved, updated, skipped, total: enrichedRecords.length } });
+    } catch (err: any) {
+        send({ type: 'error', error: err.message });
+    } finally {
+        if (db) db.close();
+    }
+}
+
 
 export async function GET(req: Request) {
   try {
