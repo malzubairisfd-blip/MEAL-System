@@ -29,7 +29,7 @@ export default function BeneficiaryScreeningPage() {
     {
       title: "Beneficiaries CMAM Screening Results Data Entry",
       description: "Enter the results from the screening process.",
-      href: "#", // Placeholder
+      href: "/meal-system/monitoring/implementation/process/CMAM-cases/beneficiaries/screening/entry",
       icon: <FileEdit className="h-8 w-8 text-orange-500" />,
     },
   ];

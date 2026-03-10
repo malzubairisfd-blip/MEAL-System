@@ -1,4 +1,4 @@
-
+// src/app/api/bnf-cmam/route.ts
 import { NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
@@ -628,16 +628,21 @@ export async function PUT(req: Request) {
         const db = initializeDatabase();
         const recordsToUpdate = await req.json();
         
-        if (!Array.isArray(recordsToUpdate)) {
+        if (!Array.isArray(recordsToUpdate) || recordsToUpdate.length === 0) {
             return NextResponse.json({ error: "Expected an array of records" }, { status: 400 });
         }
 
-        const updateStmt = db.prepare(
-            `UPDATE bnf_cmam SET ${Object.keys(recordsToUpdate[0]).filter(k => k !== 'id').map(k => `"${k}" = @${k}`).join(', ')} WHERE id = @id`
-        );
-        
         const transaction = db.transaction((records) => {
-            records.forEach((record: any) => updateStmt.run(record));
+            for (const record of records) {
+                if (!record.id) continue;
+                const { id, ...updates } = record;
+                const setClause = Object.keys(updates).map(k => `"${k}" = ?`).join(', ');
+                const values = [...Object.values(updates), id];
+                if (setClause) {
+                    const stmt = db.prepare(`UPDATE bnf_cmam SET ${setClause} WHERE id = ?`);
+                    stmt.run(...values);
+                }
+            }
         });
         
         transaction(recordsToUpdate);
@@ -671,5 +676,3 @@ export async function DELETE(req: Request) {
         return NextResponse.json({ error: "Failed to delete records", details: err.message }, { status: 500 });
     }
 }
-
-    
