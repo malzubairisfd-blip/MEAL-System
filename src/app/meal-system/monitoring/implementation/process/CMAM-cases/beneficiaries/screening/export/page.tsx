@@ -60,10 +60,11 @@ export default function ExportCmamStatementsPage() {
               return;
             }
 
-            const workerPath = statementType === 'beneficiary' 
-                ? '@/workers/bnfcmam-export.worker.ts' 
-                : '@/workers/childcmam-export.worker.ts';
-            const worker = new Worker(new URL(workerPath, import.meta.url));
+            const workerPath =
+    statementType === "beneficiary"
+        ? new URL("../../../../../../../../../workers/bnfcmam-export.worker.ts", import.meta.url)
+        : new URL("../../../../../../../../../workers/childcmam-export.worker.ts", import.meta.url);
+const worker = new Worker(workerPath, { type: "module" });
 
             worker.onmessage = (event) => {
                 const { type, status: workerStatus, progress: workerProgress, current, total, data, error } = event.data;

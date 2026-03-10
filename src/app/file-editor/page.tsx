@@ -3,8 +3,9 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import dynamic from "next/dynamic";
+import Link from 'next/link';
 import { useToast } from "@/hooks/use-toast";
-import { ClipboardPaste, Search, Plus, FolderPlus, File as FileIcon } from "lucide-react";
+import { ClipboardPaste, Search, Plus, FolderPlus, File as FileIcon, Eye } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,6 +32,8 @@ export default function FileEditor() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [newItemType, setNewItemType] = useState<'file' | 'folder' | null>(null);
   const [newItemName, setNewItemName] = useState("");
+
+  const [pageUrl, setPageUrl] = useState<string | null>(null);
 
   async function api(body: any) {
     const res = await fetch("/api/file-manager", {
@@ -71,6 +74,15 @@ export default function FileEditor() {
         setFile(p);
         setSelectedFolder(p.substring(0, p.lastIndexOf('/')));
         editorRef.current?.setValue(r.content || "");
+        
+        // Logic for the "Go to Page" button
+        if (p.endsWith('/page.tsx')) {
+            let url = p.replace('src/app', '').replace('/page.tsx', '');
+            if (url === '') url = '/';
+            setPageUrl(url);
+        } else {
+            setPageUrl(null);
+        }
     } catch(e: any) {
         toast({ title: "Error", description: `Could not read file ${p}: ${e.message}`, variant: "destructive" });
     }
@@ -105,6 +117,7 @@ export default function FileEditor() {
         await api({ action: "delete", filePath: file });
         toast({ title: "File Deleted", description: `${file} has been removed.` });
         setFile(null);
+        setPageUrl(null);
         editorRef.current?.setValue("");
         loadTree();
     } catch (e: any) {
@@ -317,6 +330,13 @@ export default function FileEditor() {
           <Button onClick={() => save()} className="bg-blue-600 px-3 py-1" disabled={!file}>
             Save
           </Button>
+          {pageUrl && (
+            <Button asChild variant="secondary">
+                <Link href={pageUrl} target="_blank">
+                    <Eye className="mr-2 h-4 w-4" /> Go to Page
+                </Link>
+            </Button>
+          )}
            <Button onClick={handlePaste} className="bg-teal-600 px-3 py-1 flex items-center gap-2" disabled={!file}>
             <ClipboardPaste className="h-4 w-4"/> Paste
           </Button>
@@ -418,5 +438,3 @@ export default function FileEditor() {
     </div>
   );
 }
-
-    
