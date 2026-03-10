@@ -23,7 +23,7 @@ export default function BeneficiaryScreeningPage() {
     {
       title: "Exporting Beneficiaries CMAM Statements",
       description: "Export statements and reports related to CMAM screening.",
-      href: "#", // Placeholder
+      href: "/meal-system/monitoring/implementation/process/CMAM-cases/beneficiaries/screening/export",
       icon: <FileDown className="h-8 w-8 text-purple-500" />,
     },
     {
