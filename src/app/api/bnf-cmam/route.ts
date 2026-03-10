@@ -101,7 +101,7 @@ const DB_COLUMNS_FOR_CREATION = `(
   bnf_preg_lec TEXT,
   preg_mon TEXT,
   child_age TEXT,
-  muac TEXT,
+  muac REAL,
   go_health_center TEXT,
   disc_date TEXT,
   near_health_center TEXT,
@@ -635,13 +635,18 @@ export async function PUT(req: Request) {
         const transaction = db.transaction((records) => {
             for (const record of records) {
                 if (!record.id) continue;
+                
                 const { id, ...updates } = record;
-                const setClause = Object.keys(updates).map(k => `"${k}" = ?`).join(', ');
-                const values = [...Object.values(updates), id];
-                if (setClause) {
-                    const stmt = db.prepare(`UPDATE bnf_cmam SET ${setClause} WHERE id = ?`);
-                    stmt.run(...values);
-                }
+                const colsToUpdate = Object.keys(updates).filter(k => VALID_COLUMNS_SET.has(k.toLowerCase()));
+
+                if (colsToUpdate.length === 0) continue;
+                
+                const setClause = colsToUpdate.map(k => `"${k}" = ?`).join(', ');
+                const values = colsToUpdate.map(k => updates[k]);
+                values.push(id);
+                
+                const stmt = db.prepare(`UPDATE bnf_cmam SET ${setClause} WHERE id = ?`);
+                stmt.run(...values);
             }
         });
         
