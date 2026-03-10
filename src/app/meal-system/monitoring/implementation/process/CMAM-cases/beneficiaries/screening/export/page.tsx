@@ -23,6 +23,7 @@ export default function ExportCmamStatementsPage() {
     const [totalSheets, setTotalSheets] = useState(0);
     const [projects, setProjects] = useState<Project[]>([]);
     const [selectedProjectId, setSelectedProjectId] = useState<string>('');
+    const [statementType, setStatementType] = useState<'beneficiary' | 'child'>('beneficiary');
     const { toast } = useToast();
 
     useEffect(() => {
@@ -59,7 +60,10 @@ export default function ExportCmamStatementsPage() {
               return;
             }
 
-            const worker = new Worker(new URL('@/workers/cmam-export.worker.ts', import.meta.url));
+            const workerPath = statementType === 'beneficiary' 
+                ? '@/workers/bnfcmam-export.worker.ts' 
+                : '@/workers/childcmam-export.worker.ts';
+            const worker = new Worker(new URL(workerPath, import.meta.url));
 
             worker.onmessage = (event) => {
                 const { type, status: workerStatus, progress: workerProgress, current, total, data, error } = event.data;
@@ -76,9 +80,10 @@ export default function ExportCmamStatementsPage() {
                     const url = window.URL.createObjectURL(blob);
                     const a = document.createElement("a");
                     a.href = url;
+                    const typeName = statementType === 'beneficiary' ? 'BNF' : 'Child';
                     a.download = isSample 
-                        ? `CMAM_Statement_${selectedProjectId}_Sample.pdf` 
-                        : `CMAM_Statements_${selectedProjectId}.zip`;
+                        ? `CMAM_${typeName}_Statement_${selectedProjectId}_Sample.pdf` 
+                        : `CMAM_${typeName}_Statements_${selectedProjectId}.zip`;
                     document.body.appendChild(a);
                     a.click();
                     a.remove();
@@ -149,19 +154,34 @@ export default function ExportCmamStatementsPage() {
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium">Select Project</label>
-                         <Select onValueChange={setSelectedProjectId} value={selectedProjectId} disabled={loading}>
-                            <SelectTrigger>
-                                <SelectValue placeholder="Select a project..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {projects.map(p => (
-                                    <SelectItem key={p.projectId} value={p.projectId}>{p.projectName}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium">Select Project</label>
+                            <Select onValueChange={setSelectedProjectId} value={selectedProjectId} disabled={loading}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select a project..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {projects.map(p => (
+                                        <SelectItem key={p.projectId} value={p.projectId}>{p.projectName}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium">Statement Type</label>
+                            <Select onValueChange={(v) => setStatementType(v as any)} value={statementType} disabled={loading}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select statement type..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="beneficiary">Beneficiary Statements</SelectItem>
+                                    <SelectItem value="child">Child Statements</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
                     </div>
+
 
                     <div className="flex gap-2">
                         <Button
