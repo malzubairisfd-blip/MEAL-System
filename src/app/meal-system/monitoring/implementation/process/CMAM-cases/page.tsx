@@ -23,7 +23,7 @@ export default function CMAMCasesPage() {
     {
       title: "Health Worker Data",
       description: "Data related to health workers involved in CMAM.",
-      href: "#", // Placeholder
+      href: "/meal-system/monitoring/implementation/process/CMAM-cases/health-worker-data",
       icon: <Stethoscope className="h-8 w-8 text-purple-500" />,
     },
   ];

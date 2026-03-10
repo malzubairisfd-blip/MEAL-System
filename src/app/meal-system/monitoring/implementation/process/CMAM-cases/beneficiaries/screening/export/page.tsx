@@ -23,7 +23,6 @@ export default function ExportCmamStatementsPage() {
     const [totalSheets, setTotalSheets] = useState(0);
     const [projects, setProjects] = useState<Project[]>([]);
     const [selectedProjectId, setSelectedProjectId] = useState<string>('');
-    const [statementType, setStatementType] = useState<'beneficiary' | 'child'>('beneficiary');
     const { toast } = useToast();
 
     useEffect(() => {
@@ -60,11 +59,7 @@ export default function ExportCmamStatementsPage() {
               return;
             }
 
-            const workerPath =
-    statementType === "beneficiary"
-        ? new URL("../../../../../../../../../workers/bnfcmam-export.worker.ts", import.meta.url)
-        : new URL("../../../../../../../../../workers/childcmam-export.worker.ts", import.meta.url);
-const worker = new Worker(workerPath, { type: "module" });
+            const worker = new Worker(new URL('@/workers/bnfcmam-export.worker.ts', import.meta.url));
 
             worker.onmessage = (event) => {
                 const { type, status: workerStatus, progress: workerProgress, current, total, data, error } = event.data;
@@ -81,10 +76,9 @@ const worker = new Worker(workerPath, { type: "module" });
                     const url = window.URL.createObjectURL(blob);
                     const a = document.createElement("a");
                     a.href = url;
-                    const typeName = statementType === 'beneficiary' ? 'BNF' : 'Child';
                     a.download = isSample 
-                        ? `CMAM_${typeName}_Statement_${selectedProjectId}_Sample.pdf` 
-                        : `CMAM_${typeName}_Statements_${selectedProjectId}.zip`;
+                        ? `CMAM_Statement_${selectedProjectId}_Sample.pdf` 
+                        : `CMAM_Statements_${selectedProjectId}.zip`;
                     document.body.appendChild(a);
                     a.click();
                     a.remove();
@@ -155,34 +149,19 @@ const worker = new Worker(workerPath, { type: "module" });
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium">Select Project</label>
-                            <Select onValueChange={setSelectedProjectId} value={selectedProjectId} disabled={loading}>
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select a project..." />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {projects.map(p => (
-                                        <SelectItem key={p.projectId} value={p.projectId}>{p.projectName}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium">Statement Type</label>
-                            <Select onValueChange={(v) => setStatementType(v as any)} value={statementType} disabled={loading}>
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select statement type..." />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="beneficiary">Beneficiary Statements</SelectItem>
-                                    <SelectItem value="child">Child Statements</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
+                    <div className="space-y-2">
+                        <label className="text-sm font-medium">Select Project</label>
+                         <Select onValueChange={setSelectedProjectId} value={selectedProjectId} disabled={loading}>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Select a project..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {projects.map(p => (
+                                    <SelectItem key={p.projectId} value={p.projectId}>{p.projectName}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     </div>
-
 
                     <div className="flex gap-2">
                         <Button
