@@ -16,6 +16,16 @@ const MonacoEditor = dynamic(() => import("@monaco-editor/react"), {
   ssr: false,
 });
 
+function formatBytes(bytes: number, decimals = 2) {
+  if (!+bytes) return '0 Bytes';
+  const k = 1024;
+  const dm = decimals < 0 ? 0 : decimals;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
+}
+
+
 export default function FileEditor() {
   const editorRef = useRef<any>(null);
   const monacoRef = useRef<any>(null);
@@ -76,9 +86,9 @@ export default function FileEditor() {
         editorRef.current?.setValue(r.content || "");
         
         // Logic for the "Go to Page" button
-        if (p.endsWith('/page.tsx')) {
-            let url = p.replace('src/app', '').replace('/page.tsx', '');
-            if (url === '') url = '/';
+        if (p.startsWith('app/') && p.endsWith('/page.tsx')) {
+            let url = p.replace('app', '').replace('/page.tsx', '');
+            if (url === '') url = '/'; // For the root page.tsx
             setPageUrl(url);
         } else {
             setPageUrl(null);
@@ -248,20 +258,22 @@ export default function FileEditor() {
       <div key={n.path} className="ml-3">
         {n.type === "file" ? (
           <div
-            className={`cursor-pointer hover:text-blue-400 ${
+            className={`flex justify-between items-center cursor-pointer hover:text-blue-400 ${
               n.path === file ? "text-blue-500 font-bold" : ""
             }`}
             onClick={() => openFile(n.path)}
           >
-            <FileIcon className="h-4 w-4 inline-block mr-1" /> {n.name}
+            <span className="flex items-center gap-1"><FileIcon className="h-4 w-4 inline-block" /> {n.name}</span>
+            <span className="text-xs text-gray-500 pr-2">{formatBytes(n.size)}</span>
           </div>
         ) : (
           <div>
             <div
-                className={`font-semibold cursor-pointer flex items-center gap-1 ${selectedFolder === n.path ? 'text-amber-400' : ''}`}
+                className={`font-semibold cursor-pointer flex justify-between items-center ${selectedFolder === n.path ? 'text-amber-400' : ''}`}
                 onClick={() => setSelectedFolder(n.path)}
             >
-                <FolderPlus className="h-4 w-4 inline-block" /> {n.name}
+                <span className="flex items-center gap-1"><FolderPlus className="h-4 w-4 inline-block" /> {n.name}</span>
+                <span className="text-xs text-gray-500 pr-2">{formatBytes(n.size)}</span>
             </div>
             {n.children && renderTree(n.children, level + 1)}
           </div>
