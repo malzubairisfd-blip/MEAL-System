@@ -1,7 +1,7 @@
 // src/app/meal-system/monitoring/implementation/process/CMAM-cases/beneficiaries/screening/entry/page.tsx
 "use client";
 
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useToast } from "@/hooks/use-toast";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -62,7 +62,12 @@ export default function ScreeningDataEntryPage() {
     
     const [loading, setLoading] = useState({ projects: true, data: false, saving: false });
 
-    const form = useForm<z.infer<typeof formSchema>>({ resolver: zodResolver(formSchema) });
+    const form = useForm<z.infer<typeof formSchema>>({ 
+        resolver: zodResolver(formSchema),
+        defaultValues: {
+            muac: 17,
+        }
+    });
     const watchHasCmam = form.watch("bnf_has_cmam");
     const watchPregLec = form.watch("bnf_preg_lec");
 
@@ -105,6 +110,7 @@ export default function ScreeningDataEntryPage() {
     }, [beneficiaries, selectedEducatorId, beneficiarySearch]);
 
     const moveToNextBeneficiary = useCallback(() => {
+        form.reset({ muac: 17 }); // Reset form to default values
         const currentIndex = filteredBeneficiaries.findIndex(b => b.id === selectedBeneficiaryId);
         if (currentIndex !== -1 && currentIndex < filteredBeneficiaries.length - 1) {
             setSelectedBeneficiaryId(filteredBeneficiaries[currentIndex + 1].id);
@@ -112,7 +118,6 @@ export default function ScreeningDataEntryPage() {
              toast({ title: "End of List", description: "You have reviewed all beneficiaries for this educator."});
              setSelectedBeneficiaryId(null);
         }
-        form.reset();
     }, [filteredBeneficiaries, selectedBeneficiaryId, form, toast]);
 
     const handleCmamDecision = useCallback(async (value: 'نعم' | 'لا') => {
@@ -234,7 +239,7 @@ export default function ScreeningDataEntryPage() {
                             <CardContent className="space-y-4">
                                 <FormField control={form.control} name="bnf_has_cmam" render={({ field }) => (
                                     <FormItem><FormLabel>هل تعاني المستفيدة من سوء تغذية؟</FormLabel>
-                                    <Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl>
+                                    <Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select an option..."/></SelectTrigger></FormControl>
                                     <SelectContent><SelectItem value="نعم">نعم</SelectItem><SelectItem value="لا">لا</SelectItem></SelectContent></Select><FormMessage /></FormItem>
                                 )} />
 
@@ -242,20 +247,20 @@ export default function ScreeningDataEntryPage() {
                                 <>
                                 <FormField control={form.control} name="bnf_preg_lec" render={({ field }) => (
                                     <FormItem><FormLabel>حالة المستفيدة حاليا</FormLabel>
-                                    <Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl>
+                                    <Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select status..."/></SelectTrigger></FormControl>
                                     <SelectContent><SelectItem value="حامل">حامل</SelectItem><SelectItem value="مرضع">مرضع</SelectItem></SelectContent></Select><FormMessage /></FormItem>
                                 )} />
                                 {watchPregLec === 'حامل' && (
                                 <FormField control={form.control} name="preg_mon" render={({ field }) => (
                                 <FormItem><FormLabel>شهر الحمل</FormLabel>
-                                <Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl>
+                                <Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select month..."/></SelectTrigger></FormControl>
                                 <SelectContent>{Array.from({length:9},(_,i)=>i+1).map(m=><SelectItem key={m} value={String(m)}>{m}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>
                                 )}/>
                                 )}
                                 {watchPregLec === 'مرضع' && (
                                 <FormField control={form.control} name="child_age" render={({ field }) => (
                                 <FormItem><FormLabel>عمر الرضيع</FormLabel>
-                                <Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl>
+                                <Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select age..."/></SelectTrigger></FormControl>
                                 <SelectContent>{Array.from({length:6},(_,i)=>i+1).map(m=><SelectItem key={m} value={String(m)}>{m}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>
                                 )}/>
                                 )}
@@ -265,7 +270,7 @@ export default function ScreeningDataEntryPage() {
                                 )} />
                                 <FormField control={form.control} name="go_health_center" render={({ field }) => (
                                 <FormItem><FormLabel>هل تذهب الى المرفق الصحي؟</FormLabel>
-                                <Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl>
+                                <Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select an option..."/></SelectTrigger></FormControl>
                                 <SelectContent><SelectItem value="نعم">نعم</SelectItem><SelectItem value="لا">لا</SelectItem></SelectContent></Select><FormMessage /></FormItem>
                                 )} />
                                 <div className="space-y-2">
@@ -278,7 +283,7 @@ export default function ScreeningDataEntryPage() {
                                 </div>
                                 <FormField control={form.control} name="near_health_center" render={({ field }) => (
                                 <FormItem><FormLabel>اقرب مركز صحي للذهاب الية</FormLabel>
-                                <Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl>
+                                <Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select health center..."/></SelectTrigger></FormControl>
                                 <SelectContent><ScrollArea className="h-60">{healthCenters.map(hc=><SelectItem key={hc.hc_id} value={hc.hc_name}>{hc.hc_name}</SelectItem>)}</ScrollArea></SelectContent></Select><FormMessage /></FormItem>
                                 )}/>
                                 <Button type="submit" disabled={loading.saving}>{loading.saving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Update & Next</Button>
