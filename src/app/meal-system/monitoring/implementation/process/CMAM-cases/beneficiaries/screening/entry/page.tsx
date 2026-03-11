@@ -21,6 +21,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Slider } from "@/components/ui/slider";
 import { ArrowLeft, ChevronsUpDown, Check, Loader2, Search, Database, FileDown, FileEdit, ThumbsUp } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface Project { projectId: string; projectName: string; }
 interface Educator { ED_ID: string; ED_NAME: string; }
@@ -83,6 +84,8 @@ export default function ScreeningDataEntryPage() {
     });
     const watchHasCmam = form.watch("bnf_has_cmam");
     const watchPregLec = form.watch("bnf_preg_lec");
+    
+    const [healthCenterPopoverOpen, setHealthCenterPopoverOpen] = useState(false);
 
     useEffect(() => {
         fetch('/api/projects').then(res => res.json()).then(setProjects).finally(() => setLoading(p => ({...p, projects: false})));
@@ -296,31 +299,41 @@ export default function ScreeningDataEntryPage() {
                                 <>
                                 <FormField control={form.control} name="bnf_preg_lec" render={({ field }) => (
                                     <FormItem><FormLabel>حالة المستفيدة حاليا</FormLabel>
-                                    <Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select status..."/></SelectTrigger></FormControl>
-                                    <SelectContent><SelectItem value="حامل">حامل</SelectItem><SelectItem value="مرضع">مرضع</SelectItem></SelectContent></Select><FormMessage /></FormItem>
+                                        <FormControl>
+                                            <div className="flex gap-4 pt-2">
+                                                <Button type="button" variant={field.value === 'حامل' ? 'default' : 'outline'} onClick={() => field.onChange('حامل')} className="flex-1">حامل</Button>
+                                                <Button type="button" variant={field.value === 'مرضع' ? 'default' : 'outline'} onClick={() => field.onChange('مرضع')} className="flex-1">مرضع</Button>
+                                            </div>
+                                        </FormControl>
+                                    <FormMessage /></FormItem>
                                 )} />
                                 {watchPregLec === 'حامل' && (
                                 <FormField control={form.control} name="preg_mon" render={({ field }) => (
-                                <FormItem><FormLabel>شهر الحمل</FormLabel>
-                                <Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select month..."/></SelectTrigger></FormControl>
-                                <SelectContent>{Array.from({length:9},(_,i)=>i+1).map(m=><SelectItem key={m} value={String(m)}>{m}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>
+                                <FormItem><FormLabel>شهر الحمل: {field.value || 1}</FormLabel>
+                                <FormControl><Slider min={1} max={9} step={1} value={[Number(field.value) || 1]} onValueChange={(v) => field.onChange(String(v[0]))} /></FormControl>
+                                <FormMessage /></FormItem>
                                 )}/>
                                 )}
                                 {watchPregLec === 'مرضع' && (
                                 <FormField control={form.control} name="child_age" render={({ field }) => (
-                                <FormItem><FormLabel>عمر الرضيع</FormLabel>
-                                <Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select age..."/></SelectTrigger></FormControl>
-                                <SelectContent>{Array.from({length:6},(_,i)=>i+1).map(m=><SelectItem key={m} value={String(m)}>{m}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>
+                                <FormItem><FormLabel>عمر الرضيع: {field.value || 1}</FormLabel>
+                                <FormControl><Slider min={1} max={6} step={1} value={[Number(field.value) || 1]} onValueChange={(v) => field.onChange(String(v[0]))} /></FormControl>
+                                <FormMessage /></FormItem>
                                 )}/>
                                 )}
                                 <FormField control={form.control} name="muac" render={({ field }) => (
                                 <FormItem><FormLabel>قياس المواك: {field.value || 17}</FormLabel>
                                 <FormControl><Slider min={17} max={26} step={0.1} value={[field.value || 17]} onValueChange={(v) => field.onChange(v[0])} /></FormControl><FormMessage /></FormItem>
                                 )} />
-                                <FormField control={form.control} name="go_health_center" render={({ field }) => (
-                                <FormItem><FormLabel>هل تذهب الى المرفق الصحي؟</FormLabel>
-                                <Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select an option..."/></SelectTrigger></FormControl>
-                                <SelectContent><SelectItem value="نعم">نعم</SelectItem><SelectItem value="لا">لا</SelectItem></SelectContent></Select><FormMessage /></FormItem>
+                                 <FormField control={form.control} name="go_health_center" render={({ field }) => (
+                                    <FormItem><FormLabel>هل تذهب الى المرفق الصحي؟</FormLabel>
+                                        <FormControl>
+                                            <div className="flex gap-4 pt-2">
+                                                <Button type="button" variant={field.value === 'نعم' ? 'default' : 'outline'} onClick={() => field.onChange('نعم')} className="flex-1">نعم</Button>
+                                                <Button type="button" variant={field.value === 'لا' ? 'destructive' : 'outline'} onClick={() => field.onChange('لا')} className="flex-1">لا</Button>
+                                            </div>
+                                        </FormControl>
+                                    <FormMessage /></FormItem>
                                 )} />
                                 <div className="space-y-2">
                                 <Label>تاريخ اكتشاف الحالة</Label>
@@ -330,11 +343,67 @@ export default function ScreeningDataEntryPage() {
                                 <FormField control={form.control} name="disc_date_year" render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Year"/></SelectTrigger></FormControl><SelectContent>{years.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}</SelectContent></Select></FormItem>)} />
                                 </div>
                                 </div>
-                                <FormField control={form.control} name="near_health_center" render={({ field }) => (
-                                <FormItem><FormLabel>اقرب مركز صحي للذهاب الية</FormLabel>
-                                <Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select health center..."/></SelectTrigger></FormControl>
-                                <SelectContent><ScrollArea className="h-60">{healthCenters.map(hc=><SelectItem key={hc.hc_id} value={hc.hc_name}>{hc.hc_name}</SelectItem>)}</ScrollArea></SelectContent></Select><FormMessage /></FormItem>
-                                )}/>
+                                <FormField
+                                    control={form.control}
+                                    name="near_health_center"
+                                    render={({ field }) => (
+                                    <FormItem className="flex flex-col">
+                                        <FormLabel>اقرب مركز صحي للذهاب الية</FormLabel>
+                                        <Popover open={healthCenterPopoverOpen} onOpenChange={setHealthCenterPopoverOpen}>
+                                            <PopoverTrigger asChild>
+                                                <FormControl>
+                                                    <Button
+                                                        variant="outline"
+                                                        role="combobox"
+                                                        className={cn(
+                                                            "w-full justify-between",
+                                                            !field.value && "text-muted-foreground"
+                                                        )}
+                                                    >
+                                                        {field.value
+                                                        ? healthCenters.find(
+                                                            (hc) => hc.hc_name === field.value
+                                                            )?.hc_name
+                                                        : "Select health center..."}
+                                                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                                    </Button>
+                                                </FormControl>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                                                <Command>
+                                                    <CommandInput placeholder="Search health center..." />
+                                                    <CommandEmpty>No health center found.</CommandEmpty>
+                                                    <CommandList>
+                                                        <ScrollArea className="h-60">
+                                                        {healthCenters.map((hc) => (
+                                                            <CommandItem
+                                                                value={hc.hc_name}
+                                                                key={hc.hc_id}
+                                                                onSelect={() => {
+                                                                    form.setValue("near_health_center", hc.hc_name)
+                                                                    setHealthCenterPopoverOpen(false)
+                                                                }}
+                                                            >
+                                                                <Check
+                                                                    className={cn(
+                                                                        "mr-2 h-4 w-4",
+                                                                        hc.hc_name === field.value
+                                                                        ? "opacity-100"
+                                                                        : "opacity-0"
+                                                                    )}
+                                                                />
+                                                                {hc.hc_name}
+                                                            </CommandItem>
+                                                        ))}
+                                                        </ScrollArea>
+                                                    </CommandList>
+                                                </Command>
+                                            </PopoverContent>
+                                        </Popover>
+                                        <FormMessage />
+                                    </FormItem>
+                                    )}
+                                />
                                 <Button type="submit" disabled={loading.saving}>{loading.saving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Update & Next</Button>
                                 </>
                                 )}
