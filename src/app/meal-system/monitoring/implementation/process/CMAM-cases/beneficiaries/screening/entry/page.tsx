@@ -1,7 +1,7 @@
 // src/app/meal-system/monitoring/implementation/process/CMAM-cases/beneficiaries/screening/entry/page.tsx
 "use client";
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { useToast } from "@/hooks/use-toast";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -24,7 +24,7 @@ import { ArrowLeft, ChevronsUpDown, Check, Loader2, Search, Database, FileDown, 
 
 interface Project { projectId: string; projectName: string; }
 interface Educator { ED_ID: string; ED_NAME: string; }
-interface Beneficiary { id: number; BENEF_ID: string; BENEF_NAME: string; ED_ID: string; }
+interface Beneficiary { id: number; BENEF_ID: string; BENEF_NAME: string; ED_ID: string; [key: string]: any; }
 interface HealthCenter { hc_id: string; hc_name: string; hw_id: string; hw_name: string;}
 
 const months = ["يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"];
@@ -90,7 +90,7 @@ export default function ScreeningDataEntryPage() {
     }, [selectedProjectId, toast]);
 
     const filteredBeneficiaries = useMemo(() => {
-      let filtered = beneficiaries;
+      let filtered = beneficiaries.filter(b => b.cmam_qualify === 'Qualified');
       if (selectedEducatorId) {
         filtered = filtered.filter(b => b.ED_ID === selectedEducatorId);
       }
@@ -104,7 +104,7 @@ export default function ScreeningDataEntryPage() {
       return filtered;
     }, [beneficiaries, selectedEducatorId, beneficiarySearch]);
 
-    const moveToNextBeneficiary = () => {
+    const moveToNextBeneficiary = useCallback(() => {
         const currentIndex = filteredBeneficiaries.findIndex(b => b.id === selectedBeneficiaryId);
         if (currentIndex !== -1 && currentIndex < filteredBeneficiaries.length - 1) {
             setSelectedBeneficiaryId(filteredBeneficiaries[currentIndex + 1].id);
@@ -113,9 +113,9 @@ export default function ScreeningDataEntryPage() {
              setSelectedBeneficiaryId(null);
         }
         form.reset();
-    };
+    }, [filteredBeneficiaries, selectedBeneficiaryId, form, toast]);
 
-    const handleCmamDecision = async (value: 'نعم' | 'لا') => {
+    const handleCmamDecision = useCallback(async (value: 'نعم' | 'لا') => {
         if (value === 'لا' && selectedBeneficiaryId) {
              setLoading(p => ({...p, saving: true}));
              try {
@@ -133,7 +133,7 @@ export default function ScreeningDataEntryPage() {
                 setLoading(p => ({...p, saving: false}));
              }
         }
-    };
+    }, [selectedBeneficiaryId, toast, moveToNextBeneficiary]);
     
     useEffect(() => {
         const subscription = form.watch((value, { name }) => {
