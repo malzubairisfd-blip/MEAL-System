@@ -11,6 +11,10 @@ interface EducatorGroupInfo {
   educatorCode: string;
   educatorName: string;
   educatorPhone: string;
+  hwname?: string;
+  hwid?: string;
+  hcname?: string;
+  hcid?: string;
 }
 
 function drawSFDLogo(doc: jsPDF) {
@@ -85,12 +89,12 @@ const drawHeader = (
         groupInfo.educatorPhone,
         groupInfo.educatorName,
         groupInfo.educatorCode,
+        "", // Health worker phone not available
         groupInfo.hwname,
         groupInfo.hwid,
         groupInfo.hcname,
         groupInfo.hcid,
         groupInfo.governorate
-
       ]
     ],
     theme: "grid",
@@ -116,7 +120,7 @@ const drawHeader = (
 const drawFooterSummary = (
   doc: jsPDF,
   bnfs: any[],
-  educatorName: string,
+  groupInfo: EducatorGroupInfo,
   rowsPerPage: number
 ) => {
   const lastAutoTable = (doc as any).lastAutoTable;
@@ -166,7 +170,7 @@ const drawFooterSummary = (
 
   const sigY = legendY + 25;
   doc.setFontSize(10);
-  doc.text("اسم العامل الصحي" + hwname, pageWidth - 15, sigY, { align: "right" });
+  doc.text("اسم العامل الصحي: " + (groupInfo.hwname || ''), pageWidth - 15, sigY, { align: "right" });
   doc.text("........................................... التوقيع: ", 50, sigY, { align: "left" });
 };
 
@@ -282,7 +286,7 @@ self.onmessage = async (event) => {
         });
 
         if (i === totalPages - 1) {
-          drawFooterSummary(doc, bnfs, groupInfo.educatorName, rowsPerPage);
+          drawFooterSummary(doc, bnfs, groupInfo, rowsPerPage);
         }
       }
 
@@ -292,7 +296,7 @@ self.onmessage = async (event) => {
         return;
       }
 
-      const safeName = hc_name.replace(/[/\\?%*:|"<>]/g, "-");
+      const safeName = (groupInfo.hcname || groupKey).replace(/[/\\?%*:|"<>]/g, "-");
       zip.file(`${safeName}.pdf`, doc.output("arraybuffer"));
     }
 
