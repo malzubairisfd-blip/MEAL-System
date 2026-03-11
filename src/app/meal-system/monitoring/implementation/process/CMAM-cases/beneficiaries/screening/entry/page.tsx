@@ -66,6 +66,15 @@ export default function ScreeningDataEntryPage() {
         resolver: zodResolver(formSchema),
         defaultValues: {
             muac: 17,
+            bnf_has_cmam: undefined,
+            bnf_preg_lec: undefined,
+            preg_mon: undefined,
+            child_age: undefined,
+            go_health_center: undefined,
+            disc_date_day: undefined,
+            disc_date_month: undefined,
+            disc_date_year: undefined,
+            near_health_center: undefined
         }
     });
     const watchHasCmam = form.watch("bnf_has_cmam");
@@ -110,7 +119,7 @@ export default function ScreeningDataEntryPage() {
     }, [beneficiaries, selectedEducatorId, beneficiarySearch]);
 
     const moveToNextBeneficiary = useCallback(() => {
-        form.reset({ muac: 17 }); // Reset form to default values
+        form.reset(); // Reset form to default values
         const currentIndex = filteredBeneficiaries.findIndex(b => b.id === selectedBeneficiaryId);
         if (currentIndex !== -1 && currentIndex < filteredBeneficiaries.length - 1) {
             setSelectedBeneficiaryId(filteredBeneficiaries[currentIndex + 1].id);
