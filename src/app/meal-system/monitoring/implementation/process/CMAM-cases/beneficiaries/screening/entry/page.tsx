@@ -42,9 +42,13 @@ const formSchema = z.object({
   disc_date_month: z.string().optional(),
   disc_date_year: z.string().optional(),
   near_health_center: z.string().optional(),
-}).refine(data => data.bnf_has_cmam === 'لا' || (data.bnf_preg_lec && data.muac && data.go_health_center && data.disc_date_day), {
+}).refine(data => {
+    if (data.bnf_has_cmam === 'لا') return true; // If 'No', no other fields are required
+    // If 'Yes', all subsequent fields are required
+    return data.bnf_preg_lec && data.muac && data.go_health_center && data.disc_date_day && data.disc_date_month && data.disc_date_year;
+}, {
     message: "All fields are required when malnutrition is 'Yes'",
-    path: ['bnf_has_cmam'],
+    path: ['bnf_has_cmam'], // You can associate this error with a specific field if you want
 });
 
 
@@ -104,22 +108,33 @@ export default function ScreeningDataEntryPage() {
     }, [selectedProjectId, toast]);
 
     const filteredBeneficiaries = useMemo(() => {
-      let filtered = beneficiaries.filter(b => b.cmam_qualify === 'Qualified');
-      if (selectedEducatorId) {
-        filtered = filtered.filter(b => b.ED_ID === selectedEducatorId);
-      }
-      if (beneficiarySearch) {
-        const lowerSearch = beneficiarySearch.toLowerCase();
-        filtered = filtered.filter(b => 
-            String(b.BENEF_ID).toLowerCase().includes(lowerSearch) || 
-            b.BENEF_NAME.toLowerCase().includes(lowerSearch)
-        );
-      }
-      return filtered;
+        let filtered = beneficiaries.filter(b => b.cmam_qualify === 'Qualified');
+        if (selectedEducatorId) {
+            filtered = filtered.filter(b => b.ED_ID === selectedEducatorId);
+        }
+        if (beneficiarySearch) {
+            const lowerSearch = beneficiarySearch.toLowerCase();
+            filtered = filtered.filter(b => 
+                String(b.BENEF_ID).toLowerCase().includes(lowerSearch) || 
+                b.BENEF_NAME.toLowerCase().includes(lowerSearch)
+            );
+        }
+        return filtered;
     }, [beneficiaries, selectedEducatorId, beneficiarySearch]);
-
+    
     const moveToNextBeneficiary = useCallback(() => {
-        form.reset(); // Reset form to default values
+        form.reset({
+            muac: 17,
+            bnf_has_cmam: undefined,
+            bnf_preg_lec: undefined,
+            preg_mon: undefined,
+            child_age: undefined,
+            go_health_center: undefined,
+            disc_date_day: undefined,
+            disc_date_month: undefined,
+            disc_date_year: undefined,
+            near_health_center: undefined
+        });
         const currentIndex = filteredBeneficiaries.findIndex(b => b.id === selectedBeneficiaryId);
         if (currentIndex !== -1 && currentIndex < filteredBeneficiaries.length - 1) {
             setSelectedBeneficiaryId(filteredBeneficiaries[currentIndex + 1].id);
@@ -246,11 +261,36 @@ export default function ScreeningDataEntryPage() {
                         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
                             <CardHeader><CardTitle>Screening Details</CardTitle></CardHeader>
                             <CardContent className="space-y-4">
-                                <FormField control={form.control} name="bnf_has_cmam" render={({ field }) => (
-                                    <FormItem><FormLabel>هل تعاني المستفيدة من سوء تغذية؟</FormLabel>
-                                    <Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select an option..."/></SelectTrigger></FormControl>
-                                    <SelectContent><SelectItem value="نعم">نعم</SelectItem><SelectItem value="لا">لا</SelectItem></SelectContent></Select><FormMessage /></FormItem>
-                                )} />
+                                 <FormField
+                                    control={form.control}
+                                    name="bnf_has_cmam"
+                                    render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>هل تعاني المستفيدة من سوء تغذية؟</FormLabel>
+                                        <FormControl>
+                                            <div className="flex gap-4 pt-2">
+                                                <Button
+                                                    type="button"
+                                                    variant={field.value === 'نعم' ? 'default' : 'outline'}
+                                                    onClick={() => field.onChange('نعم')}
+                                                    className="flex-1"
+                                                >
+                                                    نعم
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    variant={field.value === 'لا' ? 'destructive' : 'outline'}
+                                                    onClick={() => field.onChange('لا')}
+                                                    className="flex-1"
+                                                >
+                                                    لا
+                                                </Button>
+                                            </div>
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                    )}
+                                />
 
                                 {watchHasCmam === 'نعم' && (
                                 <>
