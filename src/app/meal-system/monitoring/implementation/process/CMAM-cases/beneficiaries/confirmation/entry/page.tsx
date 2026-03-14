@@ -17,12 +17,15 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Slider } from "@/components/ui/slider";
-import { ArrowLeft, Loader2, Search, Checkbox, ThumbsUp } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { ArrowLeft, Loader2, Search, ThumbsUp, Check, ChevronsUpDown } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 
 // --- Types ---
 interface Project { projectId: string; projectName: string; }
-interface HealthCenter { hc_id: string; hc_name: string; }
+interface HealthCenter { hc_id: string; hc_name: string; hw_id: string; hw_name: string;}
 interface Beneficiary { id: number; BENEF_ID: string; BENEF_NAME: string; hc_id: string; [key: string]: any; }
 
 const months = ["يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"];
@@ -98,6 +101,8 @@ export default function ConfirmationDataEntryPage() {
     const watchHasCmamHC = form.watch("bnf_has_cmam_hc");
     const watchBnfCmamCond = form.watch("bnf_cmam_cond");
     
+    const [healthCenterPopoverOpen, setHealthCenterPopoverOpen] = useState(false);
+
     // --- Data Fetching ---
     useEffect(() => {
         setLoading(p => ({...p, projects: true}));
@@ -343,7 +348,10 @@ export default function ConfirmationDataEntryPage() {
                                         <FormField control={form.control} name="exp_end_treat_date_year" render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Year"/></SelectTrigger></FormControl><SelectContent>{years.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}</SelectContent></Select></FormItem>)} />
                                     </div>
                                 </div>
-                                <FormField control={form.control} name="follow_up_status" render={({ field }) => (
+                                <FormField
+                                    control={form.control}
+                                    name="follow_up_status"
+                                    render={({ field }) => (
                                     <FormItem><FormLabel>حالة المتابعه</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select status..."/></SelectTrigger></FormControl>
                                     <SelectContent>
                                         <SelectItem value="مستمر بالمعالجة">مستمر بالمعالجة</SelectItem>
