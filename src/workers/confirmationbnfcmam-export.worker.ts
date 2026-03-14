@@ -18,53 +18,67 @@ interface EducatorGroupInfo {
 const ROWS_PER_PAGE = 8
 
 function buildLocation(r: any) {
-  return [r.GOV_NAME, r.MUD_NAME, r.OZLA_NAME, r.VILL_NAME].filter(Boolean).join(" - ")
+  return [r.GOV_NAME, r.MUD_NAME, r.OZLA_NAME].filter(Boolean).join(" - ")
 }
 
-// رسم شعار الصندوق
 function drawSFDLogo(doc: jsPDF) {
-  const x = 15
-  const y = 8
+  const logoX = 15
+  const logoY = 8
 
   doc.setFillColor(40, 60, 80)
-  doc.rect(x, y, 6, 15, "F")
+  doc.rect(logoX, logoY, 6, 15, "F")
 
   doc.setTextColor(255, 255, 255)
   doc.setFont("helvetica", "bold")
   doc.setFontSize(9)
 
-  doc.text("S", x + 3, y + 4, { align: "center" })
-  doc.text("F", x + 3, y + 8, { align: "center" })
-  doc.text("D", x + 3, y + 12, { align: "center" })
+  doc.text("S", logoX + 3, logoY + 4, { align: "center" })
+  doc.text("F", logoX + 3, logoY + 8, { align: "center" })
+  doc.text("D", logoX + 3, logoY + 12, { align: "center" })
 
   doc.setFont("NotoNaskhArabic", "normal")
   doc.setTextColor(40, 60, 80)
   doc.setFontSize(10)
 
-  doc.text("الصندوق", x + 8, y + 4)
-  doc.text("الاجتماعي", x + 8, y + 9)
-  doc.text("للتنمية", x + 8, y + 14)
+  doc.text("الصندوق", logoX + 8, logoY + 4)
+  doc.text("الاجتماعي", logoX + 8, logoY + 9)
+  doc.text("للتنمية", logoX + 8, logoY + 14)
+
+  doc.setFontSize(6)
+  doc.text("Social Fund for Development", logoX, logoY + 17)
 }
 
-// رسم رأس الصفحة
+function drawPageBorder(doc: jsPDF) {
+  const w = doc.internal.pageSize.getWidth()
+  const h = doc.internal.pageSize.getHeight()
+
+  doc.setLineWidth(1.2)
+  doc.setDrawColor(0, 0, 0)
+  doc.rect(1, 1, w - 5, h - 5)
+}
+
 function drawHeader(doc: jsPDF, page: number, totalPages: number, g: EducatorGroupInfo) {
+
   const pageWidth = doc.internal.pageSize.getWidth()
   const right = pageWidth - 10
   const center = pageWidth / 2
 
   drawSFDLogo(doc)
+  drawPageBorder(doc)
 
   doc.setFont("NotoNaskhArabic", "bold")
   doc.setFontSize(9)
-  doc.text("الجمهورية اليمنية", right, 8, { align: "right" }, {textColor: [0, 0, 0]})
-  doc.text("الصندوق الاجتماعي للتنمية", right, 13, { align: "right" }, {textColor: [0, 0, 0]})
-  doc.text("فرع صنعاء", right, 18, { align: "right" }, {textColor: [0, 0, 0]})
+  doc.setTextColor(0, 0, 0)
+
+  doc.text("الجمهورية اليمنية", right, 8, { align: "right" })
+  doc.text("الصندوق الاجتماعي للتنمية", right, 13, { align: "right" })
+  doc.text("فرع صنعاء", right, 18, { align: "right" })
 
   doc.setFontSize(10)
-  doc.text(`صفحة ${page} من ${totalPages}`, right, 24, { align: "right" }, {textColor: [0, 0, 0]})
+  doc.text(`صفحة ${page} من ${totalPages}`, right, 24, { align: "right" })
 
   doc.setFontSize(13)
-  doc.text("برنامج التحويلات النقدية المشروطة في التغذية", center, 12, { align: "center" }, {textColor: [0, 0, 0]})
+  doc.text("برنامج التحويلات النقدية المشروطة في التغذية", center, 12, { align: "center" })
 
   doc.setFontSize(11)
   doc.text("كشف تأكيد حالات سوء التغذية للمستفيدات من قبل العامل الصحي", center, 18, { align: "center" })
@@ -94,14 +108,16 @@ function drawHeader(doc: jsPDF, page: number, totalPages: number, g: EducatorGro
       g.location
     ]],
     tableWidth: "auto",
+    theme: "grid",
     styles: {
       font: "NotoNaskhArabic",
       fontSize: 9,
       textColor: [0, 0, 0],
       cellPadding: 3,
       lineColor: [0, 0, 0],
-overflow:"visible",
-      lineWidth: 0.2
+      lineWidth: 0.2,
+      overflow: "visible",
+      halign: "center"
     },
     headStyles: {
       fillColor: [240, 240, 240],
@@ -109,29 +125,44 @@ overflow:"visible",
       fontStyle: "bold",
       halign: "center"
     },
-    bodyStyles: {
-      fillColor: [255, 255, 255],
-      halign: "center",
-      textColor: [0, 0, 0],
-    },
     columnStyles: {
       7: { cellWidth: 80, halign: "center" }
     },
-    theme: "grid",
     margin: { left: 10, right: 10 }
   })
 
   return (doc as any).lastAutoTable.finalY
 }
 
-// رسم تذييل الصفحة
-function drawFooter(doc: jsPDF, bnfs: any[], hwname: string) {
+
+// signature + stamp every page
+function drawPageFooter(doc: jsPDF, hwname: string) {
+
+  const pageWidth = doc.internal.pageSize.getWidth()
+  const footerY = doc.internal.pageSize.getHeight() - 25
+
+  doc.setFontSize(12)
+  doc.setTextColor(0,0,0)
+
+  doc.text("اسم العامل الصحي " + hwname, pageWidth - 15, footerY, { align: "right" })
+  doc.text("................................ التوقيع", 60, footerY)
+
+  doc.rect(15, footerY - 5, 35, 20)
+  doc.text("ختم المركز", 32.5, footerY + 12, { align: "center" })
+}
+
+
+// summary only last page
+function drawSummary(doc: jsPDF, bnfs: any[]) {
+
   const pageWidth = doc.internal.pageSize.getWidth()
   const totalBeneficiaries = bnfs.length
   const discovered = bnfs.filter((b) => b.bnf_cmam_cond && b.bnf_cmam_cond !== "").length
 
   ;(doc as any).autoTable({
+
     startY: (doc as any).lastAutoTable.finalY + 8,
+
     body: [[
       "", "",
       discovered,
@@ -139,169 +170,216 @@ function drawFooter(doc: jsPDF, bnfs: any[], hwname: string) {
       totalBeneficiaries,
       "اجمالي المستفيدات"
     ]],
+
     styles: {
       font: "NotoNaskhArabic",
       fontSize: 14,
       halign: "center",
-      lineColor: [0, 0, 0],
+      lineColor: [0,0,0],
       lineWidth: 0.9,
       minCellHeight: 10
     },
+
     columnStyles: {
       1: { cellWidth: 50 },
-      3: { fontStyle: "bold", fillColor: [240, 240, 240] },
-      5: { fontStyle: "bold", fillColor: [240, 240, 240] }
+      3: { fontStyle: "bold", fillColor: [240,240,240] },
+      5: { fontStyle: "bold", fillColor: [240,240,240] }
     },
+
     margin: { left: 10, right: 10 }
+
   })
 
-  const legendY = (doc as any).lastAutoTable.finalY + 5
-  const legendLine1 = [
-    "بيانات المثقفة",
-    "عدد القرى: 1",
-    `عدد المستفيدات: ${totalBeneficiaries}`,
-    "عدد صفحات الكشف: " + Math.ceil(totalBeneficiaries / ROWS_PER_PAGE)
-  ].join("     ")
-  const legendLine2 = [
-    "المتابعة (-1 مستمر بالمعالجة 2 - شفاء -3 تخلف -4 وفاة -5 عدم استجابة -6 إنتهاء فترة الدعم / تخريج من برنامج سوء التغذية -7 لم تحضر للمرفق الصحي)",
-    "حالة المستفيدة: 1-حامل 2-مرضعة",
-    "هل تعاني: 1-نعم 2-لا",
-    "تذهب للمرفق: 1-نعم 2-لا"
-  ].join("     ")
-
-  doc.setFontSize(10)
-  doc.text(legendLine1, pageWidth - 15, legendY, { align: "right" })
-  doc.text(legendLine2, pageWidth - 15, legendY + 4, { align: "right" })
-
-  const sigY = legendY + 20
-  doc.setFontSize(12)
-  doc.text("اسم العامل الصحي " + hwname, pageWidth - 15, sigY, { align: "right" })
-  doc.text("................................ التوقيع", 40, sigY)
 }
 
-// Worker handler
+
+// Worker
 self.onmessage = async (event: MessageEvent) => {
+
   const { beneficiaries, fontBase64 } = event.data
+
   if (!beneficiaries?.length) {
     postMessage({ type: "error", error: "No beneficiaries" })
     return
   }
 
-  const qualified = beneficiaries.filter((r: any) => r.bnf_has_cmam === "نعم")
-  const groups: Record<string, any[]> = {}
+  const qualified = beneficiaries
+    .filter((r:any)=> r.bnf_has_cmam === "نعم")
+    .sort((a:any,b:any)=>{
+
+      const edCompare = String(a.ED_ID).localeCompare(String(b.ED_ID),"ar")
+      if(edCompare!==0) return edCompare
+
+      return String(a.hw_name).localeCompare(String(b.hw_name),"ar")
+
+    })
+
+
+  const groups: Record<string, Record<string, Record<string, any[]>>> = {}
 
   for (const r of qualified) {
-    const key = r.hc_id + "|" + r.VILL_NAME
-    if (!groups[key]) groups[key] = []
-    groups[key].push(r)
+
+    const hc = r.hc_id
+    const hw = r.hw_name
+    const ed = r.ED_ID
+
+    if (!groups[hc]) groups[hc] = {}
+    if (!groups[hc][hw]) groups[hc][hw] = {}
+    if (!groups[hc][hw][ed]) groups[hc][hw][ed] = []
+
+    groups[hc][hw][ed].push(r)
   }
+
 
   const zip = new JSZip()
 
-  for (const key in groups) {
-    const bnfs = groups[key]
-    const first = bnfs[0]
-    const g: EducatorGroupInfo = {
-      educatorPhone: first.ed_phone || "",
-      educatorName: first.ED_NAME || "",
-      educatorCode: first.ED_ID || "",
-      hwname: first.hw_name || "",
-      hwid: first.hw_id || "",
-      hcname: first.hc_name || "",
-      hcid: first.hc_id || "",
-      location: buildLocation(first)
-    }
+  for (const hc of Object.keys(groups)) {
 
-    const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" })
+    const doc = new jsPDF({ orientation:"landscape", unit:"mm", format:"a4" })
 
-    doc.addFileToVFS("Regular.ttf", fontBase64.regular)
-    doc.addFileToVFS("Bold.ttf", fontBase64.bold)
-    doc.addFont("Regular.ttf", "NotoNaskhArabic", "normal")
-    doc.addFont("Bold.ttf", "NotoNaskhArabic", "bold")
+    doc.addFileToVFS("Regular.ttf",fontBase64.regular)
+    doc.addFileToVFS("Bold.ttf",fontBase64.bold)
 
-    const pages = Math.ceil(bnfs.length / ROWS_PER_PAGE)
-    for (let p = 0; p < pages; p++) {
-      if (p > 0) doc.addPage()
-      const headerY = drawHeader(doc, p + 1, pages, g)
+    doc.addFont("Regular.ttf","NotoNaskhArabic","normal")
+    doc.addFont("Bold.ttf","NotoNaskhArabic","bold")
 
-      const slice = bnfs.slice(p * ROWS_PER_PAGE, (p + 1) * ROWS_PER_PAGE)
-      const body = slice.map((r: any, i: number) => [
-        r.not_attend_reason || "",
-        r.exp_end_treat_date || "",
-        r.exp_start_treat_date || "",
-        r.hc_muac || "",
-        r.bnf_child_age || "",
-        r.bnf_preg_mon || "",
-        r.bnf_cmam_cond || "",
-        r.hc_card_no || "",
-        r.bnf_has_cmam_hc || "",
-        r.attend_hc || "",
-        r.conf_date || "",
-        r.PHONE_NO || "",
-        r.BENEF_NAME || "",
-        r.BENEF_ID || "",
-        p * ROWS_PER_PAGE + i + 1
-      ])
+    let firstPage = true
 
-;(doc as any).autoTable({
-        startY: headerY + 5,
-        head: [[
-          "سبب عدم الذهاب للمرفق الصحي",
-          "التاريخ المتوقع لانتهاء العلاج",
-          "تاريخ بدء العلاج",
-          "قياس MUAC",
-          "عمر الرضيع",
-          "شهر الحمل",
-          "حالة المستفيدة حاليا",
-          "رقم الكرت الحصري",
-          "هل تعاني من سوء تغذية",
-          "هل حضرت المستفيدة إلى المرفق",
-          "تاريخ التاكيد",
-          "رقم الهاتف",
-          "اسم المستفيدة",
-          "كود المستفيدة",
-          "م"
-        ]],
-        body,
-        tableWidth: "auto",
-        theme: "grid",
-        styles: {
-          font: "NotoNaskhArabic",
-          fontSize: 10,
-          textColor: [0, 0, 0],
-          fillColor: [255, 255, 255],
-          cellPadding: 2,
-          lineColor: [0, 0, 0],
-          lineWidth: 0.2,
-          halign: "center",
-          overflow: "linebreak"
-        },
-        headStyles: {
-          fillColor: [240, 240, 240],
-          fontSize: 9,
-          textColor: [0, 0, 0],
-          fontStyle: "bold",
-          halign: "center",
-          lineColor: [0, 0, 0],
-          lineWidth: 0.2
-        },
-        margin: { left: 3, right: 3 }
-      })
+    const hwGroups = groups[hc]
 
-      if (p === pages - 1) {
-        drawFooter(doc, bnfs, g.hwname)
+    for (const hw of Object.keys(hwGroups)) {
+
+      const edGroups = hwGroups[hw]
+
+      for (const ed of Object.keys(edGroups)) {
+
+        const bnfs = edGroups[ed]
+        const first = bnfs[0]
+
+        const g:EducatorGroupInfo = {
+
+          educatorPhone:first.ed_phone||"",
+          educatorName:first.ED_NAME||"",
+          educatorCode:first.ED_ID||"",
+          hwname:first.hw_name||"",
+          hwid:first.hw_id||"",
+          hcname:first.hc_name||"",
+          hcid:first.hc_id||"",
+          location:buildLocation(first)
+
+        }
+
+        const totalPages = Math.ceil(bnfs.length / ROWS_PER_PAGE)
+
+        for (let p=0; p<totalPages; p++) {
+
+          if(!firstPage) doc.addPage()
+          firstPage=false
+
+          const headerY = drawHeader(doc,p+1,totalPages,g)
+
+          const slice = bnfs.slice(p*ROWS_PER_PAGE,(p+1)*ROWS_PER_PAGE)
+
+          const body = slice.map((r:any,i:number)=>[
+            r.not_attend_reason||"",
+            r.exp_end_treat_date||"",
+            r.exp_start_treat_date||"",
+            r.hc_muac||"",
+            r.bnf_child_age||"",
+            r.bnf_preg_mon||"",
+            r.bnf_cmam_cond||"",
+            r.hc_card_no||"",
+            r.bnf_has_cmam_hc||"",
+            r.attend_hc||"",
+            r.conf_date||"",
+            r.PHONE_NO||"",
+            r.BENEF_NAME||"",
+            r.BENEF_ID||"",
+            p*ROWS_PER_PAGE+i+1
+          ])
+
+          ;(doc as any).autoTable({
+
+            startY: headerY + 5,
+
+            head:[[
+
+              "سبب عدم الذهاب للمرفق الصحي",
+              "التاريخ المتوقع لانتهاء العلاج",
+              "تاريخ بدء العلاج",
+              "قياس MUAC",
+              "عمر الرضيع",
+              "شهر الحمل",
+              "حالة المستفيدة حاليا",
+              "رقم الكرت الحصري",
+              "هل تعاني من سوء تغذية",
+              "هل حضرت المستفيدة إلى المرفق",
+              "تاريخ التاكيد",
+              "رقم الهاتف",
+              "اسم المستفيدة",
+              "كود المستفيدة",
+              "م"
+
+            ]],
+
+            body,
+
+            tableWidth:"auto",
+            theme:"grid",
+
+            styles:{
+              font:"NotoNaskhArabic",
+              fontSize:10,
+              textColor:[0,0,0],
+              fillColor:[255,255,255],
+              cellPadding:2,
+              lineColor:[0,0,0],
+              lineWidth:0.2,
+              halign:"center",
+              overflow:"linebreak"
+            },
+
+            headStyles:{
+              fillColor:[240,240,240],
+              fontSize:9,
+              textColor:[0,0,0],
+              fontStyle:"bold",
+              halign:"center",
+              lineColor:[0,0,0],
+              lineWidth:0.2
+            },
+
+            margin:{left:6,right:6}
+
+          })
+
+          drawPageFooter(doc,g.hwname)
+
+          if(p === totalPages-1){
+            drawSummary(doc,bnfs)
+          }
+
+        }
+
       }
+
     }
 
-    const safe = (g.hcname || "HC").replace(/[\/\\?%*:|"<>]/g, "-")
+    const firstHW = Object.values(hwGroups)[0]
+    const firstED = Object.values(firstHW)[0]
+    const firstRec = firstED[0]
+
+    const safe = `${firstRec.hc_id}-${firstRec.hc_name}`.replace(/[\/\\?%*:|"<>]/g,"-")
+
     zip.file(`${safe}.pdf`, doc.output("arraybuffer"))
+
   }
 
   const zipData = await zip.generateAsync({
-    type: "arraybuffer",
-    compression: "DEFLATE",
-    compressionOptions: { level: 5 }
+    type:"arraybuffer",
+    compression:"DEFLATE",
+    compressionOptions:{level:5}
   })
 
-  self.postMessage({ type: "done-all", data: zipData }, [zipData])
+  self.postMessage({type:"done-all",data:zipData},[zipData])
 }
