@@ -1,41 +1,40 @@
-// src/app/meal-system/monitoring/implementation/process/CMAM-cases/beneficiaries/page.tsx
 "use client";
 
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ArrowRight, ScanSearch, ClipboardCheck, Send } from "lucide-react";
+import { ArrowLeft, ArrowRight, ClipboardList } from "lucide-react";
 
-export default function BeneficiaryCMAMPage() {
+export default function ReferralCyclesPage() {
   const features = [
     {
-      title: "Screening Malnutrition Cases",
-      description: "Screen beneficiaries for signs of malnutrition.",
-      href: "/meal-system/monitoring/implementation/process/CMAM-cases/beneficiaries/screening",
-      icon: <ScanSearch className="h-8 w-8 text-blue-500" />,
+      title: "Referral Malnourished Cycle 1",
+      description: "Manage the first cycle of referrals.",
+      href: "/meal-system/monitoring/implementation/process/CMAM-cases/beneficiaries/referral/cycles/1",
+      icon: <ClipboardList className="h-8 w-8 text-blue-500" />,
     },
     {
-      title: "Confirmation Malnutrition Cases",
-      description: "Confirm and document cases of malnutrition.",
-      href: "/meal-system/monitoring/implementation/process/CMAM-cases/beneficiaries/confirmation",
-      icon: <ClipboardCheck className="h-8 w-8 text-green-500" />,
+      title: "Referral Malnourished Cycle 2",
+      description: "Manage the second cycle of referrals.",
+      href: "/meal-system/monitoring/implementation/process/CMAM-cases/beneficiaries/referral/cycles/2",
+      icon: <ClipboardList className="h-8 w-8 text-green-500" />,
     },
     {
-      title: "Referral Malnourished Cases",
-      description: "Refer confirmed cases for appropriate treatment.",
-      href: "/meal-system/monitoring/implementation/process/CMAM-cases/beneficiaries/referral",
-      icon: <Send className="h-8 w-8 text-purple-500" />,
+      title: "Referral Malnourished Cycle 3",
+      description: "Manage the third cycle of referrals.",
+      href: "/meal-system/monitoring/implementation/process/CMAM-cases/beneficiaries/referral/cycles/3",
+      icon: <ClipboardList className="h-8 w-8 text-purple-500" />,
     },
   ];
 
   return (
     <div className="space-y-8">
       <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">Beneficiaries CMAM</h1>
+        <h1 className="text-3xl font-bold">Referral Malnourished Cases Cycles</h1>
         <Button variant="outline" asChild>
-          <Link href="/meal-system/monitoring/implementation/process/CMAM-cases">
+          <Link href="/meal-system/monitoring/implementation/process/CMAM-cases/beneficiaries/referral">
             <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to CMAM Cases
+            Back to Referral Hub
           </Link>
         </Button>
       </div>
