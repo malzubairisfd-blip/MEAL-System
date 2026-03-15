@@ -1,4 +1,3 @@
-
 "use client";
 
 import Link from "next/link";
@@ -11,7 +10,7 @@ export default function ContractsPage() {
     {
       title: "Exporting Community Educators Contracts",
       description: "Generate and download contract documents.",
-      href: "#",
+      href: "/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/contracts/export",
       icon: <FileText className="h-8 w-8 text-blue-500" />,
     },
     {
