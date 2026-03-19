@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Label } from '@/components/ui/label';
 import { ArrowLeft, Loader2, Eye, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -182,6 +183,8 @@ export default function ViewContractsPage() {
             drawSFDLogo(doc);
             const pageWidth = doc.internal.pageSize.getWidth();
             const right = pageWidth - 10;
+            const MARGIN_X = 10;
+            const CONTENT_W = pageWidth - MARGIN_X * 2;
             
             doc.setFont("NotoNaskhArabic", "bold");
             doc.setFontSize(9);
@@ -296,7 +299,7 @@ export default function ViewContractsPage() {
             setGeneratingPdf(false);
         }
 
-    }, [fontCache, selectedProjectId, selectedFunder, projects, toast]);
+    }, [fontCache, selectedProjectId, selectedFunder, projects, toast, pdfUrl]);
 
     const selectedEducatorForDisplay = useMemo(() => {
         if (!selectedProjectId) return null;
