@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
 
-const BASE_DIR = path.join(process.cwd());
+const BASE_DIR = process.cwd();
+
 
 /* ================= SAFETY ================= */
 
@@ -35,12 +36,16 @@ async function listTree(dir: string): Promise<any[]> {
 
     const nodes = await Promise.all(
         entries.map(async (e) => {
+            if (e.name.startsWith('.') || e.name === 'node_modules' || e.name === '.next') {
+              return null;
+            }
+
             const full = path.join(dir, e.name);
-            const rel = full.replace(BASE_DIR + path.sep, "");
+            const rel = path.relative(BASE_DIR, full);
 
             if (e.isDirectory()) {
                 const children = await listTree(full);
-                const size = children.reduce((acc, child) => acc + (child.size || 0), 0);
+                const size = children.reduce((acc, child) => acc + (child?.size || 0), 0);
                 return {
                     type: "folder",
                     name: e.name,
@@ -69,8 +74,8 @@ async function listTree(dir: string): Promise<any[]> {
             }
         })
     );
-    // Sort so folders appear before files
-    return nodes.sort((a, b) => {
+    // Sort so folders appear before files and filter out nulls
+    return (nodes.filter(Boolean) as any[]).sort((a, b) => {
         if (a.type === 'folder' && b.type === 'file') return -1;
         if (a.type === 'file' && b.type === 'folder') return 1;
         return a.name.localeCompare(b.name);
@@ -87,13 +92,16 @@ async function searchFiles(dir: string, q: string, out: any[] = []) {
     const full = path.join(dir, e.name);
 
     if (e.isDirectory()) {
+      if (e.name.startsWith('.') || e.name === 'node_modules' || e.name === '.next') {
+        continue;
+      }
       await searchFiles(full, q, out);
     } else {
       const txt = await fs.readFile(full, "utf8");
       txt.split("\n").forEach((l, i) => {
         if (l.includes(q)) {
           out.push({
-            file: full.replace(BASE_DIR + path.sep, ""),
+            file: path.relative(BASE_DIR, full),
             line: i + 1,
             text: l.trim(),
           });
@@ -112,8 +120,11 @@ export async function POST(req: Request) {
     const { action, filePath, content, name, oldPath, newName } = body;
 
     switch (action) {
-      case "tree":
-        return NextResponse.json(await listTree(BASE_DIR));
+      case "tree": {
+        const fullTree = await listTree(BASE_DIR);
+        const result = fullTree.filter(node => node.path === 'public' || node.path === 'src');
+        return NextResponse.json(result);
+      }
 
       case "read": {
         const abs = safePath(filePath);
