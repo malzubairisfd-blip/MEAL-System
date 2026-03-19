@@ -3,15 +3,21 @@
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ArrowRight, FileText, UserX, UserCheck } from "lucide-react";
+import { ArrowLeft, ArrowRight, FileText, UserX, UserCheck, Eye, CalendarDays } from "lucide-react";
 
 export default function ContractsPage() {
   const features = [
     {
-      title: "Exporting Community Educators Contracts",
-      description: "Generate and download contract documents.",
+      title: "View Signed Contracts",
+      description: "View details of all active community educator contracts.",
+      href: "/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/contracts/view",
+      icon: <Eye className="h-8 w-8 text-cyan-500" />,
+    },
+    {
+      title: "Set Contract Dates",
+      description: "Set start and end dates for contracts in bulk for a project.",
       href: "/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/contracts/export",
-      icon: <FileText className="h-8 w-8 text-blue-500" />,
+      icon: <CalendarDays className="h-8 w-8 text-blue-500" />,
     },
     {
       title: "Termination of Community Educators Contracts",
@@ -39,7 +45,7 @@ export default function ContractsPage() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {features.map((feature) => (
           <Card key={feature.title} className="flex flex-col text-center items-center justify-center p-6 transition-all duration-300 hover:shadow-xl hover:-translate-y-2">
             <div className="p-4 bg-muted rounded-full mb-4">
