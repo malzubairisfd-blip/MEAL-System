@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
@@ -74,7 +75,7 @@ export default function ViewContractsPage() {
         return allEducators.filter(e => 
             e.project_id === selectedProjectId && 
             e.contract_type === 'مثقفة مجتمعية' &&
-            e.contract_starting_date // Only show those with contracts
+            e.contract_starting_date && e.contract_starting_date.trim() !== '' // Only show those with contracts
         );
     }, [selectedProjectId, allEducators]);
 
