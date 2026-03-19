@@ -5,7 +5,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import dynamic from "next/dynamic";
 import Link from 'next/link';
 import { useToast } from "@/hooks/use-toast";
-import { ClipboardPaste, Search, Plus, FolderPlus, File as FileIcon, Eye } from "lucide-react";
+import { ClipboardPaste, Search, Plus, FolderPlus, File as FileIcon, Eye, Edit } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,6 +42,11 @@ export default function FileEditor() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [newItemType, setNewItemType] = useState<'file' | 'folder' | null>(null);
   const [newItemName, setNewItemName] = useState("");
+
+  // State for renaming
+  const [isRenameDialogOpen, setIsRenameDialogOpen] = useState(false);
+  const [itemToRename, setItemToRename] = useState<{ path: string; isFolder: boolean } | null>(null);
+  const [renameInput, setRenameInput] = useState("");
 
   const [pageUrl, setPageUrl] = useState<string | null>(null);
 
@@ -86,8 +91,8 @@ export default function FileEditor() {
         editorRef.current?.setValue(r.content || "");
         
         // Logic for the "Go to Page" button
-        if (p.startsWith('app/') && p.endsWith('/page.tsx')) {
-            let url = p.replace('app', '').replace('/page.tsx', '');
+        if (p.startsWith('src/app/') && p.endsWith('/page.tsx')) {
+            let url = p.replace('src/app', '').replace('/page.tsx', '');
             if (url === '') url = '/'; // For the root page.tsx
             setPageUrl(url);
         } else {
@@ -122,7 +127,6 @@ export default function FileEditor() {
 
   async function del() {
     if (!file) return;
-    if(!confirm(`Are you sure you want to delete ${file}?`)) return;
     try {
         await api({ action: "delete", filePath: file });
         toast({ title: "File Deleted", description: `${file} has been removed.` });
@@ -249,6 +253,46 @@ export default function FileEditor() {
     }
   };
 
+  const openRenameDialog = () => {
+    if (file) {
+      setItemToRename({ path: file, isFolder: false });
+      setRenameInput(file.split('/').pop() || "");
+      setIsRenameDialogOpen(true);
+    } else if (selectedFolder) {
+      setItemToRename({ path: selectedFolder, isFolder: true });
+      setRenameInput(selectedFolder.split('/').pop() || "");
+      setIsRenameDialogOpen(true);
+    } else {
+      toast({ title: "No item selected", description: "Please select a file or folder to rename.", variant: "destructive" });
+    }
+  };
+
+  const handleRename = async () => {
+    if (!itemToRename || !renameInput.trim()) {
+      toast({ title: "Invalid Name", description: "Please enter a new name.", variant: "destructive" });
+      return;
+    }
+    try {
+      await api({ action: 'rename', oldPath: itemToRename.path, newName: renameInput.trim() });
+      toast({ title: "Success", description: `Item renamed to "${renameInput.trim()}".` });
+      
+      const newPath = path.join(path.dirname(itemToRename.path), renameInput.trim());
+
+      if (itemToRename.path === file) {
+          setFile(newPath); // Update the path of the open file
+      }
+      if (itemToRename.path === selectedFolder) {
+          setSelectedFolder(newPath); // Update the path of the selected folder
+      }
+
+      setIsRenameDialogOpen(false);
+      await loadTree(); // Refresh the file tree
+    } catch (e: any) {
+      toast({ title: "Rename Failed", description: e.message, variant: "destructive" });
+    }
+  };
+
+
   useEffect(() => {
     loadTree();
   }, [loadTree]);
@@ -352,6 +396,9 @@ export default function FileEditor() {
            <Button onClick={handlePaste} className="bg-teal-600 px-3 py-1 flex items-center gap-2" disabled={!file}>
             <ClipboardPaste className="h-4 w-4"/> Paste
           </Button>
+           <Button onClick={openRenameDialog} className="bg-yellow-600 px-3 py-1" disabled={!file && !selectedFolder}>
+              <Edit className="h-4 w-4 mr-1"/> Rename
+          </Button>
           <Button onClick={empty} className="bg-yellow-600 px-3 py-1" disabled={!file}>
             Empty
           </Button>
@@ -443,6 +490,32 @@ export default function FileEditor() {
                 <DialogFooter>
                     <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>Cancel</Button>
                     <Button onClick={handleCreateItem}>Create</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+        
+        <Dialog open={isRenameDialogOpen} onOpenChange={setIsRenameDialogOpen}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Rename {itemToRename?.isFolder ? 'Folder' : 'File'}</DialogTitle>
+                    <DialogDescription>
+                        Renaming: <span className="font-mono">{itemToRename?.path}</span>
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="new-name">New Name</Label>
+                        <Input
+                            id="new-name"
+                            value={renameInput}
+                            onChange={(e) => setRenameInput(e.target.value)}
+                            placeholder="Enter new name..."
+                        />
+                    </div>
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => setIsRenameDialogOpen(false)}>Cancel</Button>
+                    <Button onClick={handleRename}>Rename</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>

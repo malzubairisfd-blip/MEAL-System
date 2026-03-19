@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
 
-const BASE_DIR = path.join(process.cwd(), "src");
+const BASE_DIR = path.join(process.cwd());
 
 /* ================= SAFETY ================= */
 
@@ -109,7 +109,7 @@ async function searchFiles(dir: string, q: string, out: any[] = []) {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { action, filePath, content, name } = body;
+    const { action, filePath, content, name, oldPath, newName } = body;
 
     switch (action) {
       case "tree":
@@ -139,6 +139,18 @@ export async function POST(req: Request) {
       case "delete": {
         const abs = safePath(filePath);
         await fs.rm(abs, { recursive: true, force: true });
+        return NextResponse.json({ ok: true });
+      }
+      
+      case "rename": {
+        if (!oldPath || !newName) throw new Error("Missing old path or new name");
+        const absOldPath = safePath(oldPath);
+        const sanitizedNewName = path.basename(newName);
+        if (sanitizedNewName !== newName) throw new Error("Invalid new name. It cannot contain path characters.");
+
+        const absNewPath = path.join(path.dirname(absOldPath), sanitizedNewName);
+
+        await fs.rename(absOldPath, absNewPath);
         return NextResponse.json({ ok: true });
       }
 

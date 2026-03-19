@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   /* config options here */
+  // This comment will invalidate the cache
   typescript: {
     ignoreBuildErrors: true,
   },
