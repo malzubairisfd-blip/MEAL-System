@@ -1,3 +1,4 @@
+
 // src/app/api/contracts/export-pdf/route.ts
 import puppeteer from "puppeteer";
 import dayjs from "dayjs";
@@ -73,8 +74,19 @@ function generateHTML(educator: any, project: any, funder: string) {
 <head>
 <meta charset="UTF-8">
 <style>
-/* Using a more common font and importing from Google Fonts for reliability */
-@import url('https://fonts.googleapis.com/css2?family=Noto+Naskh+Arabic:wght@400;700&display=swap');
+@font-face {
+  font-family: 'Noto Naskh Arabic';
+  font-style: normal;
+  font-weight: 400;
+  src: url('/fonts/NotoNaskhArabic-Regular.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'Noto Naskh Arabic';
+  font-style: normal;
+  font-weight: 700;
+  src: url('/fonts/NotoNaskhArabic-Bold.ttf') format('truetype');
+}
 
 body {
   font-family: 'Noto Naskh Arabic', serif;
@@ -251,3 +263,5 @@ body {
 </html>
 `;
 }
+
+    
