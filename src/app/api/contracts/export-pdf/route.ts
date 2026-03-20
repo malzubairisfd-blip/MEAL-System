@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import pdf from "html-pdf-node";
 import dayjs from "dayjs";
 
+export const runtime = "nodejs";
+
 // Helper to convert Excel serial date to a readable string
 function excelSerialToDate(serial: number) {
     if (typeof serial !== 'number' || isNaN(serial)) return serial; // Return as is if not a valid number
