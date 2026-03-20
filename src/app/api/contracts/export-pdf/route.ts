@@ -211,7 +211,7 @@ export async function POST(req: Request) {
       status: 200,
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="contract_${educator.applicant_name}.pdf"`,
+        "Content-Disposition": `inline; filename="contract_${educator.applicant_name}.pdf"`,
       },
     });
   } catch (err: any) {
