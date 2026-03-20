@@ -6,7 +6,7 @@ runConfig:
   # more instances in response to increased traffic.
   maxInstances: 1
 packages:
-  # Required for html-pdf-node
+  # Required for puppeteer
   - gconf-service
   - libasound2
   - libatk1.0-0
