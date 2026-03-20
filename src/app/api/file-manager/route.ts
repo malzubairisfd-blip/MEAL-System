@@ -1,96 +1,88 @@
+
+
 import { NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
+import AdmZip from "adm-zip";
 
 const BASE_DIR = process.cwd();
 
-
-/* ================= SAFETY ================= */
-
 function safePath(relativePath?: string) {
   if (!relativePath) throw new Error("Invalid file path");
-
-    const resolved = path.resolve(BASE_DIR, relativePath);
-
-      if (!resolved.startsWith(BASE_DIR)) {
-          throw new Error("Access denied");
-            }
-
-              return resolved;
-              }
-
-              async function isFile(p: string) {
-                try {
-                    const stat = await fs.stat(p);
-                        return stat.isFile();
-                          } catch {
-                              return false;
-                                }
-                                }
-
-/* ================= TREE ================= */
-
-// This function recursively gets file sizes and folder total sizes
-async function listTree(dir: string): Promise<any[]> {
-    const entries = await fs.readdir(dir, { withFileTypes: true });
-
-    const nodes = await Promise.all(
-        entries.map(async (e) => {
-            if (e.name.startsWith('.') || e.name === 'node_modules' || e.name === '.next') {
-              return null;
-            }
-
-            const full = path.join(dir, e.name);
-            const rel = path.relative(BASE_DIR, full);
-
-            if (e.isDirectory()) {
-                const children = await listTree(full);
-                const size = children.reduce((acc, child) => acc + (child?.size || 0), 0);
-                return {
-                    type: "folder",
-                    name: e.name,
-                    path: rel,
-                    size,
-                    children,
-                };
-            }
-
-            try {
-                const stats = await fs.stat(full);
-                return {
-                    type: "file",
-                    name: e.name,
-                    path: rel,
-                    size: stats.size,
-                };
-            } catch {
-                // If stat fails, return with size 0
-                return {
-                    type: "file",
-                    name: e.name,
-                    path: rel,
-                    size: 0,
-                };
-            }
-        })
-    );
-    // Sort so folders appear before files and filter out nulls
-    return (nodes.filter(Boolean) as any[]).sort((a, b) => {
-        if (a.type === 'folder' && b.type === 'file') return -1;
-        if (a.type === 'file' && b.type === 'folder') return 1;
-        return a.name.localeCompare(b.name);
-    });
+  const resolved = path.resolve(BASE_DIR, relativePath);
+  if (!resolved.startsWith(BASE_DIR)) {
+    throw new Error("Access denied");
+  }
+  return resolved;
 }
 
+async function isFile(p: string) {
+  try {
+    const stat = await fs.stat(p);
+    return stat.isFile();
+  } catch {
+    return false;
+  }
+}
 
-/* ================= SEARCH ================= */
+async function exists(p: string) {
+  try {
+    await fs.access(p);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function listTree(dir: string): Promise<any[]> {
+  const entries = await fs.readdir(dir, { withFileTypes: true });
+  const nodes = await Promise.all(
+    entries.map(async (e) => {
+      if (e.name.startsWith('.') || e.name === 'node_modules' || e.name === '.next') {
+        return null;
+      }
+      const full = path.join(dir, e.name);
+      const rel = path.relative(BASE_DIR, full);
+      if (e.isDirectory()) {
+        const children = await listTree(full);
+        const size = children.reduce((acc, child) => acc + (child?.size || 0), 0);
+        return {
+          type: "folder",
+          name: e.name,
+          path: rel,
+          size,
+          children,
+        };
+      }
+      try {
+        const stats = await fs.stat(full);
+        return {
+          type: "file",
+          name: e.name,
+          path: rel,
+          size: stats.size,
+        };
+      } catch {
+        return {
+          type: "file",
+          name: e.name,
+          path: rel,
+          size: 0,
+        };
+      }
+    })
+  );
+  return (nodes.filter(Boolean) as any[]).sort((a, b) => {
+    if (a.type === 'folder' && b.type === 'file') return -1;
+    if (a.type === 'file' && b.type === 'folder') return 1;
+    return a.name.localeCompare(b.name);
+  });
+}
 
 async function searchFiles(dir: string, q: string, out: any[] = []) {
   const entries = await fs.readdir(dir, { withFileTypes: true });
-
   for (const e of entries) {
     const full = path.join(dir, e.name);
-
     if (e.isDirectory()) {
       if (e.name.startsWith('.') || e.name === 'node_modules' || e.name === '.next') {
         continue;
@@ -112,10 +104,67 @@ async function searchFiles(dir: string, q: string, out: any[] = []) {
   return out;
 }
 
-/* ================= API ================= */
-
 export async function POST(req: Request) {
   try {
+    const contentType = req.headers.get("content-type") || "";
+    
+    if (contentType.includes("multipart/form-data")) {
+      const formData = await req.formData();
+      const action = formData.get("action");
+      
+      if (action === "analyzeZip") {
+        const zipFile = formData.get("file") as File;
+        const targetFolder = formData.get("targetFolder") as string || "src";
+        const absTarget = safePath(targetFolder);
+
+        if (!zipFile) throw new Error("No zip file provided");
+        
+        const buffer = Buffer.from(await zipFile.arrayBuffer());
+        const zip = new AdmZip(buffer);
+        const conflicts: string[] = [];
+        
+        for (const entry of zip.getEntries()) {
+          if (entry.isDirectory) continue;
+          const resolvedEntry = path.resolve(absTarget, entry.entryName);
+          if (await exists(resolvedEntry)) {
+             conflicts.push(entry.entryName);
+          }
+        }
+        return NextResponse.json({ conflicts });
+      }
+
+      if (action === "uploadZip") {
+        const zipFile = formData.get("file") as File;
+        const targetFolder = formData.get("targetFolder") as string || "src";
+        const skipFilesStr = formData.get("skipFiles") as string || "[]";
+        const skipFiles = JSON.parse(skipFilesStr) as string[];
+        const absTarget = safePath(targetFolder);
+
+        if (!zipFile) throw new Error("No zip file provided");
+        
+        const buffer = Buffer.from(await zipFile.arrayBuffer());
+        const zip = new AdmZip(buffer);
+        
+        for (const entry of zip.getEntries()) {
+          if (skipFiles.includes(entry.entryName)) continue;
+
+          const entryPath = entry.entryName;
+          const resolvedEntry = path.resolve(absTarget, entryPath);
+          if (!resolvedEntry.startsWith(absTarget)) {
+            throw new Error(`Invalid path in zip: ${entryPath}`);
+          }
+
+          if (entry.isDirectory) {
+            await fs.mkdir(resolvedEntry, { recursive: true });
+          } else {
+            await fs.mkdir(path.dirname(resolvedEntry), { recursive: true });
+            await fs.writeFile(resolvedEntry, entry.getData());
+          }
+        }
+        return NextResponse.json({ ok: true });
+      }
+    }
+
     const body = await req.json();
     const { action, filePath, content, name, oldPath, newName } = body;
 
@@ -125,7 +174,6 @@ export async function POST(req: Request) {
         const result = fullTree.filter(node => node.path === 'public' || node.path === 'src');
         return NextResponse.json(result);
       }
-
       case "read": {
         const abs = safePath(filePath);
         if (!(await isFile(abs))) throw new Error("Not a file");
@@ -133,53 +181,43 @@ export async function POST(req: Request) {
           content: await fs.readFile(abs, "utf8"),
         });
       }
-
       case "save": {
         const abs = safePath(filePath);
         await fs.mkdir(path.dirname(abs), { recursive: true });
         await fs.writeFile(abs, content ?? "", "utf8");
         return NextResponse.json({ ok: true });
       }
-
       case "empty": {
         const abs = safePath(filePath);
         await fs.writeFile(abs, "", "utf8");
         return NextResponse.json({ ok: true });
       }
-
       case "delete": {
         const abs = safePath(filePath);
         await fs.rm(abs, { recursive: true, force: true });
         return NextResponse.json({ ok: true });
       }
-      
       case "rename": {
         if (!oldPath || !newName) throw new Error("Missing old path or new name");
         const absOldPath = safePath(oldPath);
         const sanitizedNewName = path.basename(newName);
-        if (sanitizedNewName !== newName) throw new Error("Invalid new name. It cannot contain path characters.");
-
+        if (sanitizedNewName !== newName) throw new Error("Invalid name");
         const absNewPath = path.join(path.dirname(absOldPath), sanitizedNewName);
-
         await fs.rename(absOldPath, absNewPath);
         return NextResponse.json({ ok: true });
       }
-
       case "createFile": {
         const dir = safePath(filePath);
         await fs.writeFile(path.join(dir, name), content ?? "", "utf8");
         return NextResponse.json({ ok: true });
       }
-
       case "createFolder": {
         const dir = safePath(filePath);
         await fs.mkdir(path.join(dir, name), { recursive: true });
         return NextResponse.json({ ok: true });
       }
-
       case "search":
         return NextResponse.json(await searchFiles(BASE_DIR, content));
-
       default:
         return NextResponse.json({ error: "Invalid action" }, { status: 400 });
     }

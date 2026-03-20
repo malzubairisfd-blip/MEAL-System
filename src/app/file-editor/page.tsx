@@ -1,16 +1,25 @@
 
+
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import dynamic from "next/dynamic";
 import Link from 'next/link';
 import { useToast } from "@/hooks/use-toast";
-import { ClipboardPaste, Search, Plus, FolderPlus, File as FileIcon, Eye, Edit } from "lucide-react";
+import { 
+  ClipboardPaste, Search, Plus, FolderPlus, File as FileIcon, Eye, Edit, 
+  Upload, RefreshCw, Trash2, Download, Save, AlertCircle, 
+  CheckCircle2, Loader2, PanelLeft, PanelRight, ChevronLeft, ChevronRight, Menu,
+  FileX
+} from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
+import { cn } from "@/lib/utils";
 
 const MonacoEditor = dynamic(() => import("@monaco-editor/react"), {
   ssr: false,
@@ -25,18 +34,47 @@ function formatBytes(bytes: number, decimals = 2) {
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
 }
 
+function getLanguage(filePath: string) {
+  const ext = filePath.split('.').pop()?.toLowerCase();
+  switch (ext) {
+    case 'ts':
+    case 'tsx': return 'typescript';
+    case 'js':
+    case 'jsx': return 'javascript';
+    case 'json': return 'json';
+    case 'css': return 'css';
+    case 'html': return 'html';
+    case 'md': return 'markdown';
+    default: return 'plaintext';
+  }
+}
 
 export default function FileEditor() {
   const editorRef = useRef<any>(null);
   const monacoRef = useRef<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const zipInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
   const [tree, setTree] = useState<any[]>([]);
   const [file, setFile] = useState<string | null>(null);
+  const [fileContent, setFileContent] = useState("");
+  const [isLoadingFile, setIsLoadingFile] = useState(false);
   const [selectedFolder, setSelectedFolder] = useState<string | null>('src');
   const [search, setSearch] = useState("");
   const [results, setResults] = useState<any[]>([]);
+
+  // Layout States
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [sidebarSide, setSidebarSide] = useState<'left' | 'right'>('left');
+
+  // ZIP Upload States
+  const [isZipProgressOpen, setIsZipProgressOpen] = useState(false);
+  const [zipProgress, setZipProgress] = useState(0);
+  const [zipStatus, setZipStatus] = useState("");
+  const [zipConflicts, setZipConflicts] = useState<string[]>([]);
+  const [isZipConflictDialogOpen, setIsZipConflictDialogOpen] = useState(false);
+  const [pendingZipFile, setPendingZipFile] = useState<File | null>(null);
 
   // State for creating new files/folders
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -56,11 +94,8 @@ export default function FileEditor() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
     });
-    
     const text = await res.text();
-
     if (!res.ok) {
-        // Try to parse the error text as JSON, otherwise use the text itself.
         try {
             const errorJson = JSON.parse(text);
             throw new Error(errorJson.error || `API request failed with status ${res.status}`);
@@ -68,9 +103,6 @@ export default function FileEditor() {
             throw new Error(text || `API request failed with status ${res.status}`);
         }
     }
-    
-    // If the response is OK and the text is not empty, parse it.
-    // Otherwise, return an empty object for success with no content (e.g., delete).
     return text ? JSON.parse(text) : {};
   }
 
@@ -82,44 +114,49 @@ export default function FileEditor() {
     }
   }, [toast]);
 
-
   async function openFile(p: string) {
+    if (p === file) return;
+    setIsLoadingFile(true);
     try {
         const r = await api({ action: "read", filePath: p });
         setFile(p);
-        setSelectedFolder(p.substring(0, p.lastIndexOf('/')));
-        editorRef.current?.setValue(r.content || "");
+        setFileContent(r.content || "");
+        setSelectedFolder(p.includes('/') ? p.substring(0, p.lastIndexOf('/')) : null);
         
-        // Logic for the "Go to Page" button
         if (p.startsWith('src/app/') && p.endsWith('/page.tsx')) {
             let url = p.replace('src/app', '').replace('/page.tsx', '');
-            if (url === '') url = '/'; // For the root page.tsx
+            if (url === '') url = '/';
             setPageUrl(url);
         } else {
             setPageUrl(null);
         }
+        
+        if (window.innerWidth < 768) {
+          setIsSidebarOpen(false);
+        }
     } catch(e: any) {
         toast({ title: "Error", description: `Could not read file ${p}: ${e.message}`, variant: "destructive" });
+    } finally {
+        setIsLoadingFile(false);
     }
   }
 
-  async function save(content?: string) {
-    if (!file || !editorRef.current) return;
+  async function save() {
+    if (!file) return;
     try {
-        const value = content ?? editorRef.current.getValue();
-        await api({ action: "save", filePath: file, content: value });
+        await api({ action: "save", filePath: file, content: fileContent });
         toast({ title: "File Saved", description: `Saved changes to ${file}` });
     } catch (e: any) {
         toast({ title: "Save Failed", description: e.message, variant: "destructive" });
     }
   }
 
-  async function empty() {
-    if (!file || !editorRef.current) return;
+  async function clearFile() {
+    if (!file) return;
     try {
-        editorRef.current.setValue("");
         await api({ action: "empty", filePath: file });
-        toast({ title: "File Emptied", description: `Emptied content of ${file}` });
+        setFileContent("");
+        toast({ title: "File Emptied", description: `${file} content has been cleared.` });
     } catch (e: any) {
         toast({ title: "Error", description: e.message, variant: "destructive" });
     }
@@ -131,8 +168,8 @@ export default function FileEditor() {
         await api({ action: "delete", filePath: file });
         toast({ title: "File Deleted", description: `${file} has been removed.` });
         setFile(null);
+        setFileContent("");
         setPageUrl(null);
-        editorRef.current?.setValue("");
         loadTree();
     } catch (e: any) {
         toast({ title: "Delete Failed", description: e.message, variant: "destructive" });
@@ -149,16 +186,15 @@ export default function FileEditor() {
   }
   
   async function downloadFile() {
-      if (!file || !editorRef.current) {
+      if (!file) {
         toast({ title: "No file selected", description: "Please select a file from the tree to download.", variant: "destructive" });
         return;
       }
-      const content = editorRef.current.getValue();
-      const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+      const blob = new Blob([fileContent], { type: 'text/plain;charset=utf-8' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = file.split('/').pop() || 'download.txt'; // Get filename from path
+      a.download = file.split('/').pop() || 'download.txt';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -166,7 +202,7 @@ export default function FileEditor() {
     }
 
   const handlePaste = async () => {
-    if (!editorRef.current || !monacoRef.current) {
+    if (!editorRef.current) {
         toast({ title: "Editor not ready", description: "Please load a file first.", variant: "destructive" });
         return;
     }
@@ -188,34 +224,28 @@ export default function FileEditor() {
                 },
             ]);
             toast({ title: "Pasted from clipboard" });
-        } else {
-            toast({ title: "Clipboard is empty" });
         }
     } catch (err) {
-        console.error("Paste failed:", err);
         toast({
             title: "Paste Failed",
-            description: "Could not read from clipboard. Your browser might have blocked this action for security reasons. Try Ctrl+V or Cmd+V.",
+            description: "Try Ctrl+V.",
             variant: "destructive",
         });
     }
   };
 
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
-      if (!file || !editorRef.current) {
-          toast({ title: "No file selected", description: "Please select a file from the tree to overwrite.", variant: "destructive" });
-          e.target.value = ""; // Reset input
+      if (!file) {
+          toast({ title: "No file selected", description: "Select a file to overwrite.", variant: "destructive" });
           return;
       }
-
       const uploaded = e.target.files?.[0];
       if (!uploaded) return;
-
       try {
           const text = await uploaded.text();
-          editorRef.current.setValue(text);
-          await save(text); 
-          toast({ title: "Content Replaced", description: `The content of ${file} has been updated and saved.`});
+          setFileContent(text);
+          await api({ action: "save", filePath: file, content: text });
+          toast({ title: "Content Replaced", description: `Updated ${file}.`});
       } catch (err: any) {
            toast({ title: "Upload Failed", description: err.message, variant: "destructive" });
       } finally {
@@ -223,28 +253,87 @@ export default function FileEditor() {
       }
   }
 
-  const openCreateDialog = (type: 'file' | 'folder') => {
-      if (!selectedFolder) {
-          toast({ title: "No Folder Selected", description: "Please select a folder from the tree to create items in.", variant: "destructive" });
-          return;
-      }
-      setNewItemType(type);
-      setIsCreateDialogOpen(true);
-  };
-  
-  const handleCreateItem = async () => {
-    if (!newItemType || !newItemName || !selectedFolder) {
-        toast({ title: "Error", description: "Please select a folder and provide a name.", variant: "destructive" });
-        return;
+  async function handleZipUploadInitiate(e: React.ChangeEvent<HTMLInputElement>) {
+    const uploaded = e.target.files?.[0];
+    if (!uploaded) return;
+    if (!selectedFolder) {
+      toast({ title: "No folder selected", description: "Select a target folder to unzip into.", variant: "destructive" });
+      return;
     }
+
+    setPendingZipFile(uploaded);
+    setIsZipProgressOpen(true);
+    setZipProgress(10);
+    setZipStatus("Analyzing ZIP content...");
+
+    const formData = new FormData();
+    formData.append("file", uploaded);
+    formData.append("action", "analyzeZip");
+    formData.append("targetFolder", selectedFolder);
+
+    try {
+      const res = await fetch("/api/file-manager", { method: "POST", body: formData });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Analysis failed");
+
+      if (data.conflicts.length > 0) {
+        setZipConflicts(data.conflicts);
+        setIsZipConflictDialogOpen(true);
+        setZipProgress(30);
+        setZipStatus("Conflicts detected. Awaiting decision.");
+      } else {
+        await executeZipUpload(uploaded, []);
+      }
+    } catch (err: any) {
+      toast({ title: "Analysis Failed", description: err.message, variant: "destructive" });
+      setIsZipProgressOpen(false);
+    } finally {
+      e.target.value = "";
+    }
+  }
+
+  async function executeZipUpload(file: File, skipFiles: string[]) {
+    setZipProgress(50);
+    setZipStatus("Updating project files...");
+
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("action", "uploadZip");
+    formData.append("targetFolder", selectedFolder!);
+    formData.append("skipFiles", JSON.stringify(skipFiles));
+
+    try {
+      const res = await fetch("/api/file-manager", { method: "POST", body: formData });
+      if (!res.ok) throw new Error(await res.text());
+      
+      setZipProgress(90);
+      setZipStatus("Refreshing explorer...");
+      await loadTree();
+      setZipProgress(100);
+      setZipStatus("Done!");
+      
+      setTimeout(() => {
+        setIsZipProgressOpen(false);
+        setPendingZipFile(null);
+      }, 1000);
+      
+      toast({ title: "Success", description: "Project updated." });
+    } catch (err: any) {
+      toast({ title: "Upload Failed", description: err.message, variant: "destructive" });
+      setIsZipProgressOpen(false);
+    }
+  }
+
+  const handleCreateItem = async () => {
+    if (!newItemType || !newItemName || !selectedFolder) return;
     try {
         await api({
             action: newItemType === 'file' ? 'createFile' : 'createFolder',
             filePath: selectedFolder,
             name: newItemName,
-            content: '', // New file content is handled by saving the editor
+            content: '',
         });
-        toast({ title: "Success", description: `${newItemType} '${newItemName}' created in ${selectedFolder}.` });
+        toast({ title: "Success", description: `${newItemType} created.` });
         setIsCreateDialogOpen(false);
         setNewItemName('');
         await loadTree();
@@ -253,239 +342,315 @@ export default function FileEditor() {
     }
   };
 
-  const openRenameDialog = () => {
-    if (file) {
-      setItemToRename({ path: file, isFolder: false });
-      setRenameInput(file.split('/').pop() || "");
-      setIsRenameDialogOpen(true);
-    } else if (selectedFolder) {
-      setItemToRename({ path: selectedFolder, isFolder: true });
-      setRenameInput(selectedFolder.split('/').pop() || "");
-      setIsRenameDialogOpen(true);
-    } else {
-      toast({ title: "No item selected", description: "Please select a file or folder to rename.", variant: "destructive" });
-    }
-  };
-
   const handleRename = async () => {
-    if (!itemToRename || !renameInput.trim()) {
-      toast({ title: "Invalid Name", description: "Please enter a new name.", variant: "destructive" });
-      return;
-    }
+    if (!itemToRename || !renameInput.trim()) return;
     try {
       await api({ action: 'rename', oldPath: itemToRename.path, newName: renameInput.trim() });
-      toast({ title: "Success", description: `Item renamed to "${renameInput.trim()}".` });
-      
-      const newPath = path.join(path.dirname(itemToRename.path), renameInput.trim());
-
-      if (itemToRename.path === file) {
-          setFile(newPath); // Update the path of the open file
-      }
-      if (itemToRename.path === selectedFolder) {
-          setSelectedFolder(newPath); // Update the path of the selected folder
-      }
-
+      toast({ title: "Success", description: "Renamed." });
       setIsRenameDialogOpen(false);
-      await loadTree(); // Refresh the file tree
+      await loadTree();
     } catch (e: any) {
       toast({ title: "Rename Failed", description: e.message, variant: "destructive" });
     }
   };
 
-
   useEffect(() => {
     loadTree();
   }, [loadTree]);
 
-  const renderTree = (nodes: any[], level = 0) =>
+  const renderTree = (nodes: any[]) =>
     nodes.map((n) => (
-      <div key={n.path} className="ml-3">
+      <div key={n.path} className="ml-3 select-none">
         {n.type === "file" ? (
           <div
-            className={`flex justify-between items-center cursor-pointer hover:text-blue-400 ${
-              n.path === file ? "text-blue-500 font-bold" : ""
-            }`}
+            className={cn(
+              "group flex justify-between items-center py-0.5 px-2 rounded cursor-pointer transition-colors hover:bg-white/5 whitespace-nowrap",
+              n.path === file ? "bg-primary/20 text-primary font-bold" : ""
+            )}
             onClick={() => openFile(n.path)}
           >
-            <span className="flex items-center gap-1"><FileIcon className="h-4 w-4 inline-block" /> {n.name}</span>
-            <span className="text-xs text-gray-500 pr-2">{formatBytes(n.size)}</span>
+            <span className="flex items-center gap-2 overflow-hidden mr-4">
+              <FileIcon className="h-3.5 w-3.5 shrink-0 opacity-70" /> 
+              <span className="text-sm">{n.name}</span>
+            </span>
+            <div className="flex items-center gap-2">
+              <Button 
+                size="icon" 
+                variant="ghost" 
+                className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity" 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setItemToRename({ path: n.path, isFolder: false });
+                  setRenameInput(n.name);
+                  setIsRenameDialogOpen(true);
+                }}
+              >
+                <Edit className="h-3 w-3" />
+              </Button>
+              <span className="text-[10px] opacity-40 shrink-0">{formatBytes(n.size)}</span>
+            </div>
           </div>
         ) : (
-          <div>
+          <div className="mb-1">
             <div
-                className={`font-semibold cursor-pointer flex justify-between items-center ${selectedFolder === n.path ? 'text-amber-400' : ''}`}
+                className={cn(
+                  "group flex justify-between items-center py-0.5 px-2 rounded cursor-pointer transition-colors hover:bg-white/5 whitespace-nowrap",
+                  selectedFolder === n.path ? 'bg-accent/20 text-accent' : 'opacity-80'
+                )}
                 onClick={() => setSelectedFolder(n.path)}
             >
-                <span className="flex items-center gap-1"><FolderPlus className="h-4 w-4 inline-block" /> {n.name}</span>
-                <span className="text-xs text-gray-500 pr-2">{formatBytes(n.size)}</span>
+                <span className="flex items-center gap-2 overflow-hidden mr-4">
+                  <FolderPlus className="h-3.5 w-3.5 shrink-0 opacity-70" /> 
+                  <span className="text-sm font-medium">{n.name}</span>
+                </span>
+                <div className="flex items-center gap-2">
+                  <Button 
+                    size="icon" 
+                    variant="ghost" 
+                    className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity" 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setItemToRename({ path: n.path, isFolder: true });
+                      setRenameInput(n.name);
+                      setIsRenameDialogOpen(true);
+                    }}
+                  >
+                    <Edit className="h-3 w-3" />
+                  </Button>
+                  <span className="text-[10px] opacity-40 shrink-0">{formatBytes(n.size)}</span>
+                </div>
             </div>
-            {n.children && renderTree(n.children, level + 1)}
+            {n.children && renderTree(n.children)}
           </div>
         )}
       </div>
     ));
 
   return (
-    <div className="flex h-screen bg-slate-950 text-white">
-      {/* LEFT PANEL */}
-      <div className="w-72 border-r border-slate-800 p-2 flex flex-col">
-        <div className="flex-shrink-0 space-y-2">
-            <button
-                className="mb-2 bg-green-600 w-full py-1"
-                onClick={loadTree}
-            >
-                Refresh Tree
-            </button>
-             <div className="flex gap-2">
-                <Button onClick={() => openCreateDialog('file')} className="flex-1" variant="outline" size="sm" disabled={!selectedFolder}>
-                    <Plus className="h-4 w-4 mr-1"/> New File
+    <div className={cn(
+      "flex h-screen bg-background text-foreground font-body overflow-hidden",
+      sidebarSide === 'right' ? 'flex-row-reverse' : 'flex-row'
+    )}>
+      {/* SIDEBAR PANEL */}
+      <div className={cn(
+        "w-80 border-border p-4 flex flex-col gap-4 bg-background transition-all duration-300 z-50",
+        sidebarSide === 'left' ? 'border-r' : 'border-l',
+        !isSidebarOpen && "hidden"
+      )}>
+        <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <h1 className="text-xl font-headline font-bold text-accent">CodeNest</h1>
+              <div className="flex gap-1">
+                <Button size="icon" variant="ghost" onClick={loadTree} className="h-8 w-8 hover:bg-white/10">
+                  <RefreshCw className="h-4 w-4" />
                 </Button>
-                <Button onClick={() => openCreateDialog('folder')} className="flex-1" variant="outline" size="sm" disabled={!selectedFolder}>
-                    <FolderPlus className="h-4 w-4 mr-1"/> New Folder
+                <Button size="icon" variant="ghost" onClick={() => setIsSidebarOpen(false)} className="h-8 w-8 hover:bg-white/10 md:hidden">
+                  <ChevronLeft className={cn("h-4 w-4", sidebarSide === 'right' && "rotate-180")} />
+                </Button>
+              </div>
+            </div>
+            
+            <div className="flex gap-2">
+                <Button onClick={() => { setNewItemType('file'); setIsCreateDialogOpen(true); }} className="flex-1 px-1" variant="secondary" size="sm" disabled={!selectedFolder}>
+                    <Plus className="h-3.5 w-3.5 mr-1"/> File
+                </Button>
+                <Button onClick={() => { setNewItemType('folder'); setIsCreateDialogOpen(true); }} className="flex-1 px-1" variant="secondary" size="sm" disabled={!selectedFolder}>
+                    <FolderPlus className="h-3.5 w-3.5 mr-1"/> Folder
+                </Button>
+                <Button onClick={() => zipInputRef.current?.click()} className="flex-1 px-1" variant="secondary" size="sm" disabled={!selectedFolder}>
+                    <Upload className="h-3.5 w-3.5 mr-1"/> ZIP
                 </Button>
             </div>
 
             <div className="relative">
-                <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <input
-                className="border border-slate-700 bg-slate-900 w-full mb-2 pl-8 pr-2 py-1"
-                placeholder="Search file content..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && runSearch()}
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                <Input
+                  className="bg-card/50 pl-8 pr-2 py-1 h-9 text-sm"
+                  placeholder="Search code..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && runSearch()}
                 />
             </div>
-
-            <button
-                className="bg-blue-600 w-full mb-2 py-1"
-                onClick={runSearch}
-            >
-                Search
-            </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto mt-2">
-            {results.map((r, i) => (
-            <div
-                key={i}
-                className="text-xs cursor-pointer hover:text-blue-400"
-                onClick={() => openFile(r.file)}
-            >
-                {r.file}:{r.line}
+        <ScrollArea className="flex-1">
+            {results.length > 0 && (
+              <div className="mb-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-bold uppercase tracking-wider opacity-50">Results</span>
+                  <Badge variant="outline" className="text-[10px]">{results.length}</Badge>
+                </div>
+                <div className="space-y-1">
+                  {results.map((r, i) => (
+                    <div
+                        key={i}
+                        className="text-[11px] p-2 bg-card/40 rounded cursor-pointer hover:bg-card hover:text-primary transition-all overflow-hidden"
+                        onClick={() => openFile(r.file)}
+                    >
+                        <div className="font-bold truncate">{r.file}</div>
+                        <div className="opacity-60 truncate">Line {r.line}: {r.text}</div>
+                    </div>
+                  ))}
+                </div>
+                <div className="h-px bg-border my-4" />
+              </div>
+            )}
+            <div className="pr-4">
+              {renderTree(tree)}
             </div>
-            ))}
+            <ScrollBar orientation="horizontal" />
+        </ScrollArea>
 
-            {renderTree(tree)}
-        </div>
+        <input
+          ref={zipInputRef}
+          type="file"
+          accept=".zip"
+          className="hidden"
+          onChange={handleZipUploadInitiate}
+        />
       </div>
 
-      {/* EDITOR */}
-      <div className="flex-1 flex flex-col">
+      {/* EDITOR PANEL */}
+      <div className="flex-1 flex flex-col bg-card/20 min-w-0 overflow-hidden relative">
         {/* TOOLBAR */}
-        <div className="p-2 border-b border-slate-800 flex gap-2 items-center">
-          <Button onClick={() => save()} className="bg-blue-600 px-3 py-1" disabled={!file}>
-            Save
-          </Button>
-          {pageUrl && (
-            <Button asChild variant="secondary">
-                <Link href={pageUrl} target="_blank">
-                    <Eye className="mr-2 h-4 w-4" /> Go to Page
-                </Link>
+        <div className="h-14 px-4 border-b border-border flex items-center justify-between overflow-x-auto no-scrollbar">
+          <div className="flex items-center gap-3 shrink-0">
+            <Button size="icon" variant="ghost" onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="h-8 w-8 hover:bg-white/10">
+               {isSidebarOpen ? (
+                 sidebarSide === 'left' ? <PanelLeft className="h-4 w-4" /> : <PanelRight className="h-4 w-4" />
+               ) : (
+                 <Menu className="h-4 w-4" />
+               )}
             </Button>
-          )}
-           <Button onClick={handlePaste} className="bg-teal-600 px-3 py-1 flex items-center gap-2" disabled={!file}>
-            <ClipboardPaste className="h-4 w-4"/> Paste
-          </Button>
-           <Button onClick={openRenameDialog} className="bg-yellow-600 px-3 py-1" disabled={!file && !selectedFolder}>
-              <Edit className="h-4 w-4 mr-1"/> Rename
-          </Button>
-          <Button onClick={empty} className="bg-yellow-600 px-3 py-1" disabled={!file}>
-            Empty
-          </Button>
-          <Button onClick={del} className="bg-red-600 px-3 py-1" disabled={!file}>
-            Delete
-          </Button>
-          <Button onClick={downloadFile} className="bg-green-600 px-3 py-1" disabled={!file}>
-            Download
-          </Button>
+            
+            <div className="flex items-center gap-3 max-w-[200px] md:max-w-md overflow-hidden">
+              {file ? (
+                <>
+                  <FileIcon className="h-4 w-4 text-primary shrink-0" />
+                  <span className="text-sm font-medium truncate">{file}</span>
+                  {isLoadingFile && <Loader2 className="h-3 w-3 animate-spin opacity-50" />}
+                </>
+              ) : (
+                <span className="text-sm opacity-50 italic">No file selected</span>
+              )}
+              {pageUrl && (
+                <Link href={pageUrl} target="_blank" className="flex items-center text-[10px] font-bold uppercase tracking-tighter text-accent hover:underline ml-2">
+                  <Eye className="h-3 w-3 mr-1" /> Preview
+                </Link>
+              )}
+            </div>
+          </div>
+          
+          <div className="flex gap-2 items-center shrink-0 ml-4">
+            <Button size="icon" variant="ghost" onClick={() => setSidebarSide(sidebarSide === 'left' ? 'right' : 'left')} className="h-8 w-8 hover:bg-white/10 hidden md:flex" title="Swap Sidebar Position">
+              {sidebarSide === 'left' ? <PanelRight className="h-4 w-4" /> : <PanelLeft className="h-4 w-4" />}
+            </Button>
+
+            {file && (
+              <>
+                <div className="flex gap-1 md:gap-2">
+                  <Button size="sm" variant="outline" onClick={save} className="h-8 gap-2 px-2 md:px-3">
+                    <Save className="h-3.5 w-3.5" /> <span className="hidden md:inline">Save</span>
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={handlePaste} className="h-8 gap-2 text-accent border-accent/30 hover:bg-accent/10 px-2 md:px-3">
+                    <ClipboardPaste className="h-3.5 w-3.5" /> <span className="hidden md:inline">Paste</span>
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={clearFile} className="h-8 gap-2 hover:text-destructive px-2 md:px-3" title="Clear Content">
+                    <FileX className="h-3.5 w-3.5" /> <span className="hidden md:inline">Empty</span>
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => { setItemToRename({ path: file, isFolder: false }); setRenameInput(file.split('/').pop() || ""); setIsRenameDialogOpen(true); }} className="h-8 gap-2 px-2 md:px-3">
+                    <Edit className="h-3.5 w-3.5" /> <span className="hidden md:inline">Rename</span>
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={downloadFile} className="h-8 gap-2 hover:text-accent px-2 md:px-3">
+                    <Download className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button size="sm" variant="destructive" onClick={del} className="h-8 gap-2 px-2 md:px-3">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+                <div className="w-px h-6 bg-border mx-1 hidden md:block" />
+                <Button 
+                  size="sm" 
+                  className="bg-primary text-primary-foreground h-8 hidden md:flex"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  Overwrite
+                </Button>
+              </>
+            )}
+          </div>
+          
           <input
             ref={fileInputRef}
             type="file"
-            accept=".ts,.tsx,.js,.json,.txt,.md,.css"
             className="hidden"
             onChange={handleUpload}
           />
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="bg-purple-600 px-3 py-1 ml-auto"
-            disabled={!file}
-          >
-            Upload & Replace
-          </button>
         </div>
 
-        {/* MONACO */}
-        <div className="flex-1">
+        {/* EDITOR */}
+        <div className="flex-1 relative overflow-hidden">
+          {!file && !isLoadingFile && (
+            <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/50 backdrop-blur-sm">
+              <div className="text-center p-8 border border-border rounded-xl bg-card shadow-2xl max-w-sm mx-4">
+                <FileIcon className="h-12 w-12 mx-auto mb-4 opacity-20" />
+                <h2 className="text-lg font-bold mb-2">CodeNest Explorer</h2>
+                <p className="text-sm text-muted-foreground mb-6">Select a file from the left to start editing. Files open immediately on click.</p>
+                <Button variant="secondary" onClick={() => setIsSidebarOpen(true)} className="w-full gap-2">
+                  <ChevronRight className="h-4 w-4" /> Open Sidebar
+                </Button>
+              </div>
+            </div>
+          )}
+          
+          {isLoadingFile && (
+            <div className="absolute inset-0 z-20 flex items-center justify-center bg-background/40">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          )}
+
           <MonacoEditor
             path={file || 'untitled'}
-            defaultLanguage="typescript"
+            language={file ? getLanguage(file) : 'plaintext'}
+            value={fileContent}
+            onChange={(val) => setFileContent(val || "")}
             theme="vs-dark"
             onMount={(editor, monaco) => {
               editorRef.current = editor;
               monacoRef.current = monaco;
-
-              monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
-                noSemanticValidation: true,
-                noSyntaxValidation: false,
-              });
-
-              setTimeout(() => {
-                monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
-                  noSemanticValidation: false,
-                  noSyntaxValidation: false,
-                });
-              }, 1000);
-
-              monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
-                target: monaco.languages.typescript.ScriptTarget.ESNext,
-                jsx: monaco.languages.typescript.JsxEmit.React,
-                module: monaco.languages.typescript.ModuleKind.ESNext,
-                moduleResolution:
-                  monaco.languages.typescript.ModuleResolutionKind.NodeJs,
-                strict: true,
-                esModuleInterop: true,
-              });
             }}
             options={{
               minimap: { enabled: false },
               automaticLayout: true,
-              fontSize: 14,
-              wordWrap: "on",
-              largeFileOptimizations: true,
-              renderValidationDecorations: "off",
+              fontSize: 13,
+              fontFamily: 'monospace',
+              lineHeight: 20,
+              padding: { top: 16 },
+              wordWrap: "off",
+              backgroundColor: '#1A1D21',
+              scrollBeyondLastLine: false,
+              renderWhitespace: "selection",
+              scrollbar: {
+                vertical: "auto",
+                horizontal: "auto",
+                verticalScrollbarSize: 10,
+                horizontalScrollbarSize: 10
+              }
             }}
           />
         </div>
       </div>
 
        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-            <DialogContent>
+            <DialogContent className="bg-card border-border">
                 <DialogHeader>
-                    <DialogTitle>Create New {newItemType}</DialogTitle>
-                    <DialogDescription>
-                        Creating in folder: <span className="font-mono">{selectedFolder}</span>
-                    </DialogDescription>
+                    <DialogTitle>Create {newItemType}</DialogTitle>
+                    <DialogDescription>Target: <span className="font-mono text-accent">{selectedFolder}</span></DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
-                    <div className="space-y-2">
-                        <Label htmlFor="new-item-name">{newItemType === 'file' ? 'File' : 'Folder'} Name</Label>
-                        <Input 
-                            id="new-item-name" 
-                            value={newItemName} 
-                            onChange={(e) => setNewItemName(e.target.value)}
-                            placeholder={newItemType === 'file' ? 'e.g., new-component.tsx' : 'e.g., new-folder'}
-                        />
-                    </div>
+                    <Label htmlFor="name">Name</Label>
+                    <Input id="name" value={newItemName} onChange={(e) => setNewItemName(e.target.value)} placeholder="Enter name..." />
                 </div>
                 <DialogFooter>
                     <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>Cancel</Button>
@@ -495,23 +660,11 @@ export default function FileEditor() {
         </Dialog>
         
         <Dialog open={isRenameDialogOpen} onOpenChange={setIsRenameDialogOpen}>
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>Rename {itemToRename?.isFolder ? 'Folder' : 'File'}</DialogTitle>
-                    <DialogDescription>
-                        Renaming: <span className="font-mono">{itemToRename?.path}</span>
-                    </DialogDescription>
-                </DialogHeader>
+            <DialogContent className="bg-card border-border">
+                <DialogHeader><DialogTitle>Rename Item</DialogTitle></DialogHeader>
                 <div className="space-y-4 py-4">
-                    <div className="space-y-2">
-                        <Label htmlFor="new-name">New Name</Label>
-                        <Input
-                            id="new-name"
-                            value={renameInput}
-                            onChange={(e) => setRenameInput(e.target.value)}
-                            placeholder="Enter new name..."
-                        />
-                    </div>
+                    <Label htmlFor="new-name">New Name</Label>
+                    <Input id="new-name" value={renameInput} onChange={(e) => setRenameInput(e.target.value)} />
                 </div>
                 <DialogFooter>
                     <Button variant="outline" onClick={() => setIsRenameDialogOpen(false)}>Cancel</Button>
@@ -520,6 +673,43 @@ export default function FileEditor() {
             </DialogContent>
         </Dialog>
 
+        {/* ZIP CONFLICT DIALOG */}
+        <Dialog open={isZipConflictDialogOpen} onOpenChange={setIsZipConflictDialogOpen}>
+            <DialogContent className="bg-card border-border max-w-md">
+                <DialogHeader>
+                    <div className="flex items-center gap-2 text-accent mb-2">
+                      <AlertCircle className="h-5 w-5" />
+                      <DialogTitle>File Conflicts</DialogTitle>
+                    </div>
+                    <DialogDescription>
+                        {zipConflicts.length} files already exist in <span className="font-mono text-accent">{selectedFolder}</span>.
+                    </DialogDescription>
+                </DialogHeader>
+                <ScrollArea className="h-48 rounded border border-border p-2 bg-black/20 my-4">
+                    {zipConflicts.map((c, i) => <div key={i} className="text-xs font-mono opacity-70 mb-1">â€¢ {c}</div>)}
+                    <ScrollBar orientation="horizontal" />
+                </ScrollArea>
+                <DialogFooter className="flex gap-2">
+                    <Button variant="outline" onClick={() => { setIsZipConflictDialogOpen(false); executeZipUpload(pendingZipFile!, zipConflicts); }}>Skip Existing</Button>
+                    <Button onClick={() => { setIsZipConflictDialogOpen(false); executeZipUpload(pendingZipFile!, []); }}>Replace All</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+
+        {/* ZIP PROGRESS DIALOG */}
+        <Dialog open={isZipProgressOpen} onOpenChange={(open) => !open && setIsZipProgressOpen(false)}>
+            <DialogContent className="bg-card border-border max-w-sm pointer-events-none" onPointerDownOutside={(e) => e.preventDefault()}>
+                <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                      {zipProgress < 100 ? <Loader2 className="h-4 w-4 animate-spin text-primary" /> : <CheckCircle2 className="h-4 w-4 text-green-500" />}
+                      {zipStatus}
+                    </DialogTitle>
+                </DialogHeader>
+                <div className="py-6 space-y-4">
+                    <Progress value={zipProgress} className="h-2" />
+                </div>
+            </DialogContent>
+        </Dialog>
     </div>
   );
 }

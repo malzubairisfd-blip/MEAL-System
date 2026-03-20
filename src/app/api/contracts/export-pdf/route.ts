@@ -194,24 +194,23 @@ function generateHTML(educator: any, project: any, funder: string, baseUrl: stri
 
 // POST route to generate PDF
 export async function POST(req: Request) {
+  let browser = null;
   try {
-    // 1. EXTRACT DYNAMIC URL FROM HEADERS
-    const host = req.headers.get("host") || "localhost:3000";
-    const protocol = req.headers.get("x-forwarded-proto")?.split(',')[0] || (host.includes("localhost") ? "http" : "https");
-    const baseUrl = `${protocol}://${host}`;
-
     const { educator, project, funder } = await req.json();
+    const htmlContent = generateHTML(educator, project, funder);
 
-    // 2. PASS BASE URL TO HTML GENERATOR
-    const htmlContent = generateHTML(educator, project, funder, baseUrl);
-
-    // 3. LAUNCH SERVERLESS PUPPETEER
-    const browser = await puppeteer.launch({
-      args: chromium.args,
+    // CRITICAL: Increased memory and specific flags for Serverless Linux
+    browser = await puppeteer.launch({
+      args: [
+        ...chromium.args,
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-gpu",
+      ],
       defaultViewport: chromium.defaultViewport,
       executablePath: await chromium.executablePath(),
       headless: chromium.headless,
-      ignoreHTTPSErrors: true,
     });
 
     const page = await browser.newPage();
