@@ -1,14 +1,13 @@
 import { NextResponse } from "next/server";
-import puppeteer from "puppeteer";
+import puppeteer from "puppeteer-core";
+import chromium from "@sparticuz/chromium";
 import dayjs from "dayjs";
 
 export const runtime = "nodejs";
 
 // Helper to convert Excel serial date to a readable string
 function excelSerialToDate(serial: number) {
-    if (typeof serial !== 'number' || isNaN(serial)) return serial; // Return as is if not a valid number
-    // Excel's epoch starts on 1899-12-30. JavaScript's is 1970-01-01.
-    // Excel also incorrectly thinks 1900 was a leap year.
+    if (typeof serial !== 'number' || isNaN(serial)) return serial;
     const excelEpoch = new Date(1899, 11, 30);
     const date = new Date(excelEpoch.getTime() + serial * 24 * 60 * 60 * 1000);
     if (serial > 59) {
@@ -23,17 +22,17 @@ function arabicNumber(num: number | string) {
   return String(num).replace(/\d/g, d => "٠١٢٣٤٥٦٧٨٩"[Number(d)]);
 }
 
-// HTML generator with dynamic page numbers
-function generateHTML(educator: any, project: any, funder: string) {
+// HTML generator with dynamic base URL for fonts
+function generateHTML(educator: any, project: any, funder: string, baseUrl: string) {
   const issueDate = excelSerialToDate(educator.id_issue_date);
   const startDate = educator.contract_starting_date ? dayjs(educator.contract_starting_date).format('YYYY-MM-DD') : '........';
   const endDate = educator.contract_end_date ? dayjs(educator.contract_end_date).format('YYYY-MM-DD') : '........';
   const today = dayjs().format('YYYY-MM-DD');
   const dayOfWeek = dayjs().format('dddd');
 
-  // Ensure these font paths are accessible via your public folder during the Puppeteer render
-  const fontPathRegular = 'http://localhost:3000/fonts/NotoNaskhArabic-Regular.ttf';
-  const fontPathBold = 'http://localhost:3000/fonts/NotoNaskhArabic-Bold.ttf';
+  // Dynamically constructed font paths!
+  const fontPathRegular = `${baseUrl}/fonts/NotoNaskhArabic-Regular.ttf`;
+  const fontPathBold = `${baseUrl}/fonts/NotoNaskhArabic-Bold.ttf`;
 
   return `
   <!DOCTYPE html>
@@ -116,7 +115,6 @@ function generateHTML(educator: any, project: any, funder: string) {
     </style>
   </head>
   <body>
-
     <div class="page">
       <div class="border">
         <div>
@@ -189,7 +187,6 @@ function generateHTML(educator: any, project: any, funder: string) {
         </div>
       </div>
     </div>
-
   </body>
   </html>
   `;
@@ -198,19 +195,28 @@ function generateHTML(educator: any, project: any, funder: string) {
 // POST route to generate PDF
 export async function POST(req: Request) {
   try {
+    // 1. EXTRACT DYNAMIC URL FROM HEADERS
+    const host = req.headers.get("host") || "localhost:3000";
+    const protocol = req.headers.get("x-forwarded-proto")?.split(',')[0] || (host.includes("localhost") ? "http" : "https");
+    const baseUrl = `${protocol}://${host}`;
+
     const { educator, project, funder } = await req.json();
 
-    const htmlContent = generateHTML(educator, project, funder);
+    // 2. PASS BASE URL TO HTML GENERATOR
+    const htmlContent = generateHTML(educator, project, funder, baseUrl);
 
-    // Launch puppeteer
+    // 3. LAUNCH SERVERLESS PUPPETEER
     const browser = await puppeteer.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
+      args: chromium.args,
+      defaultViewport: chromium.defaultViewport,
+      executablePath: await chromium.executablePath(),
+      headless: chromium.headless,
+      ignoreHTTPSErrors: true,
     });
 
     const page = await browser.newPage();
     
-    // Set content and wait for network (helps load custom fonts before printing)
+    // Set content and wait for network (forces font downloading before PDF snapshot)
     await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
 
     const pdfBuffer = await page.pdf({

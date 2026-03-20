@@ -15,6 +15,7 @@ packages:
   - libcairo2
   - libcups2
   - libdbus-1-3
+  - libdrm2
   - libexpat1
   - libfontconfig1
   - libgcc1
@@ -36,6 +37,7 @@ packages:
   - libxext6
   - libxfixes3
   - libxi6
+  - libxkbcommon0
   - libxrandr2
   - libxrender1
   - libxss1
