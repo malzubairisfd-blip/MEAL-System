@@ -1,4 +1,3 @@
-
 import { NextResponse } from "next/server";
 import puppeteer from "puppeteer";
 import dayjs from "dayjs";
@@ -18,7 +17,6 @@ function excelSerialToDate(serial: number) {
     return dayjs(date).format('YYYY-MM-DD');
 }
 
-
 // Arabic number conversion
 function arabicNumber(num: number | string) {
   if (num === null || num === undefined) return '';
@@ -33,8 +31,9 @@ function generateHTML(educator: any, project: any, funder: string) {
   const today = dayjs().format('YYYY-MM-DD');
   const dayOfWeek = dayjs().format('dddd');
 
-  const fontPathRegular = '/fonts/NotoNaskhArabic-Regular.ttf';
-  const fontPathBold = '/fonts/NotoNaskhArabic-Bold.ttf';
+  // Ensure these font paths are accessible via your public folder during the Puppeteer render
+  const fontPathRegular = 'http://localhost:3000/fonts/NotoNaskhArabic-Regular.ttf';
+  const fontPathBold = 'http://localhost:3000/fonts/NotoNaskhArabic-Bold.ttf';
 
   return `
   <!DOCTYPE html>
@@ -196,28 +195,30 @@ function generateHTML(educator: any, project: any, funder: string) {
   `;
 }
 
-
 // POST route to generate PDF
 export async function POST(req: Request) {
   try {
     const { educator, project, funder } = await req.json();
 
+    const htmlContent = generateHTML(educator, project, funder);
+
+    // Launch puppeteer
     const browser = await puppeteer.launch({
-      headless: "new",
-      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
     });
 
     const page = await browser.newPage();
-
-    const html = generateHTML(educator, project, funder);
-    await page.setContent(html, { waitUntil: "networkidle0" });
+    
+    // Set content and wait for network (helps load custom fonts before printing)
+    await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
 
     const pdfBuffer = await page.pdf({
       format: 'A4',
-      printBackground: true,
-      margin: { top: '0mm', bottom: '0mm', left: '0mm', right: '0mm' }
+      margin: { top: '0mm', bottom: '0mm', left: '0mm', right: '0mm' },
+      printBackground: true
     });
-    
+
     await browser.close();
 
     return new NextResponse(pdfBuffer, {
