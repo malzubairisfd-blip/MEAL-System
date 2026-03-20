@@ -40,33 +40,27 @@ interface Project {
 const MARGIN_X = 10;
 
 function drawSFDLogo(doc: jsPDF) {
-  const logoX = 15;
-  const logoY = 8;
-  const scale = 1.2; // Enlarged logo
-  const rectW = 6 * scale;
-  const rectH = 15 * scale;
-  
-  doc.setFillColor(40, 60, 80); // SFD Blue
-  doc.rect(logoX, logoY, rectW, rectH, "F");
-  
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(9 * scale);
-  doc.setFont("helvetica", "bold");
-  doc.text("S", logoX + (3 * scale), logoY + (4 * scale), { align: "center", baseline: "middle" });
-  doc.text("F", logoX + (3 * scale), logoY + (8 * scale), { align: "center", baseline: "middle" });
-  doc.text("D", logoX + (3 * scale), logoY + (12 * scale), { align: "center", baseline: "middle" });
-  
-  doc.setFont("NotoNaskhArabic", "normal");
-  doc.setTextColor(40, 60, 80);
-  doc.setFontSize(10 * scale);
-  const arabicTextX = x + rectW + 1;
-  doc.text("الصندوق", arabicTextX, y + (4 * scale));
-  doc.text("الاجتماعي", arabicTextX, y + (9 * scale));
-  doc.text("للتنمية", arabicTextX, y + (14 * scale));
-  
-  doc.setFontSize(6 * scale);
-  doc.setFont("helvetica", "normal");
-  doc.text("Social Fund for Development", logoX, y + rectH + (3 * scale));
+ // --- SFD LOGO (Manual Vector Drawing) ---
+ const logoX = 15;
+ const logoY = 8;
+ doc.setFillColor(40, 60, 80); // SFD Blue
+ doc.rect(logoX, logoY, 6, 15, "F");
+ 
+ doc.setTextColor(255, 255, 255);
+ doc.setFontSize(9);
+ doc.setFont("helvetica", "bold");
+ doc.text("S", logoX + 3, logoY + 4, { align: "center", baseline: "middle" });
+ doc.text("F", logoX + 3, logoY + 8, { align: "center", baseline: "middle" });
+ doc.text("D", logoX + 3, logoY + 12, { align: "center", baseline: "middle" });
+ 
+ doc.setFont("NotoNaskhArabic", "normal");
+ doc.setTextColor(40, 60, 80);
+ doc.setFontSize(10);
+ doc.text("الصندوق", logoX + 8, logoY + 4);
+ doc.text("الاجتماعي", logoX + 8, logoY + 9);
+ doc.text("للتنمية", logoX + 8, logoY + 14);
+ doc.setFontSize(6);
+ doc.text("Social Fund for Development", logoX, logoY + 17);
 }
 
 function drawPageBorder(doc: jsPDF) {
@@ -97,7 +91,7 @@ const getArabicDay = (dateString: string) => {
 const generateContractPdf = (doc: jsPDF, educator: Educator, project: Project, funder: string): ArrayBuffer => {
     
     // Header
-    drawLogo(doc, 10, 8, 8);
+    drawSFDLogo(doc);
     drawPageBorder(doc);
     const pageWidth = doc.internal.pageSize.getWidth();
     const right = pageWidth - MARGIN_X;
