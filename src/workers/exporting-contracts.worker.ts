@@ -2,59 +2,9 @@
 import jsPDF from "jspdf";
 import dayjs from "dayjs";
 
-// --- START OF ARABIC FIXER UTILITY ---
-// This utility is placed directly in the worker to handle Arabic text shaping and RTL rendering.
-
-const ARABIC_CHARS: Record<string, string[]> = {
-  'ا': ['\uFE8D', '\uFE8E', '\uFE8D', '\uFE8E'], 'أ': ['\uFE83', '\uFE84', '\uFE83', '\uFE84'],
-  'ب': ['\uFE8F', '\uFE90', '\uFE92', '\uFE91'], 'ت': ['\uFE95', '\uFE96', '\uFE98', '\uFE97'],
-  'ث': ['\uFE99', '\uFE9A', '\uFE9C', '\uFE9B'], 'ج': ['\uFE9D', '\uFE9E', '\uFEA0', '\uFE9F'],
-  'ح': ['\uFEA1', '\uFEA2', '\uFEA4', '\uFEA3'], 'خ': ['\uFEA5', '\uFEA6', '\uFEA8', '\uFEA7'],
-  'د': ['\uFEA9', '\uFEAA', '\uFEA9', '\uFEAA'], 'ذ': ['\uFEAB', '\uFEAC', '\uFEAB', '\uFEAC'],
-  'ر': ['\uFEAD', '\uFEAE', '\uFEAD', '\uFEAE'], 'ز': ['\uFEAF', '\uFEB0', '\uFEAF', '\uFEB0'],
-  'س': ['\uFEB1', '\uFEB2', '\uFEB4', '\uFEB3'], 'ش': ['\uFEB5', '\uFEB6', '\uFEB8', '\uFEB7'],
-  'ص': ['\uFEB9', '\uFEBA', '\uFEBC', '\uFEBB'], 'ض': ['\uFEBD', '\uFEBE', '\uFEC0', '\uFEBF'],
-  'ط': ['\uFEC1', '\uFEC2', '\uFEC4', '\uFEC3'], 'ظ': ['\uFEC5', '\uFEC6', '\uFEC8', '\uFEC7'],
-  'ع': ['\uFEC9', '\uFECA', '\uFECC', '\uFECB'], 'غ': ['\uFECD', '\uFECE', '\uFED0', '\uFECF'],
-  'ف': ['\uFED1', '\uFED2', '\uFED4', '\uFED3'], 'ق': ['\uFED5', '\uFED6', '\uFED8', '\uFED7'],
-  'ك': ['\uFED9', '\uFEDA', '\uFEDC', '\uFEDB'], 'ل': ['\uFEDD', '\uFEDE', '\uFEE0', '\uFEDF'],
-  'م': ['\uFEE1', '\uFEE2', '\uFEE4', '\uFEE3'], 'ن': ['\uFEE5', '\uFEE6', '\uFEE8', '\uFEE7'],
-  'ه': ['\uFEE9', '\uFEEA', '\uFEEC', '\uFEEB'], 'و': ['\uFEED', '\uFEEE', '\uFEED', '\uFEEE'],
-  'ي': ['\uFEF1', '\uFEF2', '\uFEF4', '\uFEF3'], 'ى': ['\uFEEF', '\uFEF0', '\uFEEF', '\uFEF0'],
-  'ة': ['\uFE93', '\uFE94', '\uFE93', '\uFE94'], 'آ': ['\uFE81', '\uFE82', '\uFE81', '\uFE82'],
-  'ؤ': ['\uFE85', '\uFE86', '\uFE85', '\uFE86'], 'إ': ['\uFE87', '\uFE88', '\uFE87', '\uFE88'],
-  'ئ': ['\uFE89', '\uFE8A', '\uFE8C', '\uFE8B'], 'ء': ['\uFE80', '\uFE80', '\uFE80', '\uFE80']
-};
-const NON_CONN = ['ا','أ','إ','آ','د','ذ','ر','ز','و','ؤ','ء', 'ة', 'ى'];
-
-function fixArabic(text: string): string {
-  if (!text) return "";
-  let shaped = "";
-  const chars = Array.from(text);
-  for (let i = 0; i < chars.length; i++) {
-    const c = chars[i];
-    if (!ARABIC_CHARS[c]) { shaped += c; continue; }
-    const prev = chars[i-1];
-    const next = chars[i+1];
-    const canConnectPrev = prev && ARABIC_CHARS[prev] && !NON_CONN.includes(prev);
-    const canConnectNext = next && ARABIC_CHARS[next];
-    
-    let idx = 0; // Isolated
-    if (canConnectPrev && canConnectNext) idx = 2; // Medial
-    else if (canConnectPrev) idx = 1; // Final
-    else if (canConnectNext) idx = 3; // Initial
-
-    shaped += ARABIC_CHARS[c][idx];
-  }
-  return shaped.split("").reverse().join("");
-}
-
 function arabicNumber(num: number | string) {
   return String(num).replace(/\d/g, d => "٠١٢٣٤٥٦٧٨٩"[Number(d)]);
 }
-
-// --- END OF ARABIC FIXER UTILITY ---
-
 
 // --- Types & Interfaces ---
 interface Educator {
@@ -84,37 +34,70 @@ const CARD_WIDTH = 210;
 const CARD_HEIGHT = 297;
 const MARGIN_X = 10;
 
+// Colors
+const COLORS = {
+  primaryBrown: "#6F3B35", // The dark maroon/brown
+    primaryGold: "#C8AA68",  // The tan/gold accent
+      textBlack: "#000000",
+        textWhite: "#FFFFFF",
+          photoPlaceholder: "#F0F0F0",
+            borderGold: "#8B6F3E",   // Darker gold for borders
+            };
+
+// Layout constants
+const MARGIN = 4;
+
 // --- HELPER FUNCTIONS ---
+
+/**
+ * Draws a dotted line for form fields
+  */
+  const drawDottedLine = (doc: jsPDF, x1: number, y1: number, x2: number) => {
+    doc.setDrawColor(0);
+      doc.setLineWidth(0.5);
+        doc.setLineDashPattern([1, 1], 0); // Dotted pattern
+          doc.line(x1, y1, x2, y1);
+            doc.setLineDashPattern([], 0); // Reset to solid
+            };
+
+            /**
+             *  * Draw SFD logo placeholder (replace with actual logo image if available)
+              */
+              const drawLogo = (doc: jsPDF, x: number, y: number, size: number) => {
+                  // The provided code is for a larger format, so we scale it down to fit the ID card.
+                      // The 'size' parameter is not used as the logo has a fixed aspect ratio.
+                          const scale = 0.5; // Scale down by 50% to fit
+                              const rectW = 6 * scale;
+                                  const rectH = 15 * scale;
+                                      
+                                          doc.setFillColor(40, 60, 80); // SFD Blue
+                                              doc.rect(x, y, rectW, rectH, "F");
+                                                  
+                                                      doc.setTextColor(255, 255, 255);
+                                                          doc.setFontSize(9 * scale);
+                                                              doc.setFont("helvetica", "bold");
+                                                                  doc.text("S", x + (3 * scale), y + (4 * scale), { align: "center", baseline: "middle" });
+                                                                      doc.text("F", x + (3 * scale), y + (8 * scale), { align: "center", baseline: "middle" });
+                                                                          doc.text("D", x + (3 * scale), y + (12 * scale), { align: "center", baseline: "middle" });
+                                                                              
+                                                                                  doc.setFont("NotoNaskhArabic", "normal");
+                                                                                      doc.setTextColor(40, 60, 80);
+                                                                                          doc.setFontSize(10 * scale);
+                                                                                              const arabicTextX = x + rectW + 1;
+                                                                                                  doc.text("الصندوق", arabicTextX, y + (4 * scale));
+                                                                                                      doc.text("الاجتماعي", arabicTextX, y + (9 * scale));
+                                                                                                          doc.text("للتنمية", arabicTextX, y + (14 * scale));
+                                                                                                              
+                                                                                                                  doc.setFontSize(6 * scale);
+                                                                                                                      doc.setFont("helvetica", "normal");
+                                                                                                                          doc.text("Social Fund for Development", x, y + rectH + (3 * scale));
+                                                                                                                            }
+
 function drawText(doc: jsPDF, text: string, x: number, y: number, size: number, align: "right" | "center" | "left" = "right", isBold = false) {
   doc.setFont("NotoNaskhArabic", isBold ? "bold" : "normal");
   doc.setFontSize(size);
   doc.setTextColor(0, 0, 0);
-  doc.text(fixArabic(String(text || "")), x, y, { align, baseline: "middle" });
-}
-
-function drawSFDLogo(doc: jsPDF) {
-    const logoX = 15;
-    const logoY = 8;
-    doc.setFillColor(40, 60, 80); // SFD Blue
-    doc.rect(logoX, logoY, 6, 15, "F");
-    
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(9);
-    doc.setFont("helvetica", "bold");
-    doc.text("S", logoX + 3, logoY + 4, { align: "center", baseline: "middle" });
-    doc.text("F", logoX + 3, logoY + 8, { align: "center", baseline: "middle" });
-    doc.text("D", logoX + 3, logoY + 12, { align: "center", baseline: "middle" });
-    
-    doc.setFont("NotoNaskhArabic", "normal");
-    doc.setTextColor(40, 60, 80);
-    doc.setFontSize(10);
-    doc.text(fixArabic("الصندوق"), logoX + 8, logoY + 4);
-    doc.text(fixArabic("الاجتماعي"), logoX + 8, logoY + 9);
-    doc.text(fixArabic("للتنمية"), logoX + 8, logoY + 14);
-    
-    doc.setFontSize(6);
-    doc.setFont("helvetica", "normal");
-    doc.text("Social Fund for Development", logoX, logoY + 17);
+  doc.text(String(text || ""), x, y, { align, baseline: "middle" });
 }
 
 const getArabicDay = (dateString: string) => {
@@ -129,16 +112,16 @@ const getArabicDay = (dateString: string) => {
 const generateContractPdf = (doc: jsPDF, educator: Educator, project: Project, funder: string): ArrayBuffer => {
     
     // Header
-    drawSFDLogo(doc);
+    drawLogo(doc, 10, 8, 8);
     const pageWidth = doc.internal.pageSize.getWidth();
     const right = pageWidth - 10;
     const CONTENT_W = pageWidth - MARGIN_X * 2;
     
     doc.setFont("NotoNaskhArabic", "bold");
     doc.setFontSize(9);
-    doc.text(fixArabic("الجمهورية اليمنية"), right, 8, { align: "right" });
-    doc.text(fixArabic("الصندوق الاجتماعي للتنمية"), right, 13, { align: "right" });
-    doc.text(fixArabic("فرع الامانه - صنعاء - مارب - الجوف - المحويت"), right, 18, { align: "right" });
+    doc.text("الجمهورية اليمنية", right, 8, { align: "right" });
+    doc.text("الصندوق الاجتماعي للتنمية", right, 13, { align: "right" });
+    doc.text("فرع الامانه - صنعاء - مارب - الجوف - المحويت", right, 18, { align: "right" });
     drawText(doc, `رقم المشروع: ${project.projectId}`, right, 23, 9, 'right', true);
     doc.setLineWidth(0.5);
     doc.line(10, 28, pageWidth - 10, 28);
@@ -150,7 +133,7 @@ const generateContractPdf = (doc: jsPDF, educator: Educator, project: Project, f
     doc.setFontSize(16);
     doc.setLineHeightFactor(1.5);
     const title = "عـقـد عمل مؤقت (نقد مقابل العمل في الخدمات الاجتماعية في التغذية)";
-    doc.text(fixArabic(title), pageWidth / 2, y, { align: 'center'});
+    drawText(doc, title, pageWidth / 2, y, 16, 'center', true);
     
     // Body
     y += 20;
@@ -167,21 +150,21 @@ const generateContractPdf = (doc: jsPDF, educator: Educator, project: Project, f
     y += 8;
     
     const party1Text = `1) الصندوق الاجتماعي للتنمية – فرع صنعاء (هاتف: ${arabicNumber('513821')} ، فاكس ${arabicNumber('513803')}) الرقم المجاني للشكاوى والبلاغات (${arabicNumber('8009800')})، ويمثله: م. محمد حسن غمضان بصفته مدير الفرع ويسمى بهذا العقد الصندوق أوـ (الطرف الأول ) أو الصندوق.`;
-    const p1Lines = doc.splitTextToSize(fixArabic(party1Text), CONTENT_W - 10);
-    doc.text(p1Lines, right, y, { align: 'right' });
-    y += p1Lines.length * 5;
+    const p1Lines = doc.splitTextToSize(party1Text, CONTENT_W - 10);
+    drawText(doc, p1Lines.join('\n'), right, y, 11, "right");
+    y += p1Lines.length * 5 + 5;
 
     const party2Text = `2) الأخت/ ${educator.applicant_name} تحمل ${educator.id_card_type} رقم ${educator.id_no} صادرة من ${educator.id_issue_loc} بتاريخ ${issueDateFormatted} ويسمى لأغراض هذا العقد بـ (الطرف الثاني)`;
-    const p2Lines = doc.splitTextToSize(fixArabic(party2Text), CONTENT_W - 10);
-    doc.text(p2Lines, right, y, { align: 'right' });
+    const p2Lines = doc.splitTextToSize(party2Text, CONTENT_W - 10);
+    drawText(doc, p2Lines.join('\n'), right, y, 11, "right");
     y += p2Lines.length * 5 + 5;
 
 
     const drawClause = (title: string, text: string) => {
         drawText(doc, title, right, y, 12, 'right', true);
         y+= 7;
-        const lines = doc.splitTextToSize(fixArabic(text), CONTENT_W - 5);
-        doc.text(lines, right, y, { align: 'right' });
+        const lines = doc.splitTextToSize(text, CONTENT_W - 5);
+        drawText(doc, lines.join('\n'), right, y, 11, 'right');
         y += lines.length * 5 + 5;
     }
     
@@ -191,7 +174,7 @@ const generateContractPdf = (doc: jsPDF, educator: Educator, project: Project, f
 
     drawClause("البند الثالث: مدة العقـد", `اتفق الطرفان على أن تكون مدة هذا العقد ${arabicNumber(educator.contract_duration_months)} أشهر تبدأ من تاريخ ${arabicNumber(startDateFormatted)} وتنتهي في ${arabicNumber(endDateFormatted)}، إن لم يتم الإشعار كتابيا عن إنهاء العقد من قبل أي من الطرفين، قبل انقضاء مدته ، أو لم يُنص تحديداً على تعديل أو حذف أو إضافة أي بند من بنوده. و يحق لأحد الطرفين اخطار الطرف الاخر بشكل كتابي بإنهاء العقد.`);
     
-    drawClause("البند الرابع: الأجر الشهري: اتفق الطرفان على ما يلي:", `يتقاضى الطرف الثاني في نهاية كل شهر ميلادي إبتداءً من تاريخ مباشرته للعمل، و بالمقدار المحدد في العقد وفقاً لأيام العمل المنجزة والمهام المنجزة خلال الشهر والموافق عليها من قبل الطرف الأول. و وفق أحكام هذا العقد أجراً شهرياً صافيا ، مبلغ وقدره ( ${arabicNumber(100)} دولار ) ، مائة دولار موضحة على النحو التالي :\n1. ${arabicNumber(80)} دولار أجور الخدمات والمهام المنجزة خلال الشهر\n2. ${arabicNumber(20)} دولار أجور انتقال ومواصلات واتصالات وانترنت`);
+    drawClause("البند الرابع: الأجر الشهري: اتفق الطرفان على ما يلي:", `يتقاضى الطرف الثاني في نهاية كل شهر ميلادي إبتداءً من تاريخ مباشرته للعمل، و بالمقدار المحدد في العقد وفقاً لأيام العمل المنجزة والمهام المنجزة خلال الشهر والموافق عليها من قبل الطرف الأول. و وفق أحكام هذا العقد أجراً شهرياً صافيا ، مبلغ وقدره ( ${arabicNumber(100)} دولار ) ، مائة دولار موضحة على النحو التالي :\n1. ${arabicNumber(80)} دولار أجور الخدمات والمهام المنجزة خلال الشهر \n2. ${arabicNumber(20)} دولار أجور انتقال ومواصلات واتصالات وانترنت`);
 
     drawClause("البند الخامس : أيام وساعات العمل", `اتفق الطرفان بأن أيام العمل الرسمية هي خمس أيام عمل (من الأحد إلى الخميس ) ،أو (من السبت إلى الأربعاء) يعقبهما يومي راحة مدفوعي الأجر، وأن ساعات العمل اليومية هي (6) ساعات ، ما يساوي(30) ساعة عمل أسبوعياً ، باستثناء شهر رمضان والتي ستُحدد فيه ساعات العمل حسب تعليمات وتوجيهات الطرف الأول. ويمكن للمثقفة تنفيذ الأنشطة دون التقيد بالأيام الرسمية للعمل باعتبارها أنشطة مجتمعية`);
 
