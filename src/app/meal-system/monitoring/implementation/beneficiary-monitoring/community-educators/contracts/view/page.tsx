@@ -29,9 +29,9 @@ interface Educator {
   contract_end_date: string;
   contract_duration_months: number;
   project_id: string;
-  id_card_type: string;
+  id_type: string;
   id_no: string;
-  id_issue_loc: string;
+  id_issue_location: string;
   id_issue_date: string;
   working_village: string;
   mud_name: string;
