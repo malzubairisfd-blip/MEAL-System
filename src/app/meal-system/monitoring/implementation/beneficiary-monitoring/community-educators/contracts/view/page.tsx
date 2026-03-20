@@ -1,7 +1,7 @@
 // src/app/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/contracts/view/page.tsx
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import dayjs from 'dayjs';
 import 'dayjs/locale/ar';
@@ -49,27 +49,7 @@ export default function ViewContractsPage() {
     const [selectedFunder, setSelectedFunder] = useState('');
     const [allEducators, setAllEducators] = useState<Educator[]>([]);
     const [loading, setLoading] = useState({ projects: true, educators: false });
-    const [fontCache, setFontCache] = useState<{ regular: string, bold: string } | null>(null);
     const [generatingId, setGeneratingId] = useState<number | null>(null);
-
-    useEffect(() => {
-        const fetchFonts = async () => {
-            try {
-                const [fontRegularRes, fontBoldRes] = await Promise.all([
-                    fetch('/fonts/NotoNaskhArabic-Regular.ttf'),
-                    fetch('/fonts/NotoNaskhArabic-Bold.ttf')
-                ]);
-                const fontRegularBuffer = await fontRegularRes.arrayBuffer();
-                const fontBoldBuffer = await fontBoldRes.arrayBuffer();
-                const toBase64 = (buffer: ArrayBuffer) => btoa(new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), ''));
-                setFontCache({ regular: toBase64(fontRegularBuffer), bold: toBase64(fontBoldBuffer) });
-            } catch (error) {
-                console.error("Failed to fetch fonts:", error);
-                toast({ title: "Font Loading Error", description: "Could not load required fonts for PDF generation.", variant: "destructive" });
-            }
-        };
-        fetchFonts();
-    }, [toast]);
 
     useEffect(() => {
         const fetchProjects = async () => {
@@ -116,44 +96,39 @@ export default function ViewContractsPage() {
     }, [allEducators]);
     
     const handleDownloadContract = useCallback(async (educator: Educator) => {
-        if (!fontCache || !selectedFunder || !selectedProjectId) {
+        if (!selectedFunder || !selectedProjectId) {
             toast({ title: "Missing Information", description: "Please select a project and a funder first.", variant: "destructive" });
             return;
         }
         
         setGeneratingId(educator.applicant_id);
 
-        const project = projects.find(p => p.projectId === selectedProjectId);
-        if(!project) {
-            toast({ title: "Project details not found", variant: "destructive"});
-            setGeneratingId(null);
-            return;
-        }
+        try {
+            const project = projects.find(p => p.projectId === selectedProjectId);
+            if(!project) throw new Error("Project details not found");
 
-        const worker = new Worker(new URL('@/workers/exporting-contracts.worker.ts', import.meta.url));
-        
-        worker.onmessage = (event: MessageEvent) => {
-            const { type, pdfBuffer, error } = event.data;
-            if(type === 'done' && pdfBuffer) {
-                const blob = new Blob([pdfBuffer], { type: 'application/pdf' });
-                saveAs(blob, `Contract_${educator.applicant_name}.pdf`);
-                toast({ title: "Download started", description: `Contract for ${educator.applicant_name} is downloading.` });
-            } else if (type === 'error') {
-                toast({ title: "PDF Generation Failed", description: error, variant: "destructive" });
+            const res = await fetch('/api/contracts/export-pdf', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ educator, project, funder: selectedFunder })
+            });
+
+            if (!res.ok) {
+                const errorData = await res.json();
+                throw new Error(errorData.error || 'Failed to generate PDF');
             }
+
+            const blob = await res.blob();
+            saveAs(blob, `Contract_${educator.applicant_name}.pdf`);
+            toast({ title: "Download started", description: `Contract for ${educator.applicant_name} is downloading.` });
+
+        } catch (error: any) {
+            toast({ title: "PDF Generation Failed", description: error.message, variant: "destructive" });
+        } finally {
             setGeneratingId(null);
-            worker.terminate();
-        };
+        }
+    }, [selectedFunder, projects, selectedProjectId, toast]);
 
-        worker.onerror = (e) => {
-            toast({ title: "Worker Error", description: e.message, variant: "destructive" });
-            setGeneratingId(null);
-            worker.terminate();
-        };
-
-        worker.postMessage({ educator, project, funder: selectedFunder, fontCache });
-
-    }, [fontCache, selectedFunder, projects, selectedProjectId, toast]);
 
     return (
         <div className="space-y-6">
