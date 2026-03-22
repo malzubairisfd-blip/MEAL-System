@@ -4,7 +4,7 @@
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ArrowRight, ScanSearch } from "lucide-react";
+import { ArrowLeft, ArrowRight, ScanSearch, List } from "lucide-react";
 
 export default function ChildrenCMAMPage() {
   const features = [
@@ -13,6 +13,12 @@ export default function ChildrenCMAMPage() {
       description: "Screen children for signs of malnutrition.",
       href: "/meal-system/monitoring/implementation/process/CMAM-cases/children/screening",
       icon: <ScanSearch className="h-8 w-8 text-blue-500" />,
+    },
+    {
+      title: "Preparing Child CMAM List",
+      description: "Upload and process the initial list of children for CMAM screening.",
+      href: "/meal-system/monitoring/implementation/process/CMAM-cases/children/screening/preparing",
+      icon: <List className="h-8 w-8 text-blue-500" />,
     },
     // The other cards can be added back when their pages are implemented
   ];
@@ -48,3 +54,7 @@ export default function ChildrenCMAMPage() {
             </CardContent>
           </Card>
         ))}
+      </div>
+    </div>
+  );
+}

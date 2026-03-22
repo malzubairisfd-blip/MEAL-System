@@ -40,7 +40,7 @@ const DB_SCHEMA = `(
   cmam_qualify TEXT,
   child_has_cmam TEXT,
   child_cmam_type TEXT,
-  muac TEXT,
+  muac REAL,
   disc_date TEXT,
   near_health_center TEXT,
   comments TEXT,
@@ -67,7 +67,7 @@ const DB_SCHEMA = `(
   child_has_cmam_c1 TEXT,
   child_cmam_cond_c1 TEXT,
   meas_type_c1 TEXT,
-  muac_c1 TEXT,
+  muac_c1 REAL,
   "z-score_h_c1" REAL,
   "z-score_w_c1" REAL,
   "z-score_c1" REAL,
@@ -83,7 +83,7 @@ const DB_SCHEMA = `(
   date_attend_c2 TEXT,
   child_has_cmam_c2 TEXT,
   child_cmam_cond_c2 TEXT,
-  meas_type_c2 TEXT,
+  meas_type_c2 REAL,
   muac_c2 REAL,
   "z-score_h_c2" REAL,
   "z-score_w_c2" REAL,
@@ -123,12 +123,6 @@ function initializeDatabase() {
     return db;
 }
 
-const chunkArray = <T,>(arr: T[], size: number): T[][] => {
-    return Array.from({ length: Math.ceil(arr.length / size) }, (v, i) =>
-      arr.slice(i * size, i * size + size)
-    );
-};
-
 export async function POST(req: Request) {
     await fs.mkdir(getDataPath(), { recursive: true });
     const body = await req.json();
@@ -161,152 +155,57 @@ export async function POST(req: Request) {
             }
         }
         
-        if (action === 'save') {
-             const stream = new TransformStream();
-            const writer = stream.writable.getWriter();
-            const encoder = new TextEncoder();
-            const sendEvent = (data: any) => writer.write(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+       if (action === 'save') {
+            const { projectId, records, mode, uniqueIdCol } = body;
+            if (!projectId || !Array.isArray(records) || !mode || !uniqueIdCol) {
+                return NextResponse.json({ error: "Missing parameters for save." }, { status: 400 });
+            }
+            const db = initializeDatabase();
+            try {
+                const insertCols = columnDefs.filter(c => c !== 'id');
+                const placeholders = insertCols.map(c => `@${c}`).join(', ');
+                const insertStmt = db.prepare(`INSERT INTO child_cmam (${insertCols.map(c => `"${c}"`).join(', ')}) VALUES (${placeholders})`);
 
-            (async () => {
-                const { projectId, records, mode, uniqueIdCol } = body;
-                if (!projectId || !Array.isArray(records) || !mode || !uniqueIdCol) {
-                    sendEvent({ type: 'error', error: "Missing parameters for save." });
-                    writer.close();
-                    return;
-                }
+                const updateCols = insertCols.filter(c => c !== uniqueIdCol && c !== 'project_id');
+                const updateStmt = db.prepare(`UPDATE child_cmam SET ${updateCols.map(c => `"${c}" = @${c}`).join(', ')} WHERE "${uniqueIdCol}" = @${uniqueIdCol} AND project_id = @project_id`);
+
+                const checkStmt = db.prepare(`SELECT id FROM child_cmam WHERE "${uniqueIdCol}" = ? AND project_id = ?`);
                 
-                const db = initializeDatabase();
-                try {
-                    sendEvent({ type: 'progress', status: 'STEP_ONE', progress: 10, message: 'Processing data...' });
-                    // Web worker logic is now handled on the client before calling save
-                    const worker = new Worker(new URL('@/workers/child-cmam.worker.ts', import.meta.url));
-                    worker.postMessage({ records, projectId, ...body });
-                    
-                    worker.onmessage = async (e) => {
-                        const { type, status, progress, records: processedRecords, error } = e.data;
-                        if(type === 'error'){
-                            sendEvent({ type: 'error', error });
-                            worker.terminate();
-                            db.close();
-                            writer.close();
-                            return;
+                let saved = 0, updated = 0, skipped = 0;
+                
+                const transaction = db.transaction(() => {
+                    for (const record of records) {
+                        const uniqueVal = record[uniqueIdCol];
+                        if (uniqueVal === null || uniqueVal === undefined) {
+                            skipped++; continue;
                         }
-                        
-                        sendEvent({ type: 'progress', status, progress, message: 'Saving to database...' });
+                        const existing = checkStmt.get(uniqueVal, projectId);
 
-                        if(type === 'done') {
-                            const insertCols = columnDefs.filter(c => c !== 'id');
-                            const placeholders = insertCols.map(c => `@${c}`).join(', ');
-                            const insertStmt = db.prepare(`INSERT INTO child_cmam (${insertCols.map(c => `"${c}"`).join(', ')}) VALUES (${placeholders})`);
-
-                            const updateCols = insertCols.filter(c => c !== uniqueIdCol && c !== 'project_id');
-                            const updateStmt = db.prepare(`UPDATE child_cmam SET ${updateCols.map(c => `"${c}" = @${c}`).join(', ')} WHERE "${uniqueIdCol}" = @${uniqueIdCol} AND project_id = @project_id`);
-                            
-                            const checkStmt = db.prepare(`SELECT id FROM child_cmam WHERE "${uniqueIdCol}" = ? AND project_id = ?`);
-                            
-                            let saved = 0, updated = 0, skipped = 0;
-                            
-                            const transaction = db.transaction(() => {
-                                for(const record of processedRecords) {
-                                    const uniqueVal = record[uniqueIdCol];
-                                    if(uniqueVal === null || uniqueVal === undefined) {
-                                        skipped++; continue;
-                                    }
-                                    const existing = checkStmt.get(uniqueVal, projectId);
-
-                                    if(existing) {
-                                        if (mode === 'replace') {
-                                            const info = updateStmt.run(record);
-                                            if (info.changes > 0) updated++; else skipped++;
-                                        } else {
-                                            skipped++;
-                                        }
-                                    } else {
-                                        const info = insertStmt.run(record);
-                                        if (info.changes > 0) saved++;
-                                    }
-                                }
-                            });
-                            
-                            transaction();
-                            const stats = { saved, updated, skipped, total: processedRecords.length };
-                            sendEvent({ type: 'done', message: 'Database updated!', stats, results: body.results });
-                            worker.terminate();
-                            db.close();
-                            writer.close();
+                        if (existing) {
+                            if (mode === 'replace') {
+                                const info = updateStmt.run(record);
+                                if (info.changes > 0) updated++; else skipped++;
+                            } else {
+                                skipped++;
+                            }
+                        } else {
+                            const info = insertStmt.run(record);
+                            if (info.changes > 0) saved++;
                         }
                     }
-                } catch(e: any) {
-                    db.close();
-                    writer.close();
-                }
-            })();
-            
-            return new Response(stream.readable, {
-              headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", "Connection": "keep-alive" },
-            });
+                });
+                
+                transaction();
+                
+                return NextResponse.json({ saved, updated, skipped, total: records.length });
+
+            } finally {
+                db.close();
+            }
         }
         
         return NextResponse.json({ error: "Invalid action" }, { status: 400 });
     } catch(err: any) {
         return NextResponse.json({ error: err.message }, { status: 500 });
     }
-}
-```
-  </change>
-  <change>
-    <file>src/app/meal-system/monitoring/implementation/process/CMAM-cases/children/page.tsx</file>
-    <content><![CDATA[// src/app/meal-system/monitoring/implementation/process/CMAM-cases/children/page.tsx
-"use client";
-
-import Link from "next/link";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { ArrowLeft, ArrowRight, ScanSearch } from "lucide-react";
-
-export default function ChildrenCMAMPage() {
-  const features = [
-    {
-      title: "Screening Malnutrition Cases",
-      description: "Screen children for signs of malnutrition.",
-      href: "/meal-system/monitoring/implementation/process/CMAM-cases/children/screening",
-      icon: <ScanSearch className="h-8 w-8 text-blue-500" />,
-    },
-    // The other cards can be added back when their pages are implemented
-  ];
-
-  return (
-    <div className="space-y-8">
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">Children CMAM</h1>
-        <Button variant="outline" asChild>
-          <Link href="/meal-system/monitoring/implementation/process/CMAM-cases">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to CMAM Cases
-          </Link>
-        </Button>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {features.map((feature) => (
-          <Card key={feature.title} className="flex flex-col text-center items-center justify-center p-6 transition-all duration-300 hover:shadow-xl hover:-translate-y-2">
-            <div className="p-4 bg-muted rounded-full mb-4">
-              {feature.icon}
-            </div>
-            <CardHeader className="p-0">
-              <CardTitle className="text-lg">{feature.title}</CardTitle>
-              <CardDescription className="pt-2">{feature.description}</CardDescription>
-            </CardHeader>
-            <CardContent className="p-4 mt-auto">
-              <Button variant="secondary" size="sm" className="group" asChild>
-                <Link href={feature.href}>
-                  Proceed <ArrowRight className="ml-1 h-4 w-4 transition-transform group-hover:translate-x-1" />
-                </Link>
-              </Button>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-    </div>
-  );
 }
