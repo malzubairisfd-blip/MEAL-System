@@ -1,5 +1,3 @@
-
-
 import { NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
@@ -8,7 +6,8 @@ import AdmZip from "adm-zip";
 const BASE_DIR = process.cwd();
 
 function safePath(relativePath?: string) {
-  if (!relativePath) throw new Error("Invalid file path");
+  // Allow empty string for root directory
+  if (relativePath === undefined || relativePath === null) throw new Error("Invalid file path");
   const resolved = path.resolve(BASE_DIR, relativePath);
   if (!resolved.startsWith(BASE_DIR)) {
     throw new Error("Access denied");
@@ -114,7 +113,7 @@ export async function POST(req: Request) {
       
       if (action === "analyzeZip") {
         const zipFile = formData.get("file") as File;
-        const targetFolder = formData.get("targetFolder") as string || "src";
+        const targetFolder = formData.get("targetFolder") as string || "";
         const absTarget = safePath(targetFolder);
 
         if (!zipFile) throw new Error("No zip file provided");
@@ -135,7 +134,7 @@ export async function POST(req: Request) {
 
       if (action === "uploadZip") {
         const zipFile = formData.get("file") as File;
-        const targetFolder = formData.get("targetFolder") as string || "src";
+        const targetFolder = formData.get("targetFolder") as string || "";
         const skipFilesStr = formData.get("skipFiles") as string || "[]";
         const skipFiles = JSON.parse(skipFilesStr) as string[];
         const absTarget = safePath(targetFolder);
@@ -163,16 +162,32 @@ export async function POST(req: Request) {
         }
         return NextResponse.json({ ok: true });
       }
+
+      if (action === "uploadFile") {
+        const file = formData.get("file") as File;
+        const targetFolder = formData.get("targetFolder") as string || "";
+        const absTarget = safePath(targetFolder);
+
+        if (!file) throw new Error("No file provided");
+        
+        const buffer = Buffer.from(await file.arrayBuffer());
+        const targetPath = path.join(absTarget, file.name);
+        
+        // Ensure directory exists
+        await fs.mkdir(path.dirname(targetPath), { recursive: true });
+        await fs.writeFile(targetPath, buffer);
+        
+        return NextResponse.json({ ok: true });
+      }
     }
 
     const body = await req.json();
-    const { action, filePath, content, name, oldPath, newName } = body;
+    const { action, filePath, content, name, oldPath, newName, sourcePath, destinationDir, items, force } = body;
 
     switch (action) {
       case "tree": {
         const fullTree = await listTree(BASE_DIR);
-        const result = fullTree.filter(node => node.path === 'public' || node.path === 'src');
-        return NextResponse.json(result);
+        return NextResponse.json(fullTree);
       }
       case "read": {
         const abs = safePath(filePath);
@@ -205,6 +220,43 @@ export async function POST(req: Request) {
         const absNewPath = path.join(path.dirname(absOldPath), sanitizedNewName);
         await fs.rename(absOldPath, absNewPath);
         return NextResponse.json({ ok: true });
+      }
+      case "checkConflicts": {
+        if (!Array.isArray(items)) throw new Error("Invalid items list");
+        const conflicts: string[] = [];
+        for (const item of items) {
+          const fileName = path.basename(item.source);
+          const destDir = safePath(item.destination);
+          const targetPath = path.join(destDir, fileName);
+          if (await exists(targetPath)) {
+            conflicts.push(item.source);
+          }
+        }
+        return NextResponse.json({ conflicts });
+      }
+      case "move": {
+        if (sourcePath !== undefined && destinationDir !== undefined) {
+          const absSource = safePath(sourcePath);
+          const absDestDir = safePath(destinationDir);
+          const fileName = path.basename(absSource);
+          const absNewPath = path.join(absDestDir, fileName);
+          
+          if (absSource === absNewPath) {
+              throw new Error("Source and destination are the same");
+          }
+
+          if (await exists(absNewPath)) {
+            if (force) {
+              await fs.rm(absNewPath, { recursive: true, force: true });
+            } else {
+              return NextResponse.json({ conflict: true, path: sourcePath });
+            }
+          }
+          
+          await fs.rename(absSource, absNewPath);
+          return NextResponse.json({ ok: true });
+        }
+        throw new Error("Missing source or destination");
       }
       case "createFile": {
         const dir = safePath(filePath);

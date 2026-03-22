@@ -1,8 +1,6 @@
-
-
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import dynamic from "next/dynamic";
 import Link from 'next/link';
 import { useToast } from "@/hooks/use-toast";
@@ -10,7 +8,7 @@ import {
   ClipboardPaste, Search, Plus, FolderPlus, File as FileIcon, Eye, Edit, 
   Upload, RefreshCw, Trash2, Download, Save, AlertCircle, 
   CheckCircle2, Loader2, PanelLeft, PanelRight, ChevronLeft, ChevronRight, Menu,
-  FileX
+  FileX, Home, ArrowRightLeft, FolderOpen, FileUp, Archive
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -19,6 +17,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
+import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 
 const MonacoEditor = dynamic(() => import("@monaco-editor/react"), {
@@ -54,6 +53,7 @@ export default function FileEditor() {
   const monacoRef = useRef<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const zipInputRef = useRef<HTMLInputElement>(null);
+  const folderUploadInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
   const [tree, setTree] = useState<any[]>([]);
@@ -63,6 +63,9 @@ export default function FileEditor() {
   const [selectedFolder, setSelectedFolder] = useState<string | null>('src');
   const [search, setSearch] = useState("");
   const [results, setResults] = useState<any[]>([]);
+
+  // Selection state
+  const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
 
   // Layout States
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -85,6 +88,12 @@ export default function FileEditor() {
   const [isRenameDialogOpen, setIsRenameDialogOpen] = useState(false);
   const [itemToRename, setItemToRename] = useState<{ path: string; isFolder: boolean } | null>(null);
   const [renameInput, setRenameInput] = useState("");
+
+  // State for moving
+  const [isMoveDialogOpen, setIsMoveDialogOpen] = useState(false);
+  const [moveDestination, setMoveDestination] = useState<string | null>(null);
+  const [moveConflicts, setMoveConflicts] = useState<string[]>([]);
+  const [isMoveConflictDialogOpen, setIsMoveConflictDialogOpen] = useState(false);
 
   const [pageUrl, setPageUrl] = useState<string | null>(null);
 
@@ -162,14 +171,20 @@ export default function FileEditor() {
     }
   }
 
-  async function del() {
-    if (!file) return;
+  async function deletePath(p: string) {
     try {
-        await api({ action: "delete", filePath: file });
-        toast({ title: "File Deleted", description: `${file} has been removed.` });
-        setFile(null);
-        setFileContent("");
-        setPageUrl(null);
+        await api({ action: "delete", filePath: p });
+        toast({ title: "Deleted", description: `${p} has been removed.` });
+        if (p === file) {
+            setFile(null);
+            setFileContent("");
+            setPageUrl(null);
+        }
+        setSelectedPaths(prev => {
+            const next = new Set(prev);
+            next.delete(p);
+            return next;
+        });
         loadTree();
     } catch (e: any) {
         toast({ title: "Delete Failed", description: e.message, variant: "destructive" });
@@ -256,7 +271,7 @@ export default function FileEditor() {
   async function handleZipUploadInitiate(e: React.ChangeEvent<HTMLInputElement>) {
     const uploaded = e.target.files?.[0];
     if (!uploaded) return;
-    if (!selectedFolder) {
+    if (selectedFolder === null) {
       toast({ title: "No folder selected", description: "Select a target folder to unzip into.", variant: "destructive" });
       return;
     }
@@ -269,7 +284,7 @@ export default function FileEditor() {
     const formData = new FormData();
     formData.append("file", uploaded);
     formData.append("action", "analyzeZip");
-    formData.append("targetFolder", selectedFolder);
+    formData.append("targetFolder", selectedFolder === '.' ? '' : selectedFolder);
 
     try {
       const res = await fetch("/api/file-manager", { method: "POST", body: formData });
@@ -299,7 +314,7 @@ export default function FileEditor() {
     const formData = new FormData();
     formData.append("file", file);
     formData.append("action", "uploadZip");
-    formData.append("targetFolder", selectedFolder!);
+    formData.append("targetFolder", selectedFolder === '.' ? '' : (selectedFolder || ''));
     formData.append("skipFiles", JSON.stringify(skipFiles));
 
     try {
@@ -324,12 +339,40 @@ export default function FileEditor() {
     }
   }
 
+  async function handleFolderUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const uploaded = e.target.files?.[0];
+    if (!uploaded) return;
+    if (selectedFolder === null) {
+      toast({ title: "No folder selected", description: "Select a folder to upload into.", variant: "destructive" });
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", uploaded);
+    formData.append("action", "uploadFile");
+    formData.append("targetFolder", selectedFolder === '.' ? '' : selectedFolder);
+
+    try {
+      const res = await fetch("/api/file-manager", { method: "POST", body: formData });
+      if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.error || "Upload failed");
+      }
+      toast({ title: "Success", description: `${uploaded.name} uploaded successfully.` });
+      await loadTree();
+    } catch (err: any) {
+      toast({ title: "Upload Failed", description: err.message, variant: "destructive" });
+    } finally {
+      e.target.value = "";
+    }
+  }
+
   const handleCreateItem = async () => {
-    if (!newItemType || !newItemName || !selectedFolder) return;
+    if (!newItemType || !newItemName || selectedFolder === null) return;
     try {
         await api({
             action: newItemType === 'file' ? 'createFile' : 'createFolder',
-            filePath: selectedFolder,
+            filePath: selectedFolder === '.' ? '' : selectedFolder,
             name: newItemName,
             content: '',
         });
@@ -354,6 +397,125 @@ export default function FileEditor() {
     }
   };
 
+  const checkMoveConflicts = async () => {
+    if (selectedPaths.size === 0 || moveDestination === null) return;
+    
+    // Identify top-level move items
+    const sortedPaths = Array.from(selectedPaths).sort((a, b) => a.length - b.length);
+    const topLevelMoves: string[] = [];
+    for (const p of sortedPaths) {
+        if (!topLevelMoves.some(existing => p.startsWith(existing + '/'))) {
+            topLevelMoves.push(p);
+        }
+    }
+
+    const itemsToCheck = topLevelMoves.map(p => ({ source: p, destination: moveDestination }));
+    
+    try {
+      const res = await api({ action: 'checkConflicts', items: itemsToCheck });
+      if (res.conflicts && res.conflicts.length > 0) {
+        setMoveConflicts(res.conflicts);
+        setIsMoveConflictDialogOpen(true);
+      } else {
+        await executeMove(topLevelMoves, false);
+      }
+    } catch (e: any) {
+      toast({ title: "Check Failed", description: e.message, variant: "destructive" });
+    }
+  };
+
+  const executeMove = async (pathsToMove: string[], force: boolean) => {
+    setIsLoadingFile(true);
+    let successCount = 0;
+    let skipCount = 0;
+
+    try {
+        for (const sourcePath of pathsToMove) {
+            const res = await api({ 
+                action: 'move', 
+                sourcePath, 
+                destinationDir: moveDestination === '.' ? '' : moveDestination,
+                force
+            });
+            if (res.ok) successCount++;
+            else if (res.conflict) skipCount++;
+        }
+        toast({ 
+          title: "Move Complete", 
+          description: `Moved ${successCount} item(s)${skipCount > 0 ? `, skipped ${skipCount} conflict(s)` : ''}.` 
+        });
+        setSelectedPaths(new Set());
+        setIsMoveDialogOpen(false);
+        setIsMoveConflictDialogOpen(false);
+        await loadTree();
+    } catch (e: any) {
+        toast({ title: "Move Failed", description: e.message, variant: "destructive" });
+    } finally {
+        setIsLoadingFile(false);
+    }
+  };
+
+  const togglePathSelection = (p: string, isFolder: boolean) => {
+    setSelectedPaths(prev => {
+        const next = new Set(prev);
+        const isChecking = !next.has(p);
+
+        if (isFolder && isChecking) {
+            // Find all children recursively and select them
+            const findDescendants = (nodes: any[], parentPath: string): string[] => {
+                let paths: string[] = [];
+                for (const node of nodes) {
+                    if (node.path === parentPath) {
+                        const collect = (children: any[]) => {
+                            for (const child of children) {
+                                paths.push(child.path);
+                                if (child.children) collect(child.children);
+                            }
+                        };
+                        if (node.children) collect(node.children);
+                        break;
+                    }
+                    if (node.children) {
+                        const res = findDescendants(node.children, parentPath);
+                        if (res.length > 0) {
+                            paths = res;
+                            break;
+                        }
+                    }
+                }
+                return paths;
+            };
+
+            const descendants = findDescendants(tree, p);
+            next.add(p);
+            descendants.forEach(dp => next.add(dp));
+        } else {
+            // Single toggle (either a file, or a folder being unchecked)
+            if (isChecking) next.add(p);
+            else next.delete(p);
+        }
+        return next;
+    });
+  };
+
+  const getAllFolders = (nodes: any[]): string[] => {
+    let folders: string[] = [];
+    nodes.forEach(node => {
+        if (node.type === 'folder') {
+            folders.push(node.path);
+            if (node.children) {
+                folders = [...folders, ...getAllFolders(node.children)];
+            }
+        }
+    });
+    return folders;
+  };
+
+  const folderList = useMemo(() => {
+    const list = getAllFolders(tree);
+    return ['.', ...list]; // '.' represents the project root
+  }, [tree]);
+
   useEffect(() => {
     loadTree();
   }, [loadTree]);
@@ -370,14 +532,20 @@ export default function FileEditor() {
             onClick={() => openFile(n.path)}
           >
             <span className="flex items-center gap-2 overflow-hidden mr-4">
+              <Checkbox 
+                checked={selectedPaths.has(n.path)} 
+                onCheckedChange={() => togglePathSelection(n.path, false)} 
+                onClick={(e) => e.stopPropagation()}
+                className="h-3.5 w-3.5"
+              />
               <FileIcon className="h-3.5 w-3.5 shrink-0 opacity-70" /> 
               <span className="text-sm">{n.name}</span>
             </span>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1">
               <Button 
                 size="icon" 
                 variant="ghost" 
-                className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity" 
+                className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity" 
                 onClick={(e) => {
                   e.stopPropagation();
                   setItemToRename({ path: n.path, isFolder: false });
@@ -387,7 +555,18 @@ export default function FileEditor() {
               >
                 <Edit className="h-3 w-3" />
               </Button>
-              <span className="text-[10px] opacity-40 shrink-0">{formatBytes(n.size)}</span>
+              <Button 
+                size="icon" 
+                variant="ghost" 
+                className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity hover:text-destructive" 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  deletePath(n.path);
+                }}
+              >
+                <Trash2 className="h-3 w-3" />
+              </Button>
+              <span className="text-[10px] opacity-40 shrink-0 ml-1">{formatBytes(n.size)}</span>
             </div>
           </div>
         ) : (
@@ -400,14 +579,20 @@ export default function FileEditor() {
                 onClick={() => setSelectedFolder(n.path)}
             >
                 <span className="flex items-center gap-2 overflow-hidden mr-4">
+                  <Checkbox 
+                    checked={selectedPaths.has(n.path)} 
+                    onCheckedChange={() => togglePathSelection(n.path, true)} 
+                    onClick={(e) => e.stopPropagation()}
+                    className="h-3.5 w-3.5 border-accent/50 data-[state=checked]:bg-accent data-[state=checked]:text-accent-foreground"
+                  />
                   <FolderPlus className="h-3.5 w-3.5 shrink-0 opacity-70" /> 
                   <span className="text-sm font-medium">{n.name}</span>
                 </span>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1">
                   <Button 
                     size="icon" 
                     variant="ghost" 
-                    className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity" 
+                    className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity" 
                     onClick={(e) => {
                       e.stopPropagation();
                       setItemToRename({ path: n.path, isFolder: true });
@@ -417,7 +602,18 @@ export default function FileEditor() {
                   >
                     <Edit className="h-3 w-3" />
                   </Button>
-                  <span className="text-[10px] opacity-40 shrink-0">{formatBytes(n.size)}</span>
+                  <Button 
+                    size="icon" 
+                    variant="ghost" 
+                    className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity hover:text-destructive" 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deletePath(n.path);
+                    }}
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                  <span className="text-[10px] opacity-40 shrink-0 ml-1">{formatBytes(n.size)}</span>
                 </div>
             </div>
             {n.children && renderTree(n.children)}
@@ -450,17 +646,41 @@ export default function FileEditor() {
               </div>
             </div>
             
-            <div className="flex gap-2">
-                <Button onClick={() => { setNewItemType('file'); setIsCreateDialogOpen(true); }} className="flex-1 px-1" variant="secondary" size="sm" disabled={!selectedFolder}>
-                    <Plus className="h-3.5 w-3.5 mr-1"/> File
-                </Button>
-                <Button onClick={() => { setNewItemType('folder'); setIsCreateDialogOpen(true); }} className="flex-1 px-1" variant="secondary" size="sm" disabled={!selectedFolder}>
-                    <FolderPlus className="h-3.5 w-3.5 mr-1"/> Folder
-                </Button>
-                <Button onClick={() => zipInputRef.current?.click()} className="flex-1 px-1" variant="secondary" size="sm" disabled={!selectedFolder}>
-                    <Upload className="h-3.5 w-3.5 mr-1"/> ZIP
-                </Button>
-            </div>
+            {selectedPaths.size > 0 ? (
+                <div className="flex flex-col gap-2 p-3 bg-accent/10 border border-accent/20 rounded-lg animate-in fade-in zoom-in-95 duration-200">
+                    <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold uppercase text-accent">{selectedPaths.size} Selected</span>
+                        <Button variant="ghost" size="sm" className="h-6 px-2 text-[10px]" onClick={() => setSelectedPaths(new Set())}>Deselect All</Button>
+                    </div>
+                    <div className="flex gap-2">
+                        <Button className="flex-1 h-8 text-xs bg-accent text-accent-foreground" onClick={() => setIsMoveDialogOpen(true)}>
+                            <ArrowRightLeft className="h-3 w-3 mr-1" /> Move
+                        </Button>
+                        <Button className="flex-1 h-8 text-xs bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => {
+                            if(confirm(`Delete ${selectedPaths.size} items?`)) {
+                                selectedPaths.forEach(p => deletePath(p));
+                            }
+                        }}>
+                            <Trash2 className="h-3 w-3 mr-1" /> Delete
+                        </Button>
+                    </div>
+                </div>
+            ) : (
+                <div className="flex flex-wrap gap-2">
+                    <Button onClick={() => { setNewItemType('file'); setIsCreateDialogOpen(true); }} className="flex-1 min-w-[70px] px-1" variant="secondary" size="sm" disabled={selectedFolder === null}>
+                        <Plus className="h-3.5 w-3.5 mr-1"/> File
+                    </Button>
+                    <Button onClick={() => { setNewItemType('folder'); setIsCreateDialogOpen(true); }} className="flex-1 min-w-[70px] px-1" variant="secondary" size="sm" disabled={selectedFolder === null}>
+                        <FolderPlus className="h-3.5 w-3.5 mr-1"/> Folder
+                    </Button>
+                    <Button onClick={() => folderUploadInputRef.current?.click()} className="flex-1 min-w-[70px] px-1" variant="secondary" size="sm" disabled={selectedFolder === null}>
+                        <FileUp className="h-3.5 w-3.5 mr-1"/> Upload
+                    </Button>
+                    <Button onClick={() => zipInputRef.current?.click()} className="flex-1 min-w-[70px] px-1" variant="secondary" size="sm" disabled={selectedFolder === null}>
+                        <Archive className="h-3.5 w-3.5 mr-1"/> ZIP
+                    </Button>
+                </div>
+            )}
 
             <div className="relative">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
@@ -497,6 +717,24 @@ export default function FileEditor() {
               </div>
             )}
             <div className="pr-4">
+              <div
+                className={cn(
+                  "group flex justify-between items-center py-0.5 px-2 rounded cursor-pointer transition-colors hover:bg-white/5 whitespace-nowrap mb-1",
+                  selectedFolder === '.' ? 'bg-accent/20 text-accent' : 'opacity-80'
+                )}
+                onClick={() => setSelectedFolder('.')}
+              >
+                <span className="flex items-center gap-2 overflow-hidden mr-4">
+                  <Checkbox 
+                    checked={selectedPaths.has('.')} 
+                    onCheckedChange={() => togglePathSelection('.', true)} 
+                    onClick={(e) => e.stopPropagation()}
+                    className="h-3.5 w-3.5 border-accent/50 data-[state=checked]:bg-accent data-[state=checked]:text-accent-foreground"
+                  />
+                  <Home className="h-3.5 w-3.5 shrink-0 opacity-70" /> 
+                  <span className="text-sm font-medium">Project Root</span>
+                </span>
+              </div>
               {renderTree(tree)}
             </div>
             <ScrollBar orientation="horizontal" />
@@ -508,6 +746,12 @@ export default function FileEditor() {
           accept=".zip"
           className="hidden"
           onChange={handleZipUploadInitiate}
+        />
+        <input
+          ref={folderUploadInputRef}
+          type="file"
+          className="hidden"
+          onChange={handleFolderUpload}
         />
       </div>
 
@@ -565,7 +809,7 @@ export default function FileEditor() {
                   <Button size="sm" variant="outline" onClick={downloadFile} className="h-8 gap-2 hover:text-accent px-2 md:px-3">
                     <Download className="h-3.5 w-3.5" />
                   </Button>
-                  <Button size="sm" variant="destructive" onClick={del} className="h-8 gap-2 px-2 md:px-3">
+                  <Button size="sm" variant="destructive" onClick={() => deletePath(file)} className="h-8 gap-2 px-2 md:px-3">
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
                 </div>
@@ -646,7 +890,7 @@ export default function FileEditor() {
             <DialogContent className="bg-card border-border">
                 <DialogHeader>
                     <DialogTitle>Create {newItemType}</DialogTitle>
-                    <DialogDescription>Target: <span className="font-mono text-accent">{selectedFolder}</span></DialogDescription>
+                    <DialogDescription>Target: <span className="font-mono text-accent">{selectedFolder === '.' ? 'Root' : selectedFolder}</span></DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
                     <Label htmlFor="name">Name</Label>
@@ -673,6 +917,83 @@ export default function FileEditor() {
             </DialogContent>
         </Dialog>
 
+        {/* MOVE DIALOG */}
+        <Dialog open={isMoveDialogOpen} onOpenChange={setIsMoveDialogOpen}>
+            <DialogContent className="bg-card border-border">
+                <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                        <ArrowRightLeft className="h-5 w-5 text-accent" /> Move {selectedPaths.size} Item(s)
+                    </DialogTitle>
+                    <DialogDescription>Choose a destination folder for the selected items.</DialogDescription>
+                </DialogHeader>
+                <div className="py-4">
+                    <ScrollArea className="h-64 border border-border rounded-md bg-black/20 p-2">
+                        <div className="space-y-1">
+                            {folderList.map(folder => (
+                                <div 
+                                    key={folder}
+                                    className={cn(
+                                        "flex items-center gap-2 p-2 rounded-md cursor-pointer hover:bg-white/5 transition-colors",
+                                        moveDestination === folder && "bg-accent/20 text-accent font-bold"
+                                    )}
+                                    onClick={() => setMoveDestination(folder)}
+                                >
+                                    {folder === '.' ? <Home className="h-4 w-4 opacity-70" /> : <FolderOpen className="h-4 w-4 opacity-70" />}
+                                    <span className="text-sm">{folder === '.' ? 'Project Root' : folder}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </ScrollArea>
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => setIsMoveDialogOpen(false)}>Cancel</Button>
+                    <Button onClick={checkMoveConflicts} disabled={moveDestination === null}>Move Here</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+
+        {/* MOVE CONFLICT DIALOG */}
+        <Dialog open={isMoveConflictDialogOpen} onOpenChange={setIsMoveConflictDialogOpen}>
+            <DialogContent className="bg-card border-border max-w-md">
+                <DialogHeader>
+                    <div className="flex items-center gap-2 text-accent mb-2">
+                      <AlertCircle className="h-5 w-5" />
+                      <DialogTitle>Move Conflicts</DialogTitle>
+                    </div>
+                    <DialogDescription>
+                        {moveConflicts.length} items already exist in <span className="font-mono text-accent">{moveDestination === '.' ? 'Root' : moveDestination}</span>.
+                    </DialogDescription>
+                </DialogHeader>
+                <ScrollArea className="h-48 rounded border border-border p-2 bg-black/20 my-4">
+                    {moveConflicts.map((c, i) => <div key={i} className="text-xs font-mono opacity-70 mb-1">• {c.split('/').pop()}</div>)}
+                    <ScrollBar orientation="horizontal" />
+                </ScrollArea>
+                <DialogFooter className="flex gap-2">
+                    <Button variant="outline" onClick={() => { 
+                      const sortedPaths = Array.from(selectedPaths).sort((a, b) => a.length - b.length);
+                      const topLevelMoves = [];
+                      for (const p of sortedPaths) {
+                          if (!topLevelMoves.some(existing => p.startsWith(existing + '/'))) {
+                              topLevelMoves.push(p);
+                          }
+                      }
+                      const nonConflicting = topLevelMoves.filter(p => !moveConflicts.includes(p));
+                      executeMove(nonConflicting, false);
+                    }}>Skip Existing</Button>
+                    <Button onClick={() => {
+                      const sortedPaths = Array.from(selectedPaths).sort((a, b) => a.length - b.length);
+                      const topLevelMoves = [];
+                      for (const p of sortedPaths) {
+                          if (!topLevelMoves.some(existing => p.startsWith(existing + '/'))) {
+                              topLevelMoves.push(p);
+                          }
+                      }
+                      executeMove(topLevelMoves, true);
+                    }}>Replace All</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+
         {/* ZIP CONFLICT DIALOG */}
         <Dialog open={isZipConflictDialogOpen} onOpenChange={setIsZipConflictDialogOpen}>
             <DialogContent className="bg-card border-border max-w-md">
@@ -682,11 +1003,11 @@ export default function FileEditor() {
                       <DialogTitle>File Conflicts</DialogTitle>
                     </div>
                     <DialogDescription>
-                        {zipConflicts.length} files already exist in <span className="font-mono text-accent">{selectedFolder}</span>.
+                        {zipConflicts.length} files already exist in <span className="font-mono text-accent">{selectedFolder === '.' ? 'Root' : selectedFolder}</span>.
                     </DialogDescription>
                 </DialogHeader>
                 <ScrollArea className="h-48 rounded border border-border p-2 bg-black/20 my-4">
-                    {zipConflicts.map((c, i) => <div key={i} className="text-xs font-mono opacity-70 mb-1">â€¢ {c}</div>)}
+                    {zipConflicts.map((c, i) => <div key={i} className="text-xs font-mono opacity-70 mb-1">• {c}</div>)}
                     <ScrollBar orientation="horizontal" />
                 </ScrollArea>
                 <DialogFooter className="flex gap-2">
