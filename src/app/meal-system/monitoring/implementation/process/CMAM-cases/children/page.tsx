@@ -4,28 +4,17 @@
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ArrowRight, ScanSearch, ClipboardCheck, Send } from "lucide-react";
+import { ArrowLeft, ArrowRight, ScanSearch } from "lucide-react";
 
 export default function ChildrenCMAMPage() {
   const features = [
     {
       title: "Screening Malnutrition Cases",
       description: "Screen children for signs of malnutrition.",
-      href: "#", // Placeholder
+      href: "/meal-system/monitoring/implementation/process/CMAM-cases/children/screening",
       icon: <ScanSearch className="h-8 w-8 text-blue-500" />,
     },
-    {
-      title: "Confirmation Malnutrition Cases",
-      description: "Confirm and document cases of malnutrition.",
-      href: "#", // Placeholder
-      icon: <ClipboardCheck className="h-8 w-8 text-green-500" />,
-    },
-    {
-      title: "Referral Malnourished Cases",
-      description: "Refer confirmed cases for appropriate treatment.",
-      href: "#", // Placeholder
-      icon: <Send className="h-8 w-8 text-purple-500" />,
-    },
+    // The other cards can be added back when their pages are implemented
   ];
 
   return (
@@ -59,7 +48,3 @@ export default function ChildrenCMAMPage() {
             </CardContent>
           </Card>
         ))}
-      </div>
-    </div>
-  );
-}
