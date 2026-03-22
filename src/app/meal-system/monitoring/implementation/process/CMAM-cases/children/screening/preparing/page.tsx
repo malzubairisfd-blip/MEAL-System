@@ -57,16 +57,16 @@ export default function PreparingChildCMAMListPage() {
     const [bnfCmamData, setBnfCmamData] = useState<any[]>([]);
     const [columnMapping, setColumnMapping] = useState<Map<string, string>>(new Map());
     const [manualMapping, setManualMapping] = useState({ ui: '', db: '' });
-    const [uniqueIdCols, setUniqueIdCols] = useState({ file: '', db: '' });
+    const [uniqueIdCols, setUniqueIdCols] = useState({ file: '', db: 'child_id' });
     const [regDate, setRegDate] = useState('');
     const [currDate, setCurrDate] = useState('');
     const [status, setStatus] = useState({ state: 'idle', message: 'Ready' });
     const [progress, setProgress] = useState(0);
     const [saveStats, setSaveStats] = useState({ saved: 0, updated: 0, skipped: 0, total: 0 });
     const [results, setResults] = useState<any | null>(null);
-    const [duplicateInfo, setDuplicateInfo] = useState({ isOpen: false, count: 0, totalInFile: 0, totalInDb: 0, duplicateIds: [] });
+    const [duplicateInfo, setDuplicateInfo] = useState({ isOpen: false, count: 0, totalInFile: 0, totalInDb: 0, duplicateIds: [] as string[] });
     const [loading, setLoading] = useState({ projects: true, bnfCmam: false, saving: false, processing: false });
-    
+
     // Fetch initial data
     useEffect(() => {
         fetch("/api/projects").then(res => res.json()).then(setProjects).finally(() => setLoading(p => ({ ...p, projects: false })));
@@ -108,8 +108,39 @@ export default function PreparingChildCMAMListPage() {
             setColumns(headers.filter(Boolean));
         };
         reader.readAsBinaryString(selectedFile);
-    }
+    };
+
+    const unmappedUiColumns = useMemo(() => columns.filter(col => !Array.from(columnMapping.keys()).includes(col)), [columns, columnMapping]);
+    const unmappedDbColumns = useMemo(() => {
+        const mappedDbCols = new Set(columnMapping.values());
+        return DB_COLUMNS.filter(col => !mappedDbCols.has(col));
+    }, [columnMapping]);
+
+    const handleAutoMatch = () => {
+        const newMap = new Map<string, string>();
+        const usedDbCols = new Set<string>();
+  
+        columns.forEach(uiCol => {
+            const matchedDbCol = DB_COLUMNS.find(dbCol => dbCol.toLowerCase().replace(/_/g, '') === uiCol.toLowerCase().replace(/[\s_]/g, '') && !usedDbCols.has(dbCol));
+            if(matchedDbCol) {
+                newMap.set(uiCol, matchedDbCol);
+                usedDbCols.add(matchedDbCol);
+            }
+        });
+        setColumnMapping(newMap);
+        toast({ title: "Auto-match Complete", description: `${newMap.size} columns were matched automatically.`});
+    };
     
+    const handleAddManualMapping = () => {
+      if (!manualMapping.ui || !manualMapping.db) return;
+      setColumnMapping(prev => new Map(prev).set(manualMapping.ui, manualMapping.db));
+      setManualMapping({ ui: "", db: "" });
+    };
+
+    const removeMapping = (uiCol: string) => {
+        setColumnMapping(prev => { const next = new Map(prev); next.delete(uiCol); return next; });
+    };
+
     const processAndSave = useCallback(async (mode: 'skip' | 'replace') => {
         if (!selectedProjectId || !uniqueIdCols.file || !uniqueIdCols.db) {
             toast({ title: "Incomplete Setup", variant: "destructive" });
@@ -228,7 +259,7 @@ export default function PreparingChildCMAMListPage() {
     };
     
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 pb-10">
             <div className="flex justify-between items-center">
                 <h1 className="text-3xl font-bold">Prepare Child CMAM List</h1>
                 <Button variant="outline" asChild><Link href="/meal-system/monitoring/implementation/process/CMAM-cases/children/screening"><ArrowLeft className="mr-2 h-4 w-4"/> Back to Hub</Link></Button>
@@ -262,11 +293,11 @@ export default function PreparingChildCMAMListPage() {
                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
                             <Select value={manualMapping.ui} onValueChange={v => setManualMapping(p => ({...p, ui: v}))}><SelectTrigger><SelectValue placeholder="File Column..."/></SelectTrigger><SelectContent><ScrollArea className="h-60">{unmappedUiColumns.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</ScrollArea></SelectContent></Select>
                             <Select value={manualMapping.db} onValueChange={v => setManualMapping(p => ({...p, db: v}))}><SelectTrigger><SelectValue placeholder="DB Column..."/></SelectTrigger><SelectContent><ScrollArea className="h-60">{unmappedDbColumns.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</ScrollArea></SelectContent></Select>
-                            <Button onClick={addMapping}><Plus className="mr-2 h-4 w-4"/>Add</Button>
+                            <Button onClick={handleAddManualMapping}><Plus className="mr-2 h-4 w-4"/>Add</Button>
                         </div>
                         <ScrollArea className="h-48 border rounded-md"><Table>
                             <TableHeader><TableRow><TableHead>Source</TableHead><TableHead>Destination</TableHead><TableHead>Action</TableHead></TableRow></TableHeader>
-                            <TableBody>{Array.from(columnMapping.entries()).map(([ui, db]) => <TableRow key={ui}><TableCell>{ui}</TableCell><TableCell>{db}</TableCell><TableCell><Button variant="ghost" size="icon" onClick={() => removeMapping(ui)}><Trash2 className="h-4 w-4 text-destructive"/></Button></TableCell></TableRow>)}</TableBody>
+                            <TableBody>{Array.from(columnMapping.entries()).map(([ui, db]) => <TableRow key={ui}><TableCell>{ui}</TableCell><TableCell>{db}</TableCell><TableCell><Button variant="ghost" size="icon" onClick={()=>removeMapping(ui)}><Trash2 className="h-4 w-4 text-destructive"/></Button></TableCell></TableRow>)}</TableBody>
                         </Table></ScrollArea>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <Select value={uniqueIdCols.file} onValueChange={v => setUniqueIdCols(p => ({...p, file: v}))}><SelectTrigger><SelectValue placeholder="Unique ID from File..."/></SelectTrigger><SelectContent>{columns.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent></Select>
@@ -275,11 +306,11 @@ export default function PreparingChildCMAMListPage() {
                     </CardContent>
                 </Card>
             )}
-
+            
             <Card>
                 <CardHeader><CardTitle>3. Process & Save</CardTitle></CardHeader>
                 <CardContent>
-                    <Button onClick={() => handleSave()} disabled={loading.saving || !selectedProjectId || !file}>
+                    <Button onClick={handleSave} disabled={loading.saving || !selectedProjectId || !file}>
                         {loading.saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Save className="mr-2 h-4 w-4" />}
                         Process & Save to DB
                     </Button>
@@ -287,6 +318,7 @@ export default function PreparingChildCMAMListPage() {
                         <div className="mt-4 space-y-2">
                            <Progress value={progress} />
                            <p className="text-sm text-muted-foreground">{status.message} ({progress}%)</p>
+                           <p className="text-xs text-muted-foreground">Saved: {saveStats.saved}, Updated: {saveStats.updated}, Skipped: {saveStats.skipped}</p>
                         </div>
                     )}
                 </CardContent>
@@ -301,11 +333,6 @@ export default function PreparingChildCMAMListPage() {
                         <KeyFigureCard title="CMAM Qualified" value={results.cmamQualified} icon={<CheckCircle />} />
                         <KeyFigureCard title="Disqualified Bnfs" value={results.disqualifiedBeneficiaries} icon={<UserX />} />
                         <KeyFigureCard title="CMAM Disqualified" value={results.cmamDisqualified} icon={<UserX />} />
-                    </CardContent>
-                    <CardContent className="flex gap-2">
-                        <Button asChild><Link href="/meal-system/monitoring/implementation/process/CMAM-cases/children/screening/database"><Database className="mr-2 h-4 w-4"/>Database</Link></Button>
-                        <Button asChild><Link href="/meal-system/monitoring/implementation/process/CMAM-cases/children/screening/export"><FileDown className="mr-2 h-4 w-4"/>Export</Link></Button>
-                        <Button asChild><Link href="/meal-system/monitoring/implementation/process/CMAM-cases/children/screening/entry"><FileEdit className="mr-2 h-4 w-4"/>Data Entry</Link></Button>
                     </CardContent>
                 </Card>
             )}
