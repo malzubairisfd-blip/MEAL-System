@@ -257,7 +257,7 @@ export default function ChildScreeningDataEntryPage() {
             </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card className="border-t-4 border-t-primary shadow-sm">
                 <CardHeader className="bg-muted/30 pb-4">
                     <CardTitle className="text-lg">1. Select Project & Educator</CardTitle>
@@ -332,7 +332,7 @@ export default function ChildScreeningDataEntryPage() {
             <Card className="border-t-4 border-t-green-500 shadow-md">
                 <CardHeader className="bg-muted/30"><CardTitle className="text-lg">3. Child Details & Screening</CardTitle></CardHeader>
                 <CardContent className="pt-6">
-                    <FormProvider {...form}>
+                    <Form {...form}>
                         <form onSubmit={form.handleSubmit(handleSave)} className="space-y-8">
                             <FormField control={form.control} name="isExistingChild" render={({ field }) => (
                                 <FormItem className="bg-muted/20 p-4 rounded-lg border">
@@ -439,7 +439,7 @@ export default function ChildScreeningDataEntryPage() {
                                 </div>
                             )}
                         </form>
-                    </FormProvider>
+                    </Form>
                 </CardContent>
             </Card>
         )}
@@ -447,3 +447,4 @@ export default function ChildScreeningDataEntryPage() {
   );
 }
 
+    
