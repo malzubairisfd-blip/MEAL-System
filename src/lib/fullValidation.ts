@@ -132,7 +132,7 @@ function checkDuplicateChild(inputName: string, benef_id: string) {
 
       return null;
   } catch (error: any) {
-      if (error.code === 'SQLITE_CANTOPEN') return null; // DB doesn't exist yet, can't be a duplicate
+      if ((error as any).code === 'SQLITE_CANTOPEN') return null; // DB doesn't exist yet, can't be a duplicate
       throw error;
   }
   finally {
