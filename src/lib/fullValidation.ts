@@ -106,8 +106,11 @@ function checkDuplicateChild(inputName: string, benef_id: string) {
         }
       }
 
-      if (bestScore >= 0.9) return `⚠ الطفل مسجل مسبقاً (${bestMatch})`;
-      if (bestScore >= 0.7) return `⚠ يوجد اسم مشابه (${bestMatch})`;
+      if (bestScore >= 0.9)
+        return `الطفل مسجل مسبقاً (${bestMatch})`;
+      if (bestScore >= 0.7)
+        return `يوجد اسم مشابه (${bestMatch})`;
+
       return null;
   } catch (error: any) {
       if (error.code === 'SQLITE_ERROR' || error.code === 'SQLITE_CANTOPEN') return null;
