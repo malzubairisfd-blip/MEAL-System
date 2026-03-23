@@ -15,18 +15,13 @@ const getNamesDb = () => {
 const getCmamDb = () => {
     const dbPath = path.join(getDataPath(), 'child-CMAM.db');
     try {
-        // fileMustExist will throw if the db doesn't exist, which is fine for this check
         return new Database(dbPath, { fileMustExist: true });
-    } catch (error) {
-        if ((error as any).code === 'SQLITE_CANTOPEN') {
-            // If it doesn't exist, create it for future use but return null for this check
+    } catch (error: any) {
+        if (error.code === 'SQLITE_CANTOPEN') {
             const db = new Database(dbPath);
-            db.exec(`CREATE TABLE IF NOT EXISTS child_cmam (
-              id INTEGER PRIMARY KEY AUTOINCREMENT, child_first_name TEXT, benef_id TEXT
-              -- Add other columns as needed for full schema, though only these are used here
-            )`);
+            db.exec(`CREATE TABLE IF NOT EXISTS child_cmam (id INTEGER PRIMARY KEY AUTOINCREMENT)`);
             db.close();
-            return new Database(dbPath, { fileMustExist: true }); // Re-open it
+            return new Database(dbPath, { fileMustExist: true });
         }
         throw error;
     }
@@ -53,7 +48,6 @@ function baseArabicNormalize(value: any): string {
     .toLowerCase();
 }
 
-/* ================= HELPERS ================= */
 function normalizeSpace(v: string) {
   return v ? v.trim().replace(/\s+/g, " ") : "";
 }
@@ -76,27 +70,17 @@ function compareArabicNames(a: string, b: string) {
 }
 
 /* ================= DB FUNCTIONS ================= */
-function checkNameGenderInDB(
-  name: string,
-  gender: "M" | "F"
-): { valid: boolean; flag?: string } {
+function checkNameGenderInDB(name: string, gender: "M" | "F"): { valid: boolean; flag?: string } {
   const normalized = baseArabicNormalize(name);
   const namesDB = getNamesDb();
   try {
-      const row: any = namesDB
-        .prepare("SELECT final_flag FROM names WHERE name_key = ? LIMIT 1")
-        .get(normalized);
-
+      const row: any = namesDB.prepare("SELECT final_flag FROM names WHERE name_key = ? LIMIT 1").get(normalized);
       if (row) {
         const flags = row.final_flag.split(" "); 
         const valid = flags.includes(gender);
         return { valid, flag: row.final_flag };
       } else {
-        namesDB
-          .prepare(
-            "INSERT INTO names (name_key, final_flag) VALUES (?, ?)"
-          )
-          .run(normalized, gender);
+        namesDB.prepare("INSERT INTO names (name_key, final_flag) VALUES (?, ?)").run(normalized, gender);
         return { valid: true, flag: gender };
       }
   } finally {
@@ -108,16 +92,13 @@ function checkDuplicateChild(inputName: string, benef_id: string) {
   if (!inputName || !benef_id) return null;
   const cmamDB = getCmamDb();
   try {
-      const rows: any[] = cmamDB
-        .prepare(
-          "SELECT child_first_name FROM child_cmam WHERE benef_id = ?"
-        )
-        .all(benef_id);
-
+      // Make sure this matches your actual schema column for first name
+      const rows: any[] = cmamDB.prepare("SELECT child_first_name FROM child_cmam WHERE benef_id = ?").all(benef_id);
       let bestScore = 0;
       let bestMatch = "";
 
       for (const row of rows) {
+        if (!row.child_first_name) continue;
         const score = compareArabicNames(inputName, row.child_first_name);
         if (score > bestScore) {
           bestScore = score;
@@ -125,17 +106,13 @@ function checkDuplicateChild(inputName: string, benef_id: string) {
         }
       }
 
-      if (bestScore >= 0.9)
-        return `الطفل مسجل مسبقاً (${bestMatch})`;
-      if (bestScore >= 0.7)
-        return `يوجد اسم مشابه (${bestMatch})`;
-
+      if (bestScore >= 0.9) return `⚠ الطفل مسجل مسبقاً (${bestMatch})`;
+      if (bestScore >= 0.7) return `⚠ يوجد اسم مشابه (${bestMatch})`;
       return null;
   } catch (error: any) {
-      if ((error as any).code === 'SQLITE_CANTOPEN') return null; // DB doesn't exist yet, can't be a duplicate
+      if (error.code === 'SQLITE_ERROR' || error.code === 'SQLITE_CANTOPEN') return null;
       throw error;
-  }
-  finally {
+  } finally {
       cmamDB.close();
   }
 }
@@ -143,7 +120,7 @@ function checkDuplicateChild(inputName: string, benef_id: string) {
 /* ================= MAIN VALIDATION FUNCTION ================= */
 export function fullValidation({
   child_first_name,
-  child_gender, // "ذكر" | "أنثى"
+  child_gender,
   benef_id,
 }: {
   child_first_name: string;
@@ -151,7 +128,6 @@ export function fullValidation({
   benef_id: string;
 }) {
   const errors: string[] = [];
-
   if (!child_first_name) return errors;
 
   const name = child_first_name;
@@ -160,21 +136,15 @@ export function fullValidation({
   // ===== BASIC NAME VALIDATIONS =====
   if (name.startsWith(" ")) errors.push("الاسم يبدأ بمسافة");
   if (name.endsWith(" ")) errors.push("الاسم ينتهي بمسافة");
-  if (normalizeSpace(name) !== name)
-    errors.push("توجد اكثر من مسافة في منتصف الاسم");
-  if (!/^[ء-ي\s]+$/.test(name))
-    errors.push("الاسم يجب الا يحتوي على حروف غير عربية");
-  if (normalized.length < 3)
-    errors.push("الاسم يجب ان يتكون من ثلاثة حروف على الأقل");
-  if (normalized.length > 11)
-    errors.push("عدد الاحرف يجب الا يزيد عن 11 حرف");
-  if (/(.)\1{2,}/.test(normalized))
-    errors.push("توجد حروف مكررة أكثر من ثلاث مرات");
+  if (normalizeSpace(name) !== name) errors.push("توجد اكثر من مسافة في منتصف الاسم");
+  if (!/^[ء-ي\s]+$/.test(name)) errors.push("الاسم يجب الا يحتوي على حروف غير عربية");
+  if (normalized.length < 3) errors.push("الاسم يجب ان يتكون من ثلاثة حروف على الأقل");
+  if (normalized.length > 11) errors.push("عدد الاحرف يجب الا يزيد عن 11 حرف");
+  if (/(.)\1{2,}/.test(normalized)) errors.push("توجد حروف مكررة أكثر من ثلاث مرات");
 
-  // ===== GENDER VALIDATION (NAMES.DB) =====
+  // ===== GENDER VALIDATION =====
   const genderMap = { ذكر: "M", أنثى: "F" } as const;
   const selectedGender = genderMap[child_gender];
-
   try {
     const dbCheck = checkNameGenderInDB(name, selectedGender);
     if (!dbCheck.valid) {
@@ -182,17 +152,16 @@ export function fullValidation({
         if (selectedGender === "F") errors.push("الاسم ليس مؤنثا");
     }
   } catch (e: any) {
-    console.warn("Could not validate gender against DB:", e.message);
+    console.warn("Could not validate gender:", e.message);
   }
 
-  // ===== DUPLICATE CHECK (CHILD-CMAM.DB) =====
+  // ===== DUPLICATE CHECK =====
   try {
     const duplicateMsg = checkDuplicateChild(name, benef_id);
     if (duplicateMsg) errors.push(duplicateMsg);
   } catch(e: any) {
     console.warn("Could not check for duplicates:", e.message);
   }
-
 
   return errors;
 }
