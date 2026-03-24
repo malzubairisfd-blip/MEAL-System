@@ -456,26 +456,24 @@ export default function ChildScreeningDataEntryPage() {
                     </CardContent>
                 </Card>
             )}
-
-            <div className="fixed bottom-0 left-0 right-0 bg-background/80 backdrop-blur-sm border-t p-4 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-50">
-                 <div className="max-w-7xl mx-auto flex flex-wrap justify-center gap-4">
-                     <Button variant="outline" className="border-primary text-primary hover:bg-primary/10" asChild>
-                         <Link href="/meal-system/monitoring/implementation/process/CMAM-cases/children/screening/preparing">
-                            <List className="ml-2 h-4 w-4" /> Preparing Child CMAM List
-                         </Link>
-                     </Button>
-                     <Button variant="outline" className="border-primary text-primary hover:bg-primary/10" asChild>
-                         <Link href="/meal-system/monitoring/implementation/process/CMAM-cases/children/screening/database">
-                            <Database className="ml-2 h-4 w-4" /> Child CMAM Database
-                         </Link>
-                     </Button>
-                     <Button variant="outline" className="border-green-500 text-green-500 hover:bg-green-500/10" asChild>
-                         <Link href="/meal-system/monitoring/implementation/process/CMAM-cases/children/screening/export">
-                            <FileText className="ml-2 h-4 w-4" /> Exporting Child CMAM Statements
-                         </Link>
-                     </Button>
-                 </div>
-            </div>
-        </div>
-    );
+            <div className="flex flex-wrap justify-end gap-2">
+                                                <Button variant="outline" className="border-primary text-primary hover:bg-primary/10" asChild>
+                                                    <Link href="/meal-system/monitoring/implementation/process/CMAM-cases/children/screening/preparing">
+                                                        <List className="ml-2 h-4 w-4" /> Preparing Child CMAM List
+                                                    </Link>
+                                                </Button>
+                                                <Button variant="outline" className="border-primary text-primary hover:bg-primary/10" asChild>
+                                                    <Link href="/meal-system/monitoring/implementation/process/CMAM-cases/children/screening/database">
+                                                        <Database className="ml-2 h-4 w-4" /> Child CMAM Database
+                                                    </Link>
+                                                </Button>
+                                                <Button variant="outline" className="border-green-500 text-green-500 hover:bg-green-500/10" asChild>
+                                                    <Link href="/meal-system/monitoring/implementation/process/CMAM-cases/children/screening/export">
+                                                        <FileText className="ml-2 h-4 w-4" /> Exporting Child CMAM Statements
+                                                    </Link>
+                                                </Button>
+                                            </div>
+                                        </div>
+                                
+        );
 }

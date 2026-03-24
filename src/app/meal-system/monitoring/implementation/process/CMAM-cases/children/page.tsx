@@ -4,7 +4,7 @@
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ArrowRight, ScanSearch, List } from "lucide-react";
+import { ArrowLeft, ArrowRight, ScanSearch, ClipboardCheck, Send } from "lucide-react";
 
 export default function ChildrenCMAMPage() {
   const features = [
@@ -15,12 +15,17 @@ export default function ChildrenCMAMPage() {
       icon: <ScanSearch className="h-8 w-8 text-blue-500" />,
     },
     {
-      title: "Preparing Child CMAM List",
-      description: "Upload and process the initial list of children for CMAM screening.",
-      href: "/meal-system/monitoring/implementation/process/CMAM-cases/children/screening/preparing",
-      icon: <List className="h-8 w-8 text-blue-500" />,
+      title: "Confirmation Malnutrition Cases",
+      description: "Confirm and document cases of malnutrition.",
+      href: "#",
+      icon: <ClipboardCheck className="h-8 w-8 text-green-500" />,
     },
-    // The other cards can be added back when their pages are implemented
+    {
+      title: "Referral Malnourished Cases",
+      description: "Refer confirmed cases for appropriate treatment.",
+      href: "#",
+      icon: <Send className="h-8 w-8 text-purple-500" />,
+    },
   ];
 
   return (
