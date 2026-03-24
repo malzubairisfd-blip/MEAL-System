@@ -10,6 +10,8 @@ import { useToast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
 import Link from 'next/link';
+import { saveAs } from 'file-saver';
+import { exportConfirmationPdfs } from '@/lib/confirmationchildcmam-export';
 
 interface Project {
     projectId: string;
@@ -18,10 +20,6 @@ interface Project {
 
 export default function ExportCmamStatementsPage() {
     const [loading, setLoading] = useState(false);
-    const [status, setStatus] = useState("Idle");
-    const [progress, setProgress] = useState(0);
-    const [sheetsGenerated, setSheetsGenerated] = useState(0);
-    const [totalSheets, setTotalSheets] = useState(0);
     const [projects, setProjects] = useState<Project[]>([]);
     const [selectedProjectId, setSelectedProjectId] = useState<string>('');
     const { toast } = useToast();
@@ -46,59 +44,19 @@ export default function ExportCmamStatementsPage() {
         }
 
         setLoading(true);
-        setStatus("Fetching beneficiary data...");
-        setProgress(5);
+        toast({title: "Generating...", description: "Please wait while the documents are being created."})
 
         try {
             const res = await fetch(`/api/child-cmam?projectId=${selectedProjectId}`);
             if (!res.ok) throw new Error("Failed to fetch CMAM data.");
-            let projectchildren = await res.json();
+            let projectChildren = await res.json();
             
-            if (projectchildren.length === 0) {
+            if (projectChildren.length === 0) {
               toast({ title: "No Data", description: "No children found for the selected project to generate statements.", variant: 'default' });
               setLoading(false);
               return;
             }
 
-            const worker = new Worker(new URL('@/workers/confirmationchildcmam-export.worker.ts', import.meta.url));
-
-            worker.onmessage = (event) => {
-                const { type, status: workerStatus, progress: workerProgress, current, total, data, error } = event.data;
-                if (type === 'progress') {
-                    setStatus(workerStatus);
-                    setProgress(workerProgress);
-                    if(current && total) {
-                        setSheetsGenerated(current);
-                        setTotalSheets(total);
-                    }
-                } else if (type === 'done-sample' || type === 'done-all') {
-                    setStatus("Download ready!");
-                    const blob = new Blob([data], { type: isSample ? "application/pdf" : "application/zip" });
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement("a");
-                    a.href = url;
-                    a.download = isSample 
-                        ? `CMAM_Statement_${selectedProjectId}_Sample.pdf` 
-                        : `CMAM_Statements_${selectedProjectId}.zip`;
-                    document.body.appendChild(a);
-                    a.click();
-                    a.remove();
-                    window.URL.revokeObjectURL(url);
-                    toast({ title: "Success", description: `File downloaded: ${a.download}` });
-                    setLoading(false);
-                    worker.terminate();
-                } else if (type === 'error') {
-                    toast({ title: "Worker Error", description: error, variant: "destructive" });
-                    setLoading(false);
-                    worker.terminate();
-                }
-            };
-
-            worker.onerror = (err) => {
-                 toast({ title: "Worker Initialization Error", description: err.message, variant: "destructive" });
-                 setLoading(false);
-            }
-            
             const [fontRegularRes, fontBoldRes] = await Promise.all([
                 fetch('/fonts/NotoNaskhArabic-Regular.ttf'),
                 fetch('/fonts/NotoNaskhArabic-Bold.ttf')
@@ -116,17 +74,18 @@ export default function ExportCmamStatementsPage() {
               bold: btoa(new Uint8Array(fontBoldBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')),
             };
 
-            let childrenToSend = projectchildren;
-            if (isSample) {
-                childrenToSend = [projectchildren[Math.floor(Math.random() * projectchildren.length)]];
-            }
-            
-            setStatus("Starting generation...");
-            setProgress(10);
-            worker.postMessage({ children: childrenToSend, fontBase64, sample: isSample });
+            const blob = await exportConfirmationPdfs(projectChildren, fontBase64, isSample);
+            const fileName = isSample 
+                ? `CMAM_Confirmation_Sample_${selectedProjectId}.pdf`
+                : `CMAM_Confirmations_${selectedProjectId}.zip`;
+
+            saveAs(blob, fileName);
+
+            toast({ title: "Success", description: `File download started: ${fileName}` });
 
         } catch (error: any) {
             toast({ title: "Error", description: error.message, variant: "destructive" });
+        } finally {
             setLoading(false);
         }
     };
@@ -137,7 +96,7 @@ export default function ExportCmamStatementsPage() {
                 <h1 className="text-3xl font-bold">Export CMAM Statements</h1>
                  <Button variant="outline" asChild>
                     <Link href="/meal-system/monitoring/implementation/process/CMAM-cases/children/confirmation">
-                        <ArrowLeft className="mr-2 h-4 w-4" /> Back to Screening Hub
+                        <ArrowLeft className="mr-2 h-4 w-4" /> Back to Confirmation Hub
                     </Link>
                 </Button>
             </div>
@@ -146,7 +105,7 @@ export default function ExportCmamStatementsPage() {
                 <CardHeader>
                     <CardTitle className="text-center text-xl">Generate PDF Statements</CardTitle>
                     <CardDescription className="text-center">
-                        Generate PDF statements for all children in a project, grouped by educator and village.
+                        Generate PDF statements for all confirmed CMAM cases, grouped by health center, worker, and educator.
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
@@ -184,16 +143,6 @@ export default function ExportCmamStatementsPage() {
                             Download Sample
                         </Button>
                     </div>
-
-                    {loading && (
-                        <div className="space-y-2">
-                            <div className="flex justify-between text-sm text-muted-foreground">
-                                <span>{status}</span>
-                                {totalSheets > 0 && <span>{sheetsGenerated} / {totalSheets}</span>}
-                            </div>
-                            <Progress value={progress} />
-                        </div>
-                    )}
                 </CardContent>
             </Card>
         </div>
