@@ -38,9 +38,11 @@ interface Beneficiary { id: number; BENEF_ID: string; BENEF_NAME: string; BENEF_
 interface Child { id: number; child_id: string; child_name: string; benef_id: string; cmam_qualify: string; }
 interface HealthCenter { hc_id: string; hc_name: string; hw_id: string; hw_name: string; }
 
+
 const months = ["يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"];
 const years = Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - 5 + i);
 const days = Array.from({ length: 31 }, (_, i) => i + 1);
+
 
 export default function ChildScreeningDataEntryPage() {
     const { toast } = useToast();
@@ -388,6 +390,45 @@ export default function ChildScreeningDataEntryPage() {
 
                                         {watchHasCmam === 'نعم' && (
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-card p-6 rounded-lg border shadow-sm">
+                                                <FormField control={form.control} name="child_cmam_type" render={({ field }) => (
+                                                    <FormItem><FormLabel>حالة الطفل حاليا</FormLabel><FormControl>
+                                                        <RadioGroup onValueChange={field.onChange} value={field.value} className="flex gap-6 pt-2">
+                                                            <div className="flex items-center space-x-2 space-x-reverse"><RadioGroupItem value="سوء تغذية متوسط" id="mam"/><Label htmlFor="mam" className="font-normal m-0 cursor-pointer">سوء تغذية متوسط</Label></div>
+                                                            <div className="flex items-center space-x-2 space-x-reverse"><RadioGroupItem value="سوء تغذية حاد" id="sam"/><Label htmlFor="sam" className="font-normal m-0 cursor-pointer">سوء تغذية حاد</Label></div>
+                                                        </RadioGroup>
+                                                    </FormControl></FormItem>
+                                                )} />
+
+                                                <FormField control={form.control} name="muac" render={({ field }) => (
+                                                    <FormItem><FormLabel>قياس المواك</FormLabel><FormControl>
+                                                        <Input type="number" step="0.1" min="7" max="16" {...field} />
+                                                    </FormControl></FormItem>
+                                                )} />
+
+                                                <FormField control={form.control} name="go_health_center" render={({ field }) => (
+                                                    <FormItem><FormLabel>هل يذهب الى المرفق الصحي؟</FormLabel><FormControl>
+                                                        <RadioGroup onValueChange={field.onChange} value={field.value} className="flex gap-6 pt-2">
+                                                            <div className="flex items-center space-x-2 space-x-reverse"><RadioGroupItem value="نعم" id="gh_yes"/><Label htmlFor="gh_yes" className="font-normal m-0 cursor-pointer">نعم</Label></div>
+                                                            <div className="flex items-center space-x-2 space-x-reverse"><RadioGroupItem value="لا" id="gh_no"/><Label htmlFor="gh_no" className="font-normal m-0 cursor-pointer">لا</Label></div>
+                                                        </RadioGroup>
+                                                    </FormControl></FormItem>
+                                                )} />
+
+                                                <div className="space-y-3">
+                                                    <Label>تاريخ اكتشاف الحالة</Label>
+                                                    <div className="grid grid-cols-3 gap-2">
+                                                        <FormField control={form.control} name="disc_date_day" render={({field})=><FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="اليوم"/></SelectTrigger></FormControl><SelectContent>{days.map(d=><SelectItem key={d} value={String(d).padStart(2, '0')}>{d}</SelectItem>)}</SelectContent></Select></FormItem>}/>
+                                                        <FormField control={form.control} name="disc_date_month" render={({field})=><FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="الشهر"/></SelectTrigger></FormControl><SelectContent>{months.map((m,i)=><SelectItem key={m} value={String(i+1).padStart(2, '0')}>{m}</SelectItem>)}</SelectContent></Select></FormItem>}/>
+                                                        <FormField control={form.control} name="disc_date_year" render={({field})=><FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="السنة"/></SelectTrigger></FormControl><SelectContent>{years.map(y=><SelectItem key={y} value={String(y)}>{y}</SelectItem>)}</SelectContent></Select></FormItem>}/>
+                                                    </div>
+                                                </div>
+
+                                                <FormField control={form.control} name="near_health_center" render={({ field }) => (
+                                                    <FormItem className="col-span-1 md:col-span-2"><FormLabel>اقرب مركز صحي للذهاب الية</FormLabel><Select onValueChange={field.onChange} value={field.value}>
+                                                        <FormControl><SelectTrigger><SelectValue placeholder="اختر المرفق الصحي..." /></SelectTrigger></FormControl>
+                                                        <SelectContent>{healthCenters.map(hc => <SelectItem key={hc.hc_id} value={hc.hc_name}>{hc.hc_name}</SelectItem>)}</SelectContent>
+                                                    </Select></FormItem>
+                                                )} />
                                             </div>
                                         )}
                                         
