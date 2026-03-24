@@ -1,3 +1,4 @@
+// src/app/meal-system/monitoring/implementation/process/CMAM-cases/children/screening/entry/page.tsx
 "use client";
 
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
@@ -16,7 +17,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Label } from "@/components/ui/label"; // Imported Label to fix Context Error
+import { Label } from "@/components/ui/label";
 import { 
   ArrowLeft, 
   Loader2, 
@@ -26,7 +27,7 @@ import {
   FileText, 
   Database, 
   List, 
-  UserCheck // Added UserCheck and FileText to fix ReferenceErrors
+  UserCheck
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -156,27 +157,6 @@ export default function ChildScreeningDataEntryPage() {
         }
     }, [childrenOfBeneficiary, selectedChildId, form, toast]);
 
-    useEffect(() => {
-        if (watchIsExisting === 'نعم' && watchHasCmam === 'لا' && selectedChildId) {
-            handleSave({ child_has_cmam: 'لا', isExistingChild: 'نعم' } as any);
-        }
-    }, [watchHasCmam, watchIsExisting, selectedChildId]);
-
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            if (watchIsExisting === 'لا' && watchFirstName && watchGender && selectedBeneficiary) {
-                fetch('/api/validate-name', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name: watchFirstName, gender: watchGender, benef_id: selectedBeneficiary.BENEF_ID })
-                }).then(res => res.json()).then(data => setValidationErrors(data.result || []));
-            } else {
-                setValidationErrors([]);
-            }
-        }, 500);
-        return () => clearTimeout(timer);
-    }, [watchFirstName, watchGender, watchIsExisting, selectedBeneficiary]);
-
     const handleSave = async (data: any) => {
         if (!selectedBeneficiary) return;
         setLoading(p => ({...p, saving: true}));
@@ -221,7 +201,7 @@ export default function ChildScreeningDataEntryPage() {
                 moveToNextChild();
             } else {
                 form.reset({ isExistingChild: 'لا' });
-                handleProjectSelect(selectedProjectId); 
+                await handleProjectSelect(selectedProjectId); 
             }
         } catch (error: any) {
             toast({ title: "خطأ", description: error.message, variant: "destructive" });
@@ -229,6 +209,28 @@ export default function ChildScreeningDataEntryPage() {
             setLoading(p => ({...p, saving: false}));
         }
     };
+    
+    useEffect(() => {
+        if (watchIsExisting === 'نعم' && watchHasCmam === 'لا' && selectedChildId) {
+            handleSave({ child_has_cmam: 'لا', isExistingChild: 'نعم' } as any);
+        }
+    }, [watchHasCmam, watchIsExisting, selectedChildId, handleSave]);
+
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            if (watchIsExisting === 'لا' && watchFirstName && watchGender && selectedBeneficiary) {
+                fetch('/api/validate-name', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: watchFirstName, gender: watchGender, benef_id: selectedBeneficiary.BENEF_ID })
+                }).then(res => res.json()).then(data => setValidationErrors(data.result || []));
+            } else {
+                setValidationErrors([]);
+            }
+        }, 500);
+        return () => clearTimeout(timer);
+    }, [watchFirstName, watchGender, watchIsExisting, selectedBeneficiary]);
+
 
     return (
         <div className="space-y-6 max-w-7xl mx-auto p-4 md:p-6 pb-24" dir="rtl">
@@ -278,7 +280,7 @@ export default function ChildScreeningDataEntryPage() {
                     </CardContent>
                 </Card>
 
-                <Card className="border-t-4 border-t-blue-500 shadow-sm">
+                <Card className="border-t-4 border-t-primary shadow-sm">
                     <CardHeader className="bg-muted/30 pb-4"><CardTitle className="text-lg">اختيار المستفيدة</CardTitle></CardHeader>
                     <CardContent className="pt-4 space-y-4">
                          <Input placeholder="بحث بالاسم او رقم المستفيدة..." value={beneficiarySearch} onChange={e => setBeneficiarySearch(e.target.value)} disabled={!selectedEducatorId} />
@@ -287,7 +289,7 @@ export default function ChildScreeningDataEntryPage() {
                                 <TableHeader className="bg-muted sticky top-0"><TableRow><TableHead className="w-[50px]">تحديد</TableHead><TableHead>رقم المستفيدة</TableHead><TableHead>اسم المستفيدة</TableHead></TableRow></TableHeader>
                                 <TableBody>
                                     {beneficiariesForEducator.map(b => (
-                                        <TableRow key={b.id} className={cn("cursor-pointer hover:bg-muted/50 transition-colors", selectedBeneficiary?.id === b.id && 'bg-blue-50')} onClick={() => {setSelectedBeneficiary(b); setSelectedChildId("");}}>
+                                        <TableRow key={b.id} className={cn("cursor-pointer hover:bg-muted/50 transition-colors", selectedBeneficiary?.id === b.id && 'bg-primary/10')} onClick={() => {setSelectedBeneficiary(b); setSelectedChildId("");}}>
                                             <TableCell><Checkbox checked={selectedBeneficiary?.id === b.id} /></TableCell>
                                             <TableCell className="font-medium">{b.BENEF_ID}</TableCell>
                                             <TableCell>{b.BENEF_NAME}</TableCell>
@@ -302,8 +304,8 @@ export default function ChildScreeningDataEntryPage() {
             </div>
 
             {selectedBeneficiary && (
-                <Card className="border-t-4 border-t-green-500 shadow-md">
-                    <CardHeader className="bg-muted/30"><CardTitle className="text-lg">بيانات الطفل</CardTitle></CardHeader>
+                <Card className="border-t-4 border-t-secondary shadow-md">
+                    <CardHeader className="bg-muted/30"><CardTitle className="text-lg">3. Child Details & Screening</CardTitle></CardHeader>
                     <CardContent className="pt-6">
                         <Form {...form}>
                             <form onSubmit={form.handleSubmit(handleSave)} className="space-y-8">
@@ -328,13 +330,13 @@ export default function ChildScreeningDataEntryPage() {
                                                 <TableHeader className="bg-muted sticky top-0"><TableRow><TableHead className="w-[50px]">تحديد</TableHead><TableHead>رقم الطفل</TableHead><TableHead>اسم الطفل</TableHead></TableRow></TableHeader>
                                                 <TableBody>
                                                     {childrenOfBeneficiary.length > 0 ? childrenOfBeneficiary.map(c => (
-                                                        <TableRow key={c.id} className={cn("cursor-pointer hover:bg-muted/50", selectedChildId === c.child_id && 'bg-green-50')} onClick={() => setSelectedChildId(c.child_id)}>
+                                                        <TableRow key={c.id} className={cn("cursor-pointer hover:bg-muted/50", selectedChildId === c.child_id && 'bg-secondary/10')} onClick={() => setSelectedChildId(c.child_id)}>
                                                             <TableCell><Checkbox checked={selectedChildId === c.child_id} /></TableCell>
                                                             <TableCell className="font-medium">{c.child_id}</TableCell>
                                                             <TableCell>{c.child_name}</TableCell>
                                                         </TableRow>
                                                     )) : (
-                                                        <TableRow><TableCell colSpan={3} className="text-center text-muted-foreground h-24 bg-orange-50/50">لايوجد طفل لدى المستفيدة مؤهل قد يكون عمر الطفل ٥ سنوات او اكثر يرجى اختيار مستفيدة أخرى او إدخال طفل جديد</TableCell></TableRow>
+                                                        <TableRow><TableCell colSpan={3} className="text-center text-yellow-600 h-24 bg-yellow-500/10">لايوجد طفل لدى المستفيدة مؤهل قد يكون عمر الطفل ٥ سنوات او اكثر يرجى اختيار مستفيدة أخرى او إدخال طفل جديد</TableCell></TableRow>
                                                     )}
                                                 </TableBody>
                                             </Table>
@@ -343,7 +345,7 @@ export default function ChildScreeningDataEntryPage() {
                                 )}
 
                                 {watchIsExisting === 'لا' && (
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-4 border rounded-lg bg-slate-50">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-4 border rounded-lg bg-card">
                                         <FormField control={form.control} name="child_gender" render={({ field }) => (
                                             <FormItem><FormLabel>جنس الطفل</FormLabel><FormControl>
                                                 <RadioGroup onValueChange={field.onChange} value={field.value} className="flex gap-6 pt-2">
@@ -358,7 +360,7 @@ export default function ChildScreeningDataEntryPage() {
                                         )} />
                                         
                                         {validationErrors.length > 0 && (
-                                            <div className="col-span-1 md:col-span-2 p-3 rounded bg-red-50 border border-red-200 text-red-700">
+                                            <div className="col-span-1 md:col-span-2 p-3 rounded bg-destructive/10 border border-destructive/30 text-destructive-foreground">
                                                 <p className="font-semibold mb-1">يوجد ملاحظات على الاسم:</p>
                                                 <ul className="list-disc list-inside text-sm space-y-1">{validationErrors.map((err, i) => <li key={i}>{err}</li>)}</ul>
                                             </div>
@@ -373,8 +375,8 @@ export default function ChildScreeningDataEntryPage() {
                                 {((watchIsExisting === 'نعم' && selectedChildId) || watchIsExisting === 'لا') && (
                                     <div className="space-y-6 pt-6 border-t border-dashed">
                                         <FormField control={form.control} name="child_has_cmam" render={({ field }) => (
-                                            <FormItem className="bg-orange-50 p-4 rounded-lg border border-orange-100">
-                                                <FormLabel className="text-base font-semibold text-orange-900">هل يعاني الطفل من سوء تغذية؟</FormLabel>
+                                            <FormItem className="bg-yellow-500/10 p-4 rounded-lg border border-yellow-500/20">
+                                                <FormLabel className="text-base font-semibold text-yellow-200">هل يعاني الطفل من سوء تغذية؟</FormLabel>
                                                 <FormControl>
                                                     <RadioGroup onValueChange={field.onChange} value={field.value} className="flex gap-8 pt-3">
                                                         <div className="flex items-center space-x-2 space-x-reverse"><RadioGroupItem value="نعم" id="c_yes"/><Label htmlFor="c_yes" className="font-medium cursor-pointer m-0">نعم</Label></div>
@@ -385,52 +387,13 @@ export default function ChildScreeningDataEntryPage() {
                                         )} />
 
                                         {watchHasCmam === 'نعم' && (
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-white p-6 rounded-lg border shadow-sm">
-                                                <FormField control={form.control} name="child_cmam_type" render={({ field }) => (
-                                                    <FormItem><FormLabel>حالة الطفل حاليا</FormLabel><FormControl>
-                                                        <RadioGroup onValueChange={field.onChange} value={field.value} className="flex gap-6 pt-2">
-                                                            <div className="flex items-center space-x-2 space-x-reverse"><RadioGroupItem value="سوء تغذية متوسط" id="mam"/><Label htmlFor="mam" className="font-normal m-0 cursor-pointer">سوء تغذية متوسط</Label></div>
-                                                            <div className="flex items-center space-x-2 space-x-reverse"><RadioGroupItem value="سوء تغذية حاد" id="sam"/><Label htmlFor="sam" className="font-normal m-0 cursor-pointer">سوء تغذية حاد</Label></div>
-                                                        </RadioGroup>
-                                                    </FormControl></FormItem>
-                                                )} />
-
-                                                <FormField control={form.control} name="muac" render={({ field }) => (
-                                                    <FormItem><FormLabel>قياس المواك</FormLabel><FormControl>
-                                                        <Input type="number" step="0.1" min="7" max="16" {...field} />
-                                                    </FormControl></FormItem>
-                                                )} />
-
-                                                <FormField control={form.control} name="go_health_center" render={({ field }) => (
-                                                    <FormItem><FormLabel>هل يذهب الى المرفق الصحي؟</FormLabel><FormControl>
-                                                        <RadioGroup onValueChange={field.onChange} value={field.value} className="flex gap-6 pt-2">
-                                                            <div className="flex items-center space-x-2 space-x-reverse"><RadioGroupItem value="نعم" id="gh_yes"/><Label htmlFor="gh_yes" className="font-normal m-0 cursor-pointer">نعم</Label></div>
-                                                            <div className="flex items-center space-x-2 space-x-reverse"><RadioGroupItem value="لا" id="gh_no"/><Label htmlFor="gh_no" className="font-normal m-0 cursor-pointer">لا</Label></div>
-                                                        </RadioGroup>
-                                                    </FormControl></FormItem>
-                                                )} />
-
-                                                <div className="space-y-3">
-                                                    <Label>تاريخ اكتشاف الحالة</Label>
-                                                    <div className="grid grid-cols-3 gap-2">
-                                                        <FormField control={form.control} name="disc_date_day" render={({field})=><FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="اليوم"/></SelectTrigger></FormControl><SelectContent>{days.map(d=><SelectItem key={d} value={String(d).padStart(2, '0')}>{d}</SelectItem>)}</SelectContent></Select></FormItem>}/>
-                                                        <FormField control={form.control} name="disc_date_month" render={({field})=><FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="الشهر"/></SelectTrigger></FormControl><SelectContent>{months.map((m,i)=><SelectItem key={m} value={String(i+1).padStart(2, '0')}>{m}</SelectItem>)}</SelectContent></Select></FormItem>}/>
-                                                        <FormField control={form.control} name="disc_date_year" render={({field})=><FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="السنة"/></SelectTrigger></FormControl><SelectContent>{years.map(y=><SelectItem key={y} value={String(y)}>{y}</SelectItem>)}</SelectContent></Select></FormItem>}/>
-                                                    </div>
-                                                </div>
-
-                                                <FormField control={form.control} name="near_health_center" render={({ field }) => (
-                                                    <FormItem className="col-span-1 md:col-span-2"><FormLabel>اقرب مركز صحي للذهاب الية</FormLabel><Select onValueChange={field.onChange} value={field.value}>
-                                                        <FormControl><SelectTrigger><SelectValue placeholder="اختر المرفق الصحي..." /></SelectTrigger></FormControl>
-                                                        <SelectContent>{healthCenters.map(hc => <SelectItem key={hc.hc_id} value={hc.hc_name}>{hc.hc_name}</SelectItem>)}</SelectContent>
-                                                    </Select></FormItem>
-                                                )} />
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-card p-6 rounded-lg border shadow-sm">
                                             </div>
                                         )}
                                         
                                         <div className="pt-4 flex justify-end">
                                              <Button type="submit" size="lg" className="w-full md:w-auto" disabled={loading.saving || (watchHasCmam !== 'نعم' && watchHasCmam !== 'لا')}>
-                                                 {loading.saving ? <Loader2 className="mr-2 h-5 w-5 animate-spin"/> : <Save className="mr-2 h-5 w-5"/>} حفظ وتحديث بيانات الطفل
+                                                 {loading.saving ? <Loader2 className="mr-2 h-5 w-5 animate-spin"/> : <Save className="mr-2 h-5 w-5"/>} Save Child Data
                                              </Button>
                                         </div>
                                     </div>
@@ -441,19 +404,19 @@ export default function ChildScreeningDataEntryPage() {
                 </Card>
             )}
 
-            <div className="fixed bottom-0 left-0 right-0 bg-white border-t p-4 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-50">
+            <div className="fixed bottom-0 left-0 right-0 bg-background border-t p-4 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-50">
                  <div className="max-w-7xl mx-auto flex flex-wrap justify-center gap-4">
                      <Button variant="outline" className="border-primary text-primary hover:bg-primary/10" asChild>
                          <Link href="/meal-system/monitoring/implementation/process/CMAM-cases/children/screening">
                             <UserCheck className="ml-2 h-4 w-4" /> شاشة تسجيل الأطفال
                          </Link>
                      </Button>
-                     <Button variant="outline" className="border-blue-600 text-blue-600 hover:bg-blue-50" asChild>
+                     <Button variant="outline" className="border-primary text-primary hover:bg-primary/10" asChild>
                          <Link href="/meal-system/monitoring/implementation/process/CMAM-cases/children/screening/list">
                             <List className="ml-2 h-4 w-4" /> عرض سجلات الفحص
                          </Link>
                      </Button>
-                     <Button variant="outline" className="border-green-600 text-green-600 hover:bg-green-50" asChild>
+                     <Button variant="outline" className="border-green-500 text-green-500 hover:bg-green-500/10" asChild>
                          <Link href="/meal-system/monitoring/implementation/process/CMAM-cases/children/screening/report">
                             <FileText className="ml-2 h-4 w-4" /> التقارير والتحليل
                          </Link>
