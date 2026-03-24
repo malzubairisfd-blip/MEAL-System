@@ -18,6 +18,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Label } from "@/components/ui/label";
+import { Slider } from "@/components/ui/slider";
 import { 
   ArrowLeft, 
   Loader2, 
@@ -213,10 +214,15 @@ export default function ChildScreeningDataEntryPage() {
     };
     
     useEffect(() => {
-        if (watchIsExisting === 'نعم' && watchHasCmam === 'لا' && selectedChildId) {
-            handleSave({ child_has_cmam: 'لا', isExistingChild: 'نعم' } as any);
-        }
-    }, [watchHasCmam, watchIsExisting, selectedChildId, handleSave]);
+        const subscription = form.watch((value, { name }) => {
+            if (name === 'child_has_cmam') {
+                if (value.isExistingChild === 'نعم' && value.child_has_cmam === 'لا' && selectedChildId) {
+                    handleSave({ child_has_cmam: 'لا', isExistingChild: 'نعم' } as any);
+                }
+            }
+        });
+        return () => subscription.unsubscribe();
+    }, [form, handleSave, selectedChildId]);
 
     useEffect(() => {
         const timer = setTimeout(() => {
@@ -237,7 +243,7 @@ export default function ChildScreeningDataEntryPage() {
     return (
         <div className="space-y-6 max-w-7xl mx-auto p-4 md:p-6 pb-24" dir="rtl">
             <div className="flex justify-between items-center mb-6">
-                <h1 className="text-3xl font-bold text-primary">إدخال نتائج الفحص (CMAM)</h1>
+                <h1 className="text-3xl font-bold text-foreground">إدخال نتائج الفحص (CMAM)</h1>
                 <Button variant="outline" asChild><Link href="/meal-system/monitoring/implementation/process/CMAM-cases/children/screening"><ArrowLeft className="mr-2 h-4 w-4"/> عودة</Link></Button>
             </div>
 
@@ -312,12 +318,12 @@ export default function ChildScreeningDataEntryPage() {
                         <Form {...form}>
                             <form onSubmit={form.handleSubmit(handleSave)} className="space-y-8">
                                 <FormField control={form.control} name="isExistingChild" render={({field}) => (
-                                    <FormItem className="bg-muted/20 p-4 rounded-lg border">
+                                    <FormItem className="bg-card p-4 rounded-lg border">
                                         <FormLabel className="text-base font-semibold">هل الطفل مسجل سابقا في قاعدة البيانات؟</FormLabel>
                                         <FormControl>
                                             <RadioGroup onValueChange={field.onChange} value={field.value} className="flex gap-8 pt-3">
-                                                <div className="flex items-center space-x-2 space-x-reverse"><RadioGroupItem value="نعم" id="yes"/><Label htmlFor="yes" className="font-medium cursor-pointer m-0">نعم</Label></div>
-                                                <div className="flex items-center space-x-2 space-x-reverse"><RadioGroupItem value="لا" id="no"/><Label htmlFor="no" className="font-medium cursor-pointer m-0">لا</Label></div>
+                                                <div className="flex items-center space-x-2 space-x-reverse"><RadioGroupItem value="نعم" id="yes"/><Label htmlFor="yes" className="font-normal m-0 cursor-pointer">نعم</Label></div>
+                                                <div className="flex items-center space-x-2 space-x-reverse"><RadioGroupItem value="لا" id="no"/><Label htmlFor="no" className="font-normal m-0 cursor-pointer">لا</Label></div>
                                             </RadioGroup>
                                         </FormControl>
                                     </FormItem>
@@ -377,8 +383,8 @@ export default function ChildScreeningDataEntryPage() {
                                 {((watchIsExisting === 'نعم' && selectedChildId) || watchIsExisting === 'لا') && (
                                     <div className="space-y-6 pt-6 border-t border-dashed">
                                         <FormField control={form.control} name="child_has_cmam" render={({ field }) => (
-                                            <FormItem className="bg-yellow-500/10 p-4 rounded-lg border border-yellow-500/20">
-                                                <FormLabel className="text-base font-semibold text-yellow-200">هل يعاني الطفل من سوء تغذية؟</FormLabel>
+                                            <FormItem className="bg-accent/10 p-4 rounded-lg border border-accent/20">
+                                                <FormLabel className="text-base font-semibold text-accent-foreground">هل يعاني الطفل من سوء تغذية؟</FormLabel>
                                                 <FormControl>
                                                     <RadioGroup onValueChange={field.onChange} value={field.value} className="flex gap-8 pt-3">
                                                         <div className="flex items-center space-x-2 space-x-reverse"><RadioGroupItem value="نعم" id="c_yes"/><Label htmlFor="c_yes" className="font-medium cursor-pointer m-0">نعم</Label></div>
@@ -400,9 +406,15 @@ export default function ChildScreeningDataEntryPage() {
                                                 )} />
 
                                                 <FormField control={form.control} name="muac" render={({ field }) => (
-                                                    <FormItem><FormLabel>قياس المواك</FormLabel><FormControl>
-                                                        <Input type="number" step="0.1" min="7" max="16" {...field} />
-                                                    </FormControl></FormItem>
+                                                    <FormItem><FormLabel>قياس المواك: {field.value || 7}</FormLabel><FormControl>
+                                                        <Slider
+                                                            min={7}
+                                                            max={16}
+                                                            step={0.1}
+                                                            value={[field.value || 7]}
+                                                            onValueChange={(v) => field.onChange(v[0])}
+                                                        />
+                                                    </FormControl><FormMessage /></FormItem>
                                                 )} />
 
                                                 <FormField control={form.control} name="go_health_center" render={({ field }) => (
@@ -445,21 +457,21 @@ export default function ChildScreeningDataEntryPage() {
                 </Card>
             )}
 
-            <div className="fixed bottom-0 left-0 right-0 bg-background border-t p-4 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-50">
+            <div className="fixed bottom-0 left-0 right-0 bg-background/80 backdrop-blur-sm border-t p-4 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-50">
                  <div className="max-w-7xl mx-auto flex flex-wrap justify-center gap-4">
                      <Button variant="outline" className="border-primary text-primary hover:bg-primary/10" asChild>
-                         <Link href="/meal-system/monitoring/implementation/process/CMAM-cases/children/screening">
-                            <UserCheck className="ml-2 h-4 w-4" /> شاشة تسجيل الأطفال
+                         <Link href="/meal-system/monitoring/implementation/process/CMAM-cases/children/screening/preparing">
+                            <List className="ml-2 h-4 w-4" /> Preparing Child CMAM List
                          </Link>
                      </Button>
                      <Button variant="outline" className="border-primary text-primary hover:bg-primary/10" asChild>
-                         <Link href="/meal-system/monitoring/implementation/process/CMAM-cases/children/screening/list">
-                            <List className="ml-2 h-4 w-4" /> عرض سجلات الفحص
+                         <Link href="/meal-system/monitoring/implementation/process/CMAM-cases/children/screening/database">
+                            <Database className="ml-2 h-4 w-4" /> Child CMAM Database
                          </Link>
                      </Button>
                      <Button variant="outline" className="border-green-500 text-green-500 hover:bg-green-500/10" asChild>
-                         <Link href="/meal-system/monitoring/implementation/process/CMAM-cases/children/screening/report">
-                            <FileText className="ml-2 h-4 w-4" /> التقارير والتحليل
+                         <Link href="/meal-system/monitoring/implementation/process/CMAM-cases/children/screening/export">
+                            <FileText className="ml-2 h-4 w-4" /> Exporting Child CMAM Statements
                          </Link>
                      </Button>
                  </div>
