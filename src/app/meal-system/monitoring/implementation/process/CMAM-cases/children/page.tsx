@@ -17,7 +17,7 @@ export default function ChildrenCMAMPage() {
     {
       title: "Confirmation Malnutrition Cases",
       description: "Confirm and document cases of malnutrition.",
-      href: "#",
+      href: "/meal-system/monitoring/implementation/process/CMAM-cases/children/confirmation",
       icon: <ClipboardCheck className="h-8 w-8 text-green-500" />,
     },
     {
