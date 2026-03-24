@@ -1,4 +1,6 @@
-// src/lib/confirmationchildcmam-export.ts
+
+"use client";
+
 import html2pdf from "html2pdf.js";
 import JSZip from "jszip";
 
@@ -50,6 +52,9 @@ const getStyles = (fontRegBase64: string, fontBoldBase64: string) => `
     width: 20mm;
     text-align: center;
   }
+  .logo-sfd-letters { background-color: #283c50; color: white; font-weight: bold; padding: 2px 0; font-family: helvetica; font-size: 14px; letter-spacing: 2px; writing-mode: vertical-rl; text-orientation: upright; display: inline-block; margin-bottom: 4px; }
+  .logo-arabic { color: #283c50; font-size: 11px; line-height: 1.2; }
+  .logo-eng { font-size: 7px; margin-top: 4px; }
 
   .top-right-headers {
     position: absolute;
@@ -100,7 +105,7 @@ function generateHTML(hcGroups: any, fontBase64: any): string {
     <div class="pdf-page">
       <div class="logo-box">
         <img src="/sfd-logo.png" style="height: 20mm; width: auto;" alt="SFD Logo" />
-      </div>
+    </div>
       <div class="top-right-headers">
         <div>الجمهورية اليمنية</div>
         <div>الصندوق الاجتماعي للتنمية</div>
@@ -305,7 +310,7 @@ export const exportConfirmationPdfs = async (children: any[], fontBase64: any, i
     const container = document.createElement('div');
     container.innerHTML = htmlString;
     container.style.position = 'absolute';
-    container.style.left = '-9999px'; 
+    container.style.left = '-9999px'; // Hide off-screen
     document.body.appendChild(container);
 
     const firstRecord = groups[hc][Object.keys(groups[hc])[0]][Object.keys(groups[hc][Object.keys(groups[hc])[0]])[0]][0];
@@ -325,7 +330,7 @@ export const exportConfirmationPdfs = async (children: any[], fontBase64: any, i
 
   // Generate Zip
   const zipData = await zip.generateAsync({
-    type: "blob", 
+    type: "blob", // Standard blob for main-thread downloads
     compression: "DEFLATE",
     compressionOptions: { level: 5 }
   });
