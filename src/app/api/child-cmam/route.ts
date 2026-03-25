@@ -1,3 +1,4 @@
+// src/app/api/child-cmam/route.ts
 import { NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
@@ -154,9 +155,6 @@ export async function POST(req: Request) {
   const { action } = body;
 
   try {
-    // ==========================================
-    // EXISTING: GET SCHEMA
-    // ==========================================
     if (action === "get_schema") {
       return NextResponse.json({
         columns: DB_COLUMNS,
@@ -164,9 +162,6 @@ export async function POST(req: Request) {
       });
     }
 
-    // ==========================================
-    // EXISTING: CHECK DUPLICATES
-    // ==========================================
     if (action === "check_duplicates") {
       const { projectId, records, benefNoCol, childIdxCol } = body;
       if (!projectId || !Array.isArray(records) || !benefNoCol || !childIdxCol) {
@@ -217,9 +212,6 @@ export async function POST(req: Request) {
       }
     }
 
-    // ==========================================
-    // NEW: CREATE NEW CHILD
-    // ==========================================
     if (action === "create_new_child") {
       const { payload } = body;
       let childDb: Database.Database | null = null;
@@ -236,11 +228,9 @@ export async function POST(req: Request) {
 
         if (!bnf) throw new Error("Beneficiary not found in database.");
 
-        // Calculate Child Index
         const countRow = childDb.prepare("SELECT COUNT(*) as count FROM child_cmam WHERE benef_id = ?").get(payload.benef_id) as any;
         const childIdx = (countRow.count || 0) + 1;
         
-        // Calculate Child ID & Name
         const childId = `${bnf.WOMAN_ID}${childIdx}`;
         const childName = `${payload.child_first_name} ${bnf.HUSBAND_NAME || ''}`.trim();
 
@@ -269,7 +259,6 @@ export async function POST(req: Request) {
           child_name: childName,
           new_child_age_years: payload.new_child_age_mon ? (payload.new_child_age_mon / 12).toFixed(2) : null,
           cmam_qualify: 'Qualified',
-          // bnf data map
           woman_id: bnf.WOMAN_ID,
           benef_no: bnf.BENEF_NO,
           bnf_name: bnf.BENEF_NAME,
@@ -292,9 +281,6 @@ export async function POST(req: Request) {
       }
     }
 
-    // ==========================================
-    // NEW: UPDATE EXISTING CHILD
-    // ==========================================
     if (action === "update_child") {
       const { payload } = body;
       let childDb: Database.Database | null = null;
@@ -315,222 +301,138 @@ export async function POST(req: Request) {
         if (childDb) childDb.close();
       }
     }
-
-    // ==========================================
-    // EXISTING: MASS STREAM SAVING
-    // ==========================================
-    if (action === "save") {
-      const stream = new TransformStream();
-      const writer = stream.writable.getWriter();
-
-      (async () => {
-        const {
-          projectId,
-          records,
-          mapping,
-          benefNoCol,
-          childIdxCol,
-          mode,
-          duplicateIds = [],
-        } = body;
-        const uniqueIdCol = "child_id";
-        const duplicateIdSet = new Set(duplicateIds);
-
-        let childDb: Database.Database | null = null;
-        let bnfCmamDb: Database.Database | null = null;
-        let projectsDb: Database.Database | null = null;
-
-        try {
-          sendProgress(writer, {
-            type: "progress",
-            status: "STEP_ONE",
-            progress: 10,
-            message: "Ensuring schema...",
-          });
-
-          childDb = initializeDatabase();
-          bnfCmamDb = new Database(getBnfCmamDbPath(), { fileMustExist: true });
-          projectsDb = new Database(getProjectsDbPath(), { fileMustExist: true });
-
-          const bnfMap = new Map(
-            bnfCmamDb
-              .prepare("SELECT * FROM bnf_cmam WHERE project_id = ?")
-              .all(projectId)
-              .map((b: any) => [String(b.WOMAN_ID), b])
-          );
-          const project = projectsDb
-            .prepare("SELECT projectName FROM projects WHERE projectId = ?")
-            .get(projectId);
-
-          sendProgress(writer, {
-            type: "progress",
-            status: "STEP_TWO",
-            progress: 30,
-            message: "Mapping records...",
-          });
-
-          const processedRecords = records.map((row: any) => {
-            const mapped: Record<string, any> = {
-              project_id: projectId,
-              project_name: project?.projectName || "",
-            };
-            for (const [uiCol, dbCol] of Object.entries(mapping)) {
-              if (row[uiCol] !== undefined) {
-                const rawValue = row[uiCol];
-                mapped[dbCol] =
-                  dbCol === "woman_id" ? normalizeBenefNoValue(rawValue) : rawValue;
-              }
+    
+    if (action === 'save') {
+        const stream = new TransformStream();
+        const writer = stream.writable.getWriter();
+    
+        (async () => {
+            const { projectId, records, mapping, benefNoCol, childIdxCol, mode, duplicateIds = [] } = body;
+            const uniqueIdCol = "child_id";
+            const duplicateIdSet = new Set(duplicateIds);
+    
+            let childDb: Database.Database | null = null;
+            let bnfCmamDb: Database.Database | null = null;
+            let projectsDb: Database.Database | null = null;
+    
+            try {
+                sendProgress(writer, { type: 'progress', status: "STEP_ONE", progress: 10, message: "Ensuring schema..." });
+    
+                childDb = initializeDatabase();
+                bnfCmamDb = new Database(getBnfCmamDbPath(), { fileMustExist: true });
+                projectsDb = new Database(getProjectsDbPath(), { fileMustExist: true });
+    
+                const bnfMap = new Map(bnfCmamDb.prepare("SELECT * FROM bnf_cmam WHERE project_id = ?").all(projectId).map((b: any) => [String(b.WOMAN_ID), b]));
+                const project = projectsDb.prepare("SELECT projectName FROM projects WHERE projectId = ?").get(projectId);
+    
+                sendProgress(writer, { type: 'progress', status: "STEP_TWO", progress: 30, message: "Mapping records..." });
+    
+                const processedRecords = records.map((row: any) => {
+                    const mapped: Record<string, any> = { project_id: projectId, project_name: project?.projectName || "" };
+                    for (const [uiCol, dbCol] of Object.entries(mapping)) {
+                        if (row[uiCol] !== undefined) {
+                            const rawValue = row[uiCol];
+                            mapped[dbCol] = dbCol === "woman_id" ? normalizeBenefNoValue(rawValue) : rawValue;
+                        }
+                    }
+                    const benefNo = normalizeBenefNoValue(row[benefNoCol]);
+                    const childIdx = String(row[childIdxCol] ?? "");
+                    const benefRecord = bnfMap.get(benefNo);
+    
+                    if (benefRecord) {
+                        Object.assign(mapped, {
+                            benef_id: benefRecord.BENEF_ID, benef_no: benefRecord.BENEF_NO, bnf_name: benefRecord.BENEF_NAME,
+                            hsbnd_name: benefRecord.HUSBAND_NAME, ed_id: benefRecord.ED_ID, ed_name: benefRecord.ED_NAME,
+                            ed_phone: benefRecord.ed_phone, gov_name: benefRecord.GOV_NAME, mud_name: benefRecord.MUD_NAME,
+                            ozla_name: benefRecord.OZLA_NAME, vill_name: benefRecord.VILL_NAME, BENEF_CLASS_DESC: benefRecord.BENEF_CLASS_DESC,
+                            reg_date: benefRecord.reg_date, curr_date: benefRecord.curr_date,
+                        });
+    
+                        const regDate = parseDate(mapped.reg_date);
+                        const currDate = parseDate(mapped.curr_date);
+    
+                        if (regDate && currDate && benefRecord.BENEF_CLASS_DESC === "مستفيدة") {
+                            const diffDays = currDate.diff(regDate, "day");
+                            const diffMonths = diffDays / 30;
+                            mapped.reg_curr_days = diffDays.toString();
+                            mapped.reg_curr_mon = diffMonths.toString();
+                            
+                            const rawNewAgeMon = Number(mapped.child_age_mon) + diffMonths;
+                            const decimalPart = rawNewAgeMon - Math.floor(rawNewAgeMon);
+                            if (decimalPart >= 0.7) {
+                                mapped.new_child_age_mon = Math.ceil(rawNewAgeMon);
+                            } else {
+                                mapped.new_child_age_mon = Math.floor(rawNewAgeMon);
+                            }
+    
+                            mapped.new_child_age_years = Number(mapped.new_child_age_mon) / 12 || 0;
+                            mapped.cmam_qualify = mapped.new_child_age_years < 5 ? "Qualified" : "Disqualified";
+                        }
+                    }
+    
+                    mapped.child_id = `${benefNo}${childIdx}`;
+                    mapped.benef_no = benefNo;
+                    mapped.old_new_child = "old";
+                    mapped.data = JSON.stringify(row);
+                    return mapped;
+                });
+    
+                sendProgress(writer, { type: 'progress', status: "STEP_THREE", progress: 65, message: "Preparing database statements..." });
+    
+                const insertCols = DB_COLUMNS.filter((c) => c !== "id");
+                const insertPlaceholders = insertCols.map((c) => `@${c}`).join(", ");
+                const updateAssignments = insertCols.filter((c) => c !== uniqueIdCol).map((c) => `"${c}" = @${c}`).join(", ");
+    
+                const insertStmt = childDb.prepare(`INSERT INTO child_cmam (${insertCols.map((c) => `"${c}"`).join(", ")}) VALUES (${insertPlaceholders})`);
+                const updateStmt = childDb.prepare(`UPDATE child_cmam SET ${updateAssignments} WHERE "${uniqueIdCol}" = @${uniqueIdCol}`);
+    
+                const stats = { saved: 0, updated: 0, skipped: 0 };
+    
+                sendProgress(writer, { type: 'progress', status: "STEP_FOUR", progress: 80, message: "Committing records..." });
+    
+                const transaction = childDb.transaction(() => {
+                    for (const record of processedRecords) {
+                        const uid = record[uniqueIdCol];
+                        if (mode === "skip" && duplicateIdSet.has(uid)) {
+                            stats.skipped++;
+                            continue;
+                        }
+                        const payload: Record<string, any> = {};
+                        insertCols.forEach((col) => { payload[col] = record[col] ?? null; });
+    
+                        if (duplicateIdSet.has(uid)) {
+                            const info = updateStmt.run(payload);
+                            stats.updated += info.changes > 0 ? 1 : 0;
+                        } else {
+                            const info = insertStmt.run(payload);
+                            stats.saved += info.changes > 0 ? 1 : 0;
+                        }
+                    }
+                });
+                transaction();
+    
+                sendProgress(writer, { type: 'progress', status: "STEP_FIVE", progress: 95, message: "Finalizing..." });
+    
+                const results = {
+                    totalChildren: processedRecords.length,
+                    qualifiedBeneficiaries: processedRecords.filter((r) => r.BENEF_CLASS_DESC === "مستفيدة").length,
+                    cmamQualified: processedRecords.filter((r) => r.cmam_qualify === "Qualified").length,
+                    disqualifiedBeneficiaries: processedRecords.filter((r) => r.BENEF_CLASS_DESC !== "مستفيدة").length,
+                    cmamDisqualified: processedRecords.filter((r) => r.cmam_qualify === "Disqualified").length,
+                };
+    
+                sendProgress(writer, { type: "done", status: "done", progress: 100, stats, results });
+            } catch (err: any) {
+                sendProgress(writer, { type: "error", error: err.message });
+            } finally {
+                childDb?.close();
+                bnfCmamDb?.close();
+                projectsDb?.close();
+                writer.close();
             }
-            const benefNo = normalizeBenefNoValue(row[benefNoCol]);
-            const childIdx = String(row[childIdxCol] ?? "");
-            const benefRecord = bnfMap.get(benefNo);
-
-            if (benefRecord) {
-              mapped.benef_id = benefRecord.BENEF_ID;
-              mapped.benef_no = benefRecord.BENEF_NO;
-              mapped.bnf_name = benefRecord.BENEF_NAME;
-              mapped.hsbnd_name = benefRecord.HUSBAND_NAME;
-              mapped.ed_id = benefRecord.ED_ID;
-              mapped.ed_name = benefRecord.ED_NAME;
-              mapped.ed_phone = benefRecord.ed_phone;
-              mapped.gov_name = benefRecord.GOV_NAME;
-              mapped.mud_name = benefRecord.MUD_NAME;
-              mapped.ozla_name = benefRecord.OZLA_NAME;
-              mapped.vill_name = benefRecord.VILL_NAME;
-              mapped.BENEF_CLASS_DESC = benefRecord.BENEF_CLASS_DESC;
-              mapped.reg_date = benefRecord.reg_date;
-              mapped.curr_date = benefRecord.curr_date;
-
-              const regDate = parseDate(mapped.reg_date);
-              const currDate = parseDate(mapped.curr_date);
-
-              if (regDate && currDate && benefRecord.BENEF_CLASS_DESC === "مستفيدة") {
-                const diffDays = currDate.diff(regDate, "day");
-                const diffMonths = diffDays / 30;
-                mapped.reg_curr_days = diffDays.toString();
-                mapped.reg_curr_mon = diffMonths.toString();
-                
-                const rawNewAgeMon = Number(mapped.child_age_mon) + diffMonths || diffMonths;
-                const decimalPart = rawNewAgeMon - Math.floor(rawNewAgeMon);
-                if (decimalPart >= 0.7) {
-                    mapped.new_child_age_mon = Math.ceil(rawNewAgeMon);
-                } else {
-                    mapped.new_child_age_mon = Math.floor(rawNewAgeMon);
-                }
-
-                mapped.new_child_age_years =
-                  Number(mapped.new_child_age_mon) / 12 || 0;
-                mapped.cmam_qualify =
-                  mapped.new_child_age_years < 5 ? "Qualified" : "Disqualified";
-              }
-            }
-
-            mapped.child_id = `${benefNo}${childIdx}`;
-            mapped.benef_no = benefNo; // Ensure benef_no itself is normalized
-            mapped.old_new_child = "old";
-            mapped.data = JSON.stringify(row);
-            return mapped;
-          });
-
-          sendProgress(writer, {
-            type: "progress",
-            status: "STEP_THREE",
-            progress: 65,
-            message: "Preparing database statements...",
-          });
-
-          const insertCols = DB_COLUMNS.filter((c) => c !== "id");
-          const insertPlaceholders = insertCols.map((c) => `@${c}`).join(", ");
-          const updateAssignments = insertCols
-            .filter((c) => c !== uniqueIdCol)
-            .map((c) => `"${c}" = @${c}`)
-            .join(", ");
-
-          const insertStmt = childDb.prepare(
-            `INSERT INTO child_cmam (${insertCols.map((c) => `"${c}"`).join(", ")}) VALUES (${insertPlaceholders})`
-          );
-          const updateStmt = childDb.prepare(
-            `UPDATE child_cmam SET ${updateAssignments} WHERE "${uniqueIdCol}" = @${uniqueIdCol}`
-          );
-
-          const stats = { saved: 0, updated: 0, skipped: 0 };
-
-          sendProgress(writer, {
-            type: "progress",
-            status: "STEP_FOUR",
-            progress: 80,
-            message: "Committing records...",
-          });
-
-          const transaction = childDb.transaction(() => {
-            for (const record of processedRecords) {
-              const uid = record[uniqueIdCol];
-              if (mode === "skip" && duplicateIdSet.has(uid)) {
-                stats.skipped++;
-                continue;
-              }
-
-              const payload: Record<string, any> = {};
-              insertCols.forEach((col) => {
-                payload[col] = record[col] ?? null;
-              });
-
-              if (duplicateIdSet.has(uid)) {
-                const info = updateStmt.run(payload);
-                stats.updated += info.changes > 0 ? 1 : 0;
-              } else {
-                const info = insertStmt.run(payload);
-                stats.saved += info.changes > 0 ? 1 : 0;
-              }
-            }
-          });
-
-          transaction();
-
-          sendProgress(writer, {
-            type: "progress",
-            status: "STEP_FIVE",
-            progress: 95,
-            message: "Finalizing...",
-            stats,
-          });
-
-          const results = {
-            totalChildren: processedRecords.length,
-            qualifiedBeneficiaries: processedRecords.filter(
-              (r) => r.BENEF_CLASS_DESC === "مستفيدة"
-            ).length,
-            cmamQualified: processedRecords.filter(
-              (r) => r.cmam_qualify === "Qualified"
-            ).length,
-            disqualifiedBeneficiaries: processedRecords.filter(
-              (r) => r.BENEF_CLASS_DESC !== "مستفيدة"
-            ).length,
-            cmamDisqualified: processedRecords.filter(
-              (r) => r.cmam_qualify === "Disqualified"
-            ).length,
-          };
-
-          sendProgress(writer, {
-            type: "done",
-            status: "done",
-            progress: 100,
-            stats,
-            results,
-          });
-        } catch (err: any) {
-          sendProgress(writer, { type: "error", error: err.message });
-        } finally {
-          childDb?.close();
-          bnfCmamDb?.close();
-          projectsDb?.close();
-          writer.close();
-        }
-      })();
-
-      return new Response(stream.readable, {
-        headers: { "Content-Type": "text/event-stream" },
-      });
+        })();
+    
+        return new Response(stream.readable, { headers: { "Content-Type": "text/event-stream" } });
     }
 
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });
@@ -560,4 +462,33 @@ export async function GET(req: Request) {
       { status: 500 }
     );
   }
+}
+
+export async function PUT(req: Request) {
+    const body = await req.json();
+    if (!Array.isArray(body) || body.length === 0) {
+        return NextResponse.json({ error: 'Expected an array of records to update.' }, { status: 400 });
+    }
+    
+    let db: Database.Database | null = null;
+    try {
+        db = initializeDatabase();
+        const transaction = db.transaction((records: any[]) => {
+            for (const record of records) {
+                const { id, ...updates } = record;
+                if (!id) continue;
+                const setClauses = Object.keys(updates).map(k => `"${k}" = ?`).join(', ');
+                if (!setClauses) continue;
+                const values = [...Object.values(updates), id];
+                const stmt = db!.prepare(`UPDATE child_cmam SET ${setClauses} WHERE id = ?`);
+                stmt.run(values);
+            }
+        });
+        transaction(body);
+        return NextResponse.json({ success: true, message: 'Records updated.' });
+    } catch (err: any) {
+        return NextResponse.json({ error: 'Failed to update records.', details: err.message }, { status: 500 });
+    } finally {
+        if (db) db.close();
+    }
 }
