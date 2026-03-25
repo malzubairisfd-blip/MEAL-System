@@ -22,6 +22,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { ArrowLeft, Loader2, Search, ThumbsUp, Check, ChevronsUpDown, Database, FileText } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
+import { Textarea } from '@/components/ui/textarea';
 
 // --- Types ---
 interface Project { projectId: string; projectName: string; }
@@ -40,16 +41,17 @@ const formSchema = z.object({
   conf_date_month: z.string().optional(),
   conf_date_year: z.string().optional(),
   
-  // 'No' branch
+  // 'No' attend branch
   not_attend_reason_hc: z.string().optional(),
 
-  // 'Yes' branch
+  // 'Yes' attend branch
   child_has_cmam_hc: z.enum(['نعم', 'لا']).optional(),
 
-  // 'Yes' -> 'No' sub-branch
+  // 'Yes' attend -> 'No' cmam sub-branch
   muac_hc_no: z.number().optional(),
+  comments: z.string().optional(),
 
-  // 'Yes' -> 'Yes' sub-branch
+  // 'Yes' attend -> 'Yes' cmam sub-branch
   hc_card_no: z.string().optional(),
   meas_type: z.enum(['المواك', 'الزد اسكور']).optional(),
   muac_hc: z.number().optional(),
@@ -64,18 +66,7 @@ const formSchema = z.object({
   exp_end_treat_date_month: z.string().optional(),
   exp_end_treat_date_year: z.string().optional(),
   cmam_result_hc: z.string().optional(),
-}).refine(data => {
-    if (data.attend_hc === 'نعم') {
-        return !!data.child_has_cmam_hc;
-    }
-    return true;
-}, { message: "This field is required.", path: ["child_has_cmam_hc"] })
-.refine(data => {
-    if (data.attend_hc === 'نعم' && data.child_has_cmam_hc === 'نعم') {
-        return !!data.meas_type;
-    }
-    return true;
-}, { message: "Measurement type is required.", path: ["meas_type"] });
+});
 
 
 export default function ConfirmationDataEntryPage() {
@@ -85,7 +76,7 @@ export default function ConfirmationDataEntryPage() {
     
     const [selectedProjectId, setSelectedProjectId] = useState("");
     const [selectedHealthCenterId, setSelectedHealthCenterId] = useState("");
-    const [selectedBeneficiaryId, setSelectedBeneficiaryId] = useState<string>('');
+    const [selectedBeneficiary, setSelectedBeneficiary] = useState<Beneficiary | null>(null);
     const [selectedChildId, setSelectedChildId] = useState<string>('');
     
     const [beneficiarySearch, setBeneficiarySearch] = useState("");
@@ -106,7 +97,6 @@ export default function ConfirmationDataEntryPage() {
     const watchHasCmamHC = form.watch("child_has_cmam_hc");
     const watchMeasType = form.watch("meas_type");
     
-    // --- Data Fetching ---
     useEffect(() => {
         setLoading(p => ({...p, projects: true}));
         fetch('/api/projects').then(res => res.json()).then(setProjects).finally(() => setLoading(p => ({...p, projects: false})));
@@ -115,7 +105,7 @@ export default function ConfirmationDataEntryPage() {
     const handleProjectSelect = useCallback(async (projectId: string) => {
         setSelectedProjectId(projectId);
         setSelectedHealthCenterId("");
-        setSelectedBeneficiaryId("");
+        setSelectedBeneficiary(null);
         setSelectedChildId("");
         form.reset();
         
@@ -137,7 +127,6 @@ export default function ConfirmationDataEntryPage() {
         }
     }, [toast, form]);
 
-    // --- Filtering & Memoization ---
     const healthCenters = useMemo((): HealthCenter[] => {
         if (!allChildren.length) return [];
         const qualifiedChildren = allChildren.filter(c => c.child_has_cmam === 'نعم');
@@ -159,16 +148,15 @@ export default function ConfirmationDataEntryPage() {
     }, [beneficiariesInHc, beneficiarySearch]);
 
     const childrenOfBeneficiary = useMemo(() => {
-        if (!selectedBeneficiaryId) return [];
-        let filtered = allChildren.filter(c => c.benef_id === selectedBeneficiaryId && c.cmam_qualify === 'Qualified' && c.child_has_cmam === 'نعم');
+        if (!selectedBeneficiary) return [];
+        let filtered = allChildren.filter(c => c.benef_id === selectedBeneficiary.BENEF_ID && c.cmam_qualify === 'Qualified' && c.child_has_cmam === 'نعم');
         if (childSearch) {
             const ls = childSearch.toLowerCase();
             filtered = filtered.filter(c => String(c.child_id).toLowerCase().includes(ls) || c.child_name.toLowerCase().includes(ls));
         }
         return filtered;
-    }, [allChildren, selectedBeneficiaryId, childSearch]);
+    }, [allChildren, selectedBeneficiary, childSearch]);
 
-    // --- Form Logic ---
     const moveToNext = useCallback(() => {
         form.reset({ attend_hc: undefined, muac_hc: 7.0, muac_hc_no: 12.5 });
 
@@ -176,98 +164,98 @@ export default function ConfirmationDataEntryPage() {
         if (currentChildIndex > -1 && currentChildIndex < childrenOfBeneficiary.length - 1) {
              const nextChild = childrenOfBeneficiary[currentChildIndex + 1];
              setSelectedChildId(nextChild.child_id);
-             toast({ title: "تم الانتقال", description: `تم الانتقال إلى الطفل التالي: ${nextChild.child_name}`});
+             toast({ title: "Next Child", description: `Switched to child: ${nextChild.child_name}`});
              return;
         }
         
-        const currentBnfIndex = filteredBeneficiaries.findIndex(b => b.BENEF_ID === selectedBeneficiaryId);
+        const currentBnfIndex = filteredBeneficiaries.findIndex(b => b.id === selectedBeneficiary?.id);
         if (currentBnfIndex > -1 && currentBnfIndex < filteredBeneficiaries.length - 1) {
              const nextBnf = filteredBeneficiaries[currentBnfIndex + 1];
-             setSelectedBeneficiaryId(nextBnf.BENEF_ID);
-             toast({ title: "تم الانتقال", description: `تم الانتقال إلى المستفيدة التالية: ${nextBnf.BENEF_NAME}`});
+             setSelectedBeneficiary(nextBnf);
+             toast({ title: "Next Beneficiary", description: `Switched to: ${nextBnf.BENEF_NAME}`});
         } else {
-             toast({ title: "اكتملت القائمة", description: "تم الانتهاء من جميع الأطفال والمستفيدات في هذا المركز الصحي."});
+             toast({ title: "End of List", description: "You have reviewed all children for this educator."});
              setSelectedChildId("");
-             setSelectedBeneficiaryId("");
+             setSelectedBeneficiary(null);
         }
-    }, [childrenOfBeneficiary, selectedChildId, filteredBeneficiaries, selectedBeneficiaryId, form, toast]);
-
-    // This effect handles selecting the first child when a new beneficiary is selected
+    }, [childrenOfBeneficiary, selectedChildId, form, toast, filteredBeneficiaries, selectedBeneficiary]);
+    
     useEffect(() => {
-        if (selectedBeneficiaryId && childrenOfBeneficiary.length > 0) {
-            const firstChild = childrenOfBeneficiary[0];
-            setSelectedChildId(firstChild.child_id);
+        if (selectedBeneficiary && childrenOfBeneficiary.length > 0) {
+            const firstUnreviewedChild = childrenOfBeneficiary.find(c => !c.attend_hc);
+            if(firstUnreviewedChild) {
+              setSelectedChildId(firstUnreviewedChild.child_id);
+            } else {
+              setSelectedChildId(childrenOfBeneficiary[0].child_id);
+            }
             form.reset({ attend_hc: undefined, muac_hc: 7.0, muac_hc_no: 12.5 });
         } else {
             setSelectedChildId("");
         }
-    }, [selectedBeneficiaryId, childrenOfBeneficiary, form]);
+    }, [selectedBeneficiary, childrenOfBeneficiary, form]);
 
 
-    const handleQuickSave = useCallback(async (payload: any) => {
-        if (!selectedChildId) return;
-        setLoading(p => ({...p, saving: true}));
-        try {
-            const res = await fetch('/api/child-cmam', {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify([{ id: allChildren.find(c => c.child_id === selectedChildId)?.id, ...payload }]),
-            });
-            if (!res.ok) throw new Error("Failed to save data.");
-            toast({ title: "Success", description: "Record updated." });
-            moveToNext();
-        } catch (err: any) {
-             toast({ title: "Save Error", description: err.message, variant: "destructive" });
-        } finally {
-             setLoading(p => ({...p, saving: false}));
-        }
-    }, [selectedChildId, allChildren, toast, moveToNext]);
-
-    useEffect(() => {
-        const subscription = form.watch((value, { name }) => {
-            if (name === 'attend_hc' && value.attend_hc === 'لا') {
-                const { conf_date_day, conf_date_month, conf_date_year, not_attend_reason_hc } = form.getValues();
-                const fullDate = (conf_date_day && conf_date_month && conf_date_year) ? `${conf_date_year}-${conf_date_month}-${conf_date_day}` : null;
-                handleQuickSave({ attend_hc: 'لا', not_attend_reason_hc, conf_date: fullDate });
-            } else if (name === 'child_has_cmam_hc' && value.child_has_cmam_hc === 'لا') {
-                 const { conf_date_day, conf_date_month, conf_date_year, muac_hc_no } = form.getValues();
-                 const fullDate = (conf_date_day && conf_date_month && conf_date_year) ? `${conf_date_year}-${conf_date_month}-${conf_date_day}` : null;
-                 handleQuickSave({ attend_hc: 'نعم', child_has_cmam_hc: 'لا', muac_hc: muac_hc_no, conf_date: fullDate });
-            }
-        });
-        return () => subscription.unsubscribe();
-    }, [form, handleQuickSave]);
-    
     const onSubmit = async (data: z.infer<typeof formSchema>) => {
-        if (!selectedChildId) return;
+        if (!selectedChildId) {
+            toast({ title: "Selection Missing", variant: "destructive" });
+            return;
+        }
 
         setLoading(p => ({...p, saving: true}));
-        const payload: any = {
+
+        const fullDate = (data.conf_date_day && data.conf_date_month && data.conf_date_year)
+            ? `${data.conf_date_year}-${data.conf_date_month}-${data.conf_date_day}`
+            : null;
+
+        let payload: any = { 
             id: allChildren.find(c => c.child_id === selectedChildId)?.id,
-            conf_date: data.conf_date_year ? `${data.conf_date_year}-${data.conf_date_month}-${data.conf_date_day}` : null,
-            attend_hc: data.attend_hc,
-            child_has_cmam_hc: data.child_has_cmam_hc,
-            hc_card_no: data.hc_card_no,
-            meas_type: data.meas_type,
-            muac_hc: data.meas_type === 'المواك' ? data.muac_hc : null,
-            zscore_h: data.meas_type === 'الزد اسكور' ? data.zscore_h : null,
-            zscore_w: data.meas_type === 'الزد اسكور' ? data.zscore_w : null,
-            zscore: data.meas_type === 'الزد اسكور' ? data.zscore : null,
-            child_cmam_cond: data.child_cmam_cond,
-            exp_start_treat_date: data.exp_start_treat_date_year ? `${data.exp_start_treat_date_year}-${data.exp_start_treat_date_month}-${data.exp_start_treat_date_day}` : null,
-            exp_end_treat_date: data.exp_end_treat_date_year ? `${data.exp_end_treat_date_year}-${data.exp_end_treat_date_month}-${data.exp_end_treat_date_day}` : null,
-            cmam_result_hc: data.cmam_result_hc,
+            conf_date: fullDate,
         };
         
         try {
+            if (!fullDate && data.attend_hc === 'نعم') {
+                throw new Error("تاريخ تأكيد الحالة is required.");
+            }
+
+            payload.attend_hc = data.attend_hc;
+            
+            if (data.attend_hc === 'لا') {
+                if (!data.not_attend_reason_hc) throw new Error("سبب عدم الحضور is required.");
+                payload.not_attend_reason_hc = data.not_attend_reason_hc;
+            } else if (data.attend_hc === 'نعم') {
+                if (!data.child_has_cmam_hc) throw new Error("هل يعاني الطفل من سوء تغذية is required.");
+                payload.child_has_cmam_hc = data.child_has_cmam_hc;
+
+                if (data.child_has_cmam_hc === 'لا') {
+                    if (data.muac_hc_no === undefined) throw new Error("قياس المواك is required.");
+                    payload.muac_hc = data.muac_hc_no;
+                    payload.not_attend_reason_hc = data.comments; 
+                } else {
+                    if (!data.meas_type || !data.child_cmam_cond) throw new Error("Please fill all required malnutrition details.");
+                    payload.hc_card_no = data.hc_card_no;
+                    payload.meas_type = data.meas_type;
+                    payload.muac_hc = data.meas_type === 'المواك' ? data.muac_hc : null;
+                    payload.zscore_h = data.meas_type === 'الزد اسكور' ? data.zscore_h : null;
+                    payload.zscore_w = data.meas_type === 'الزد اسكور' ? data.zscore_w : null;
+                    payload.zscore = data.meas_type === 'الزد اسكور' ? data.zscore : null;
+                    payload.child_cmam_cond = data.child_cmam_cond;
+                    payload.exp_start_treat_date = data.exp_start_treat_date_year ? `${data.exp_start_treat_date_year}-${data.exp_start_treat_date_month}-${data.exp_start_treat_date_day}` : null;
+                    payload.exp_end_treat_date = data.exp_end_treat_date_year ? `${data.exp_end_treat_date_year}-${data.exp_end_treat_date_month}-${data.exp_end_treat_date_day}` : null;
+                    payload.cmam_result_hc = data.cmam_result_hc;
+                }
+            }
+            
             const res = await fetch('/api/child-cmam', {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify([payload])
             });
             if (!res.ok) throw new Error(await res.text());
+            
             toast({ title: "Success", description: "Record updated successfully." });
+            await handleProjectSelect(selectedProjectId); // Refresh data
             moveToNext();
+
         } catch (err: any) {
             toast({ title: "Save Error", description: err.message, variant: "destructive" });
         } finally {
@@ -312,15 +300,15 @@ export default function ConfirmationDataEntryPage() {
                         <ScrollArea className="h-48 mt-4 border rounded-md">
                             <Table><TableHeader><TableRow><TableHead>تحديد</TableHead><TableHead>ID</TableHead><TableHead>الاسم</TableHead></TableRow></TableHeader>
                             <TableBody>{filteredBeneficiaries.map(b => (
-                                <TableRow key={b.BENEF_ID} onClick={()=>setSelectedBeneficiaryId(b.BENEF_ID)} className={cn("cursor-pointer", selectedBeneficiaryId === b.BENEF_ID && 'bg-primary/10')}>
-                                    <TableCell><Checkbox checked={selectedBeneficiaryId === b.BENEF_ID} /></TableCell>
+                                <TableRow key={b.BENEF_ID} onClick={()=>{setSelectedBeneficiary(b); setSelectedChildId('');}} className={cn("cursor-pointer", selectedBeneficiary?.BENEF_ID === b.BENEF_ID && 'bg-primary/10')}>
+                                    <TableCell><Checkbox checked={selectedBeneficiary?.BENEF_ID === b.BENEF_ID} /></TableCell>
                                     <TableCell>{b.BENEF_ID}</TableCell><TableCell>{b.BENEF_NAME}</TableCell>
                                 </TableRow>
                             ))}</TableBody></Table>
                          </ScrollArea>
                     </CardContent>
                     
-                    {selectedBeneficiaryId && <Card>
+                    {selectedBeneficiary && <Card>
                         <CardHeader><CardTitle>اختيار الطفل</CardTitle></CardHeader>
                         <CardContent>
                              <Input placeholder="بحث بالاسم او رقم الطفل..." value={childSearch} onChange={e => setChildSearch(e.target.value)} />
@@ -352,16 +340,23 @@ export default function ConfirmationDataEntryPage() {
                                 <Button type="button" variant={field.value === 'لا' ? 'destructive' : 'outline'} onClick={() => field.onChange('لا')} className="flex-1">لا</Button>
                             </div></FormControl><FormMessage /></FormItem>)} />
 
-                            {watchAttendHC === 'لا' && (<FormField control={form.control} name="not_attend_reason_hc" render={({ field }) => (<FormItem><FormLabel>سبب عدم الحضور</FormLabel><FormControl><Input {...field}/></FormControl><FormMessage/></FormItem>)} />)}
+                            {watchAttendHC === 'لا' && (<><FormField control={form.control} name="not_attend_reason_hc" render={({ field }) => (<FormItem><FormLabel>سبب عدم الحضور</FormLabel><FormControl><Input {...field}/></FormControl><FormMessage/></FormItem>)} /><Button type="submit" disabled={loading.saving}>{loading.saving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Update & Next</Button></>)}
                             {watchAttendHC === 'نعم' && (<FormField control={form.control} name="child_has_cmam_hc" render={({ field }) => (<FormItem><FormLabel>هل يعاني الطفل من سوء تغذية؟</FormLabel><FormControl><div className="flex gap-4 pt-2">
                                 <Button type="button" variant={field.value === 'نعم' ? 'default' : 'outline'} onClick={() => field.onChange('نعم')} className="flex-1">نعم</Button>
                                 <Button type="button" variant={field.value === 'لا' ? 'destructive' : 'outline'} onClick={() => field.onChange('لا')} className="flex-1">لا</Button>
                             </div></FormControl><FormMessage /></FormItem>)} />)}
                             
-                             {watchAttendHC === 'نعم' && watchHasCmamHC === 'لا' && (<FormField control={form.control} name="muac_hc_no" render={({ field }) => (
+                             {watchAttendHC === 'نعم' && watchHasCmamHC === 'لا' && (<>
+                                <FormField control={form.control} name="muac_hc_no" render={({ field }) => (
                                 <FormItem><FormLabel>قياس المواك: {field.value?.toFixed(1) || 12.5}</FormLabel>
                                 <FormControl><Slider min={12.5} max={20} step={0.1} value={[field.value || 12.5]} onValueChange={(v) => field.onChange(v[0])} /></FormControl><FormMessage /></FormItem>
-                                )} />)}
+                                )} />
+                                 <FormField control={form.control} name="comments" render={({ field }) => (
+                                    <FormItem><FormLabel>ملاحظات</FormLabel><FormControl><Textarea {...field}/></FormControl><FormMessage/></FormItem>
+                                )} />
+                                <Button type="submit" disabled={loading.saving}>{loading.saving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Update & Next</Button>
+                                </>
+                             )}
 
                             {watchAttendHC === 'نعم' && watchHasCmamHC === 'نعم' && (<div className="space-y-6 border-t pt-6 mt-6">
                                 <FormField control={form.control} name="hc_card_no" render={({ field }) => (<FormItem><FormLabel>رقم الكرت الحصري</FormLabel><FormControl><Input type="number" {...field}/></FormControl><FormMessage/></FormItem>)} />
@@ -387,13 +382,21 @@ export default function ConfirmationDataEntryPage() {
                                     <FormField control={form.control} name="exp_end_treat_date_month" render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="شهر"/></SelectTrigger></FormControl><SelectContent>{months.map((m,i) => <SelectItem key={m} value={String(i+1)}>{m}</SelectItem>)}</SelectContent></Select></FormItem>)} />
                                     <FormField control={form.control} name="exp_end_treat_date_year" render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="سنة"/></SelectTrigger></FormControl><SelectContent>{years.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}</SelectContent></Select></FormItem>)} />
                                 </div></div>
-                                <FormField control={form.control} name="cmam_result_hc" render={({ field }) => (<FormItem><FormLabel>حالة المتابعة</FormLabel>
-                                    <FormControl><div className="grid grid-cols-2 gap-2">
-                                        {["مستمر بالمعالجة", "شفاء", "تخلف", "الوفاة", "عدم استجابة", "انتهاء فترة الدعم / تخريج من برنامج سوء التغذية"].map(opt => (
-                                            <Button key={opt} type="button" variant={field.value === opt ? 'default' : 'outline'} onClick={() => field.onChange(opt)}>{opt}</Button>
-                                        ))}
-                                    </div></FormControl>
-                                <FormMessage /></FormItem>)} />
+                                <FormField
+                                    control={form.control}
+                                    name="cmam_result_hc"
+                                    render={({ field }) => (
+                                    <FormItem><FormLabel>حالة المتابعة</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select status..."/></SelectTrigger></FormControl>
+                                    <SelectContent>
+                                        <SelectItem value="مستمر بالمعالجة">مستمر بالمعالجة</SelectItem>
+                                        <SelectItem value="شفاء">شفاء</SelectItem>
+                                        <SelectItem value="تخلف">تخلف</SelectItem>
+                                        <SelectItem value="الوفاة">الوفاة</SelectItem>
+                                        <SelectItem value="عدم استجابة">عدم استجابة</SelectItem>
+                                        <SelectItem value="انتهاء فترة الدعم / تخريج من برنامج سوء التغذية">انتهاء فترة الدعم / تخريج من برنامج سوء التغذية</SelectItem>
+                                    </SelectContent>
+                                    </Select><FormMessage /></FormItem>
+                                )} />
                                 <Button type="submit" disabled={loading.saving}>{loading.saving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Update & Next</Button>
                             </div>)}
                         </CardContent>
