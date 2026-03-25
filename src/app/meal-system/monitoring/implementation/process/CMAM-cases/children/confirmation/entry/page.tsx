@@ -25,8 +25,8 @@ import { cn } from "@/lib/utils";
 
 // --- Types ---
 interface Project { projectId: string; projectName: string; }
-interface HealthCenter { hc_id: string; hc_name: string; }
-interface Beneficiary { id: number; benef_id: string; bnf_name: string; hc_id: string; [key: string]: any; }
+interface HealthCenter { hc_id: string; hc_name: string; hw_id: string; hw_name: string;}
+interface Beneficiary { id: number; BENEF_ID: string; BENEF_NAME: string; hc_id: string; [key: string]: any; }
 interface Child { id: number; child_id: string; child_name: string; benef_id: string; }
 
 const months = ["يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"];
@@ -65,11 +65,15 @@ const formSchema = z.object({
   exp_end_treat_date_year: z.string().optional(),
   cmam_result_hc: z.string().optional(),
 }).refine(data => {
-    if (data.attend_hc === 'نعم' && !data.child_has_cmam_hc) return false;
+    if (data.attend_hc === 'نعم') {
+        return !!data.child_has_cmam_hc;
+    }
     return true;
 }, { message: "This field is required.", path: ["child_has_cmam_hc"] })
 .refine(data => {
-    if (data.attend_hc === 'نعم' && data.child_has_cmam_hc === 'نعم' && !data.meas_type) return false;
+    if (data.attend_hc === 'نعم' && data.child_has_cmam_hc === 'نعم') {
+        return !!data.meas_type;
+    }
     return true;
 }, { message: "Measurement type is required.", path: ["meas_type"] });
 
@@ -141,7 +145,7 @@ export default function ConfirmationDataEntryPage() {
         } finally {
             setLoading(p => ({...p, data: false}));
         }
-    }, [toast]);
+    }, [toast, form]);
     
     const filteredBeneficiaries = useMemo(() => {
         let filtered = beneficiaries;
@@ -199,18 +203,6 @@ export default function ConfirmationDataEntryPage() {
         }
     };
     
-    useEffect(() => {
-        const { day, month, year } = form.getValues();
-        const fullDate = (day && month && year) ? `${year}-${month}-${day}` : null;
-        if (watchAttendHC === 'لا') {
-            handleQuickSave({ attend_hc: 'لا', not_attend_reason_hc: form.getValues("not_attend_reason_hc"), conf_date: fullDate });
-        } else if (watchAttendHC === 'نعم' && watchHasCmamHC === 'لا') {
-            handleQuickSave({ attend_hc: 'نعم', child_has_cmam_hc: 'لا', muac_hc: form.getValues("muac_hc_no"), conf_date: fullDate });
-        }
-    // We only want this to run when these specific dependencies change, not on every form change
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [watchAttendHC, watchHasCmamHC]);
-
     const onSubmit = async (data: z.infer<typeof formSchema>) => {
         if (!selectedChildId) return;
 
@@ -281,16 +273,16 @@ export default function ConfirmationDataEntryPage() {
                         <Input placeholder="بحث بالاسم او رقم المستفيدة..." value={beneficiarySearch} onChange={e => setBeneficiarySearch(e.target.value)} disabled={!selectedHealthCenterId} />
                         <ScrollArea className="h-48 mt-4 border rounded-md">
                             <Table><TableHeader><TableRow><TableHead>تحديد</TableHead><TableHead>ID</TableHead><TableHead>الاسم</TableHead></TableRow></TableHeader>
-                            <TableBody>{beneficiariesForEducator.map(b => (
-                                <TableRow key={b.id} onClick={()=>setSelectedBeneficiary(b)} className={cn("cursor-pointer", selectedBeneficiary?.id === b.id && 'bg-primary/10')}>
-                                    <TableCell><Checkbox checked={selectedBeneficiary?.id === b.id} /></TableCell>
+                            <TableBody>{filteredBeneficiaries.map(b => (
+                                <TableRow key={b.id} onClick={()=>setSelectedBeneficiaryId(b.BENEF_ID)} className={cn("cursor-pointer", selectedBeneficiaryId === b.BENEF_ID && 'bg-primary/10')}>
+                                    <TableCell><Checkbox checked={selectedBeneficiaryId === b.BENEF_ID} /></TableCell>
                                     <TableCell>{b.BENEF_ID}</TableCell><TableCell>{b.BENEF_NAME}</TableCell>
                                 </TableRow>
                             ))}</TableBody></Table>
                          </ScrollArea>
                     </CardContent>
                     
-                    {selectedBeneficiary && <Card>
+                    {selectedBeneficiaryId && <Card>
                         <CardHeader><CardTitle>اختيار الطفل</CardTitle></CardHeader>
                         <CardContent>
                              <Input placeholder="بحث بالاسم او رقم الطفل..." value={childSearch} onChange={e => setChildSearch(e.target.value)} />
@@ -320,16 +312,35 @@ export default function ConfirmationDataEntryPage() {
                             </div></div>
                             <FormField control={form.control} name="attend_hc" render={({ field }) => (<FormItem><FormLabel>هل الطفل حضر الى المركز الصحي؟</FormLabel><FormControl><div className="flex gap-4 pt-2">
                                 <Button type="button" variant={field.value === 'نعم' ? 'default' : 'outline'} onClick={() => field.onChange('نعم')} className="flex-1">نعم</Button>
-                                <Button type="button" variant={field.value === 'لا' ? 'destructive' : 'outline'} onClick={() => field.onChange('لا')} className="flex-1">لا</Button>
+                                <Button type="button" variant={field.value === 'لا' ? 'destructive' : 'outline'} onClick={() => {
+                                    field.onChange('لا');
+                                    const { conf_date_day, conf_date_month, conf_date_year, not_attend_reason_hc } = form.getValues();
+                                    const fullDate = (conf_date_day && conf_date_month && conf_date_year) ? `${conf_date_year}-${conf_date_month}-${conf_date_day}` : null;
+                                    handleQuickSave({ attend_hc: 'لا', not_attend_reason_hc, conf_date: fullDate });
+                                }} className="flex-1">لا</Button>
                             </div></FormControl><FormMessage /></FormItem>)} />
 
-                            {watchAttendHC === 'لا' && (<><FormField control={form.control} name="not_attend_reason_hc" render={({ field }) => (<FormItem><FormLabel>سبب عدم الحضور</FormLabel><FormControl><Input {...field}/></FormControl><FormMessage/></FormItem>)} /><Button type="button" onClick={() => handleQuickSave({ attend_hc: 'لا', not_attend_reason_hc: form.getValues("not_attend_reason_hc"), conf_date: `${form.getValues().conf_date_year}-${form.getValues().conf_date_month}-${form.getValues().conf_date_day}`})} disabled={loading.saving}>{loading.saving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Update & Next</Button></>)}
+                            {watchAttendHC === 'لا' && (<><FormField control={form.control} name="not_attend_reason_hc" render={({ field }) => (<FormItem><FormLabel>سبب عدم الحضور</FormLabel><FormControl><Input {...field}/></FormControl><FormMessage/></FormItem>)} /><Button type="button" onClick={() => { const { conf_date_day, conf_date_month, conf_date_year, not_attend_reason_hc } = form.getValues(); const fullDate = (conf_date_day && conf_date_month && conf_date_year) ? `${conf_date_year}-${conf_date_month}-${conf_date_day}` : null; handleQuickSave({ attend_hc: 'لا', not_attend_reason_hc, conf_date: fullDate })}} disabled={loading.saving}>{loading.saving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Update & Next</Button></>)}
                             {watchAttendHC === 'نعم' && (<FormField control={form.control} name="child_has_cmam_hc" render={({ field }) => (<FormItem><FormLabel>هل يعاني الطفل من سوء تغذية؟</FormLabel><FormControl><div className="flex gap-4 pt-2">
                                 <Button type="button" variant={field.value === 'نعم' ? 'default' : 'outline'} onClick={() => field.onChange('نعم')} className="flex-1">نعم</Button>
-                                <Button type="button" variant={field.value === 'لا' ? 'destructive' : 'outline'} onClick={() => field.onChange('لا')} className="flex-1">لا</Button>
+                                <Button type="button" variant={field.value === 'لا' ? 'destructive' : 'outline'} onClick={() => {
+                                    field.onChange('لا');
+                                    const { conf_date_day, conf_date_month, conf_date_year, muac_hc_no } = form.getValues();
+                                    const fullDate = (conf_date_day && conf_date_month && conf_date_year) ? `${conf_date_year}-${conf_date_month}-${conf_date_day}` : null;
+                                    handleQuickSave({ attend_hc: 'نعم', child_has_cmam_hc: 'لا', muac_hc: muac_hc_no, conf_date: fullDate });
+                                }} className="flex-1">لا</Button>
                             </div></FormControl><FormMessage /></FormItem>)} />)}
-                            {watchAttendHC === 'نعم' && watchHasCmamHC === 'لا' && (<><FormField control={form.control} name="muac_hc_no" render={({ field }) => (<FormItem><FormLabel>قياس المواك: {field.value?.toFixed(1) || 12.5}</FormLabel><FormControl><Slider min={12.5} max={20} step={0.1} value={[field.value || 12.5]} onValueChange={(v) => field.onChange(v[0])} /></FormControl><FormMessage /></FormItem>)} /><Button type="button" onClick={() => handleQuickSave({ attend_hc: 'نعم', child_has_cmam_hc: 'لا', muac_hc: form.getValues("muac_hc_no"), conf_date: `${form.getValues().conf_date_year}-${form.getValues().conf_date_month}-${form.getValues().conf_date_day}` })} disabled={loading.saving}>{loading.saving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Update & Next</Button></>)}
                             
+                             {watchAttendHC === 'نعم' && watchHasCmamHC === 'لا' && (
+                                <>
+                                <FormField control={form.control} name="muac_hc_no" render={({ field }) => (
+                                <FormItem><FormLabel>قياس المواك: {field.value?.toFixed(1) || 12.5}</FormLabel>
+                                <FormControl><Slider min={12.5} max={20} step={0.1} value={[field.value || 12.5]} onValueChange={(v) => field.onChange(v[0])} /></FormControl><FormMessage /></FormItem>
+                                )} />
+                                <Button type="button" onClick={() => { const { conf_date_day, conf_date_month, conf_date_year, muac_hc_no } = form.getValues(); const fullDate = (conf_date_day && conf_date_month && conf_date_year) ? `${conf_date_year}-${conf_date_month}-${conf_date_day}` : null; handleQuickSave({ attend_hc: 'نعم', child_has_cmam_hc: 'لا', muac_hc: muac_hc_no, conf_date: fullDate }) }} disabled={loading.saving}>{loading.saving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Update & Next</Button>
+                                </>
+                             )}
+
                             {watchAttendHC === 'نعم' && watchHasCmamHC === 'نعم' && (<div className="space-y-6 border-t pt-6 mt-6">
                                 <FormField control={form.control} name="hc_card_no" render={({ field }) => (<FormItem><FormLabel>رقم الكرت الحصري</FormLabel><FormControl><Input type="number" {...field}/></FormControl><FormMessage/></FormItem>)} />
                                 <FormField control={form.control} name="meas_type" render={({ field }) => (<FormItem><FormLabel>نوع القياس المستخدم</FormLabel><FormControl><div className="flex gap-4 pt-2">
