@@ -1,8 +1,5 @@
 "use client";
 
-import html2pdf from "html2pdf.js";
-import JSZip from "jszip";
-
 export interface EducatorGroupInfo {
   location: string;
   educatorCode: string;
@@ -25,7 +22,7 @@ const getStyles = (fontRegBase64: string, fontBoldBase64: string) => `
   @font-face { font-family: 'NotoNaskhArabic'; src: url(data:font/ttf;base64,${fontBoldBase64}); font-weight: bold; }
   
   .pdf-wrapper {
-    font-family: sans-serif;
+    font-family: 'NotoNaskhArabic', sans-serif;
     direction: rtl;
     text-align: right;
     color: #000;
@@ -36,9 +33,9 @@ const getStyles = (fontRegBase64: string, fontBoldBase64: string) => `
   .pdf-page {
     width: 297mm;
     height: 209mm;
-    padding: 10mm;
+    padding: 8mm;
     box-sizing: border-box;
-    border: 2px solid black;
+    border: 4px solid black;
     position: relative;
     background: white;
     page-break-after: always;
@@ -46,8 +43,8 @@ const getStyles = (fontRegBase64: string, fontBoldBase64: string) => `
     overflow: hidden;
   }
 
-  .logo-box { position: absolute; top: 10mm; left: 15mm; width: 30mm; text-align: center; }
-  .top-right-headers { position: absolute; top: 10mm; right: 15mm; font-weight: bold; font-size: 12px; line-height: 1.5; }
+  .logo-box { position: absolute; top: 5mm; left: 15mm; width: 30mm; text-align: center; }
+  .top-right-headers { position: absolute; top: 5mm; right: 15mm; font-weight: bold; font-size: 12px; line-height: 1.5; }
 
   .cover-title-container { margin-top: 30mm; text-align: center; }
   .cover-title-box { border: 1px solid black; padding: 10px; margin: 10px auto; width: 60%; font-size: 20px; font-weight: bold; }
@@ -70,20 +67,20 @@ const getStyles = (fontRegBase64: string, fontBoldBase64: string) => `
   .stat-table td { border: 1px solid black; padding: 10px; text-align: center; font-weight: bold; font-size: 14px; }
 
   /* INCREASED FONT SIZES HERE */
-  table.data-table { width: 100%; border-collapse: collapse; margin-top: 10mm; text-align: center; table-layout: fixed; }
+  table.data-table { width: 100%; border-collapse: collapse; margin-top: 5mm; text-align: center; table-layout: fixed; }
   table.data-table th { background-color: #f0f0f0; font-weight: bold; font-size: 11px; border: 1px solid black; padding: 6px 2px; }
   table.data-table td { border: 1px solid black; padding: 6px 2px; font-size: 11px; text-align: center; word-wrap: break-word; }
   
-  table.header-table { width: 100%; border-collapse: collapse; margin-top: 15mm; font-size: 10px; text-align: center; }
+  table.header-table { width: 100%; border-collapse: collapse; margin-top: 10mm; font-size: 11px; text-align: center; }
   table.header-table th, table.header-table td { border: 1px solid black; padding: 6px; }
   table.header-table th { background-color: #f0f0f0; font-weight: bold; text-align: center; }
 
   /* FOOTER STYLING */
   .footer { 
     position: absolute; 
-    bottom: 10mm; 
-    left: 10mm; 
-    right: 10mm; 
+    bottom: 5mm; 
+    left: 5mm; 
+    right: 5mm; 
     display: flex; 
     justify-content: space-between; 
     align-items: center; 
@@ -183,12 +180,13 @@ export function generateHTML(childrenForHc: any[], fontBase64: { regular: string
           <div class="pdf-page">
             <div class="logo-box"><img src="${logoBase64}" style="height: 18mm; width: auto;" /></div>
             <div class="top-right-headers">
-              <div>الصندوق الاجتماعي للتنمية - فرع صنعاء</div>
-              <div style="font-weight: normal; font-size: 11px;">صفحة ${p + 1} من ${totalPages}</div>
-            </div>
-            
-            <div style="text-align: center; font-weight: bold; font-size: 15px; padding-top: 5mm;">برنامج التحويلات النقدية المشروطة في التغذية</div>
-            <div style="text-align: center; font-size: 13px; margin-top: 5px;">كشف تأكيد حالات سوء التغذية للأطفال من قبل العامل الصحي</div>
+            <div style="text-align: right; font-weight: bold; font-si1e: 12px; padding-top: 0mm;">الجمهورية اليمنية</div>
+            <div style="text-align: right;  font-weight: bold; font-size: 12px; margin-top: 1px;">الصندوق الاجتماعي للتنمية</div>
+            <div style="text-align: right;  font-weight: bold; font-size: 12px; margin-top: 2px;">صفحة ${p + 1} من ${totalPages}</div>
+          </div>
+          
+            <div style="text-align: center; font-weight: bold; font-size: 15px; padding-top: 0mm;">برنامج التحويلات النقدية المشروطة في التغذية</div>
+            <div style="text-align: center;  font-weight: bold; font-size: 15px; margin-top: 1px;">كشف تأكيد حالات سوء التغذية للأطفال من قبل العامل الصحي</div>
 
             <table class="header-table">
               <thead>

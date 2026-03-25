@@ -249,13 +249,13 @@ export async function POST(req: Request) {
             project_id, project_name, child_idx, child_id, old_new_child, child_first_name, child_name, child_gender,
             new_child_age_mon, new_child_age_years, cmam_qualify, child_has_cmam, child_cmam_type, muac, 
             go_health_center, disc_date, near_health_center, hw_id, hw_name, hc_id, hc_name,
-            woman_id, benef_id, bnf_name, hsbnd_name, ed_id, ed_name, ed_phone, 
+            woman_id, benef_id, benef_no, bnf_name, hsbnd_name, ed_id, ed_name, ed_phone, 
             gov_name, mud_name, ozla_name, vill_name, BENEF_CLASS_DESC
           ) VALUES (
             @project_id, @project_name, @child_idx, @child_id, @old_new_child, @child_first_name, @child_name, @child_gender,
             @new_child_age_mon, @new_child_age_years, @cmam_qualify, @child_has_cmam, @child_cmam_type, @muac,
             @go_health_center, @disc_date, @near_health_center, @hw_id, @hw_name, @hc_id, @hc_name,
-            @woman_id, @benef_id, @bnf_name, @hsbnd_name, @ed_id, @ed_name, @ed_phone,
+            @woman_id, @benef_id, @benef_no, @bnf_name, @hsbnd_name, @ed_id, @ed_name, @ed_phone,
             @gov_name, @mud_name, @ozla_name, @vill_name, @BENEF_CLASS_DESC
           )
         `);
@@ -271,6 +271,7 @@ export async function POST(req: Request) {
           cmam_qualify: 'Qualified',
           // bnf data map
           woman_id: bnf.WOMAN_ID,
+          benef_no: bnf.BENEF_NO,
           bnf_name: bnf.BENEF_NAME,
           hsbnd_name: bnf.HUSBAND_NAME,
           ed_id: bnf.ED_ID,
@@ -377,7 +378,7 @@ export async function POST(req: Request) {
               if (row[uiCol] !== undefined) {
                 const rawValue = row[uiCol];
                 mapped[dbCol] =
-                  dbCol === "benef_no" ? normalizeBenefNoValue(rawValue) : rawValue;
+                  dbCol === "woman_id" ? normalizeBenefNoValue(rawValue) : rawValue;
               }
             }
             const benefNo = normalizeBenefNoValue(row[benefNoCol]);
@@ -386,6 +387,7 @@ export async function POST(req: Request) {
 
             if (benefRecord) {
               mapped.benef_id = benefRecord.BENEF_ID;
+              mapped.benef_no = benefRecord.BENEF_NO;
               mapped.bnf_name = benefRecord.BENEF_NAME;
               mapped.hsbnd_name = benefRecord.HUSBAND_NAME;
               mapped.ed_id = benefRecord.ED_ID;
@@ -407,8 +409,15 @@ export async function POST(req: Request) {
                 const diffMonths = diffDays / 30;
                 mapped.reg_curr_days = diffDays.toString();
                 mapped.reg_curr_mon = diffMonths.toString();
-                mapped.new_child_age_mon =
-                  Number(mapped.child_age_mon) + diffMonths || diffMonths;
+                
+                const rawNewAgeMon = Number(mapped.child_age_mon) + diffMonths || diffMonths;
+                const decimalPart = rawNewAgeMon - Math.floor(rawNewAgeMon);
+                if (decimalPart >= 0.7) {
+                    mapped.new_child_age_mon = Math.ceil(rawNewAgeMon);
+                } else {
+                    mapped.new_child_age_mon = Math.floor(rawNewAgeMon);
+                }
+
                 mapped.new_child_age_years =
                   Number(mapped.new_child_age_mon) / 12 || 0;
                 mapped.cmam_qualify =
