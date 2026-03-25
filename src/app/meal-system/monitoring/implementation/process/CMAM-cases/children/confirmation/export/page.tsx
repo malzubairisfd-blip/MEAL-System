@@ -9,8 +9,15 @@ import { useToast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import Link from 'next/link';
 import { saveAs } from "file-saver";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-
+import { generateHTML } from "@/lib/confirmationchildcmam-export";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 // --- Types ---
 interface Project {
@@ -35,12 +42,42 @@ export default function ExportCmamStatementsPage() {
     const [selectedProjectId, setSelectedProjectId] = useState<string>('');
     const [allData, setAllData] = useState<any[]>([]);
     const { toast } = useToast();
+    const [fontBase64, setFontBase64] = useState<{ regular: string, bold: string, logo: string } | null>(null);
 
     useEffect(() => {
         setLoading(true);
-        fetch('/api/projects').then(res => res.json())
-        .then(data => setProjects(data || []))
-        .catch(err => {
+        Promise.all([
+            fetch('/api/projects').then(res => res.json()),
+            fetch('/fonts/NotoNaskhArabic-Regular.ttf').then(res => res.blob()),
+            fetch('/fonts/NotoNaskhArabic-Bold.ttf').then(res => res.blob()),
+            fetch('/sfd-logo.png').then(res => res.blob())
+        ]).then(async ([projectData, fontRegularBlob, fontBoldBlob, logoBlob]) => {
+            setProjects(projectData || []);
+            
+            const blobToBase64 = (blob: Blob): Promise<string> => {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(reader.result as string);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(blob);
+                });
+            };
+
+            const [regUrl, boldUrl, logoUrl] = await Promise.all([
+                blobToBase64(fontRegularBlob),
+                blobToBase64(fontBoldBlob),
+                blobToBase64(logoBlob)
+            ]);
+
+            const extractBase64 = (dataUrl: string) => dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
+
+            setFontBase64({
+                regular: extractBase64(regUrl),
+                bold: extractBase64(boldUrl),
+                logo: logoUrl
+            });
+
+        }).catch(err => {
             toast({ title: "Error loading initial assets", description: err.message, variant: "destructive" });
         }).finally(() => setLoading(false));
     }, [toast]);
@@ -65,6 +102,7 @@ export default function ExportCmamStatementsPage() {
         
         for (const record of qualified) {
             const hc_id = record.hc_id || 'UNKNOWN';
+            
             if (!groups[hc_id]) {
                 groups[hc_id] = { hc_name: record.hc_name || 'Unknown Center', records: [] };
             }
@@ -81,27 +119,73 @@ export default function ExportCmamStatementsPage() {
     }, [allData]);
 
     const handleDownload = async (records: any[], asZip: boolean, fileName: string) => {
+        if (!fontBase64) {
+            toast({ title: "Assets not loaded", description: "Please wait for assets to load.", variant: "destructive" });
+            return;
+        }
+        
+        if (!records?.length) {
+            toast({ title: "No data", description: "There is no data to generate a PDF for.", variant: "destructive" });
+            return;
+        }
+
         setActionLoading(fileName);
         toast({title: "Generating...", description: `Your download for ${fileName} will begin shortly.`});
 
         try {
-            const res = await fetch('/api/child-cmam-confirmation-export', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ records, asZip })
-            });
+            // Dynamically import libraries to avoid breaking SSR
+            const html2pdf = (await import("html2pdf.js")).default;
+            const JSZip = (await import("jszip")).default;
 
-            if (!res.ok) {
-                const errorData = await res.json();
-                throw new Error(errorData.error || 'PDF Generation failed on server');
+            const groups: Record<string, any[]> = {};
+            for (const r of records) {
+                const hc = r.hc_id || "UNKNOWN";
+                if (!groups[hc]) groups[hc] = [];
+                groups[hc].push(r);
             }
 
-            const blob = await res.blob();
-            saveAs(blob, fileName);
-            toast({ title: "Success", description: "Download complete." });
+            const opt = {
+                margin: 0,
+                image: { type: 'jpeg', quality: 1 },
+                html2canvas: { scale: 2, useCORS: true, logging: false }, 
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
+                pagebreak: { mode: ['css', 'legacy'] } 
+            };
+
+            if (asZip) {
+                const zip = new JSZip();
+                for (const hc of Object.keys(groups)) {
+                    const htmlString = generateHTML(groups[hc], fontBase64, fontBase64.logo);
+                    
+                    // Passing the HTML string directly prevents CSSOM blank-rendering bugs
+                    const buffer = await html2pdf()
+                      .set(opt)
+                      .from(htmlString)
+                      .output("arraybuffer");
+                      
+                    const firstRecord = groups[hc][0];
+                    const safeName = `${firstRecord.hc_id}-${firstRecord.hc_name}`.replace(/[\/\\?%*:|"<>]/g, "-");
+                    zip.file(`${safeName}.pdf`, buffer);
+                }
+                const zipBlob = await zip.generateAsync({ type: "blob" });
+                saveAs(zipBlob, fileName);
+                
+            } else {
+                const firstHc = Object.keys(groups)[0];
+                const htmlString = generateHTML(groups[firstHc], fontBase64, fontBase64.logo);
+                
+                // Passing the HTML string directly prevents CSSOM blank-rendering bugs
+                const blob = await html2pdf()
+                  .set(opt)
+                  .from(htmlString)
+                  .output("blob");
+                  
+                saveAs(blob, fileName);
+            }
 
         } catch (error: any) {
-            toast({ title: "Error", description: error.message, variant: "destructive" });
+            console.error("PDF Generation Error:", error);
+            toast({ title: "Error", description: error.message || "Failed to generate PDF.", variant: "destructive" });
         } finally {
             setActionLoading(null);
         }
@@ -149,10 +233,12 @@ export default function ExportCmamStatementsPage() {
                                 disabled={actionLoading !== null || healthCenterGroups.length === 0}
                                 className="w-full"
                             >
-                                {actionLoading === `CMAM_Confirmations_${selectedProjectId}.zip` ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+                                {actionLoading === `CMAM_Confirmations_${selectedProjectId}.zip` ?
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
                                 Download All as ZIP ({healthCenterGroups.length} Centers)
                             </Button>
-                             <Button
+                        
+                            <Button
                                 size="lg"
                                 variant="outline"
                                 onClick={() => handleDownload([allData.filter(r => r.child_has_cmam === 'نعم')[0]], false, `CMAM_Sample_${selectedProjectId}.pdf`)}
@@ -162,6 +248,7 @@ export default function ExportCmamStatementsPage() {
                                 Download Sample PDF
                             </Button>
                         </div>
+                        
                         
                         <div className="space-y-2">
                             <h3 className="font-semibold">Download by Health Center</h3>
@@ -174,6 +261,7 @@ export default function ExportCmamStatementsPage() {
                                             <TableHead className="text-right">Action</TableHead>
                                         </TableRow>
                                     </TableHeader>
+                
                                     <TableBody>
                                         {healthCenterGroups.map(group => (
                                             <TableRow key={group.hc_id}>
@@ -186,7 +274,8 @@ export default function ExportCmamStatementsPage() {
                                                         disabled={actionLoading !== null}
                                                         onClick={() => handleDownload(group.records, true, `CMAM_${group.hc_id}.zip`)}
                                                     >
-                                                        {actionLoading === `CMAM_${group.hc_id}.zip` ? <Loader2 className="h-4 w-4 animate-spin"/> : <Download className="h-4 w-4"/>}
+                                                        {actionLoading === `CMAM_${group.hc_id}.zip` ?
+                                                            <Loader2 className="h-4 w-4 animate-spin"/> : <Download className="h-4 w-4"/>}
                                                     </Button>
                                                 </TableCell>
                                             </TableRow>
