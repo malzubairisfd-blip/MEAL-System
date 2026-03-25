@@ -23,6 +23,7 @@ import { Slider } from "@/components/ui/slider";
 import { ArrowLeft, ChevronsUpDown, Check, Loader2, Search, Database, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Checkbox } from '@/components/ui/checkbox';
+import { Textarea } from '@/components/ui/textarea';
 
 interface Project { projectId: string; projectName: string; }
 interface Educator { ED_ID: string; ED_NAME: string; }
@@ -47,9 +48,18 @@ const formSchema = z.object({
   disc_date_month: z.string().optional(),
   disc_date_year: z.string().optional(),
   near_health_center: z.string().optional(),
+  comments: z.string().optional(),
+}).refine(data => {
+    if (data.isExistingChild === 'لا') {
+        return !!data.child_first_name && !!data.child_gender && !!data.new_child_age_mon;
+    }
+    return true;
+}, {
+    message: "New child details are required.",
+    path: ['child_first_name'],
 }).refine(data => {
     if (data.child_has_cmam === 'نعم') {
-        return !!data.bnf_preg_lec && !!data.muac && !!data.go_health_center && !!data.disc_date_day && !!data.disc_date_month && !!data.disc_date_year;
+        return !!data.child_cmam_type && !!data.muac && !!data.go_health_center && !!data.disc_date_day && !!data.disc_date_month && !!data.disc_date_year;
     }
     return true;
 }, {
@@ -177,40 +187,74 @@ export default function ChildScreeningDataEntryPage() {
     }, [selectedBeneficiary, childrenOfBeneficiary, form]);
 
 
-    const handleSave = async (data: any) => {
-        if (!selectedBeneficiary) return;
+    const handleSave = async (data: z.infer<typeof formSchema>) => {
+        if ((data.isExistingChild === 'نعم' && !selectedChildId) || !selectedBeneficiary) {
+            toast({ title: "Selection Missing", variant: "destructive" });
+            return;
+        }
+
         setLoading(p => ({...p, saving: true}));
 
         try {
+            let action: string;
+            let payload: any = {};
             const hc = healthCenters.find(h => h.hc_name === data.near_health_center);
-            const commonPayload = {
-                project_id: selectedProjectId,
-                child_has_cmam: data.child_has_cmam,
-                child_cmam_type: data.child_has_cmam === 'نعم' ? data.child_cmam_type : null,
-                muac: data.child_has_cmam === 'نعم' ? data.muac : null,
-                go_health_center: data.child_has_cmam === 'نعم' ? data.go_health_center : null,
-                disc_date: data.disc_date_year ? `${data.disc_date_year}-${data.disc_date_month}-${data.disc_date_day}` : null,
-                near_health_center: hc?.hc_name,
-                hc_id: hc?.hc_id, hc_name: hc?.hc_name, hw_id: hc?.hw_id, hw_name: hc?.hw_name
-            };
 
-            const payload = data.isExistingChild === 'نعم' 
-                ? { action: 'update_child', payload: { ...commonPayload, child_id: selectedChildId } }
-                : { 
-                    action: 'create_new_child', 
-                    payload: { 
-                        ...commonPayload, 
-                        benef_id: selectedBeneficiary.BENEF_ID,
-                        child_first_name: data.child_first_name,
-                        child_gender: data.child_gender,
-                        new_child_age_mon: parseInt(data.new_child_age_mon)
-                    } 
-                  };
+            if (data.isExistingChild === 'نعم') {
+                action = 'update_child';
+                payload = { id: allChildren.find(c => c.child_id === selectedChildId)?.id };
 
+                if (data.child_has_cmam === 'نعم') {
+                    Object.assign(payload, {
+                        child_has_cmam: 'نعم',
+                        child_cmam_type: data.child_cmam_type,
+                        muac: data.muac,
+                        go_health_center: data.go_health_center,
+                        disc_date: data.disc_date_year ? `${data.disc_date_year}-${data.disc_date_month}-${data.disc_date_day}` : null,
+                        near_health_center: hc?.hc_name, hc_id: hc?.hc_id, hw_id: hc?.hw_id, hw_name: hc?.hw_name,
+                        comments: data.comments
+                    });
+                } else if (data.child_has_cmam === 'لا') {
+                    Object.assign(payload, {
+                        child_has_cmam: 'لا',
+                        muac: data.muac,
+                        comments: data.comments,
+                        child_cmam_type: null, go_health_center: null, disc_date: null, near_health_center: null,
+                    });
+                }
+            } else { // New Child
+                action = 'create_new_child';
+                const commonPayload = {
+                    project_id: selectedProjectId,
+                    benef_id: selectedBeneficiary.BENEF_ID,
+                    child_first_name: data.child_first_name,
+                    child_gender: data.child_gender,
+                    new_child_age_mon: parseInt(data.new_child_age_mon || '0'),
+                    child_has_cmam: data.child_has_cmam
+                };
+                if (data.child_has_cmam === 'نعم') {
+                    Object.assign(payload, {
+                        ...commonPayload,
+                        child_cmam_type: data.child_cmam_type,
+                        muac: data.muac,
+                        go_health_center: data.go_health_center,
+                        disc_date: data.disc_date_year ? `${data.disc_date_year}-${data.disc_date_month}-${data.disc_date_day}` : null,
+                        near_health_center: hc?.hc_name, hc_id: hc?.hc_id, hw_id: hc?.hw_id, hw_name: hc?.hw_name,
+                        comments: data.comments
+                    });
+                } else {
+                     Object.assign(payload, {
+                        ...commonPayload,
+                        muac: data.muac,
+                        comments: data.comments
+                    });
+                }
+            }
+            
             const res = await fetch('/api/child-cmam', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
+                body: JSON.stringify({ action, payload: payload })
             });
 
             if (!res.ok) throw new Error(await res.text());
@@ -221,7 +265,7 @@ export default function ChildScreeningDataEntryPage() {
                 moveToNext();
             } else {
                 form.reset({ isExistingChild: 'لا' });
-                await handleProjectSelect(selectedProjectId); 
+                await handleProjectSelect(selectedProjectId);
             }
         } catch (error: any) {
             toast({ title: "خطأ", description: error.message, variant: "destructive" });
@@ -304,7 +348,7 @@ export default function ChildScreeningDataEntryPage() {
                          <Input placeholder="بحث بالاسم او رقم المستفيدة..." value={beneficiarySearch} onChange={e => setBeneficiarySearch(e.target.value)} disabled={!selectedEducatorId} />
                          <ScrollArea className="h-[200px] border rounded-md">
                             <Table>
-                                <TableHeader className="bg-muted sticky top-0"><TableRow><TableHead className="w-[50px]">تحديد</TableHead><TableHead>رقم المستفيدة</TableHead><TableHead>اسم المستفيدة</TableHead></TableRow></TableHeader>
+                                <TableHeader className="bg-muted sticky top-0"><TableRow><TableHead className="w-[50px]">تحديد</TableHead><TableHead>ID</TableHead><TableHead>الاسم</TableHead></TableRow></TableHeader>
                                 <TableBody>
                                     {beneficiariesForEducator.map(b => (
                                         <TableRow key={b.id} className={cn("cursor-pointer hover:bg-muted/50 transition-colors", selectedBeneficiary?.id === b.id && 'bg-primary/10')} onClick={() => {setSelectedBeneficiary(b); setSelectedChildId("");}}>
@@ -400,7 +444,9 @@ export default function ChildScreeningDataEntryPage() {
                                                         onValueChange={value => {
                                                             field.onChange(value);
                                                             if (value === 'لا') {
-                                                                handleSave({ ...form.getValues(), child_has_cmam: 'لا' });
+                                                                form.setValue('muac', 12.5);
+                                                            } else {
+                                                                form.setValue('muac', 7.0);
                                                             }
                                                         }} 
                                                         value={field.value} 
@@ -412,6 +458,19 @@ export default function ChildScreeningDataEntryPage() {
                                                 </FormControl>
                                             </FormItem>
                                         )} />
+
+                                        {watchHasCmam === 'لا' && (
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-card p-6 rounded-lg border shadow-sm">
+                                                <FormField control={form.control} name="muac" render={({ field }) => (
+                                                    <FormItem><FormLabel>قياس المواك: {field.value || 12.5}</FormLabel><FormControl>
+                                                        <Slider min={12.5} max={20} step={0.1} value={[field.value || 12.5]} onValueChange={(v) => field.onChange(v[0])} />
+                                                    </FormControl><FormMessage /></FormItem>
+                                                )} />
+                                                <FormField control={form.control} name="comments" render={({ field }) => (
+                                                    <FormItem><FormLabel>ملاحظات</FormLabel><FormControl><Textarea placeholder="أدخل ملاحظاتك هنا..." {...field} /></FormControl><FormMessage /></FormItem>
+                                                )} />
+                                            </div>
+                                        )}
 
                                         {watchHasCmam === 'نعم' && (
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-card p-6 rounded-lg border shadow-sm">
@@ -464,8 +523,8 @@ export default function ChildScreeningDataEntryPage() {
                                         )}
                                         
                                         <div className="pt-4 flex justify-end">
-                                             <Button type="submit" size="lg" className="w-full md:w-auto" disabled={loading.saving || (watchHasCmam !== 'نعم' && watchHasCmam !== 'لا')}>
-                                                 {loading.saving ? <Loader2 className="mr-2 h-5 w-5 animate-spin"/> : <Save className="mr-2 h-5 w-5"/>} Save Child Data
+                                             <Button type="submit" size="lg" className="w-full md:w-auto" disabled={loading.saving || !form.formState.isValid}>
+                                                 {loading.saving ? <Loader2 className="mr-2 h-5 w-5 animate-spin"/> : <Save className="mr-2 h-5 w-5"/>} Save & Next
                                              </Button>
                                         </div>
                                     </div>
@@ -475,23 +534,6 @@ export default function ChildScreeningDataEntryPage() {
                     </CardContent>
                 </Card>
             )}
-            <div className="flex flex-wrap justify-end gap-2">
-                <Button variant="outline" className="border-primary text-primary hover:bg-primary/10" asChild>
-                    <Link href="/meal-system/monitoring/implementation/process/CMAM-cases/children/screening/preparing">
-                        <List className="ml-2 h-4 w-4" /> Preparing Child CMAM List
-                    </Link>
-                </Button>
-                <Button variant="outline" className="border-primary text-primary hover:bg-primary/10" asChild>
-                    <Link href="/meal-system/monitoring/implementation/process/CMAM-cases/children/screening/database">
-                        <Database className="ml-2 h-4 w-4" /> Child CMAM Database
-                    </Link>
-                </Button>
-                <Button variant="outline" className="border-green-500 text-green-500 hover:bg-green-500/10" asChild>
-                    <Link href="/meal-system/monitoring/implementation/process/CMAM-cases/children/screening/export">
-                        <FileText className="ml-2 h-4 w-4" /> Exporting Child CMAM Statements
-                    </Link>
-                </Button>
-            </div>
         </div>
     );
 }
