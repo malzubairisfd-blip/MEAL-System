@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
@@ -8,7 +9,7 @@ import {
   ClipboardPaste, Search, Plus, FolderPlus, File as FileIcon, Eye, Edit, 
   Upload, RefreshCw, Trash2, Download, Save, AlertCircle, 
   CheckCircle2, Loader2, PanelLeft, PanelRight, ChevronLeft, ChevronRight, Menu,
-  FileX, Home, ArrowRightLeft, FolderOpen, FileUp, Archive
+  FileX, Home, ArrowRightLeft, FolderOpen, FileUp, Archive, ChevronDown
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -62,7 +63,9 @@ export default function FileEditor() {
   const [isLoadingFile, setIsLoadingFile] = useState(false);
   const [selectedFolder, setSelectedFolder] = useState<string | null>('src');
   const [search, setSearch] = useState("");
-  const [results, setResults] = useState<any[]>([]);
+
+  // New state for collapsible folders
+  const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set());
 
   // Selection state
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
@@ -122,6 +125,26 @@ export default function FileEditor() {
         toast({ title: "Error", description: `Could not load file tree: ${e.message}`, variant: "destructive" });
     }
   }, [toast]);
+
+  // Collapse all folders by default when the tree is loaded
+  const getAllFolderPaths = useCallback((nodes: any[]): string[] => {
+    let paths: string[] = [];
+    nodes.forEach(node => {
+      if (node.type === 'folder') {
+        paths.push(node.path);
+        if (node.children) {
+          paths = [...paths, ...getAllFolderPaths(node.children)];
+        }
+      }
+    });
+    return paths;
+  }, []);
+
+  useEffect(() => {
+    if (tree.length > 0 && !search) {
+      setCollapsedFolders(new Set(getAllFolderPaths(tree)));
+    }
+  }, [tree, search, getAllFolderPaths]);
 
   async function openFile(p: string) {
     if (p === file) return;
@@ -188,15 +211,6 @@ export default function FileEditor() {
         loadTree();
     } catch (e: any) {
         toast({ title: "Delete Failed", description: e.message, variant: "destructive" });
-    }
-  }
-
-  async function runSearch() {
-    if (!search.trim()) return;
-    try {
-        setResults(await api({ action: "search", content: search }));
-    } catch(e: any) {
-        toast({ title: "Search Failed", description: e.message, variant: "destructive" });
     }
   }
   
@@ -520,73 +534,69 @@ export default function FileEditor() {
     loadTree();
   }, [loadTree]);
 
-  const renderTree = (nodes: any[]) =>
-    nodes.map((n) => (
-      <div key={n.path} className="ml-3 select-none">
-        {n.type === "file" ? (
-          <div
-            className={cn(
-              "group flex justify-between items-center py-0.5 px-2 rounded cursor-pointer transition-colors hover:bg-white/5 whitespace-nowrap",
-              n.path === file ? "bg-primary/20 text-primary font-bold" : ""
-            )}
-            onClick={() => openFile(n.path)}
-          >
-            <span className="flex items-center gap-2 overflow-hidden mr-4">
-              <Checkbox 
-                checked={selectedPaths.has(n.path)} 
-                onCheckedChange={() => togglePathSelection(n.path, false)} 
-                onClick={(e) => e.stopPropagation()}
-                className="h-3.5 w-3.5"
-              />
-              <FileIcon className="h-3.5 w-3.5 shrink-0 opacity-70" /> 
-              <span className="text-sm">{n.name}</span>
-            </span>
-            <div className="flex items-center gap-1">
-              <Button 
-                size="icon" 
-                variant="ghost" 
-                className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity" 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setItemToRename({ path: n.path, isFolder: false });
-                  setRenameInput(n.name);
-                  setIsRenameDialogOpen(true);
-                }}
-              >
-                <Edit className="h-3 w-3" />
-              </Button>
-              <Button 
-                size="icon" 
-                variant="ghost" 
-                className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity hover:text-destructive" 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  deletePath(n.path);
-                }}
-              >
-                <Trash2 className="h-3 w-3" />
-              </Button>
-              <span className="text-[10px] opacity-40 shrink-0 ml-1">{formatBytes(n.size)}</span>
-            </div>
-          </div>
-        ) : (
-          <div className="mb-1">
-            <div
+  const toggleFolder = (path: string) => {
+    setCollapsedFolders(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(path)) {
+        newSet.delete(path);
+      } else {
+        newSet.add(path);
+      }
+      return newSet;
+    });
+  };
+
+  const filteredTree = useMemo(() => {
+    if (!search.trim()) {
+      return tree;
+    }
+    const lowercasedSearch = search.toLowerCase();
+
+    function filterNodes(nodes: any[]): any[] {
+      const result: any[] = [];
+      for (const node of nodes) {
+        const nameMatches = node.name.toLowerCase().includes(lowercasedSearch);
+        if (node.type === 'file') {
+          if (nameMatches) {
+            result.push(node);
+          }
+        } else if (node.type === 'folder') {
+          const filteredChildren = node.children ? filterNodes(node.children) : [];
+          if (nameMatches || filteredChildren.length > 0) {
+            result.push({ ...node, children: filteredChildren });
+          }
+        }
+      }
+      return result;
+    }
+
+    return filterNodes(tree);
+  }, [tree, search]);
+
+  const renderTree = useCallback((nodes: any[]) => {
+      return nodes.map((n) => {
+        const isCollapsed = !search && collapsedFolders.has(n.path);
+        const hasChildren = n.children && n.children.length > 0;
+  
+        return (
+          <div key={n.path} className="ml-3 select-none">
+            {n.type === "file" ? (
+              <div
                 className={cn(
                   "group flex justify-between items-center py-0.5 px-2 rounded cursor-pointer transition-colors hover:bg-white/5 whitespace-nowrap",
-                  selectedFolder === n.path ? 'bg-accent/20 text-accent' : 'opacity-80'
+                  n.path === file ? "bg-primary/20 text-primary font-bold" : ""
                 )}
-                onClick={() => setSelectedFolder(n.path)}
-            >
+                onClick={() => openFile(n.path)}
+              >
                 <span className="flex items-center gap-2 overflow-hidden mr-4">
                   <Checkbox 
                     checked={selectedPaths.has(n.path)} 
-                    onCheckedChange={() => togglePathSelection(n.path, true)} 
+                    onCheckedChange={() => togglePathSelection(n.path, false)} 
                     onClick={(e) => e.stopPropagation()}
-                    className="h-3.5 w-3.5 border-accent/50 data-[state=checked]:bg-accent data-[state=checked]:text-accent-foreground"
+                    className="h-3.5 w-3.5"
                   />
-                  <FolderPlus className="h-3.5 w-3.5 shrink-0 opacity-70" /> 
-                  <span className="text-sm font-medium">{n.name}</span>
+                  <FileIcon className="h-3.5 w-3.5 shrink-0 opacity-70" /> 
+                  <span className="text-sm">{n.name}</span>
                 </span>
                 <div className="flex items-center gap-1">
                   <Button 
@@ -595,7 +605,7 @@ export default function FileEditor() {
                     className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity" 
                     onClick={(e) => {
                       e.stopPropagation();
-                      setItemToRename({ path: n.path, isFolder: true });
+                      setItemToRename({ path: n.path, isFolder: false });
                       setRenameInput(n.name);
                       setIsRenameDialogOpen(true);
                     }}
@@ -615,12 +625,73 @@ export default function FileEditor() {
                   </Button>
                   <span className="text-[10px] opacity-40 shrink-0 ml-1">{formatBytes(n.size)}</span>
                 </div>
-            </div>
-            {n.children && renderTree(n.children)}
+              </div>
+            ) : (
+              <div className="mb-1">
+                <div
+                    className={cn(
+                      "group flex justify-between items-center py-0.5 px-2 rounded cursor-pointer transition-colors hover:bg-white/5 whitespace-nowrap",
+                      selectedFolder === n.path ? 'bg-accent/20 text-accent' : 'opacity-80'
+                    )}
+                    onClick={() => setSelectedFolder(n.path)}
+                >
+                    <span className="flex items-center gap-2 overflow-hidden mr-4">
+                      <Checkbox 
+                        checked={selectedPaths.has(n.path)} 
+                        onCheckedChange={() => togglePathSelection(n.path, true)} 
+                        onClick={(e) => e.stopPropagation()}
+                        className="h-3.5 w-3.5 border-accent/50 data-[state=checked]:bg-accent data-[state=checked]:text-accent-foreground"
+                      />
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-6 w-6"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleFolder(n.path);
+                        }}
+                      >
+                        {hasChildren ? (isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />) : <span className="w-4"/>}
+                      </Button>
+                      <FolderPlus className="h-3.5 w-3.5 shrink-0 opacity-70" /> 
+                      <span className="text-sm font-medium">{n.name}</span>
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <Button 
+                        size="icon" 
+                        variant="ghost" 
+                        className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity" 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setItemToRename({ path: n.path, isFolder: true });
+                          setRenameInput(n.name);
+                          setIsRenameDialogOpen(true);
+                        }}
+                      >
+                        <Edit className="h-3 w-3" />
+                      </Button>
+                      <Button 
+                        size="icon" 
+                        variant="ghost" 
+                        className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity hover:text-destructive" 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deletePath(n.path);
+                        }}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                      <span className="text-[10px] opacity-40 shrink-0 ml-1">{formatBytes(n.size)}</span>
+                    </div>
+                </div>
+                {!isCollapsed && n.children && renderTree(n.children)}
+              </div>
+            )}
           </div>
-        )}
-      </div>
-    ));
+        );
+      });
+  }, [search, collapsedFolders, file, selectedFolder, selectedPaths, togglePathSelection, deletePath, openFile]);
+
 
   return (
     <div className={cn(
@@ -686,36 +757,14 @@ export default function FileEditor() {
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                 <Input
                   className="bg-card/50 pl-8 pr-2 py-1 h-9 text-sm"
-                  placeholder="Search code..."
+                  placeholder="Search files and folders..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && runSearch()}
                 />
             </div>
         </div>
 
         <ScrollArea className="flex-1">
-            {results.length > 0 && (
-              <div className="mb-4">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-bold uppercase tracking-wider opacity-50">Results</span>
-                  <Badge variant="outline" className="text-[10px]">{results.length}</Badge>
-                </div>
-                <div className="space-y-1">
-                  {results.map((r, i) => (
-                    <div
-                        key={i}
-                        className="text-[11px] p-2 bg-card/40 rounded cursor-pointer hover:bg-card hover:text-primary transition-all overflow-hidden"
-                        onClick={() => openFile(r.file)}
-                    >
-                        <div className="font-bold truncate">{r.file}</div>
-                        <div className="opacity-60 truncate">Line {r.line}: {r.text}</div>
-                    </div>
-                  ))}
-                </div>
-                <div className="h-px bg-border my-4" />
-              </div>
-            )}
             <div className="pr-4">
               <div
                 className={cn(
@@ -735,7 +784,7 @@ export default function FileEditor() {
                   <span className="text-sm font-medium">Project Root</span>
                 </span>
               </div>
-              {renderTree(tree)}
+              {renderTree(filteredTree)}
             </div>
             <ScrollBar orientation="horizontal" />
         </ScrollArea>
