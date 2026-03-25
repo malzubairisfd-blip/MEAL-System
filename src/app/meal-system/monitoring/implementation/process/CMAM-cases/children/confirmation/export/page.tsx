@@ -1,4 +1,4 @@
-// src/app/meal-system/monitoring/implementation/process/CMAM-cases/children/confirmation/export/page.tsx
+
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import Link from 'next/link';
 import { saveAs } from "file-saver";
+import { exportConfirmationPdfs } from "@/lib/confirmationchildcmam-export";
 
 interface Project {
     projectId: string;
@@ -23,18 +24,41 @@ interface HealthCenterGroup {
 }
 
 export default function ExportCmamStatementsPage() {
-    const [loading, setLoading] = useState(false);
-    const [actionLoading, setActionLoading] = useState<string | null>(null); // 'sample', 'all', or hc_id
+    const [loading, setLoading] = useState(true);
+    const [actionLoading, setActionLoading] = useState<string | null>(null);
     const [projects, setProjects] = useState<Project[]>([]);
     const [selectedProjectId, setSelectedProjectId] = useState<string>('');
     const [allData, setAllData] = useState<any[]>([]);
     const { toast } = useToast();
+    const [fontBase64, setFontBase64] = useState<{ regular: string, bold: string, logo: string } | null>(null);
 
     useEffect(() => {
         setLoading(true);
-        fetch('/api/projects').then(res => res.json()).then(data => setProjects(data || [])).finally(() => setLoading(false));
-    }, []);
+        Promise.all([
+            fetch('/api/projects').then(res => res.json()),
+            fetch('/fonts/NotoNaskhArabic-Regular.ttf').then(res => res.arrayBuffer()),
+            fetch('/fonts/NotoNaskhArabic-Bold.ttf').then(res => res.arrayBuffer()),
+            fetch('/sfd-logo.png').then(res => res.blob())
+        ]).then(([projectData, fontRegularBuffer, fontBoldBuffer, logoBlob]) => {
+            setProjects(projectData || []);
+            
+            const toBase64 = (buffer: ArrayBuffer) => btoa(new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), ''));
+            
+            const reader = new FileReader();
+            reader.readAsDataURL(logoBlob);
+            reader.onloadend = () => {
+                setFontBase64({
+                    regular: toBase64(fontRegularBuffer),
+                    bold: toBase64(fontBoldBuffer),
+                    logo: reader.result as string,
+                });
+            };
 
+        }).catch(err => {
+            toast({ title: "Error loading initial assets", description: err.message, variant: "destructive" });
+        }).finally(() => setLoading(false));
+    }, [toast]);
+    
     useEffect(() => {
         if (!selectedProjectId) {
             setAllData([]);
@@ -70,27 +94,18 @@ export default function ExportCmamStatementsPage() {
 
     }, [allData]);
 
-    const handleDownload = async (payload: { records: any[], asZip: boolean, isSample?: boolean, fileName: string }) => {
-        const { records, asZip, isSample, fileName } = payload;
+    const handleDownload = async (records: any[], asZip: boolean, fileName: string) => {
+        if (!fontBase64) {
+            toast({ title: "Assets not loaded", description: "Please wait for fonts and images to load and try again.", variant: "destructive" });
+            return;
+        }
         
         setActionLoading(fileName);
         toast({title: "Generating...", description: `Your download for ${fileName} will begin shortly.`});
 
         try {
-            const res = await fetch('/api/child-cmam-confirmation-export', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ records, asZip, isSample })
-            });
-
-            if (!res.ok) {
-                const errorData = await res.json();
-                throw new Error(errorData.error || 'PDF generation failed on the server.');
-            }
-            
-            const blob = await res.blob();
+            const blob = await exportConfirmationPdfs(records, fontBase64, asZip);
             saveAs(blob, fileName);
-
         } catch (error: any) {
             toast({ title: "Error", description: error.message, variant: "destructive" });
         } finally {
@@ -136,17 +151,17 @@ export default function ExportCmamStatementsPage() {
                         <div className="flex gap-2">
                              <Button
                                 size="lg"
-                                onClick={() => handleDownload({ records: allData.filter(r => r.child_has_cmam === 'نعم'), asZip: true, fileName: `CMAM_Confirmations_${selectedProjectId}.zip` })}
+                                onClick={() => handleDownload(allData.filter(r => r.child_has_cmam === 'نعم'), true, `CMAM_Confirmations_${selectedProjectId}.zip`)}
                                 disabled={actionLoading !== null || healthCenterGroups.length === 0}
                                 className="w-full"
                             >
-                                {actionLoading === 'all' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+                                {actionLoading === `CMAM_Confirmations_${selectedProjectId}.zip` ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
                                 Download All as ZIP ({healthCenterGroups.length} Centers)
                             </Button>
                              <Button
                                 size="lg"
                                 variant="outline"
-                                onClick={() => handleDownload({ records: [allData.filter(r => r.child_has_cmam === 'نعم')[0]], asZip: false, isSample: true, fileName: `CMAM_Sample_${selectedProjectId}.pdf` })}
+                                onClick={() => handleDownload([allData.filter(r => r.child_has_cmam === 'نعم')[0]], false, `CMAM_Sample_${selectedProjectId}.pdf`)}
                                 disabled={actionLoading !== null || healthCenterGroups.length === 0}
                             >
                                 <FileIcon className="mr-2 h-4 w-4" />
@@ -175,9 +190,9 @@ export default function ExportCmamStatementsPage() {
                                                         size="sm"
                                                         variant="ghost"
                                                         disabled={actionLoading !== null}
-                                                        onClick={() => handleDownload({ records: group.records, asZip: false, fileName: `CMAM_${group.hc_id}.pdf`})}
+                                                        onClick={() => handleDownload(group.records, true, `CMAM_${group.hc_id}.zip`)}
                                                     >
-                                                        {actionLoading === `${group.hc_name}.pdf` ? <Loader2 className="h-4 w-4 animate-spin"/> : <Download className="h-4 w-4"/>}
+                                                        {actionLoading === `CMAM_${group.hc_id}.zip` ? <Loader2 className="h-4 w-4 animate-spin"/> : <Download className="h-4 w-4"/>}
                                                     </Button>
                                                 </TableCell>
                                             </TableRow>
