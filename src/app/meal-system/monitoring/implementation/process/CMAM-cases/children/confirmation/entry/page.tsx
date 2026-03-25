@@ -26,8 +26,8 @@ import { cn } from "@/lib/utils";
 // --- Types ---
 interface Project { projectId: string; projectName: string; }
 interface HealthCenter { hc_id: string; hc_name: string; hw_id: string; hw_name: string;}
-interface Beneficiary { id: number; BENEF_ID: string; BENEF_NAME: string; hc_id: string; [key: string]: any; }
-interface Child { id: number; child_id: string; child_name: string; benef_id: string; }
+interface Beneficiary { id: number; BENEF_ID: string; BENEF_NAME: string; [key: string]: any; }
+interface Child { id: number; child_id: string; child_name: string; benef_id: string; [key: string]: any; }
 
 const months = ["يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"];
 const years = Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - 5 + i);
@@ -81,9 +81,7 @@ const formSchema = z.object({
 export default function ConfirmationDataEntryPage() {
     const { toast } = useToast();
     const [projects, setProjects] = useState<Project[]>([]);
-    const [healthCenters, setHealthCenters] = useState<HealthCenter[]>([]);
-    const [beneficiaries, setBeneficiaries] = useState<Beneficiary[]>([]);
-    const [children, setChildren] = useState<Child[]>([]);
+    const [allChildren, setAllChildren] = useState<Child[]>([]);
     
     const [selectedProjectId, setSelectedProjectId] = useState("");
     const [selectedHealthCenterId, setSelectedHealthCenterId] = useState("");
@@ -108,8 +106,6 @@ export default function ConfirmationDataEntryPage() {
     const watchHasCmamHC = form.watch("child_has_cmam_hc");
     const watchMeasType = form.watch("meas_type");
     
-    const [healthCenterPopoverOpen, setHealthCenterPopoverOpen] = useState(false);
-
     // --- Data Fetching ---
     useEffect(() => {
         setLoading(p => ({...p, projects: true}));
@@ -122,106 +118,146 @@ export default function ConfirmationDataEntryPage() {
         setSelectedBeneficiaryId("");
         setSelectedChildId("");
         form.reset();
-        if (!projectId) return;
+        
+        if (!projectId) {
+            setAllChildren([]);
+            return;
+        }
 
         setLoading(p => ({...p, data: true}));
         try {
-            const [bnfRes, hcRes, childRes] = await Promise.all([
-                fetch(`/api/bnf-cmam?projectId=${projectId}`),
-                fetch(`/api/health-centers?projectId=${projectId}`),
-                fetch(`/api/child-cmam?projectId=${projectId}`)
-            ]);
-            
-            const bnfData = await bnfRes.json();
-            setBeneficiaries(bnfData);
-
-            const hcData = await hcRes.json();
-            const uniqueHCs: HealthCenter[] = Array.from(new Map(hcData.map((item: any) => [item.hc_id, item])).values());
-            setHealthCenters(uniqueHCs);
-
-            setChildren(await childRes.json());
+            const res = await fetch(`/api/child-cmam?projectId=${projectId}`);
+            if (!res.ok) throw new Error("Failed to load child CMAM data.");
+            const data = await res.json();
+            setAllChildren(Array.isArray(data) ? data : []);
         } catch (error: any) {
-            toast({ title: "Error loading data", description: error.message, variant: "destructive" });
+            toast({ title: "Error", description: error.message, variant: "destructive" });
         } finally {
             setLoading(p => ({...p, data: false}));
         }
     }, [toast, form]);
+
+    // --- Filtering & Memoization ---
+    const healthCenters = useMemo((): HealthCenter[] => {
+        if (!allChildren.length) return [];
+        const qualifiedChildren = allChildren.filter(c => c.child_has_cmam === 'نعم');
+        const uniqueHCs = Array.from(new Map(qualifiedChildren.map(c => [c.hc_id, { hc_id: c.hc_id, hc_name: c.hc_name, hw_id: c.hw_id, hw_name: c.hw_name }])).values());
+        return uniqueHCs;
+    }, [allChildren]);
+    
+    const beneficiariesInHc = useMemo((): Beneficiary[] => {
+        if (!selectedHealthCenterId) return [];
+        const childrenInHc = allChildren.filter(c => c.hc_id === selectedHealthCenterId && c.child_has_cmam === 'نعم');
+        const uniqueBnfs = Array.from(new Map(childrenInHc.map(c => [c.benef_id, { id: c.id, BENEF_ID: c.benef_id, BENEF_NAME: c.bnf_name }])).values());
+        return uniqueBnfs;
+    }, [allChildren, selectedHealthCenterId]);
     
     const filteredBeneficiaries = useMemo(() => {
-        let filtered = beneficiaries;
-        if (selectedHealthCenterId) {
-            const childrenInHc = children.filter(c => c.hc_id === selectedHealthCenterId);
-            const bnfIdsInHc = new Set(childrenInHc.map(c => c.benef_id));
-            filtered = filtered.filter(b => bnfIdsInHc.has(b.BENEF_ID));
-        }
-        if (beneficiarySearch) {
-            const ls = beneficiarySearch.toLowerCase();
-            filtered = filtered.filter(b => String(b.BENEF_ID).toLowerCase().includes(ls) || b.BENEF_NAME.toLowerCase().includes(ls));
-        }
-        return filtered;
-    }, [beneficiaries, children, selectedHealthCenterId, beneficiarySearch]);
+        if (!beneficiarySearch) return beneficiariesInHc;
+        const ls = beneficiarySearch.toLowerCase();
+        return beneficiariesInHc.filter(b => String(b.BENEF_ID).toLowerCase().includes(ls) || b.BENEF_NAME.toLowerCase().includes(ls));
+    }, [beneficiariesInHc, beneficiarySearch]);
 
     const childrenOfBeneficiary = useMemo(() => {
         if (!selectedBeneficiaryId) return [];
-        let filtered = children.filter(c => c.benef_id === selectedBeneficiaryId && c.cmam_qualify === 'Qualified');
+        let filtered = allChildren.filter(c => c.benef_id === selectedBeneficiaryId && c.cmam_qualify === 'Qualified' && c.child_has_cmam === 'نعم');
         if (childSearch) {
             const ls = childSearch.toLowerCase();
             filtered = filtered.filter(c => String(c.child_id).toLowerCase().includes(ls) || c.child_name.toLowerCase().includes(ls));
         }
         return filtered;
-    }, [children, selectedBeneficiaryId, childSearch]);
+    }, [allChildren, selectedBeneficiaryId, childSearch]);
 
-    const moveToNextChild = useCallback(() => {
+    // --- Form Logic ---
+    const moveToNext = useCallback(() => {
         form.reset({ attend_hc: undefined, muac_hc: 7.0, muac_hc_no: 12.5 });
-        const currentIndex = childrenOfBeneficiary.findIndex(c => c.child_id === selectedChildId);
-        if (currentIndex !== -1 && currentIndex < childrenOfBeneficiary.length - 1) {
-             const nextChild = childrenOfBeneficiary[currentIndex + 1];
+
+        const currentChildIndex = childrenOfBeneficiary.findIndex(c => c.child_id === selectedChildId);
+        if (currentChildIndex > -1 && currentChildIndex < childrenOfBeneficiary.length - 1) {
+             const nextChild = childrenOfBeneficiary[currentChildIndex + 1];
              setSelectedChildId(nextChild.child_id);
              toast({ title: "تم الانتقال", description: `تم الانتقال إلى الطفل التالي: ${nextChild.child_name}`});
-        } else {
-             toast({ title: "اكتملت القائمة", description: "تم الانتهاء من جميع الأطفال المؤهلين لهذه المستفيدة."});
-             setSelectedChildId("");
+             return;
         }
-    }, [childrenOfBeneficiary, selectedChildId, form, toast]);
+        
+        const currentBnfIndex = filteredBeneficiaries.findIndex(b => b.BENEF_ID === selectedBeneficiaryId);
+        if (currentBnfIndex > -1 && currentBnfIndex < filteredBeneficiaries.length - 1) {
+             const nextBnf = filteredBeneficiaries[currentBnfIndex + 1];
+             setSelectedBeneficiaryId(nextBnf.BENEF_ID);
+             toast({ title: "تم الانتقال", description: `تم الانتقال إلى المستفيدة التالية: ${nextBnf.BENEF_NAME}`});
+        } else {
+             toast({ title: "اكتملت القائمة", description: "تم الانتهاء من جميع الأطفال والمستفيدات في هذا المركز الصحي."});
+             setSelectedChildId("");
+             setSelectedBeneficiaryId("");
+        }
+    }, [childrenOfBeneficiary, selectedChildId, filteredBeneficiaries, selectedBeneficiaryId, form, toast]);
 
-    const handleQuickSave = async (payload: any) => {
+    // This effect handles selecting the first child when a new beneficiary is selected
+    useEffect(() => {
+        if (selectedBeneficiaryId && childrenOfBeneficiary.length > 0) {
+            const firstChild = childrenOfBeneficiary[0];
+            setSelectedChildId(firstChild.child_id);
+            form.reset({ attend_hc: undefined, muac_hc: 7.0, muac_hc_no: 12.5 });
+        } else {
+            setSelectedChildId("");
+        }
+    }, [selectedBeneficiaryId, childrenOfBeneficiary, form]);
+
+
+    const handleQuickSave = useCallback(async (payload: any) => {
         if (!selectedChildId) return;
         setLoading(p => ({...p, saving: true}));
         try {
             const res = await fetch('/api/child-cmam', {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify([{ id: children.find(c => c.child_id === selectedChildId)?.id, ...payload }]),
+                body: JSON.stringify([{ id: allChildren.find(c => c.child_id === selectedChildId)?.id, ...payload }]),
             });
             if (!res.ok) throw new Error("Failed to save data.");
             toast({ title: "Success", description: "Record updated." });
-            moveToNextChild();
+            moveToNext();
         } catch (err: any) {
              toast({ title: "Save Error", description: err.message, variant: "destructive" });
         } finally {
              setLoading(p => ({...p, saving: false}));
         }
-    };
+    }, [selectedChildId, allChildren, toast, moveToNext]);
+
+    useEffect(() => {
+        const subscription = form.watch((value, { name }) => {
+            if (name === 'attend_hc' && value.attend_hc === 'لا') {
+                const { conf_date_day, conf_date_month, conf_date_year, not_attend_reason_hc } = form.getValues();
+                const fullDate = (conf_date_day && conf_date_month && conf_date_year) ? `${conf_date_year}-${conf_date_month}-${conf_date_day}` : null;
+                handleQuickSave({ attend_hc: 'لا', not_attend_reason_hc, conf_date: fullDate });
+            } else if (name === 'child_has_cmam_hc' && value.child_has_cmam_hc === 'لا') {
+                 const { conf_date_day, conf_date_month, conf_date_year, muac_hc_no } = form.getValues();
+                 const fullDate = (conf_date_day && conf_date_month && conf_date_year) ? `${conf_date_year}-${conf_date_month}-${conf_date_day}` : null;
+                 handleQuickSave({ attend_hc: 'نعم', child_has_cmam_hc: 'لا', muac_hc: muac_hc_no, conf_date: fullDate });
+            }
+        });
+        return () => subscription.unsubscribe();
+    }, [form, handleQuickSave]);
     
     const onSubmit = async (data: z.infer<typeof formSchema>) => {
         if (!selectedChildId) return;
 
         setLoading(p => ({...p, saving: true}));
-        const payload = {
-            id: children.find(c => c.child_id === selectedChildId)?.id,
-            ...data,
-            conf_date: `${data.conf_date_year}-${data.conf_date_month}-${data.conf_date_day}`,
+        const payload: any = {
+            id: allChildren.find(c => c.child_id === selectedChildId)?.id,
+            conf_date: data.conf_date_year ? `${data.conf_date_year}-${data.conf_date_month}-${data.conf_date_day}` : null,
+            attend_hc: data.attend_hc,
+            child_has_cmam_hc: data.child_has_cmam_hc,
+            hc_card_no: data.hc_card_no,
+            meas_type: data.meas_type,
+            muac_hc: data.meas_type === 'المواك' ? data.muac_hc : null,
+            zscore_h: data.meas_type === 'الزد اسكور' ? data.zscore_h : null,
+            zscore_w: data.meas_type === 'الزد اسكور' ? data.zscore_w : null,
+            zscore: data.meas_type === 'الزد اسكور' ? data.zscore : null,
+            child_cmam_cond: data.child_cmam_cond,
             exp_start_treat_date: data.exp_start_treat_date_year ? `${data.exp_start_treat_date_year}-${data.exp_start_treat_date_month}-${data.exp_start_treat_date_day}` : null,
             exp_end_treat_date: data.exp_end_treat_date_year ? `${data.exp_end_treat_date_year}-${data.exp_end_treat_date_month}-${data.exp_end_treat_date_day}` : null,
+            cmam_result_hc: data.cmam_result_hc,
         };
-
-        if(data.meas_type === 'المواك') {
-            payload.zscore_h = null;
-            payload.zscore_w = null;
-            payload.zscore = null;
-        } else {
-            payload.muac_hc = null;
-        }
         
         try {
             const res = await fetch('/api/child-cmam', {
@@ -231,7 +267,7 @@ export default function ConfirmationDataEntryPage() {
             });
             if (!res.ok) throw new Error(await res.text());
             toast({ title: "Success", description: "Record updated successfully." });
-            moveToNextChild();
+            moveToNext();
         } catch (err: any) {
             toast({ title: "Save Error", description: err.message, variant: "destructive" });
         } finally {
@@ -250,9 +286,11 @@ export default function ConfirmationDataEntryPage() {
                     <Button variant="outline" asChild><Link href="/meal-system/monitoring/implementation/process/CMAM-cases/children/confirmation/export"><FileText className="mr-2 h-4 w-4"/>Export</Link></Button>
                 </div>
             </div>
-
-            <Card>
-                <CardHeader><CardTitle>1. حدد المشروع و المركز الصحي</CardTitle></CardHeader>
+            
+             <Card>
+                <CardHeader>
+                    <CardTitle>1. حدد المشروع و المركز الصحي</CardTitle>
+                </CardHeader>
                 <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <Select onValueChange={handleProjectSelect} value={selectedProjectId}>
                         <SelectTrigger><SelectValue placeholder="اختر المشروع..." /></SelectTrigger>
@@ -267,14 +305,14 @@ export default function ConfirmationDataEntryPage() {
 
             {selectedHealthCenterId && (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <Card className="lg:col-span-1">
+                <Card className="lg:col-span-1 space-y-4">
                     <CardHeader><CardTitle>اختيار المستفيدة</CardTitle></CardHeader>
                     <CardContent>
                         <Input placeholder="بحث بالاسم او رقم المستفيدة..." value={beneficiarySearch} onChange={e => setBeneficiarySearch(e.target.value)} disabled={!selectedHealthCenterId} />
                         <ScrollArea className="h-48 mt-4 border rounded-md">
                             <Table><TableHeader><TableRow><TableHead>تحديد</TableHead><TableHead>ID</TableHead><TableHead>الاسم</TableHead></TableRow></TableHeader>
                             <TableBody>{filteredBeneficiaries.map(b => (
-                                <TableRow key={b.id} onClick={()=>setSelectedBeneficiaryId(b.BENEF_ID)} className={cn("cursor-pointer", selectedBeneficiaryId === b.BENEF_ID && 'bg-primary/10')}>
+                                <TableRow key={b.BENEF_ID} onClick={()=>setSelectedBeneficiaryId(b.BENEF_ID)} className={cn("cursor-pointer", selectedBeneficiaryId === b.BENEF_ID && 'bg-primary/10')}>
                                     <TableCell><Checkbox checked={selectedBeneficiaryId === b.BENEF_ID} /></TableCell>
                                     <TableCell>{b.BENEF_ID}</TableCell><TableCell>{b.BENEF_NAME}</TableCell>
                                 </TableRow>
@@ -287,8 +325,7 @@ export default function ConfirmationDataEntryPage() {
                         <CardContent>
                              <Input placeholder="بحث بالاسم او رقم الطفل..." value={childSearch} onChange={e => setChildSearch(e.target.value)} />
                              <ScrollArea className="h-48 mt-4 border rounded-md">
-                                <Table>
-                                <TableHeader><TableRow><TableHead>تحديد</TableHead><TableHead>ID</TableHead><TableHead>الاسم</TableHead></TableRow></TableHeader>
+                                <Table><TableHeader><TableRow><TableHead>تحديد</TableHead><TableHead>ID</TableHead><TableHead>الاسم</TableHead></TableRow></TableHeader>
                                 <TableBody>{childrenOfBeneficiary.map(c => (
                                     <TableRow key={c.id} onClick={()=>setSelectedChildId(c.child_id)} className={cn("cursor-pointer", selectedChildId === c.child_id && 'bg-secondary/10')}>
                                         <TableCell><Checkbox checked={selectedChildId === c.child_id} /></TableCell>
@@ -312,34 +349,19 @@ export default function ConfirmationDataEntryPage() {
                             </div></div>
                             <FormField control={form.control} name="attend_hc" render={({ field }) => (<FormItem><FormLabel>هل الطفل حضر الى المركز الصحي؟</FormLabel><FormControl><div className="flex gap-4 pt-2">
                                 <Button type="button" variant={field.value === 'نعم' ? 'default' : 'outline'} onClick={() => field.onChange('نعم')} className="flex-1">نعم</Button>
-                                <Button type="button" variant={field.value === 'لا' ? 'destructive' : 'outline'} onClick={() => {
-                                    field.onChange('لا');
-                                    const { conf_date_day, conf_date_month, conf_date_year, not_attend_reason_hc } = form.getValues();
-                                    const fullDate = (conf_date_day && conf_date_month && conf_date_year) ? `${conf_date_year}-${conf_date_month}-${conf_date_day}` : null;
-                                    handleQuickSave({ attend_hc: 'لا', not_attend_reason_hc, conf_date: fullDate });
-                                }} className="flex-1">لا</Button>
+                                <Button type="button" variant={field.value === 'لا' ? 'destructive' : 'outline'} onClick={() => field.onChange('لا')} className="flex-1">لا</Button>
                             </div></FormControl><FormMessage /></FormItem>)} />
 
-                            {watchAttendHC === 'لا' && (<><FormField control={form.control} name="not_attend_reason_hc" render={({ field }) => (<FormItem><FormLabel>سبب عدم الحضور</FormLabel><FormControl><Input {...field}/></FormControl><FormMessage/></FormItem>)} /><Button type="button" onClick={() => { const { conf_date_day, conf_date_month, conf_date_year, not_attend_reason_hc } = form.getValues(); const fullDate = (conf_date_day && conf_date_month && conf_date_year) ? `${conf_date_year}-${conf_date_month}-${conf_date_day}` : null; handleQuickSave({ attend_hc: 'لا', not_attend_reason_hc, conf_date: fullDate })}} disabled={loading.saving}>{loading.saving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Update & Next</Button></>)}
+                            {watchAttendHC === 'لا' && (<FormField control={form.control} name="not_attend_reason_hc" render={({ field }) => (<FormItem><FormLabel>سبب عدم الحضور</FormLabel><FormControl><Input {...field}/></FormControl><FormMessage/></FormItem>)} />)}
                             {watchAttendHC === 'نعم' && (<FormField control={form.control} name="child_has_cmam_hc" render={({ field }) => (<FormItem><FormLabel>هل يعاني الطفل من سوء تغذية؟</FormLabel><FormControl><div className="flex gap-4 pt-2">
                                 <Button type="button" variant={field.value === 'نعم' ? 'default' : 'outline'} onClick={() => field.onChange('نعم')} className="flex-1">نعم</Button>
-                                <Button type="button" variant={field.value === 'لا' ? 'destructive' : 'outline'} onClick={() => {
-                                    field.onChange('لا');
-                                    const { conf_date_day, conf_date_month, conf_date_year, muac_hc_no } = form.getValues();
-                                    const fullDate = (conf_date_day && conf_date_month && conf_date_year) ? `${conf_date_year}-${conf_date_month}-${conf_date_day}` : null;
-                                    handleQuickSave({ attend_hc: 'نعم', child_has_cmam_hc: 'لا', muac_hc: muac_hc_no, conf_date: fullDate });
-                                }} className="flex-1">لا</Button>
+                                <Button type="button" variant={field.value === 'لا' ? 'destructive' : 'outline'} onClick={() => field.onChange('لا')} className="flex-1">لا</Button>
                             </div></FormControl><FormMessage /></FormItem>)} />)}
                             
-                             {watchAttendHC === 'نعم' && watchHasCmamHC === 'لا' && (
-                                <>
-                                <FormField control={form.control} name="muac_hc_no" render={({ field }) => (
+                             {watchAttendHC === 'نعم' && watchHasCmamHC === 'لا' && (<FormField control={form.control} name="muac_hc_no" render={({ field }) => (
                                 <FormItem><FormLabel>قياس المواك: {field.value?.toFixed(1) || 12.5}</FormLabel>
                                 <FormControl><Slider min={12.5} max={20} step={0.1} value={[field.value || 12.5]} onValueChange={(v) => field.onChange(v[0])} /></FormControl><FormMessage /></FormItem>
-                                )} />
-                                <Button type="button" onClick={() => { const { conf_date_day, conf_date_month, conf_date_year, muac_hc_no } = form.getValues(); const fullDate = (conf_date_day && conf_date_month && conf_date_year) ? `${conf_date_year}-${conf_date_month}-${conf_date_day}` : null; handleQuickSave({ attend_hc: 'نعم', child_has_cmam_hc: 'لا', muac_hc: muac_hc_no, conf_date: fullDate }) }} disabled={loading.saving}>{loading.saving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Update & Next</Button>
-                                </>
-                             )}
+                                )} />)}
 
                             {watchAttendHC === 'نعم' && watchHasCmamHC === 'نعم' && (<div className="space-y-6 border-t pt-6 mt-6">
                                 <FormField control={form.control} name="hc_card_no" render={({ field }) => (<FormItem><FormLabel>رقم الكرت الحصري</FormLabel><FormControl><Input type="number" {...field}/></FormControl><FormMessage/></FormItem>)} />

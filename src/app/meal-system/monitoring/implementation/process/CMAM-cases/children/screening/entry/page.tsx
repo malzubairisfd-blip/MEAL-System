@@ -10,17 +10,29 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
-import { ArrowLeft, ChevronsUpDown, Check, Loader2, Search, Database, FileDown, FileEdit, ThumbsUp } from "lucide-react";
+import { 
+  ArrowLeft, 
+  Loader2, 
+  Check, 
+  ChevronsUpDown, 
+  Save, 
+  FileText, 
+  Database, 
+  List, 
+  UserCheck
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
+// --- Types ---
 interface Project { projectId: string; projectName: string; }
 interface Educator { ED_ID: string; ED_NAME: string; }
 interface Beneficiary { id: number; BENEF_ID: string; BENEF_NAME: string; BENEF_CLASS_DESC: string; ED_ID?: string; ED_NAME?: string; }
@@ -200,6 +212,27 @@ export default function ChildScreeningDataEntryPage() {
             setLoading(p => ({...p, saving: false}));
         }
     };
+    
+
+useEffect(() => {
+    const subscription = form.watch((value, { name }) => {
+        // Only trigger if the specific field 'child_has_cmam' changed to 'لا'
+        if (name === 'child_has_cmam' && value.child_has_cmam === 'لا') {
+            if (value.isExistingChild === 'نعم' && selectedChildId) {
+                
+                // FIX: Wrap in a timeout to move execution out of the React render cycle
+                setTimeout(() => {
+                    handleSave({ 
+                        child_has_cmam: 'لا', 
+                        isExistingChild: 'نعم' 
+                    } as any);
+                }, 0);
+                
+            }
+        }
+    });
+    return () => subscription.unsubscribe();
+}, [form, handleSave, selectedChildId]);
 
     useEffect(() => {
         const timer = setTimeout(() => {
@@ -221,11 +254,7 @@ export default function ChildScreeningDataEntryPage() {
         <div className="space-y-6 max-w-7xl mx-auto p-4 md:p-6 pb-24" dir="rtl">
             <div className="flex justify-between items-center mb-6">
                 <h1 className="text-3xl font-bold text-foreground">إدخال نتائج الفحص (CMAM)</h1>
-                <div className="flex gap-2">
-                    <Button variant="outline" asChild><Link href="/meal-system/monitoring/implementation/process/CMAM-cases/children/screening"><ArrowLeft className="mr-2 h-4 w-4"/> عودة</Link></Button>
-                    <Button variant="outline" asChild><Link href="/meal-system/monitoring/implementation/process/CMAM-cases/children/screening/database"><Database className="mr-2 h-4 w-4"/>Database</Link></Button>
-                    <Button variant="outline" asChild><Link href="/meal-system/monitoring/implementation/process/CMAM-cases/children/screening/export"><FileDown className="mr-2 h-4 w-4"/>Export</Link></Button>
-                </div>
+                <Button variant="outline" asChild><Link href="/meal-system/monitoring/implementation/process/CMAM-cases/children/screening"><ArrowLeft className="mr-2 h-4 w-4"/> عودة</Link></Button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -367,15 +396,7 @@ export default function ChildScreeningDataEntryPage() {
                                             <FormItem className="bg-accent/10 p-4 rounded-lg border border-accent/20">
                                                 <FormLabel className="text-base font-semibold text-accent-foreground">هل يعاني الطفل من سوء تغذية؟</FormLabel>
                                                 <FormControl>
-                                                    <RadioGroup 
-                                                        onValueChange={(value) => {
-                                                            field.onChange(value);
-                                                            if (form.getValues('isExistingChild') === 'نعم' && value === 'لا' && selectedChildId) {
-                                                                handleSave({ child_has_cmam: 'لا', isExistingChild: 'نعم' } as any);
-                                                            }
-                                                        }} 
-                                                        value={field.value} 
-                                                        className="flex gap-8 pt-3">
+                                                    <RadioGroup onValueChange={field.onChange} value={field.value} className="flex gap-8 pt-3">
                                                         <div className="flex items-center space-x-2 space-x-reverse"><RadioGroupItem value="نعم" id="c_yes"/><Label htmlFor="c_yes" className="font-medium cursor-pointer m-0">نعم</Label></div>
                                                         <div className="flex items-center space-x-2 space-x-reverse"><RadioGroupItem value="لا" id="c_no"/><Label htmlFor="c_no" className="font-medium cursor-pointer m-0">لا</Label></div>
                                                     </RadioGroup>
@@ -446,22 +467,23 @@ export default function ChildScreeningDataEntryPage() {
                 </Card>
             )}
             <div className="flex flex-wrap justify-end gap-2">
-                <Button variant="outline" className="border-primary text-primary hover:bg-primary/10" asChild>
-                    <Link href="/meal-system/monitoring/implementation/process/CMAM-cases/children/screening/preparing">
-                        <List className="ml-2 h-4 w-4" /> Preparing Child CMAM List
-                    </Link>
-                </Button>
-                <Button variant="outline" className="border-primary text-primary hover:bg-primary/10" asChild>
-                    <Link href="/meal-system/monitoring/implementation/process/CMAM-cases/children/screening/database">
-                        <Database className="ml-2 h-4 w-4" /> Child CMAM Database
-                    </Link>
-                </Button>
-                <Button variant="outline" className="border-green-500 text-green-500 hover:bg-green-500/10" asChild>
-                    <Link href="/meal-system/monitoring/implementation/process/CMAM-cases/children/screening/export">
-                        <FileText className="ml-2 h-4 w-4" /> Exporting Child CMAM Statements
-                    </Link>
-                </Button>
-            </div>
-        </div>
-    );
+                                                <Button variant="outline" className="border-primary text-primary hover:bg-primary/10" asChild>
+                                                    <Link href="/meal-system/monitoring/implementation/process/CMAM-cases/children/screening/preparing">
+                                                        <List className="ml-2 h-4 w-4" /> Preparing Child CMAM List
+                                                    </Link>
+                                                </Button>
+                                                <Button variant="outline" className="border-primary text-primary hover:bg-primary/10" asChild>
+                                                    <Link href="/meal-system/monitoring/implementation/process/CMAM-cases/children/screening/database">
+                                                        <Database className="ml-2 h-4 w-4" /> Child CMAM Database
+                                                    </Link>
+                                                </Button>
+                                                <Button variant="outline" className="border-green-500 text-green-500 hover:bg-green-500/10" asChild>
+                                                    <Link href="/meal-system/monitoring/implementation/process/CMAM-cases/children/screening/export">
+                                                        <FileText className="ml-2 h-4 w-4" /> Exporting Child CMAM Statements
+                                                    </Link>
+                                                </Button>
+                                            </div>
+                                        </div>
+                                
+        );
 }
