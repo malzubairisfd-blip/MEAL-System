@@ -1,87 +1,85 @@
 // src/app/meal-system/monitoring/implementation/process/CMAM-cases/children/screening/entry/page.tsx
 "use client";
 
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useToast } from "@/hooks/use-toast";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
+import { z } from "zod";
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Label } from "@/components/ui/label";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Slider } from "@/components/ui/slider";
-import { 
-  ArrowLeft, 
-  Loader2, 
-  Check, 
-  ChevronsUpDown, 
-  Save, 
-  FileText, 
-  Database, 
-  List, 
-  UserCheck
-} from "lucide-react";
+import { ArrowLeft, ChevronsUpDown, Check, Loader2, Search, Database, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Checkbox } from '@/components/ui/checkbox';
 
-// --- Types ---
 interface Project { projectId: string; projectName: string; }
 interface Educator { ED_ID: string; ED_NAME: string; }
 interface Beneficiary { id: number; BENEF_ID: string; BENEF_NAME: string; BENEF_CLASS_DESC: string; ED_ID?: string; ED_NAME?: string; }
 interface Child { id: number; child_id: string; child_name: string; benef_id: string; cmam_qualify: string; }
-interface HealthCenter { hc_id: string; hc_name: string; hw_id: string; hw_name: string; }
-
+interface HealthCenter { hc_id: string; hc_name: string; hw_id: string; hw_name: string;}
 
 const months = ["يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"];
 const years = Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - 5 + i);
 const days = Array.from({ length: 31 }, (_, i) => i + 1);
 
+const formSchema = z.object({
+  isExistingChild: z.string().default('نعم'),
+  child_first_name: z.string().optional(),
+  child_gender: z.enum(['ذكر', 'أنثى']).optional(),
+  new_child_age_mon: z.string().optional(),
+  child_has_cmam: z.enum(['نعم', 'لا']).optional(),
+  child_cmam_type: z.enum(['سوء تغذية متوسط', 'سوء تغذية حاد']).optional(),
+  muac: z.number().optional(),
+  go_health_center: z.enum(['نعم', 'لا']).optional(),
+  disc_date_day: z.string().optional(),
+  disc_date_month: z.string().optional(),
+  disc_date_year: z.string().optional(),
+  near_health_center: z.string().optional(),
+}).refine(data => {
+    if (data.child_has_cmam === 'نعم') {
+        return !!data.bnf_preg_lec && !!data.muac && !!data.go_health_center && !!data.disc_date_day && !!data.disc_date_month && !!data.disc_date_year;
+    }
+    return true;
+}, {
+    message: "All fields are required when malnutrition is 'Yes'",
+    path: ['child_has_cmam'],
+});
+
 
 export default function ChildScreeningDataEntryPage() {
     const { toast } = useToast();
-    
-    // --- Data States ---
     const [projects, setProjects] = useState<Project[]>([]);
     const [educators, setEducators] = useState<Educator[]>([]);
     const [allBeneficiaries, setAllBeneficiaries] = useState<Beneficiary[]>([]);
     const [allChildren, setAllChildren] = useState<Child[]>([]);
     const [healthCenters, setHealthCenters] = useState<HealthCenter[]>([]);
-    
-    // --- Selections ---
     const [selectedProjectId, setSelectedProjectId] = useState("");
     const [selectedEducatorId, setSelectedEducatorId] = useState("");
     const [selectedBeneficiary, setSelectedBeneficiary] = useState<Beneficiary | null>(null);
     const [selectedChildId, setSelectedChildId] = useState<string>("");
-    
-    // --- UI States ---
     const [beneficiarySearch, setBeneficiarySearch] = useState("");
     const [childSearch, setChildSearch] = useState("");
     const [loading, setLoading] = useState({ projects: true, data: false, saving: false });
     const [validationErrors, setValidationErrors] = useState<string[]>([]);
     const [educatorOpen, setEducatorOpen] = useState(false);
 
-    const form = useForm({
+    const form = useForm<z.infer<typeof formSchema>>({
+        resolver: zodResolver(formSchema),
         defaultValues: {
             isExistingChild: 'نعم',
-            child_first_name: '',
-            child_gender: undefined,
-            new_child_age_mon: '',
-            child_has_cmam: undefined,
-            child_cmam_type: undefined,
             muac: 7.0,
-            go_health_center: undefined,
-            disc_date_day: '',
-            disc_date_month: '',
-            disc_date_year: '',
-            near_health_center: '',
         }
     });
 
@@ -90,12 +88,11 @@ export default function ChildScreeningDataEntryPage() {
     const watchFirstName = form.watch("child_first_name");
     const watchGender = form.watch("child_gender");
 
-    // --- Init Fetch ---
     useEffect(() => {
         fetch('/api/projects').then(res => res.json()).then(setProjects).finally(() => setLoading(p => ({...p, projects: false})));
     }, []);
 
-    const handleProjectSelect = async (projectId: string) => {
+    const handleProjectSelect = useCallback(async (projectId: string) => {
         setSelectedProjectId(projectId);
         setSelectedEducatorId("");
         setSelectedBeneficiary(null);
@@ -124,7 +121,7 @@ export default function ChildScreeningDataEntryPage() {
         } finally {
             setLoading(p => ({...p, data: false}));
         }
-    };
+    }, [toast, form]);
 
     const beneficiariesForEducator = useMemo(() => {
         if (!selectedEducatorId) return [];
@@ -146,19 +143,39 @@ export default function ChildScreeningDataEntryPage() {
         return filtered;
     }, [allChildren, selectedBeneficiary, childSearch]);
 
-    const moveToNextChild = useCallback(() => {
-        if(childrenOfBeneficiary.length === 0) return;
-        const currentIndex = childrenOfBeneficiary.findIndex(c => c.child_id === selectedChildId);
-        if (currentIndex > -1 && currentIndex < childrenOfBeneficiary.length - 1) {
-             const nextChild = childrenOfBeneficiary[currentIndex + 1];
+     const moveToNext = useCallback(() => {
+        form.reset({ isExistingChild: 'نعم', child_has_cmam: undefined, muac: 7.0 });
+
+        const currentChildIndex = childrenOfBeneficiary.findIndex(c => c.child_id === selectedChildId);
+        if (currentChildIndex > -1 && currentChildIndex < childrenOfBeneficiary.length - 1) {
+             const nextChild = childrenOfBeneficiary[currentChildIndex + 1];
              setSelectedChildId(nextChild.child_id);
-             form.reset({ isExistingChild: 'نعم', child_has_cmam: undefined });
-             toast({ title: "تم الانتقال", description: `تم الانتقال إلى الطفل التالي: ${nextChild.child_name}`});
-        } else {
-             toast({ title: "اكتملت القائمة", description: "تم الانتهاء من جميع الأطفال المؤهلين لهذه المستفيدة."});
-             setSelectedChildId("");
+             toast({ title: "Next Child", description: `Switched to child: ${nextChild.child_name}`});
+             return;
         }
-    }, [childrenOfBeneficiary, selectedChildId, form, toast]);
+        
+        const currentBnfIndex = beneficiariesForEducator.findIndex(b => b.id === selectedBeneficiary?.id);
+        if (currentBnfIndex > -1 && currentBnfIndex < beneficiariesForEducator.length - 1) {
+             const nextBnf = beneficiariesForEducator[currentBnfIndex + 1];
+             setSelectedBeneficiary(nextBnf);
+             toast({ title: "Next Beneficiary", description: `Switched to: ${nextBnf.BENEF_NAME}`});
+        } else {
+             toast({ title: "End of List", description: "You have reviewed all children for this educator."});
+             setSelectedChildId("");
+             setSelectedBeneficiary(null);
+        }
+    }, [childrenOfBeneficiary, selectedChildId, form, toast, beneficiariesForEducator, selectedBeneficiary]);
+    
+    useEffect(() => {
+        if (selectedBeneficiary && childrenOfBeneficiary.length > 0) {
+            const firstChild = childrenOfBeneficiary[0];
+            setSelectedChildId(firstChild.child_id);
+            form.reset({ isExistingChild: 'نعم', child_has_cmam: undefined, muac: 7.0 });
+        } else {
+            setSelectedChildId("");
+        }
+    }, [selectedBeneficiary, childrenOfBeneficiary, form]);
+
 
     const handleSave = async (data: any) => {
         if (!selectedBeneficiary) return;
@@ -201,7 +218,7 @@ export default function ChildScreeningDataEntryPage() {
             toast({ title: "نجاح", description: "تم حفظ بيانات الطفل بنجاح" });
 
             if (data.isExistingChild === 'نعم') {
-                moveToNextChild();
+                moveToNext();
             } else {
                 form.reset({ isExistingChild: 'لا' });
                 await handleProjectSelect(selectedProjectId); 
@@ -213,27 +230,6 @@ export default function ChildScreeningDataEntryPage() {
         }
     };
     
-
-useEffect(() => {
-    const subscription = form.watch((value, { name }) => {
-        // Only trigger if the specific field 'child_has_cmam' changed to 'لا'
-        if (name === 'child_has_cmam' && value.child_has_cmam === 'لا') {
-            if (value.isExistingChild === 'نعم' && selectedChildId) {
-                
-                // FIX: Wrap in a timeout to move execution out of the React render cycle
-                setTimeout(() => {
-                    handleSave({ 
-                        child_has_cmam: 'لا', 
-                        isExistingChild: 'نعم' 
-                    } as any);
-                }, 0);
-                
-            }
-        }
-    });
-    return () => subscription.unsubscribe();
-}, [form, handleSave, selectedChildId]);
-
     useEffect(() => {
         const timer = setTimeout(() => {
             if (watchIsExisting === 'لا' && watchFirstName && watchGender && selectedBeneficiary) {
@@ -253,10 +249,14 @@ useEffect(() => {
     return (
         <div className="space-y-6 max-w-7xl mx-auto p-4 md:p-6 pb-24" dir="rtl">
             <div className="flex justify-between items-center mb-6">
-                <h1 className="text-3xl font-bold text-foreground">إدخال نتائج الفحص (CMAM)</h1>
-                <Button variant="outline" asChild><Link href="/meal-system/monitoring/implementation/process/CMAM-cases/children/screening"><ArrowLeft className="mr-2 h-4 w-4"/> عودة</Link></Button>
+                <h1 className="text-3xl font-bold text-foreground">إدخال نتائج الفحص (CMAM) للأطفال</h1>
+                <div className="flex gap-2">
+                    <Button variant="outline" asChild><Link href="/meal-system/monitoring/implementation/process/CMAM-cases/children/screening"><ArrowLeft className="mr-2 h-4 w-4"/> عودة</Link></Button>
+                    <Button variant="outline" asChild><Link href="/meal-system/monitoring/implementation/process/CMAM-cases/children/screening/database"><Database className="mr-2 h-4 w-4"/>Database</Link></Button>
+                    <Button variant="outline" asChild><Link href="/meal-system/monitoring/implementation/process/CMAM-cases/children/screening/export"><FileText className="mr-2 h-4 w-4"/>Export</Link></Button>
+                </div>
             </div>
-
+            
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <Card className="border-t-4 border-t-primary shadow-sm">
                     <CardHeader className="bg-muted/30 pb-4"><CardTitle className="text-lg">تحديد المشروع والمثقفة</CardTitle></CardHeader>
@@ -396,7 +396,16 @@ useEffect(() => {
                                             <FormItem className="bg-accent/10 p-4 rounded-lg border border-accent/20">
                                                 <FormLabel className="text-base font-semibold text-accent-foreground">هل يعاني الطفل من سوء تغذية؟</FormLabel>
                                                 <FormControl>
-                                                    <RadioGroup onValueChange={field.onChange} value={field.value} className="flex gap-8 pt-3">
+                                                    <RadioGroup 
+                                                        onValueChange={value => {
+                                                            field.onChange(value);
+                                                            if (value === 'لا') {
+                                                                handleSave({ ...form.getValues(), child_has_cmam: 'لا' });
+                                                            }
+                                                        }} 
+                                                        value={field.value} 
+                                                        className="flex gap-8 pt-3"
+                                                    >
                                                         <div className="flex items-center space-x-2 space-x-reverse"><RadioGroupItem value="نعم" id="c_yes"/><Label htmlFor="c_yes" className="font-medium cursor-pointer m-0">نعم</Label></div>
                                                         <div className="flex items-center space-x-2 space-x-reverse"><RadioGroupItem value="لا" id="c_no"/><Label htmlFor="c_no" className="font-medium cursor-pointer m-0">لا</Label></div>
                                                     </RadioGroup>
@@ -467,23 +476,22 @@ useEffect(() => {
                 </Card>
             )}
             <div className="flex flex-wrap justify-end gap-2">
-                                                <Button variant="outline" className="border-primary text-primary hover:bg-primary/10" asChild>
-                                                    <Link href="/meal-system/monitoring/implementation/process/CMAM-cases/children/screening/preparing">
-                                                        <List className="ml-2 h-4 w-4" /> Preparing Child CMAM List
-                                                    </Link>
-                                                </Button>
-                                                <Button variant="outline" className="border-primary text-primary hover:bg-primary/10" asChild>
-                                                    <Link href="/meal-system/monitoring/implementation/process/CMAM-cases/children/screening/database">
-                                                        <Database className="ml-2 h-4 w-4" /> Child CMAM Database
-                                                    </Link>
-                                                </Button>
-                                                <Button variant="outline" className="border-green-500 text-green-500 hover:bg-green-500/10" asChild>
-                                                    <Link href="/meal-system/monitoring/implementation/process/CMAM-cases/children/screening/export">
-                                                        <FileText className="ml-2 h-4 w-4" /> Exporting Child CMAM Statements
-                                                    </Link>
-                                                </Button>
-                                            </div>
-                                        </div>
-                                
-        );
+                <Button variant="outline" className="border-primary text-primary hover:bg-primary/10" asChild>
+                    <Link href="/meal-system/monitoring/implementation/process/CMAM-cases/children/screening/preparing">
+                        <List className="ml-2 h-4 w-4" /> Preparing Child CMAM List
+                    </Link>
+                </Button>
+                <Button variant="outline" className="border-primary text-primary hover:bg-primary/10" asChild>
+                    <Link href="/meal-system/monitoring/implementation/process/CMAM-cases/children/screening/database">
+                        <Database className="ml-2 h-4 w-4" /> Child CMAM Database
+                    </Link>
+                </Button>
+                <Button variant="outline" className="border-green-500 text-green-500 hover:bg-green-500/10" asChild>
+                    <Link href="/meal-system/monitoring/implementation/process/CMAM-cases/children/screening/export">
+                        <FileText className="ml-2 h-4 w-4" /> Exporting Child CMAM Statements
+                    </Link>
+                </Button>
+            </div>
+        </div>
+    );
 }
