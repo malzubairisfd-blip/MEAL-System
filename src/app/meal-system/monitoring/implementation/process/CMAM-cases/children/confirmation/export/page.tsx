@@ -10,6 +10,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import Link from 'next/link';
 import { saveAs } from "file-saver";
 import { exportConfirmationPdfs } from "@/lib/confirmationchildcmam-export";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 
 // --- Types ---
