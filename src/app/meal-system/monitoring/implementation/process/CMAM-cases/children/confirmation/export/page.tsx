@@ -8,9 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Download, Loader2, File as FileIcon, ArrowLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Progress } from "@/components/ui/progress";
 import Link from 'next/link';
-import { saveAs } from 'file-saver';
 import { exportConfirmationPdfs } from '@/lib/confirmationchildcmam-export';
 
 interface Project {
@@ -44,45 +42,10 @@ export default function ExportCmamStatementsPage() {
         }
 
         setLoading(true);
-        toast({title: "Generating...", description: "Please wait while the documents are being created."})
+        toast({title: "Generating...", description: "Your download will begin shortly. This may take a moment."})
 
         try {
-            const res = await fetch(`/api/child-cmam?projectId=${selectedProjectId}`);
-            if (!res.ok) throw new Error("Failed to fetch CMAM data.");
-            let projectChildren = await res.json();
-            
-            if (projectChildren.length === 0) {
-              toast({ title: "No Data", description: "No children found for the selected project to generate statements.", variant: 'default' });
-              setLoading(false);
-              return;
-            }
-
-            const [fontRegularRes, fontBoldRes] = await Promise.all([
-                fetch('/fonts/NotoNaskhArabic-Regular.ttf'),
-                fetch('/fonts/NotoNaskhArabic-Bold.ttf')
-            ]);
-            
-            if (!fontRegularRes.ok || !fontBoldRes.ok) {
-              throw new Error("Failed to fetch font files.");
-            }
-    
-            const fontRegularBuffer = await fontRegularRes.arrayBuffer();
-            const fontBoldBuffer = await fontBoldRes.arrayBuffer();
-            
-            const fontBase64 = {
-              regular: btoa(new Uint8Array(fontRegularBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')),
-              bold: btoa(new Uint8Array(fontBoldBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')),
-            };
-
-            const blob = await exportConfirmationPdfs(projectChildren, fontBase64, isSample);
-            const fileName = isSample 
-                ? `CMAM_Confirmation_Sample_${selectedProjectId}.pdf`
-                : `CMAM_Confirmations_${selectedProjectId}.zip`;
-
-            saveAs(blob, fileName);
-
-            toast({ title: "Success", description: `File download started: ${fileName}` });
-
+            await exportConfirmationPdfs(selectedProjectId, isSample);
         } catch (error: any) {
             toast({ title: "Error", description: error.message, variant: "destructive" });
         } finally {
