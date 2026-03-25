@@ -49,6 +49,7 @@ const formSchema = z.object({
   hc_muac_no: z.number().optional(),
 
   // 'Yes' -> 'Yes' sub-branch
+  hc_card_no: z.string().optional(),
   bnf_cmam_cond: z.enum(['حامل', 'مرضع']).optional(),
   bnf_preg_mon: z.string().optional(),
   bnf_child_age: z.string().optional(),
@@ -149,6 +150,7 @@ export default function ConfirmationDataEntryPage() {
             hc_muac_no: 25,
             hc_muac_yes: 17,
             bnf_cmam_cond: undefined,
+            hc_card_no: '',
             bnf_preg_mon: '1',
             bnf_child_age: '1'
         });
@@ -179,6 +181,7 @@ export default function ConfirmationDataEntryPage() {
             if (data.bnf_has_cmam_hc === 'لا') {
                 payload.hc_muac = data.hc_muac_no;
             } else {
+                payload.hc_card_no = data.hc_card_no;
                 payload.bnf_cmam_cond = data.bnf_cmam_cond;
                 payload.bnf_preg_mon = data.bnf_preg_mon;
                 payload.bnf_child_age = data.bnf_child_age;
@@ -310,6 +313,9 @@ export default function ConfirmationDataEntryPage() {
 
                             {watchAttendHC === 'نعم' && watchHasCmamHC === 'نعم' && (
                             <>
+                                <FormField control={form.control} name="hc_card_no" render={({ field }) => (
+                                    <FormItem><FormLabel>رقم الكرت الحصري</FormLabel><FormControl><Input type="number" {...field}/></FormControl><FormMessage/></FormItem>
+                                )} />
                                 <FormField control={form.control} name="bnf_cmam_cond" render={({ field }) => (
                                 <FormItem><FormLabel>حالة المستفيدة حاليا</FormLabel><FormControl><div className="flex gap-4 pt-2">
                                     <Button type="button" variant={field.value === 'حامل' ? 'default' : 'outline'} onClick={() => field.onChange('حامل')} className="flex-1">حامل</Button>
