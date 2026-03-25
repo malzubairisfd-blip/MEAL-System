@@ -1,55 +1,100 @@
 // src/app/meal-system/monitoring/implementation/process/CMAM-cases/children/confirmation/export/page.tsx
-
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Download, Loader2, File as FileIcon, ArrowLeft } from "lucide-react";
+import { Download, Loader2, File as FileIcon, ArrowLeft, Users } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import Link from 'next/link';
-import { exportConfirmationPdfs } from '@/lib/confirmationchildcmam-export';
+import { saveAs } from "file-saver";
 
 interface Project {
     projectId: string;
     projectName: string;
 }
 
+interface HealthCenterGroup {
+    hc_id: string;
+    hc_name: string;
+    count: number;
+    records: any[];
+}
+
 export default function ExportCmamStatementsPage() {
     const [loading, setLoading] = useState(false);
+    const [actionLoading, setActionLoading] = useState<string | null>(null); // 'sample', 'all', or hc_id
     const [projects, setProjects] = useState<Project[]>([]);
     const [selectedProjectId, setSelectedProjectId] = useState<string>('');
+    const [allData, setAllData] = useState<any[]>([]);
     const { toast } = useToast();
 
     useEffect(() => {
-        const fetchProjects = async () => {
-            try {
-                const res = await fetch('/api/projects');
-                if (!res.ok) throw new Error("Failed to load projects.");
-                setProjects(await res.json());
-            } catch (error: any) {
-                toast({ title: "Error", description: error.message, variant: "destructive" });
-            }
-        };
-        fetchProjects();
-    }, [toast]);
+        setLoading(true);
+        fetch('/api/projects').then(res => res.json()).then(data => setProjects(data || [])).finally(() => setLoading(false));
+    }, []);
 
-    const handleDownload = async (isSample = false) => {
+    useEffect(() => {
         if (!selectedProjectId) {
-            toast({ title: "No Project Selected", description: "Please select a project to generate statements for.", variant: "destructive" });
+            setAllData([]);
             return;
         }
-
         setLoading(true);
-        toast({title: "Generating...", description: "Your download will begin shortly. This may take a moment."})
+        fetch(`/api/child-cmam?projectId=${selectedProjectId}`)
+            .then(res => res.json())
+            .then(data => setAllData(Array.isArray(data) ? data : []))
+            .catch(err => toast({ title: "Error loading data", description: err.message, variant: "destructive" }))
+            .finally(() => setLoading(false));
+    }, [selectedProjectId, toast]);
+
+    const healthCenterGroups = useMemo((): HealthCenterGroup[] => {
+        if (!allData.length) return [];
+        const qualified = allData.filter(r => r.child_has_cmam === 'نعم');
+        const groups: Record<string, { hc_name: string, records: any[] }> = {};
+        
+        for (const record of qualified) {
+            const hc_id = record.hc_id || 'UNKNOWN';
+            if (!groups[hc_id]) {
+                groups[hc_id] = { hc_name: record.hc_name || 'Unknown Center', records: [] };
+            }
+            groups[hc_id].records.push(record);
+        }
+        
+        return Object.entries(groups).map(([hc_id, data]) => ({
+            hc_id,
+            hc_name: data.hc_name,
+            count: data.records.length,
+            records: data.records
+        })).sort((a,b) => a.hc_name.localeCompare(b.hc_name));
+
+    }, [allData]);
+
+    const handleDownload = async (payload: { records: any[], asZip: boolean, isSample?: boolean, fileName: string }) => {
+        const { records, asZip, isSample, fileName } = payload;
+        
+        setActionLoading(fileName);
+        toast({title: "Generating...", description: `Your download for ${fileName} will begin shortly.`});
 
         try {
-            await exportConfirmationPdfs(selectedProjectId, isSample);
+            const res = await fetch('/api/child-cmam-confirmation-export', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ records, asZip, isSample })
+            });
+
+            if (!res.ok) {
+                const errorData = await res.json();
+                throw new Error(errorData.error || 'PDF generation failed on the server.');
+            }
+            
+            const blob = await res.blob();
+            saveAs(blob, fileName);
+
         } catch (error: any) {
             toast({ title: "Error", description: error.message, variant: "destructive" });
         } finally {
-            setLoading(false);
+            setActionLoading(null);
         }
     };
 
@@ -64,19 +109,19 @@ export default function ExportCmamStatementsPage() {
                 </Button>
             </div>
 
-            <Card className="w-full max-w-lg mx-auto">
+            <Card className="w-full max-w-4xl mx-auto">
                 <CardHeader>
-                    <CardTitle className="text-center text-xl">Generate PDF Statements</CardTitle>
-                    <CardDescription className="text-center">
-                        Generate PDF statements for all confirmed CMAM cases, grouped by health center, worker, and educator.
+                    <CardTitle className="text-xl">Generate PDF Statements</CardTitle>
+                    <CardDescription>
+                        Generate PDF statements for all confirmed CMAM cases, grouped by health center.
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
                     <div className="space-y-2">
-                        <label className="text-sm font-medium">Select Project</label>
+                        <label className="text-sm font-medium">1. Select Project</label>
                          <Select onValueChange={setSelectedProjectId} value={selectedProjectId} disabled={loading}>
                             <SelectTrigger>
-                                <SelectValue placeholder="Select a project..." />
+                                <SelectValue placeholder={loading ? "Loading..." : "Select a project..."} />
                             </SelectTrigger>
                             <SelectContent>
                                 {projects.map(p => (
@@ -86,26 +131,63 @@ export default function ExportCmamStatementsPage() {
                         </Select>
                     </div>
 
-                    <div className="flex gap-2">
-                        <Button
-                            size="lg"
-                            onClick={() => handleDownload(false)}
-                            disabled={loading || !selectedProjectId}
-                            className="w-full"
-                        >
-                            {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
-                            {loading ? "Generating..." : "Download All Statements (ZIP)"}
-                        </Button>
-                         <Button
-                            size="lg"
-                            variant="outline"
-                            onClick={() => handleDownload(true)}
-                            disabled={loading || !selectedProjectId}
-                        >
-                            <FileIcon className="mr-2 h-4 w-4" />
-                            Download Sample
-                        </Button>
-                    </div>
+                    {selectedProjectId && (loading ? <div className="text-center p-8"><Loader2 className="animate-spin"/></div> :
+                    <>
+                        <div className="flex gap-2">
+                             <Button
+                                size="lg"
+                                onClick={() => handleDownload({ records: allData.filter(r => r.child_has_cmam === 'نعم'), asZip: true, fileName: `CMAM_Confirmations_${selectedProjectId}.zip` })}
+                                disabled={actionLoading !== null || healthCenterGroups.length === 0}
+                                className="w-full"
+                            >
+                                {actionLoading === 'all' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+                                Download All as ZIP ({healthCenterGroups.length} Centers)
+                            </Button>
+                             <Button
+                                size="lg"
+                                variant="outline"
+                                onClick={() => handleDownload({ records: [allData.filter(r => r.child_has_cmam === 'نعم')[0]], asZip: false, isSample: true, fileName: `CMAM_Sample_${selectedProjectId}.pdf` })}
+                                disabled={actionLoading !== null || healthCenterGroups.length === 0}
+                            >
+                                <FileIcon className="mr-2 h-4 w-4" />
+                                Download Sample PDF
+                            </Button>
+                        </div>
+                        
+                        <div className="space-y-2">
+                            <h3 className="font-semibold">Download by Health Center</h3>
+                             <div className="border rounded-md">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Health Center</TableHead>
+                                            <TableHead># of Children</TableHead>
+                                            <TableHead className="text-right">Action</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {healthCenterGroups.map(group => (
+                                            <TableRow key={group.hc_id}>
+                                                <TableCell>{group.hc_name} ({group.hc_id})</TableCell>
+                                                <TableCell>{group.count}</TableCell>
+                                                <TableCell className="text-right">
+                                                    <Button
+                                                        size="sm"
+                                                        variant="ghost"
+                                                        disabled={actionLoading !== null}
+                                                        onClick={() => handleDownload({ records: group.records, asZip: false, fileName: `CMAM_${group.hc_id}.pdf`})}
+                                                    >
+                                                        {actionLoading === `${group.hc_name}.pdf` ? <Loader2 className="h-4 w-4 animate-spin"/> : <Download className="h-4 w-4"/>}
+                                                    </Button>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                             </div>
+                        </div>
+                    </>
+                    )}
                 </CardContent>
             </Card>
         </div>

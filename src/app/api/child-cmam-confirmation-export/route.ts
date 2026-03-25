@@ -5,7 +5,6 @@ import chromium from '@sparticuz/chromium';
 import JSZip from 'jszip';
 import path from 'path';
 import fs from 'fs/promises';
-import Database from 'better-sqlite3';
 
 interface EducatorGroupInfo {
   location: string;
@@ -21,7 +20,7 @@ interface EducatorGroupInfo {
 const ROWS_PER_PAGE = 8;
 
 function buildLocation(r: any) {
-  return [r.GOV_NAME, r.MUD_NAME, r.OZLA_NAME].filter(Boolean).join(" - ");
+  return [r.gov_name, r.mud_name, r.ozla_name].filter(Boolean).join(" - ");
 }
 
 const getStyles = (fontRegBase64: string, fontBoldBase64: string) => `
@@ -30,8 +29,6 @@ const getStyles = (fontRegBase64: string, fontBoldBase64: string) => `
   
   body {
     -webkit-print-color-adjust: exact;
-  }
-  .pdf-wrapper {
     font-family: 'NotoNaskhArabic', sans-serif;
     direction: rtl;
     text-align: right;
@@ -252,29 +249,31 @@ function generateHTML(hcGroups: any, fontBase64: any, logoBase64: string): strin
   return html;
 }
 
-const getDataPath = () => path.join(process.cwd(), 'src/data');
-const getDbPath = () => path.join(getDataPath(), 'child-cmam.db');
-
 export async function POST(req: Request) {
     let browser = null;
     try {
-        const { projectId, isSample } = await req.json();
+        const { records, asZip } = await req.json();
 
-        // 1. Fetch data
-        const db = new Database(getDbPath(), { fileMustExist: true });
-        const records = db.prepare("SELECT * FROM child_cmam WHERE project_id = ?").all(projectId);
-        db.close();
-
-        if (records.length === 0) {
-            return NextResponse.json({ error: "No records found" }, { status: 404 });
+        if (!records || records.length === 0) {
+            return NextResponse.json({ error: "No records provided" }, { status: 400 });
         }
+
+        const [fontRegularBase64, fontBoldBase64, logoBuffer] = await Promise.all([
+            fs.readFile(path.join(process.cwd(), "public/fonts/NotoNaskhArabic-Regular.ttf"), "base64"),
+            fs.readFile(path.join(process.cwd(), "public/fonts/NotoNaskhArabic-Bold.ttf"), "base64"),
+            fs.readFile(path.join(process.cwd(), "public/sfd-logo.png"))
+        ]);
+        const logoBase64 = `data:image/png;base64,${logoBuffer.toString('base64')}`;
+        const fontBase64 = { regular: fontRegularBase64, bold: fontBoldBase64 };
+
+        browser = await puppeteer.launch({
+            args: [...chromium.args, "--no-sandbox", "--disable-setuid-sandbox"],
+            executablePath: await chromium.executablePath(),
+            headless: chromium.headless,
+        });
 
         const qualified = records.filter((r: any) => r.child_has_cmam === "نعم");
-        if (qualified.length === 0) {
-            return NextResponse.json({ error: "No qualified children for export." }, { status: 404 });
-        }
-
-        // 2. Group data
+        
         const groups: Record<string, Record<string, Record<string, any[]>>> = {};
         for (const r of qualified) {
             const hc = r.hc_id || 'UNKNOWN_HC';
@@ -286,43 +285,27 @@ export async function POST(req: Request) {
             groups[hc][hw][ed].push(r);
         }
 
-        // 3. Load assets
-        const [fontRegularBase64, fontBoldBase64, logoBuffer] = await Promise.all([
-            fs.readFile(path.join(process.cwd(), "public/fonts/NotoNaskhArabic-Regular.ttf"), "base64"),
-            fs.readFile(path.join(process.cwd(), "public/fonts/NotoNaskhArabic-Bold.ttf"), "base64"),
-            fs.readFile(path.join(process.cwd(), "public/sfd-logo.png"))
-        ]);
-        const logoBase64 = `data:image/png;base64,${logoBuffer.toString('base64')}`;
-        const fontBase64 = { regular: fontRegularBase64, bold: fontBoldBase64 };
-
-        // 4. Launch Puppeteer
-        browser = await puppeteer.launch({
-            args: [...chromium.args, "--no-sandbox", "--disable-setuid-sandbox"],
-            executablePath: await chromium.executablePath(),
-            headless: chromium.headless,
-        });
-        const page = await browser.newPage();
-        
         const zip = new JSZip();
-        const dataToProcess = isSample ? Object.keys(groups).slice(0, 1) : Object.keys(groups);
+        const page = await browser.newPage();
 
-        for (const hc of dataToProcess) {
+        for (const hc of Object.keys(groups)) {
             const htmlString = generateHTML(groups[hc], fontBase64, logoBase64);
             await page.setContent(htmlString, { waitUntil: 'networkidle0' });
-            
             const pdfBuffer = await page.pdf({ format: 'A4', landscape: true, printBackground: true, margin: { top: 0, right: 0, bottom: 0, left: 0 } });
             
-            if (isSample) {
-                return new NextResponse(pdfBuffer, { headers: { 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="CMAM_Confirmation_Sample.pdf"` } });
+            if (!asZip) { // If only one health center's data was passed, return single PDF
+                 await browser.close();
+                 return new NextResponse(pdfBuffer, { headers: { 'Content-Type': 'application/pdf' } });
             }
-            
+
             const firstRecord = groups[hc][Object.keys(groups[hc])[0]][Object.keys(groups[hc][Object.keys(groups[hc])[0]])[0]][0];
             const safeName = `${firstRecord.hc_id}-${firstRecord.hc_name}`.replace(/[\/\\?%*:|"<>]/g, "-");
             zip.file(`${safeName}.pdf`, pdfBuffer);
         }
         
+        await browser.close();
         const zipBlob = await zip.generateAsync({ type: "nodebuffer" });
-        return new NextResponse(zipBlob, { headers: { 'Content-Type': 'application/zip', 'Content-Disposition': `attachment; filename="CMAM_Confirmations.zip"` } });
+        return new NextResponse(zipBlob, { headers: { 'Content-Type': 'application/zip' } });
         
     } catch (err: any) {
         console.error("PDF Export Error:", err);
