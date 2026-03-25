@@ -1,9 +1,6 @@
 "use client";
 
-// src/lib/confirmationchildcmam-export.ts
-
-import html2pdf from "html2pdf.js";
-import JSZip from "jszip";
+import { saveAs } from "file-saver";
 
 interface EducatorGroupInfo {
   location: string;
@@ -87,14 +84,23 @@ const getStyles = (fontRegBase64: string, fontBoldBase64: string) => `
   .stamp-box { border: 1px solid black; width: 40px; height: 60px; display: flex; align-items: center; justify-content: center; }
 `;
 
-function generateHTML(hcGroups: any, fontBase64: { regular: string, bold: string }, logoBase64: string): string {
+function generateHTML(childrenForHc: any[], fontBase64: { regular: string, bold: string }, logoBase64: string): string {
   let html = `<div class="pdf-wrapper"><style>${getStyles(fontBase64.regular, fontBase64.bold)}</style>`;
+  
+  const hwGroups: Record<string, Record<string, any[]>> = {};
+  for (const r of childrenForHc) {
+    const hw = r.hw_name || 'UNKNOWN_HW';
+    const ed = r.ed_id || 'UNKNOWN_ED';
+    if (!hwGroups[hw]) hwGroups[hw] = {};
+    if (!hwGroups[hw][ed]) hwGroups[hw][ed] = [];
+    hwGroups[hw][ed].push(r);
+  }
 
-  const hwGroups = hcGroups;
   const firstHW = Object.values(hwGroups)[0] as Record<string, any[]>;
+  if (!firstHW) return "";
   const firstED = Object.values(firstHW)[0] as any[];
   const firstRecord = firstED?.[0];
-  const hcChild = Object.values(hwGroups).flatMap((hw: any) => Object.values(hw).flat());
+  const hcChild = childrenForHc;
 
   if (!firstRecord) return "";
 
@@ -263,33 +269,22 @@ function generateHTML(hcGroups: any, fontBase64: { regular: string, bold: string
 
 // ================= MAIN EXPORT FUNCTION =================
 export const exportConfirmationPdfs = async (children: any[], fontBase64: any, asZip: boolean, logoBase64: string) => {
+  const html2pdf = (await import("html2pdf.js")).default;
+  const JSZip = (await import("jszip")).default;
+
   if (!children?.length) {
     throw new Error("No children data provided");
   }
 
-  // Grouping Logic
-  const qualified = children
-    .filter((r: any) => r.child_has_cmam === "نعم")
-    .sort((a: any, b: any) => {
-      const edCompare = String(a.ed_id).localeCompare(String(b.ed_id), "ar");
-      if (edCompare !== 0) return edCompare;
-      return String(a.hw_name).localeCompare(String(b.hw_name), "ar");
-    });
-
-  const groups: Record<string, Record<string, Record<string, any[]>>> = {};
-  for (const r of qualified) {
-    const hc = r.hc_id || 'UNKNOWN_HC';
-    const hw = r.hw_name || 'UNKNOWN_HW';
-    const ed = r.ed_id || 'UNKNOWN_ED';
-    if (!groups[hc]) groups[hc] = {};
-    if (!groups[hc][hw]) groups[hc][hw] = {};
-    if (!groups[hc][hw][ed]) groups[hc][hw][ed] = [];
-    groups[hc][hw][ed].push(r);
+  const groups: Record<string, any[]> = {};
+  for (const r of children) {
+    const hc = r.hc_id || "UNKNOWN";
+    if (!groups[hc]) groups[hc] = [];
+    groups[hc].push(r);
   }
 
   const zip = new JSZip();
 
-  // html2pdf global settings (No margins because CSS handles exactly A4 sizing)
   const opt = {
     margin: 0,
     image: { type: 'jpeg', quality: 1 },
@@ -298,48 +293,53 @@ export const exportConfirmationPdfs = async (children: any[], fontBase64: any, a
     pagebreak: { mode: 'css' } 
   };
 
-  // Generate PDF for each Health Center
   for (const hc of Object.keys(groups)) {
     const htmlString = generateHTML(groups[hc], fontBase64, logoBase64);
     
-    // Create an invisible container on the DOM to render the HTML
     const container = document.createElement('div');
     container.innerHTML = htmlString;
     container.style.position = 'absolute';
-    container.style.left = '-9999px'; // Hide off-screen
+    container.style.left = '-9999px';
     document.body.appendChild(container);
 
-    const firstRecord = groups[hc][Object.keys(groups[hc])[0]][Object.keys(groups[hc][Object.keys(groups[hc])[0]])[0]][0];
+    if (!html2pdf) throw new Error("html2pdf not loaded");
+
+    const buffer = await html2pdf()
+      .set(opt)
+      .from(container)
+      .output("arraybuffer");
+
+    const firstRecord = groups[hc][0];
     const safeName = `${firstRecord.hc_id}-${firstRecord.hc_name}`.replace(/[\/\\?%*:|"<>]/g, "-");
 
-    // Convert to PDF and get ArrayBuffer for the Zip file
-    const pdfArrayBuffer = await html2pdf().set(opt).from(container).output('arraybuffer');
-    zip.file(`${safeName}.pdf`, pdfArrayBuffer);
+    zip.file(`${safeName}.pdf`, buffer);
 
-    // Clean up DOM
     document.body.removeChild(container);
   }
 
   if (!asZip) {
-      const firstHcKey = Object.keys(groups)[0];
-      if (!firstHcKey) throw new Error("No health center groups found to generate a sample PDF.");
-      const htmlString = generateHTML(groups[firstHcKey], fontBase64, logoBase64);
-      const container = document.createElement('div');
-      container.innerHTML = htmlString;
-      container.style.position = 'absolute';
-      container.style.left = '-9999px';
-      document.body.appendChild(container);
-      const pdfBlob = await html2pdf().set(opt).from(container).output('blob');
-      document.body.removeChild(container);
-      return pdfBlob;
-  }
-  
-  // Generate Zip
-  const zipData = await zip.generateAsync({
-    type: "blob", // Standard blob for main-thread downloads
-    compression: "DEFLATE",
-    compressionOptions: { level: 5 }
-  });
+    const first = Object.keys(groups)[0];
+    if (!first) {
+        throw new Error("No health center groups found to generate a sample PDF.");
+    }
+    const container = document.createElement("div");
 
-  return zipData;
+    container.innerHTML = generateHTML(
+      groups[first],
+      fontBase64,
+      logoBase64
+    );
+
+    document.body.appendChild(container);
+
+    const blob = await html2pdf()
+      .set(opt)
+      .from(container)
+      .output("blob");
+
+    document.body.removeChild(container);
+    return blob;
+  }
+
+  return await zip.generateAsync({ type: "blob" });
 };
