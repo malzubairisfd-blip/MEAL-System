@@ -9,15 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import Link from 'next/link';
 import { saveAs } from "file-saver";
-import { exportConfirmationPdfs } from "@/lib/confirmationchildcmam-export";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 
 // --- Types ---
@@ -43,31 +35,12 @@ export default function ExportCmamStatementsPage() {
     const [selectedProjectId, setSelectedProjectId] = useState<string>('');
     const [allData, setAllData] = useState<any[]>([]);
     const { toast } = useToast();
-    const [fontBase64, setFontBase64] = useState<{ regular: string, bold: string, logo: string } | null>(null);
 
     useEffect(() => {
         setLoading(true);
-        Promise.all([
-            fetch('/api/projects').then(res => res.json()),
-            fetch('/fonts/NotoNaskhArabic-Regular.ttf').then(res => res.arrayBuffer()),
-            fetch('/fonts/NotoNaskhArabic-Bold.ttf').then(res => res.arrayBuffer()),
-            fetch('/sfd-logo.png').then(res => res.blob())
-        ]).then(([projectData, fontRegularBuffer, fontBoldBuffer, logoBlob]) => {
-            setProjects(projectData || []);
-            
-            const toBase64 = (buffer: ArrayBuffer) => btoa(new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), ''));
-            
-            const reader = new FileReader();
-            reader.readAsDataURL(logoBlob);
-            reader.onloadend = () => {
-                setFontBase64({
-                    regular: toBase64(fontRegularBuffer),
-                    bold: toBase64(fontBoldBuffer),
-                    logo: reader.result as string,
-                });
-            };
-
-        }).catch(err => {
+        fetch('/api/projects').then(res => res.json())
+        .then(data => setProjects(data || []))
+        .catch(err => {
             toast({ title: "Error loading initial assets", description: err.message, variant: "destructive" });
         }).finally(() => setLoading(false));
     }, [toast]);
@@ -108,17 +81,25 @@ export default function ExportCmamStatementsPage() {
     }, [allData]);
 
     const handleDownload = async (records: any[], asZip: boolean, fileName: string) => {
-        if (!fontBase64) {
-            toast({ title: "Assets not loaded", description: "Please wait for fonts and images to load and try again.", variant: "destructive" });
-            return;
-        }
-        
         setActionLoading(fileName);
         toast({title: "Generating...", description: `Your download for ${fileName} will begin shortly.`});
 
         try {
-            const blob = await exportConfirmationPdfs(records, fontBase64, asZip, fontBase64.logo);
+            const res = await fetch('/api/child-cmam-confirmation-export', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ records, asZip })
+            });
+
+            if (!res.ok) {
+                const errorData = await res.json();
+                throw new Error(errorData.error || 'PDF Generation failed on server');
+            }
+
+            const blob = await res.blob();
             saveAs(blob, fileName);
+            toast({ title: "Success", description: "Download complete." });
+
         } catch (error: any) {
             toast({ title: "Error", description: error.message, variant: "destructive" });
         } finally {
