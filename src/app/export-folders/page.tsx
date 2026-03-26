@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 
 type Node = {
   type: "folder" | "file";
@@ -16,17 +16,56 @@ export default function ExportFoldersPage() {
   const [status, setStatus] = useState("");
   const [working, setWorking] = useState(false);
 
-  async function api(body: any) {
+  const api = useCallback(async (body: any) => {
     return fetch("/api/file-manager", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     }).then((r) => r.json());
-  }
+  }, []);
 
-  async function loadTree() {
-    setTree(await api({ action: "tree" }));
-  }
+  const loadTree = useCallback(async () => {
+    try {
+      setTree(await api({ action: "tree" }));
+    } catch(e) {
+      console.error("Failed to load file tree", e);
+    }
+  }, [api]);
+
+  useEffect(() => {
+    loadTree();
+  }, [loadTree]);
+
+  const handleSelectFolder = (path: string, checked: boolean) => {
+    const newSelected = { ...selected };
+    
+    // Function to recursively apply selection state to a node and its children
+    const applySelection = (node: Node, shouldBeSelected: boolean) => {
+        if(node.type === 'folder') {
+            newSelected[node.path] = shouldBeSelected;
+            if(node.children) {
+                node.children.forEach(child => applySelection(child, shouldBeSelected));
+            }
+        }
+    };
+
+    // Find the node that was clicked in the tree
+    const findAndApply = (nodes: Node[], targetPath: string): boolean => {
+        for(const node of nodes) {
+            if (node.path === targetPath) {
+                applySelection(node, checked);
+                return true;
+            }
+            if (node.children) {
+                if (findAndApply(node.children, targetPath)) return true;
+            }
+        }
+        return false;
+    };
+    
+    findAndApply(tree, path);
+    setSelected(newSelected);
+  };
 
   async function exportSelected() {
     const folders = Object.keys(selected).filter((k) => selected[k]);
@@ -34,15 +73,19 @@ export default function ExportFoldersPage() {
       alert("Select at least one folder");
       return;
     }
+    
+    const topLevelFolders = folders.filter(folder => {
+        const parentPath = folder.substring(0, folder.lastIndexOf('/'));
+        return !parentPath || !folders.includes(parentPath);
+    });
 
     setWorking(true);
     setProgress(0);
     setStatus("Preparing export...");
 
     let finalText = "";
-    let processedFiles = 0;
 
-    for (const folder of folders) {
+    for (const folder of topLevelFolders) {
       setStatus(`Reading ${folder} ...`);
 
       const res = await fetch("/api/export-folder", {
@@ -51,21 +94,18 @@ export default function ExportFoldersPage() {
         body: JSON.stringify({ folder }),
       }).then((r) => r.json());
 
-      const filesCount = res.totalFiles || 1;
-      processedFiles += filesCount;
-
       finalText +=
         "\n\n############################################\n" +
         `FOLDER: ${folder}\n` +
         "############################################\n\n" +
         res.content;
 
-      setProgress((p) => Math.min(100, p + 100 / folders.length));
+      setProgress((p) => Math.min(100, p + 100 / topLevelFolders.length));
     }
 
     setStatus("Generating file...");
 
-    const blob = new Blob([finalText], { type: "text/plain" });
+    const blob = new Blob([finalText], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
 
     const a = document.createElement("a");
@@ -90,10 +130,7 @@ export default function ExportFoldersPage() {
                 type="checkbox"
                 checked={!!selected[n.path]}
                 onChange={(e) =>
-                  setSelected((s) => ({
-                    ...s,
-                    [n.path]: e.target.checked,
-                  }))
+                  handleSelectFolder(n.path, e.target.checked)
                 }
               />
               📁 {n.name}
@@ -108,10 +145,6 @@ export default function ExportFoldersPage() {
       </div>
     ));
 
-  useEffect(() => {
-    loadTree();
-  }, []);
-
   return (
     <div className="min-h-screen bg-slate-950 text-white p-6">
       <h1 className="text-2xl font-bold mb-4">
@@ -122,7 +155,6 @@ export default function ExportFoldersPage() {
         {renderTree(tree)}
       </div>
 
-      {/* PROGRESS BAR */}
       {working && (
         <div className="mt-4">
           <div className="text-sm mb-1">{status}</div>
