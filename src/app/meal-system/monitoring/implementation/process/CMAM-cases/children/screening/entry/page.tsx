@@ -1,3 +1,4 @@
+// src/app/meal-system/monitoring/implementation/process/CMAM-cases/children/screening/entry/page.tsx
 "use client";
 
 import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
@@ -213,7 +214,10 @@ export default function ChildScreeningDataEntryPage() {
             muac: data.muac,
             go_health_center: data.go_health_center,
             disc_date: data.disc_date_year ? `${data.disc_date_year}-${data.disc_date_month}-${data.disc_date_day}` : null,
-            near_health_center: hc_name: hc?.hc_name, hc_id: hc?.hc_id, hw_id: hc?.hw_id, hw_name: hc?.hw_name,
+            near_health_center: hc?.hc_name,
+            hc_id: hc?.hc_id,
+            hw_id: hc?.hw_id,
+            hw_name: hc?.hw_name,
             comments: data.comments
           });
         } else if (data.child_has_cmam === 'لا') {
@@ -248,7 +252,10 @@ export default function ChildScreeningDataEntryPage() {
             muac: data.muac,
             go_health_center: data.go_health_center,
             disc_date: data.disc_date_year ? `${data.disc_date_year}-${data.disc_date_month}-${data.disc_date_day}` : null,
-            near_health_center: hc_name: hc?.hc_name, hc_id: hc?.hc_id, hw_id: hc?.hw_id, hw_name: hc?.hw_name,
+            near_health_center: hc?.hc_name,
+            hc_id: hc?.hc_id,
+            hw_id: hc?.hw_id,
+            hw_name: hc?.hw_name,
             comments: data.comments
           });
         } else {
@@ -271,7 +278,7 @@ export default function ChildScreeningDataEntryPage() {
       const res = await fetch('/api/child-cmam', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, payload: payload })
+        body: JSON.stringify({ action, payload })
       });
 
       if (!res.ok) throw new Error(await res.text());
@@ -290,6 +297,13 @@ export default function ChildScreeningDataEntryPage() {
       setLoading(p => ({ ...p, saving: false }));
     }
   };
+  
+    const handleCmamDecisionChange = (value: 'نعم' | 'لا') => {
+        form.setValue('child_has_cmam', value);
+        if (value === 'لا') {
+            handleSave(form.getValues() as z.infer<typeof formSchema>);
+        }
+    };
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -305,6 +319,7 @@ export default function ChildScreeningDataEntryPage() {
     }, 500);
     return () => clearTimeout(timer);
   }, [watchFirstName, watchGender, watchIsExisting, selectedBeneficiary]);
+
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto p-4 md:p-6 pb-24" dir="rtl">
@@ -475,11 +490,7 @@ export default function ChildScreeningDataEntryPage() {
                       <FormItem className="bg-accent/10 p-4 rounded-lg border border-accent/20">
                         <FormLabel className="text-base font-semibold text-accent-foreground">هل يعاني الطفل من سوء تغذية؟</FormLabel>
                         <FormControl>
-                          <RadioGroup
-                            onValueChange={field.onChange}
-                            value={field.value}
-                            className="flex gap-8 pt-3"
-                          >
+                          <RadioGroup onValueChange={(value) => handleCmamDecisionChange(value as 'نعم' | 'لا')} value={field.value} className="flex gap-8 pt-3">
                             <div className="flex items-center space-x-2 space-x-reverse"><RadioGroupItem value="نعم" id="c_yes" /><Label htmlFor="c_yes" className="font-medium cursor-pointer m-0">نعم</Label></div>
                             <div className="flex items-center space-x-2 space-x-reverse"><RadioGroupItem value="لا" id="c_no" /><Label htmlFor="c_no" className="font-medium cursor-pointer m-0">لا</Label></div>
                           </RadioGroup>
@@ -587,9 +598,9 @@ export default function ChildScreeningDataEntryPage() {
                     )}
 
                     <div className="pt-4 flex justify-end">
-                      <Button type="submit" size="lg" className="w-full md:w-auto" disabled={loading.saving || !form.formState.isValid}>
-                        {loading.saving ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Save className="mr-2 h-5 w-5" />} Save & Next
-                      </Button>
+                         <Button type="submit" size="lg" className="w-full md:w-auto" disabled={loading.saving || !form.formState.isValid}>
+                             {loading.saving ? <Loader2 className="mr-2 h-5 w-5 animate-spin"/> : <Save className="mr-2 h-5 w-5"/>} Save & Next
+                         </Button>
                     </div>
                   </div>
                 )}
