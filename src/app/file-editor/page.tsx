@@ -62,7 +62,8 @@ export default function FileEditor() {
   const [fileContent, setFileContent] = useState("");
   const [isLoadingFile, setIsLoadingFile] = useState(false);
   const [selectedFolder, setSelectedFolder] = useState<string | null>('src');
-  const [search, setSearch] = useState("");
+  const [folderSearch, setFolderSearch] = useState("");
+  const [fileSearch, setFileSearch] = useState("");
 
   // New state for collapsible folders
   const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set());
@@ -141,10 +142,10 @@ export default function FileEditor() {
   }, []);
 
   useEffect(() => {
-    if (tree.length > 0 && !search) {
+    if (tree.length > 0 && !folderSearch && !fileSearch) {
       setCollapsedFolders(new Set(getAllFolderPaths(tree)));
     }
-  }, [tree, search, getAllFolderPaths]);
+  }, [tree, folderSearch, fileSearch, getAllFolderPaths]);
 
   async function openFile(p: string) {
     if (p === file) return;
@@ -547,23 +548,26 @@ export default function FileEditor() {
   };
 
   const filteredTree = useMemo(() => {
-    if (!search.trim()) {
+    const folderQuery = folderSearch.trim().toLowerCase();
+    const fileQuery = fileSearch.trim().toLowerCase();
+
+    if (!folderQuery && !fileQuery) {
       return tree;
     }
-    const lowercasedSearch = search.toLowerCase();
 
     function filterNodes(nodes: any[]): any[] {
       const result: any[] = [];
       for (const node of nodes) {
-        const nameMatches = node.name.toLowerCase().includes(lowercasedSearch);
-        if (node.type === 'file') {
-          if (nameMatches) {
-            result.push(node);
+        if (node.type === 'folder') {
+          const children = node.children ? filterNodes(node.children) : [];
+          if (children.length > 0) {
+            result.push({ ...node, children });
           }
-        } else if (node.type === 'folder') {
-          const filteredChildren = node.children ? filterNodes(node.children) : [];
-          if (nameMatches || filteredChildren.length > 0) {
-            result.push({ ...node, children: filteredChildren });
+        } else { // file
+          const fileMatch = !fileQuery || node.name.toLowerCase().includes(fileQuery);
+          const pathMatch = !folderQuery || node.path.toLowerCase().includes(folderQuery);
+          if (fileMatch && pathMatch) {
+            result.push(node);
           }
         }
       }
@@ -571,11 +575,11 @@ export default function FileEditor() {
     }
 
     return filterNodes(tree);
-  }, [tree, search]);
+  }, [tree, folderSearch, fileSearch]);
 
   const renderTree = useCallback((nodes: any[]) => {
       return nodes.map((n) => {
-        const isCollapsed = !search && collapsedFolders.has(n.path);
+        const isCollapsed = !folderSearch && !fileSearch && collapsedFolders.has(n.path);
         const hasChildren = n.children && n.children.length > 0;
   
         return (
@@ -690,7 +694,7 @@ export default function FileEditor() {
           </div>
         );
       });
-  }, [search, collapsedFolders, file, selectedFolder, selectedPaths, togglePathSelection, deletePath, openFile]);
+  }, [folderSearch, fileSearch, collapsedFolders, file, selectedFolder, selectedPaths, togglePathSelection, deletePath, openFile]);
 
 
   return (
@@ -753,14 +757,25 @@ export default function FileEditor() {
                 </div>
             )}
 
-            <div className="relative">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                <Input
-                  className="bg-card/50 pl-8 pr-2 py-1 h-9 text-sm"
-                  placeholder="Search files and folders..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
+            <div className="flex gap-2">
+                <div className="relative flex-1">
+                    <FolderOpen className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                    <Input
+                      className="bg-card/50 pl-8 pr-2 py-1 h-9 text-sm"
+                      placeholder="Search folders..."
+                      value={folderSearch}
+                      onChange={(e) => setFolderSearch(e.target.value)}
+                    />
+                </div>
+                <div className="relative flex-1">
+                    <FileIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                    <Input
+                      className="bg-card/50 pl-8 pr-2 py-1 h-9 text-sm"
+                      placeholder="Search files..."
+                      value={fileSearch}
+                      onChange={(e) => setFileSearch(e.target.value)}
+                    />
+                </div>
             </div>
         </div>
 
