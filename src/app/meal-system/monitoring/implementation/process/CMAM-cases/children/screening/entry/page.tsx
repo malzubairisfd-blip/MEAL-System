@@ -204,7 +204,10 @@ export default function ChildScreeningDataEntryPage() {
                 action = 'update_child';
                 const childToUpdate = allChildren.find(c => c.child_id === selectedChildId);
                 if (!childToUpdate) throw new Error("Child not found");
-                payload = { id: childToUpdate.id };
+                payload = { 
+                    id: childToUpdate.id,
+                    child_id: childToUpdate.child_id,
+                };
 
                 if (data.child_has_cmam === 'نعم') {
                     Object.assign(payload, {
@@ -255,7 +258,15 @@ export default function ChildScreeningDataEntryPage() {
                      Object.assign(payload, {
                         ...commonPayload,
                         muac: data.muac,
-                        comments: data.comments
+                        comments: data.comments,
+                        child_cmam_type: null,
+                        go_health_center: null,
+                        disc_date: null,
+                        near_health_center: null,
+                        hc_id: null,
+                        hc_name: null,
+                        hw_id: null,
+                        hw_name: null
                     });
                 }
             }
@@ -310,10 +321,10 @@ export default function ChildScreeningDataEntryPage() {
                 </div>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <Card className="border-t-4 border-t-primary shadow-sm">
-                    <CardHeader className="bg-muted/30 pb-4"><CardTitle className="text-lg">تحديد المشروع والمثقفة</CardTitle></CardHeader>
-                    <CardContent className="space-y-4 pt-4">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <Card className="lg:col-span-1">
+                    <CardHeader><CardTitle>تحديد المشروع والمستفيدة</CardTitle></CardHeader>
+                    <CardContent className="space-y-4">
                         <div className="space-y-2">
                             <Label>المشروع</Label>
                             <Select onValueChange={handleProjectSelect} value={selectedProjectId}>
@@ -348,38 +359,30 @@ export default function ChildScreeningDataEntryPage() {
                                 </PopoverContent>
                             </Popover>
                         </div>
-                    </CardContent>
-                </Card>
-
-                <Card className="border-t-4 border-t-primary shadow-sm">
-                    <CardHeader className="bg-muted/30 pb-4"><CardTitle className="text-lg">اختيار المستفيدة</CardTitle></CardHeader>
-                    <CardContent className="pt-4 space-y-4">
-                         <Input placeholder="بحث بالاسم او رقم المستفيدة..." value={beneficiarySearch} onChange={e => setBeneficiarySearch(e.target.value)} disabled={!selectedEducatorId} />
-                         <ScrollArea className="h-[200px] border rounded-md">
-                            <Table>
-                                <TableHeader className="bg-muted sticky top-0"><TableRow><TableHead className="w-[50px]">تحديد</TableHead><TableHead>ID</TableHead><TableHead>الاسم</TableHead></TableRow></TableHeader>
-                                <TableBody>
-                                    {beneficiariesForEducator.map(b => (
+                        {selectedEducatorId && (
+                             <div className="space-y-2">
+                                <Label>اختيار المستفيدة</Label>
+                                <Input placeholder="بحث بالاسم او رقم المستفيدة..." value={beneficiarySearch} onChange={e => setBeneficiarySearch(e.target.value)} />
+                                <ScrollArea className="h-96 mt-4 border rounded-md">
+                                    <Table><TableHeader className="bg-muted sticky top-0"><TableRow><TableHead className="w-[50px]">تحديد</TableHead><TableHead>ID</TableHead><TableHead>الاسم</TableHead></TableRow></TableHeader>
+                                    <TableBody>{beneficiariesForEducator.map(b => (
                                         <TableRow key={b.id} className={cn("cursor-pointer hover:bg-muted/50 transition-colors", selectedBeneficiary?.id === b.id && 'bg-primary/10')} onClick={() => {setSelectedBeneficiary(b); setSelectedChildId("");}}>
                                             <TableCell><Checkbox checked={selectedBeneficiary?.id === b.id} /></TableCell>
                                             <TableCell className="font-medium">{b.BENEF_ID}</TableCell>
                                             <TableCell>{b.BENEF_NAME}</TableCell>
                                         </TableRow>
-                                    ))}
-                                    {beneficiariesForEducator.length === 0 && <TableRow><TableCell colSpan={3} className="text-center text-muted-foreground h-24">الرجاء تحديد المشروع والمثقفة أولاً</TableCell></TableRow>}
-                                </TableBody>
-                            </Table>
-                         </ScrollArea>
+                                    ))}</TableBody></Table>
+                                 </ScrollArea>
+                             </div>
+                        )}
                     </CardContent>
                 </Card>
-            </div>
 
-            {selectedBeneficiary && (
-                <Card className="border-t-4 border-t-secondary shadow-md">
-                    <CardHeader className="bg-muted/30"><CardTitle className="text-lg">3. Child Details & Screening</CardTitle></CardHeader>
-                    <CardContent className="pt-6">
-                        <Form {...form}>
-                            <form onSubmit={form.handleSubmit(handleSave)} className="space-y-8">
+                <Card className="lg:col-span-2">
+                    <Form {...form}>
+                        <form onSubmit={form.handleSubmit(handleSave)} className="space-y-6">
+                            <CardHeader><CardTitle>بيانات فحص الطفل</CardTitle></CardHeader>
+                            <CardContent className="space-y-6">
                                 <FormField control={form.control} name="isExistingChild" render={({field}) => (
                                     <FormItem className="bg-card p-4 rounded-lg border">
                                         <FormLabel className="text-base font-semibold">هل الطفل مسجل سابقا في قاعدة البيانات؟</FormLabel>
@@ -391,8 +394,8 @@ export default function ChildScreeningDataEntryPage() {
                                         </FormControl>
                                     </FormItem>
                                 )} />
-
-                                {watchIsExisting === 'نعم' && (
+                                
+                                {watchIsExisting === 'نعم' ? (
                                     <div className="space-y-4">
                                         <Label className="text-base font-semibold">اختيار الطفل</Label>
                                         <Input placeholder="بحث باسم أو رقم الطفل..." value={childSearch} onChange={e => setChildSearch(e.target.value)} className="max-w-md"/>
@@ -413,9 +416,7 @@ export default function ChildScreeningDataEntryPage() {
                                             </Table>
                                         </ScrollArea>
                                     </div>
-                                )}
-
-                                {watchIsExisting === 'لا' && (
+                                ) : (
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-4 border rounded-lg bg-card">
                                         <FormField control={form.control} name="child_gender" render={({ field }) => (
                                             <FormItem><FormLabel>جنس الطفل</FormLabel><FormControl>
@@ -450,14 +451,7 @@ export default function ChildScreeningDataEntryPage() {
                                                 <FormLabel className="text-base font-semibold text-accent-foreground">هل يعاني الطفل من سوء تغذية؟</FormLabel>
                                                 <FormControl>
                                                     <RadioGroup 
-                                                        onValueChange={value => {
-                                                            field.onChange(value);
-                                                            if (value === 'لا') {
-                                                                form.setValue('muac', 12.5);
-                                                            } else {
-                                                                form.setValue('muac', 7.0);
-                                                            }
-                                                        }} 
+                                                        onValueChange={field.onChange} 
                                                         value={field.value} 
                                                         className="flex gap-8 pt-3"
                                                     >
@@ -494,13 +488,7 @@ export default function ChildScreeningDataEntryPage() {
 
                                                 <FormField control={form.control} name="muac" render={({ field }) => (
                                                     <FormItem><FormLabel>قياس المواك: {field.value || 7}</FormLabel><FormControl>
-                                                        <Slider
-                                                            min={7}
-                                                            max={16}
-                                                            step={0.1}
-                                                            value={[field.value || 7]}
-                                                            onValueChange={(v) => field.onChange(v[0])}
-                                                        />
+                                                        <Slider min={7} max={16} step={0.1} value={[field.value || 7]} onValueChange={(v) => field.onChange(v[0])} />
                                                     </FormControl><FormMessage /></FormItem>
                                                 )} />
 
@@ -541,8 +529,8 @@ export default function ChildScreeningDataEntryPage() {
                             </form>
                         </Form>
                     </CardContent>
-                </Card>
-            )}
+                </Card>}
+            </div>
         </div>
     );
 }
