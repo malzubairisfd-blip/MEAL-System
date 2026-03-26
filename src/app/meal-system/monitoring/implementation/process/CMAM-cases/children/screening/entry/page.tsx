@@ -204,7 +204,7 @@ export default function ChildScreeningDataEntryPage() {
                 action = 'update_child';
                 const childToUpdate = allChildren.find(c => c.child_id === selectedChildId);
                 if (!childToUpdate) throw new Error("Child not found");
-                payload = { id: childToUpdate.id, child_id: selectedChildId };
+                payload = { id: childToUpdate.id };
 
                 if (data.child_has_cmam === 'نعم') {
                     Object.assign(payload, {
@@ -221,7 +221,6 @@ export default function ChildScreeningDataEntryPage() {
                         child_has_cmam: 'لا',
                         muac: data.muac,
                         comments: data.comments,
-                        // Clear other fields
                         child_cmam_type: null, 
                         go_health_center: null, 
                         disc_date: null, 
@@ -361,7 +360,7 @@ export default function ChildScreeningDataEntryPage() {
                                 <TableHeader className="bg-muted sticky top-0"><TableRow><TableHead className="w-[50px]">تحديد</TableHead><TableHead>ID</TableHead><TableHead>الاسم</TableHead></TableRow></TableHeader>
                                 <TableBody>
                                     {beneficiariesForEducator.map(b => (
-                                        <TableRow key={b.id} className={cn("cursor-pointer hover:bg-muted/50 transition-colors", selectedBeneficiary?.id === b.id && 'bg-primary/10')} onClick={() => {setSelectedBeneficiary(b); setSelectedChildId('');}}>
+                                        <TableRow key={b.id} className={cn("cursor-pointer hover:bg-muted/50 transition-colors", selectedBeneficiary?.id === b.id && 'bg-primary/10')} onClick={() => {setSelectedBeneficiary(b); setSelectedChildId("");}}>
                                             <TableCell><Checkbox checked={selectedBeneficiary?.id === b.id} /></TableCell>
                                             <TableCell className="font-medium">{b.BENEF_ID}</TableCell>
                                             <TableCell>{b.BENEF_NAME}</TableCell>
@@ -451,7 +450,14 @@ export default function ChildScreeningDataEntryPage() {
                                                 <FormLabel className="text-base font-semibold text-accent-foreground">هل يعاني الطفل من سوء تغذية؟</FormLabel>
                                                 <FormControl>
                                                     <RadioGroup 
-                                                        onValueChange={field.onChange} 
+                                                        onValueChange={value => {
+                                                            field.onChange(value);
+                                                            if (value === 'لا') {
+                                                                form.setValue('muac', 12.5);
+                                                            } else {
+                                                                form.setValue('muac', 7.0);
+                                                            }
+                                                        }} 
                                                         value={field.value} 
                                                         className="flex gap-8 pt-3"
                                                     >
@@ -488,7 +494,13 @@ export default function ChildScreeningDataEntryPage() {
 
                                                 <FormField control={form.control} name="muac" render={({ field }) => (
                                                     <FormItem><FormLabel>قياس المواك: {field.value || 7}</FormLabel><FormControl>
-                                                        <Slider min={7} max={16} step={0.1} value={[field.value || 7]} onValueChange={(v) => field.onChange(v[0])} />
+                                                        <Slider
+                                                            min={7}
+                                                            max={16}
+                                                            step={0.1}
+                                                            value={[field.value || 7]}
+                                                            onValueChange={(v) => field.onChange(v[0])}
+                                                        />
                                                     </FormControl><FormMessage /></FormItem>
                                                 )} />
 
