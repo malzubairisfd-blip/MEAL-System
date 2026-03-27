@@ -11,7 +11,7 @@ export interface EducatorGroupInfo {
   hcid: string;
 }
 
-const ROWS_PER_PAGE = 7;
+const ROWS_PER_PAGE = 6;
 
 function buildLocation(r: any) {
   return [r.gov_name, r.mud_name, r.ozla_name].filter(Boolean).join(" - ");

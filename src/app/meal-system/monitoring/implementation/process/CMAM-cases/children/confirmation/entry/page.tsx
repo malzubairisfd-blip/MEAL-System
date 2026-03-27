@@ -27,7 +27,7 @@ import { Textarea } from '@/components/ui/textarea';
 // --- Types ---
 interface Project { projectId: string; projectName: string; }
 interface HealthCenter { hc_id: string; hc_name: string; hw_id: string; hw_name: string;}
-interface Beneficiary { id: number; BENEF_ID: string; BENEF_NAME: string; hc_id: string; [key: string]: any; }
+interface Beneficiary { id: string; BENEF_ID: string; BENEF_NAME: string; hc_id: string; [key: string]: any; }
 interface Child { id: number; child_id: string; child_name: string; benef_id: string; [key: string]: any; }
 
 const months = ["يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"];
@@ -85,7 +85,6 @@ export default function ConfirmationDataEntryPage() {
     const [projects, setProjects] = useState<Project[]>([]);
     const [healthCenters, setHealthCenters] = useState<HealthCenter[]>([]);
     const [allChildren, setAllChildren] = useState<Child[]>([]);
-    const [allBeneficiaries, setAllBeneficiaries] = useState<Beneficiary[]>([]);
     
     const [selectedProjectId, setSelectedProjectId] = useState("");
     const [selectedHealthCenterId, setSelectedHealthCenterId] = useState("");
@@ -117,25 +116,22 @@ export default function ConfirmationDataEntryPage() {
         setLoading(p => ({...p, projects: true}));
         fetch('/api/projects').then(res => res.json()).then(setProjects).finally(() => setLoading(p => ({...p, projects: false})));
     }, []);
-
+    
     const fetchProjectData = useCallback(async (projectId: string) => {
         if (!projectId) return;
         setLoading(p => ({ ...p, data: true }));
         try {
-            const [bnfRes, childRes] = await Promise.all([
-                fetch(`/api/bnf-cmam?projectId=${projectId}`),
-                fetch(`/api/child-cmam?projectId=${projectId}`)
-            ]);
-
-            if (!bnfRes.ok || !childRes.ok) throw new Error("Failed to load project data.");
-            
-            const bnfData = await bnfRes.json();
-            setAllBeneficiaries(bnfData);
-
-            const data = await childRes.json();
+            const res = await fetch(`/api/child-cmam?projectId=${projectId}`);
+            if (!res.ok) throw new Error("Failed to load child CMAM data.");
+            const data = await res.json();
             const cmamChildren = Array.isArray(data) ? data : [];
+            
             setAllChildren(cmamChildren);
-            const uniqueHCs: HealthCenter[] = Array.from(new Map(cmamChildren.filter(c => c.child_has_cmam === 'نعم').map((item: any) => [item.hc_id, { hc_id: item.hc_id, hc_name: item.hc_name, hw_id: item.hw_id, hw_name: item.hw_name }])).values());
+
+            const uniqueHCs: HealthCenter[] = Array.from(new Map(cmamChildren
+                .filter((c: any) => c.child_has_cmam === 'نعم' && c.hc_id)
+                .map((item: any) => [item.hc_id, { hc_id: item.hc_id, hc_name: item.hc_name, hw_id: item.hw_id, hw_name: item.hw_name }]))
+                .values());
             setHealthCenters(uniqueHCs);
             
         } catch (error: any) {
@@ -147,7 +143,6 @@ export default function ConfirmationDataEntryPage() {
     
     const fetchChildData = useCallback(async (projectId: string) => {
         if (!projectId) return;
-        // No loading state change here to avoid UI flicker
         try {
              const res = await fetch(`/api/child-cmam?projectId=${projectId}`);
              if (!res.ok) throw new Error("Failed to load child CMAM data.");
@@ -171,9 +166,20 @@ export default function ConfirmationDataEntryPage() {
     const beneficiariesInHc = useMemo((): Beneficiary[] => {
         if (!selectedHealthCenterId) return [];
         const childrenInHc = allChildren.filter(c => c.hc_id === selectedHealthCenterId && c.child_has_cmam === 'نعم');
-        const uniqueBnfIds = new Set(childrenInHc.map(c => c.benef_id));
-        return allBeneficiaries.filter(b => uniqueBnfIds.has(b.BENEF_ID));
-    }, [allChildren, allBeneficiaries, selectedHealthCenterId]);
+        
+        const uniqueBeneficiaries = new Map<string, Beneficiary>();
+        childrenInHc.forEach(child => {
+            if (child.benef_id && !uniqueBeneficiaries.has(child.benef_id)) {
+                uniqueBeneficiaries.set(child.benef_id, {
+                    id: child.benef_id,
+                    BENEF_ID: child.benef_id,
+                    BENEF_NAME: child.bnf_name,
+                    hc_id: child.hc_id,
+                });
+            }
+        });
+        return Array.from(uniqueBeneficiaries.values());
+    }, [allChildren, selectedHealthCenterId]);
     
     const filteredBeneficiaries = useMemo(() => {
         if (!beneficiarySearch) return beneficiariesInHc;
@@ -183,7 +189,7 @@ export default function ConfirmationDataEntryPage() {
 
     const childrenOfBeneficiary = useMemo(() => {
         if (!selectedBeneficiary) return [];
-        let filtered = allChildren.filter(c => c.benef_id === selectedBeneficiary.BENEF_ID && c.cmam_qualify === 'Qualified' && c.child_has_cmam === 'نعم');
+        let filtered = allChildren.filter(c => c.benef_id === selectedBeneficiary.BENEF_ID && c.child_has_cmam === 'نعم');
         if (childSearch) {
             const ls = childSearch.toLowerCase();
             filtered = filtered.filter(c => String(c.child_id).toLowerCase().includes(ls) || c.child_name.toLowerCase().includes(ls));
@@ -221,7 +227,6 @@ export default function ConfirmationDataEntryPage() {
 
     const moveToNext = useCallback(() => {
         resetForm();
-
         const currentChildIndex = childrenOfBeneficiary.findIndex(c => c.child_id === selectedChildId);
         if (currentChildIndex > -1 && currentChildIndex < childrenOfBeneficiary.length - 1) {
             const nextChild = childrenOfBeneficiary[currentChildIndex + 1];
@@ -271,6 +276,7 @@ export default function ConfirmationDataEntryPage() {
 
         let payload: any = { 
             id: allChildren.find(c => c.child_id === selectedChildId)?.id,
+            child_id: selectedChildId,
             conf_date: fullDate,
         };
         
@@ -362,8 +368,8 @@ export default function ConfirmationDataEntryPage() {
                         <ScrollArea className="h-48 mt-4 border rounded-md">
                             <Table><TableHeader className="bg-muted sticky top-0"><TableRow><TableHead className="w-[50px]">تحديد</TableHead><TableHead>ID</TableHead><TableHead>الاسم</TableHead></TableRow></TableHeader>
                             <TableBody>{filteredBeneficiaries.map(b => (
-                                <TableRow key={b.BENEF_ID} onClick={()=>{setSelectedBeneficiary(b); setSelectedChildId('');}} className={cn("cursor-pointer", selectedBeneficiary?.BENEF_ID === b.BENEF_ID && 'bg-primary/10')}>
-                                    <TableCell><Checkbox checked={selectedBeneficiary?.BENEF_ID === b.BENEF_ID} /></TableCell>
+                                <TableRow key={b.id} onClick={()=>{setSelectedBeneficiary(b); setSelectedChildId('');}} className={cn("cursor-pointer", selectedBeneficiary?.id === b.id && 'bg-primary/10')}>
+                                    <TableCell><Checkbox checked={selectedBeneficiary?.id === b.id} /></TableCell>
                                     <TableCell>{b.BENEF_ID}</TableCell><TableCell>{b.BENEF_NAME}</TableCell>
                                 </TableRow>
                             ))}</TableBody></Table>
@@ -414,7 +420,7 @@ export default function ConfirmationDataEntryPage() {
                                 <FormControl><Slider min={12.5} max={20} step={0.1} value={[field.value || 12.5]} onValueChange={(v) => field.onChange(v[0])} /></FormControl><FormMessage /></FormItem>
                                 )} />
                                  <FormField control={form.control} name="comments" render={({ field }) => (
-                                    <FormItem><FormLabel>ملاحظات</FormLabel><FormControl><Textarea {...field}/></FormControl><FormMessage/></FormItem>
+                                    <FormItem><FormLabel>ملاحظات</FormLabel><FormControl><Textarea placeholder="أدخل ملاحظاتك هنا..." {...field} /></FormControl><FormMessage/></FormItem>
                                 )} />
                                 <Button type="submit" disabled={loading.saving}>{loading.saving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Update & Next</Button>
                                 </>
