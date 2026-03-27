@@ -68,16 +68,16 @@ const formSchema = z.object({
   cmam_result_hc: z.string().optional(),
 }).refine(data => {
     if (data.attend_hc === 'نعم') {
-        return !!data.bnf_has_cmam_hc;
+        return !!data.child_has_cmam_hc;
     }
     return true;
-}, { message: "This field is required.", path: ["bnf_has_cmam_hc"] })
+}, { message: "This field is required.", path: ["child_has_cmam_hc"] })
 .refine(data => {
-    if (data.attend_hc === 'نعم' && data.bnf_has_cmam_hc === 'نعم') {
-        return !!data.bnf_cmam_cond;
+    if (data.attend_hc === 'نعم' && data.child_has_cmam_hc === 'نعم') {
+        return !!data.child_cmam_cond;
     }
     return true;
-}, { message: "This field is required.", path: ["bnf_cmam_cond"] });
+}, { message: "This field is required.", path: ["child_cmam_cond"] });
 
 
 export default function ConfirmationDataEntryPage() {
@@ -122,19 +122,21 @@ export default function ConfirmationDataEntryPage() {
         if (!projectId) return;
         setLoading(p => ({ ...p, data: true }));
         try {
-            const [bnfRes, hcRes, childRes] = await Promise.all([
+            const [bnfRes, childRes] = await Promise.all([
                 fetch(`/api/bnf-cmam?projectId=${projectId}`),
-                fetch(`/api/health-centers?projectId=${projectId}`),
                 fetch(`/api/child-cmam?projectId=${projectId}`)
             ]);
 
-            if (!bnfRes.ok || !hcRes.ok || !childRes.ok) throw new Error("Failed to load project data.");
+            if (!bnfRes.ok || !childRes.ok) throw new Error("Failed to load project data.");
             
             const bnfData = await bnfRes.json();
             setAllBeneficiaries(bnfData);
-            
-            setHealthCenters(await hcRes.json());
-            setAllChildren(await childRes.json());
+
+            const data = await childRes.json();
+            const cmamChildren = Array.isArray(data) ? data : [];
+            setAllChildren(cmamChildren);
+            const uniqueHCs: HealthCenter[] = Array.from(new Map(cmamChildren.filter(c => c.child_has_cmam === 'نعم').map((item: any) => [item.hc_id, { hc_id: item.hc_id, hc_name: item.hc_name, hw_id: item.hw_id, hw_name: item.hw_name }])).values());
+            setHealthCenters(uniqueHCs);
             
         } catch (error: any) {
             toast({ title: "Error loading project data", description: error.message, variant: "destructive" });
@@ -145,15 +147,13 @@ export default function ConfirmationDataEntryPage() {
     
     const fetchChildData = useCallback(async (projectId: string) => {
         if (!projectId) return;
-        setLoading(p => ({ ...p, data: true }));
+        // No loading state change here to avoid UI flicker
         try {
              const res = await fetch(`/api/child-cmam?projectId=${projectId}`);
              if (!res.ok) throw new Error("Failed to load child CMAM data.");
              setAllChildren(await res.json());
         } catch (error: any) {
              toast({ title: "Error refreshing child data", description: error.message, variant: "destructive" });
-        } finally {
-            setLoading(p => ({ ...p, data: false }));
         }
     }, [toast]);
 
@@ -164,7 +164,7 @@ export default function ConfirmationDataEntryPage() {
         setSelectedChildId("");
         form.reset();
         await fetchProjectData(projectId);
-    }, [form, fetchProjectData]);
+    }, [toast, form, fetchProjectData]);
 
 
     // --- Filtering & Memoization ---
@@ -199,7 +199,7 @@ export default function ConfirmationDataEntryPage() {
             conf_date_month: undefined,
             conf_date_year: undefined,
             not_attend_reason_hc: '',
-            bnf_has_cmam_hc: undefined,
+            child_has_cmam_hc: undefined,
             muac_hc_no: 12.5,
             comments: '',
             hc_card_no: '',
@@ -291,7 +291,7 @@ export default function ConfirmationDataEntryPage() {
                 if (data.child_has_cmam_hc === 'لا') {
                     if (data.muac_hc_no === undefined) throw new Error("قياس المواك is required.");
                     payload.muac_hc = data.muac_hc_no;
-                    payload.not_attend_reason_hc = data.comments; // Note: Overwriting this field based on new logic
+                    payload.comments = data.comments;
                 } else {
                     if (!data.meas_type || !data.child_cmam_cond) throw new Error("Please fill all required malnutrition details.");
                     payload.hc_card_no = data.hc_card_no;
