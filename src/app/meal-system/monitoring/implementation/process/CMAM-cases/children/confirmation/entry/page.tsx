@@ -1,14 +1,14 @@
 // src/app/meal-system/monitoring/implementation/process/CMAM-cases/children/confirmation/entry/page.tsx
 "use client";
 
-import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { useToast } from "@/hooks/use-toast";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -17,12 +17,10 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Slider } from "@/components/ui/slider";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { ArrowLeft, Loader2, Search, ThumbsUp, Check, ChevronsUpDown, Database, FileText } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { Textarea } from '@/components/ui/textarea';
+import { ArrowLeft, Loader2, Database, FileText } from "lucide-react";
 
 // --- Types ---
 interface Project { projectId: string; projectName: string; }
@@ -49,7 +47,7 @@ const formSchema = z.object({
 
   // 'Yes' -> 'No' sub-branch
   muac_hc_no: z.number().optional(),
-  cmam_result_hc_no: z.string().optional(), // Now captures comments for this branch
+  cmam_result_hc_no: z.string().optional(), 
 
   // 'Yes' -> 'Yes' sub-branch
   hc_card_no: z.string().optional(),
@@ -79,6 +77,30 @@ const formSchema = z.object({
     return true;
 }, { message: "This field is required.", path: ["child_cmam_cond"] });
 
+const defaultValues = {
+    attend_hc: undefined,
+    conf_date_day: undefined,
+    conf_date_month: undefined,
+    conf_date_year: undefined,
+    not_attend_reason_hc: '',
+    child_has_cmam_hc: undefined,
+    muac_hc_no: 12.5,
+    cmam_result_hc_no: '',
+    hc_card_no: '',
+    meas_type: undefined,
+    muac_hc: 7.0,
+    zscore_h: '',
+    zscore_w: '',
+    zscore: '',
+    child_cmam_cond: undefined,
+    exp_start_treat_date_day: undefined,
+    exp_start_treat_date_month: undefined,
+    exp_start_treat_date_year: undefined,
+    exp_end_treat_date_day: undefined,
+    exp_end_treat_date_month: undefined,
+    exp_end_treat_date_year: undefined,
+    cmam_result_hc: undefined,
+};
 
 export default function ConfirmationDataEntryPage() {
     const { toast } = useToast();
@@ -95,28 +117,22 @@ export default function ConfirmationDataEntryPage() {
     const [childSearch, setChildSearch] = useState("");
     
     const [loading, setLoading] = useState({ projects: true, data: false, saving: false });
-    
+
     const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
-        defaultValues: {
-            attend_hc: undefined,
-            muac_hc_no: 12.5,
-            muac_hc: 7.0,
-        }
+        defaultValues
     });
 
     const watchAttendHC = form.watch("attend_hc");
     const watchHasCmamHC = form.watch("child_has_cmam_hc");
     const watchMeasType = form.watch("meas_type");
-    
-    const [healthCenterPopoverOpen, setHealthCenterPopoverOpen] = useState(false);
 
     // --- Data Fetching ---
     useEffect(() => {
         setLoading(p => ({...p, projects: true}));
         fetch('/api/projects').then(res => res.json()).then(setProjects).finally(() => setLoading(p => ({...p, projects: false})));
     }, []);
-    
+
     const fetchProjectData = useCallback(async (projectId: string) => {
         if (!projectId) return;
         setLoading(p => ({ ...p, data: true }));
@@ -124,8 +140,8 @@ export default function ConfirmationDataEntryPage() {
             const res = await fetch(`/api/child-cmam?projectId=${projectId}`);
             if (!res.ok) throw new Error("Failed to load child CMAM data.");
             const data = await res.json();
+       
             const cmamChildren = Array.isArray(data) ? data : [];
-            
             setAllChildren(cmamChildren);
 
             const uniqueHCs: HealthCenter[] = Array.from(new Map(cmamChildren
@@ -141,15 +157,37 @@ export default function ConfirmationDataEntryPage() {
         }
     }, [toast]);
 
+    const resetForm = useCallback(() => {
+        form.reset(defaultValues);
+    }, [form]);
+
+    const handleBeneficiarySelect = useCallback((b: Beneficiary | null) => {
+        setSelectedBeneficiary(b);
+        if (b) {
+            const children = allChildren.filter(c => c.benef_id === b.BENEF_ID && c.child_has_cmam === 'نعم');
+            if (children.length > 0) {
+                const firstUnreviewedChild = children.find(c => !c.attend_hc);
+                setSelectedChildId(firstUnreviewedChild ? firstUnreviewedChild.child_id : children[0].child_id);
+            } else {
+                setSelectedChildId("");
+            }
+        } else {
+            setSelectedChildId("");
+        }
+        resetForm();
+    }, [allChildren, resetForm]);
+
     const handleProjectSelect = useCallback(async (projectId: string) => {
         setSelectedProjectId(projectId);
         setSelectedHealthCenterId("");
-        setSelectedBeneficiary(null);
-        setSelectedChildId("");
-        form.reset();
+        handleBeneficiarySelect(null);
         await fetchProjectData(projectId);
-    }, [toast, form, fetchProjectData]);
+    }, [fetchProjectData, handleBeneficiarySelect]);
 
+    const handleHealthCenterChange = (hcId: string) => {
+        setSelectedHealthCenterId(hcId);
+        handleBeneficiarySelect(null);
+    };
 
     // --- Filtering & Memoization ---
     const beneficiariesInHc = useMemo((): Beneficiary[] => {
@@ -164,12 +202,12 @@ export default function ConfirmationDataEntryPage() {
                     BENEF_ID: child.benef_id,
                     BENEF_NAME: child.bnf_name,
                     hc_id: child.hc_id,
-                });
+                 });
             }
         });
         return Array.from(uniqueBeneficiaries.values());
     }, [allChildren, selectedHealthCenterId]);
-    
+
     const filteredBeneficiaries = useMemo(() => {
         if (!beneficiarySearch) return beneficiariesInHc;
         const ls = beneficiarySearch.toLowerCase();
@@ -185,50 +223,8 @@ export default function ConfirmationDataEntryPage() {
         }
         return filtered;
     }, [allChildren, selectedBeneficiary, childSearch]);
-    
-    // --- Form Logic ---
-    const resetForm = useCallback(() => {
-        form.reset({
-            attend_hc: undefined,
-            conf_date_day: undefined,
-            conf_date_month: undefined,
-            conf_date_year: undefined,
-            not_attend_reason_hc: '',
-            child_has_cmam_hc: undefined,
-            muac_hc_no: 12.5,
-            cmam_result_hc_no: '',
-            hc_card_no: '',
-            meas_type: undefined,
-            muac_hc: 7.0,
-            zscore_h: '',
-            zscore_w: '',
-            zscore: '',
-            child_cmam_cond: undefined,
-            exp_start_treat_date_day: undefined,
-            exp_start_treat_date_month: undefined,
-            exp_start_treat_date_year: undefined,
-            exp_end_treat_date_day: undefined,
-            exp_end_treat_date_month: undefined,
-            exp_end_treat_date_year: undefined,
-            cmam_result_hc: undefined,
-        });
-    }, [form]);
-    
-    useEffect(() => {
-        if (selectedBeneficiary && childrenOfBeneficiary.length > 0) {
-            const firstUnreviewedChild = childrenOfBeneficiary.find(c => !c.attend_hc);
-            if(firstUnreviewedChild) {
-              setSelectedChildId(firstUnreviewedChild.child_id);
-            } else {
-              setSelectedChildId(childrenOfBeneficiary[0].child_id);
-            }
-            resetForm();
-        } else {
-            setSelectedChildId("");
-        }
-    }, [selectedBeneficiary, childrenOfBeneficiary, resetForm]);
 
-
+    // --- Submit Logic ---
     const onSubmit = async (data: z.infer<typeof formSchema>) => {
         if (!selectedChildId) {
             toast({ title: "Selection Missing", variant: "destructive" });
@@ -252,14 +248,14 @@ export default function ConfirmationDataEntryPage() {
             id: childToUpdate.id,
             conf_date: fullDate,
         };
-        
+
         try {
             if (!fullDate && data.attend_hc === 'نعم') {
                 throw new Error("تاريخ تأكيد الحالة is required.");
             }
 
             payload.attend_hc = data.attend_hc;
-            
+
             if (data.attend_hc === 'لا') {
                 if (!data.not_attend_reason_hc) throw new Error("سبب عدم الحضور is required.");
                 payload.not_attend_reason_hc = data.not_attend_reason_hc;
@@ -292,29 +288,31 @@ export default function ConfirmationDataEntryPage() {
                 body: JSON.stringify([payload])
             });
             if (!res.ok) throw new Error(await res.text());
-            
-            toast({ title: "Success", description: "Record updated successfully." });
+
+            toast({ title: "Success", description: "تم تحديث السجل بنجاح." });
             
             const updatedChildren = allChildren.map(child =>
                 child.id === payload.id ? { ...child, ...payload } : child
             );
             setAllChildren(updatedChildren);
 
+            // Determine explicit navigation paths
             const currentChildIndex = childrenOfBeneficiary.findIndex(c => c.child_id === selectedChildId);
             const nextChild = (currentChildIndex > -1 && currentChildIndex < childrenOfBeneficiary.length - 1) ? childrenOfBeneficiary[currentChildIndex + 1] : null;
 
             if (nextChild) {
+                toast({ title: "انتقال", description: `يتم الان الانتقال إلى الطفل: ${nextChild.child_name}` });
                 setSelectedChildId(nextChild.child_id);
                 resetForm();
             } else {
                 const currentBnfIndex = filteredBeneficiaries.findIndex(b => b.id === selectedBeneficiary?.id);
                 if (currentBnfIndex > -1 && currentBnfIndex < filteredBeneficiaries.length - 1) {
-                    setSelectedBeneficiary(filteredBeneficiaries[currentBnfIndex + 1]);
+                    const nextBnf = filteredBeneficiaries[currentBnfIndex + 1];
+                    toast({ title: "انتقال", description: `يتم الان الانتقال إلى المستفيدة: ${nextBnf.BENEF_NAME}` });
+                    handleBeneficiarySelect(nextBnf);
                 } else {
-                    toast({ title: "End of List", description: "You have reviewed all children for this health center." });
-                    setSelectedChildId("");
-                    setSelectedBeneficiary(null);
-                    resetForm();
+                    toast({ title: "نهاية القائمة", description: "لقد قمت بمراجعة جميع الأطفال في هذا المركز الصحي." });
+                    handleBeneficiarySelect(null);
                 }
             }
             
@@ -337,7 +335,7 @@ export default function ConfirmationDataEntryPage() {
                 </div>
             </div>
             
-             <Card>
+            <Card>
                 <CardHeader>
                     <CardTitle>1. حدد المشروع و المركز الصحي</CardTitle>
                 </CardHeader>
@@ -346,7 +344,7 @@ export default function ConfirmationDataEntryPage() {
                         <SelectTrigger><SelectValue placeholder="اختر المشروع..." /></SelectTrigger>
                         <SelectContent>{projects.map(p => <SelectItem key={p.projectId} value={p.projectId}>{p.projectName}</SelectItem>)}</SelectContent>
                     </Select>
-                     <Select onValueChange={setSelectedHealthCenterId} value={selectedHealthCenterId} disabled={!selectedProjectId}>
+                     <Select onValueChange={handleHealthCenterChange} value={selectedHealthCenterId} disabled={!selectedProjectId}>
                         <SelectTrigger><SelectValue placeholder="اختر المركز..." /></SelectTrigger>
                         <SelectContent>{healthCenters.map(hc => <SelectItem key={hc.hc_id} value={hc.hc_id}>{hc.hc_name} ({hc.hc_id})</SelectItem>)}</SelectContent>
                     </Select>
@@ -362,14 +360,14 @@ export default function ConfirmationDataEntryPage() {
                         <ScrollArea className="h-48 mt-4 border rounded-md">
                             <Table><TableHeader className="bg-muted sticky top-0"><TableRow><TableHead className="w-[50px]">تحديد</TableHead><TableHead>ID</TableHead><TableHead>الاسم</TableHead></TableRow></TableHeader>
                             <TableBody>{filteredBeneficiaries.map(b => (
-                                <TableRow key={b.id} onClick={()=>{setSelectedBeneficiary(b); setSelectedChildId('');}} className={cn("cursor-pointer", selectedBeneficiary?.id === b.id && 'bg-primary/10')}>
+                                <TableRow key={b.id} onClick={() => handleBeneficiarySelect(b)} className={cn("cursor-pointer", selectedBeneficiary?.id === b.id && 'bg-primary/10')}>
                                     <TableCell><Checkbox checked={selectedBeneficiary?.id === b.id} /></TableCell>
                                     <TableCell>{b.BENEF_ID}</TableCell><TableCell>{b.BENEF_NAME}</TableCell>
                                 </TableRow>
                             ))}</TableBody></Table>
                          </ScrollArea>
                     </CardContent>
-                    
+             
                     {selectedBeneficiary && <Card className="mt-4">
                         <CardHeader><CardTitle>اختيار الطفل</CardTitle></CardHeader>
                         <CardContent>
@@ -377,7 +375,7 @@ export default function ConfirmationDataEntryPage() {
                              <ScrollArea className="h-48 mt-4 border rounded-md">
                                 <Table><TableHeader className="bg-muted sticky top-0"><TableRow><TableHead className="w-[50px]">تحديد</TableHead><TableHead>ID</TableHead><TableHead>الاسم</TableHead></TableRow></TableHeader>
                                 <TableBody>{childrenOfBeneficiary.map(c => (
-                                    <TableRow key={c.id} onClick={()=>setSelectedChildId(c.child_id)} className={cn("cursor-pointer", selectedChildId === c.child_id && 'bg-secondary/10')}>
+                                    <TableRow key={c.id} onClick={() => { setSelectedChildId(c.child_id); resetForm(); }} className={cn("cursor-pointer", selectedChildId === c.child_id && 'bg-secondary/10')}>
                                         <TableCell><Checkbox checked={selectedChildId === c.child_id} /></TableCell>
                                         <TableCell>{c.child_id}</TableCell><TableCell>{c.child_name}</TableCell>
                                     </TableRow>
@@ -387,7 +385,8 @@ export default function ConfirmationDataEntryPage() {
                     </Card>}
                 </Card>
 
-                {selectedChildId && <Card className="lg:col-span-2">
+                {/* Using key={selectedChildId} forces React to destroy and rebuild the component, eliminating completely any stale data in custom UI elements */}
+                {selectedChildId && <Card key={selectedChildId} className="lg:col-span-2">
                     <Form {...form}>
                     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
                         <CardHeader><CardTitle>بيانات تأكيد الحالة للطفل المحدد</CardTitle></CardHeader>
@@ -403,6 +402,7 @@ export default function ConfirmationDataEntryPage() {
                             </div></FormControl><FormMessage /></FormItem>)} />
 
                             {watchAttendHC === 'لا' && (<><FormField control={form.control} name="not_attend_reason_hc" render={({ field }) => (<FormItem><FormLabel>سبب عدم الحضور</FormLabel><FormControl><Input {...field}/></FormControl><FormMessage/></FormItem>)} /><Button type="submit" disabled={loading.saving}>{loading.saving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Update & Next</Button></>)}
+           
                             {watchAttendHC === 'نعم' && (<FormField control={form.control} name="child_has_cmam_hc" render={({ field }) => (<FormItem><FormLabel>هل يعاني الطفل من سوء تغذية؟</FormLabel><FormControl><div className="flex gap-4 pt-2">
                                 <Button type="button" variant={field.value === 'نعم' ? 'default' : 'outline'} onClick={() => field.onChange('نعم')} className="flex-1">نعم</Button>
                                 <Button type="button" variant={field.value === 'لا' ? 'destructive' : 'outline'} onClick={() => field.onChange('لا')} className="flex-1">لا</Button>
