@@ -49,7 +49,7 @@ const formSchema = z.object({
 
   // 'Yes' -> 'No' sub-branch
   muac_hc_no: z.number().optional(),
-  comments: z.string().optional(),
+  cmam_result_hc_no: z.string().optional(), // Now captures comments for this branch
 
   // 'Yes' -> 'Yes' sub-branch
   hc_card_no: z.string().optional(),
@@ -140,17 +140,6 @@ export default function ConfirmationDataEntryPage() {
             setLoading(p => ({ ...p, data: false }));
         }
     }, [toast]);
-    
-    const fetchChildData = useCallback(async (projectId: string) => {
-        if (!projectId) return;
-        try {
-             const res = await fetch(`/api/child-cmam?projectId=${projectId}`);
-             if (!res.ok) throw new Error("Failed to load child CMAM data.");
-             setAllChildren(await res.json());
-        } catch (error: any) {
-             toast({ title: "Error refreshing child data", description: error.message, variant: "destructive" });
-        }
-    }, [toast]);
 
     const handleProjectSelect = useCallback(async (projectId: string) => {
         setSelectedProjectId(projectId);
@@ -207,7 +196,7 @@ export default function ConfirmationDataEntryPage() {
             not_attend_reason_hc: '',
             child_has_cmam_hc: undefined,
             muac_hc_no: 12.5,
-            comments: '',
+            cmam_result_hc_no: '',
             hc_card_no: '',
             meas_type: undefined,
             muac_hc: 7.0,
@@ -224,28 +213,6 @@ export default function ConfirmationDataEntryPage() {
             cmam_result_hc: undefined,
         });
     }, [form]);
-
-    const moveToNext = useCallback(() => {
-        resetForm();
-        const currentChildIndex = childrenOfBeneficiary.findIndex(c => c.child_id === selectedChildId);
-        if (currentChildIndex > -1 && currentChildIndex < childrenOfBeneficiary.length - 1) {
-            const nextChild = childrenOfBeneficiary[currentChildIndex + 1];
-            setSelectedChildId(nextChild.child_id);
-            toast({ title: "Next Child", description: `Switched to child: ${nextChild.child_name}`});
-            return;
-        }
-        
-        const currentBnfIndex = filteredBeneficiaries.findIndex(b => b.id === selectedBeneficiary?.id);
-        if (currentBnfIndex > -1 && currentBnfIndex < filteredBeneficiaries.length - 1) {
-            const nextBnf = filteredBeneficiaries[currentBnfIndex + 1];
-            setSelectedBeneficiary(nextBnf);
-            toast({ title: "Next Beneficiary", description: `Switched to: ${nextBnf.BENEF_NAME}`});
-        } else {
-             toast({ title: "End of List", description: "You have reviewed all children for this health center."});
-             setSelectedChildId("");
-             setSelectedBeneficiary(null);
-        }
-    }, [childrenOfBeneficiary, selectedChildId, toast, filteredBeneficiaries, selectedBeneficiary, resetForm]);
     
     useEffect(() => {
         if (selectedBeneficiary && childrenOfBeneficiary.length > 0) {
@@ -274,9 +241,15 @@ export default function ConfirmationDataEntryPage() {
             ? `${data.conf_date_year}-${data.conf_date_month}-${data.conf_date_day}`
             : null;
 
+        const childToUpdate = allChildren.find(c => c.child_id === selectedChildId);
+        if (!childToUpdate) {
+            toast({title: "Error", description: "Could not find the child record to update.", variant: "destructive"});
+            setLoading(p => ({...p, saving: false}));
+            return;
+        }
+
         let payload: any = { 
-            id: allChildren.find(c => c.child_id === selectedChildId)?.id,
-            child_id: selectedChildId,
+            id: childToUpdate.id,
             conf_date: fullDate,
         };
         
@@ -297,7 +270,7 @@ export default function ConfirmationDataEntryPage() {
                 if (data.child_has_cmam_hc === 'لا') {
                     if (data.muac_hc_no === undefined) throw new Error("قياس المواك is required.");
                     payload.muac_hc = data.muac_hc_no;
-                    payload.comments = data.comments;
+                    payload.comments = data.cmam_result_hc_no;
                 } else {
                     if (!data.meas_type || !data.child_cmam_cond) throw new Error("Please fill all required malnutrition details.");
                     payload.hc_card_no = data.hc_card_no;
@@ -321,9 +294,30 @@ export default function ConfirmationDataEntryPage() {
             if (!res.ok) throw new Error(await res.text());
             
             toast({ title: "Success", description: "Record updated successfully." });
-            await fetchChildData(selectedProjectId); 
-            moveToNext();
+            
+            const updatedChildren = allChildren.map(child =>
+                child.id === payload.id ? { ...child, ...payload } : child
+            );
+            setAllChildren(updatedChildren);
 
+            const currentChildIndex = childrenOfBeneficiary.findIndex(c => c.child_id === selectedChildId);
+            const nextChild = (currentChildIndex > -1 && currentChildIndex < childrenOfBeneficiary.length - 1) ? childrenOfBeneficiary[currentChildIndex + 1] : null;
+
+            if (nextChild) {
+                setSelectedChildId(nextChild.child_id);
+                resetForm();
+            } else {
+                const currentBnfIndex = filteredBeneficiaries.findIndex(b => b.id === selectedBeneficiary?.id);
+                if (currentBnfIndex > -1 && currentBnfIndex < filteredBeneficiaries.length - 1) {
+                    setSelectedBeneficiary(filteredBeneficiaries[currentBnfIndex + 1]);
+                } else {
+                    toast({ title: "End of List", description: "You have reviewed all children for this health center." });
+                    setSelectedChildId("");
+                    setSelectedBeneficiary(null);
+                    resetForm();
+                }
+            }
+            
         } catch (err: any) {
             toast({ title: "Save Error", description: err.message, variant: "destructive" });
         } finally {
@@ -338,7 +332,7 @@ export default function ConfirmationDataEntryPage() {
                 <h1 className="text-3xl font-bold text-foreground">إدخال نتائج تأكيد سوء التغذية (للأطفال)</h1>
                 <div className="flex gap-2">
                     <Button variant="outline" asChild><Link href="/meal-system/monitoring/implementation/process/CMAM-cases/children/confirmation"><ArrowLeft className="mr-2 h-4 w-4"/> عودة</Link></Button>
-                    <Button variant="outline" asChild><Link href="/meal-system/monitoring/implementation/process/CMAM-cases/children/screening/database"><Database className="mr-2 h-4 w-4"/>Database</Link></Button>
+                    <Button variant="outline" asChild><Link href="/meal-system/monitoring/implementation/process/CMAM-cases/children/database"><Database className="mr-2 h-4 w-4"/>Database</Link></Button>
                     <Button variant="outline" asChild><Link href="/meal-system/monitoring/implementation/process/CMAM-cases/children/confirmation/export"><FileText className="mr-2 h-4 w-4"/>Export</Link></Button>
                 </div>
             </div>
@@ -399,9 +393,9 @@ export default function ConfirmationDataEntryPage() {
                         <CardHeader><CardTitle>بيانات تأكيد الحالة للطفل المحدد</CardTitle></CardHeader>
                         <CardContent className="space-y-6">
                             <div className="space-y-2"><Label>تاريخ تأكيد الحالة</Label><div className="grid grid-cols-3 gap-2">
-                                <FormField control={form.control} name="conf_date_day" render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="يوم"/></SelectTrigger></FormControl><SelectContent>{days.map(d => <SelectItem key={d} value={String(d)}>{d}</SelectItem>)}</SelectContent></Select></FormItem>)} />
-                                <FormField control={form.control} name="conf_date_month" render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="شهر"/></SelectTrigger></FormControl><SelectContent>{months.map((m,i) => <SelectItem key={m} value={String(i+1)}>{m}</SelectItem>)}</SelectContent></Select></FormItem>)} />
-                                <FormField control={form.control} name="conf_date_year" render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="سنة"/></SelectTrigger></FormControl><SelectContent>{years.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}</SelectContent></Select></FormItem>)} />
+                                <FormField control={form.control} name="conf_date_day" render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Day"/></SelectTrigger></FormControl><SelectContent>{days.map(d => <SelectItem key={d} value={String(d)}>{d}</SelectItem>)}</SelectContent></Select></FormItem>)} />
+                                <FormField control={form.control} name="conf_date_month" render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Month"/></SelectTrigger></FormControl><SelectContent>{months.map((m,i) => <SelectItem key={m} value={String(i+1)}>{m}</SelectItem>)}</SelectContent></Select></FormItem>)} />
+                                <FormField control={form.control} name="conf_date_year" render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Year"/></SelectTrigger></FormControl><SelectContent>{years.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}</SelectContent></Select></FormItem>)} />
                             </div></div>
                             <FormField control={form.control} name="attend_hc" render={({ field }) => (<FormItem><FormLabel>هل الطفل حضر الى المركز الصحي؟</FormLabel><FormControl><div className="flex gap-4 pt-2">
                                 <Button type="button" variant={field.value === 'نعم' ? 'default' : 'outline'} onClick={() => field.onChange('نعم')} className="flex-1">نعم</Button>
@@ -419,7 +413,7 @@ export default function ConfirmationDataEntryPage() {
                                 <FormItem><FormLabel>قياس المواك: {field.value?.toFixed(1) || 12.5}</FormLabel>
                                 <FormControl><Slider min={12.5} max={20} step={0.1} value={[field.value || 12.5]} onValueChange={(v) => field.onChange(v[0])} /></FormControl><FormMessage /></FormItem>
                                 )} />
-                                 <FormField control={form.control} name="comments" render={({ field }) => (
+                                 <FormField control={form.control} name="cmam_result_hc_no" render={({ field }) => (
                                     <FormItem><FormLabel>ملاحظات</FormLabel><FormControl><Textarea placeholder="أدخل ملاحظاتك هنا..." {...field} /></FormControl><FormMessage/></FormItem>
                                 )} />
                                 <Button type="submit" disabled={loading.saving}>{loading.saving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Update & Next</Button>
@@ -441,14 +435,14 @@ export default function ConfirmationDataEntryPage() {
                                     <Button type="button" variant={field.value === 'سوء تغذية حاد' ? 'default' : 'outline'} onClick={() => field.onChange('سوء تغذية حاد')} className="flex-1">سوء تغذية حاد</Button>
                                 </div></FormControl><FormMessage /></FormItem>)} />
                                 <div className="space-y-2"><Label>تاريخ بدء العلاج</Label><div className="grid grid-cols-3 gap-2">
-                                    <FormField control={form.control} name="exp_start_treat_date_day" render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="يوم"/></SelectTrigger></FormControl><SelectContent>{days.map(d => <SelectItem key={d} value={String(d)}>{d}</SelectItem>)}</SelectContent></Select></FormItem>)} />
-                                    <FormField control={form.control} name="exp_start_treat_date_month" render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="شهر"/></SelectTrigger></FormControl><SelectContent>{months.map((m,i) => <SelectItem key={m} value={String(i+1)}>{m}</SelectItem>)}</SelectContent></Select></FormItem>)} />
-                                    <FormField control={form.control} name="exp_start_treat_date_year" render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="سنة"/></SelectTrigger></FormControl><SelectContent>{years.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}</SelectContent></Select></FormItem>)} />
+                                    <FormField control={form.control} name="exp_start_treat_date_day" render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Day"/></SelectTrigger></FormControl><SelectContent>{days.map(d => <SelectItem key={d} value={String(d)}>{d}</SelectItem>)}</SelectContent></Select></FormItem>)} />
+                                    <FormField control={form.control} name="exp_start_treat_date_month" render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Month"/></SelectTrigger></FormControl><SelectContent>{months.map((m,i) => <SelectItem key={m} value={String(i+1)}>{m}</SelectItem>)}</SelectContent></Select></FormItem>)} />
+                                    <FormField control={form.control} name="exp_start_treat_date_year" render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Year"/></SelectTrigger></FormControl><SelectContent>{years.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}</SelectContent></Select></FormItem>)} />
                                 </div></div>
                                 <div className="space-y-2"><Label>التاريخ المتوقع لانتهاء العلاج</Label><div className="grid grid-cols-3 gap-2">
-                                    <FormField control={form.control} name="exp_end_treat_date_day" render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="يوم"/></SelectTrigger></FormControl><SelectContent>{days.map(d => <SelectItem key={d} value={String(d)}>{d}</SelectItem>)}</SelectContent></Select></FormItem>)} />
-                                    <FormField control={form.control} name="exp_end_treat_date_month" render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="شهر"/></SelectTrigger></FormControl><SelectContent>{months.map((m,i) => <SelectItem key={m} value={String(i+1)}>{m}</SelectItem>)}</SelectContent></Select></FormItem>)} />
-                                    <FormField control={form.control} name="exp_end_treat_date_year" render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="سنة"/></SelectTrigger></FormControl><SelectContent>{years.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}</SelectContent></Select></FormItem>)} />
+                                    <FormField control={form.control} name="exp_end_treat_date_day" render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Day"/></SelectTrigger></FormControl><SelectContent>{days.map(d => <SelectItem key={d} value={String(d)}>{d}</SelectItem>)}</SelectContent></Select></FormItem>)} />
+                                    <FormField control={form.control} name="exp_end_treat_date_month" render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Month"/></SelectTrigger></FormControl><SelectContent>{months.map((m,i) => <SelectItem key={m} value={String(i+1)}>{m}</SelectItem>)}</SelectContent></Select></FormItem>)} />
+                                    <FormField control={form.control} name="exp_end_treat_date_year" render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Year"/></SelectTrigger></FormControl><SelectContent>{years.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}</SelectContent></Select></FormItem>)} />
                                 </div></div>
                                 <FormField
                                     control={form.control}
