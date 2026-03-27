@@ -27,7 +27,7 @@ import { Textarea } from '@/components/ui/textarea';
 // --- Types ---
 interface Project { projectId: string; projectName: string; }
 interface HealthCenter { hc_id: string; hc_name: string; hw_id: string; hw_name: string;}
-interface Beneficiary { id: number; BENEF_ID: string; BENEF_NAME: string; [key: string]: any; }
+interface Beneficiary { id: number; BENEF_ID: string; BENEF_NAME: string; hc_id: string; [key: string]: any; }
 interface Child { id: number; child_id: string; child_name: string; benef_id: string; [key: string]: any; }
 
 const months = ["يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"];
@@ -41,17 +41,17 @@ const formSchema = z.object({
   conf_date_month: z.string().optional(),
   conf_date_year: z.string().optional(),
   
-  // 'No' attend branch
+  // 'No' branch
   not_attend_reason_hc: z.string().optional(),
 
-  // 'Yes' attend branch
+  // 'Yes' branch
   child_has_cmam_hc: z.enum(['نعم', 'لا']).optional(),
 
-  // 'Yes' attend -> 'No' cmam sub-branch
+  // 'Yes' -> 'No' sub-branch
   muac_hc_no: z.number().optional(),
   comments: z.string().optional(),
 
-  // 'Yes' attend -> 'Yes' cmam sub-branch
+  // 'Yes' -> 'Yes' sub-branch
   hc_card_no: z.string().optional(),
   meas_type: z.enum(['المواك', 'الزد اسكور']).optional(),
   muac_hc: z.number().optional(),
@@ -72,6 +72,7 @@ const formSchema = z.object({
 export default function ConfirmationDataEntryPage() {
     const { toast } = useToast();
     const [projects, setProjects] = useState<Project[]>([]);
+    const [healthCenters, setHealthCenters] = useState<HealthCenter[]>([]);
     const [allChildren, setAllChildren] = useState<Child[]>([]);
     
     const [selectedProjectId, setSelectedProjectId] = useState("");
@@ -97,10 +98,31 @@ export default function ConfirmationDataEntryPage() {
     const watchHasCmamHC = form.watch("child_has_cmam_hc");
     const watchMeasType = form.watch("meas_type");
     
+    const [healthCenterPopoverOpen, setHealthCenterPopoverOpen] = useState(false);
+
+    // --- Data Fetching ---
     useEffect(() => {
         setLoading(p => ({...p, projects: true}));
         fetch('/api/projects').then(res => res.json()).then(setProjects).finally(() => setLoading(p => ({...p, projects: false})));
     }, []);
+
+    const fetchProjectData = useCallback(async (projectId: string) => {
+        if (!projectId) return;
+        setLoading(p => ({ ...p, data: true }));
+        try {
+            const res = await fetch(`/api/child-cmam?projectId=${projectId}`);
+            if (!res.ok) throw new Error("Failed to load child CMAM data.");
+            const data = await res.json();
+            const cmamChildren = Array.isArray(data) ? data : [];
+            setAllChildren(cmamChildren);
+            const uniqueHCs: HealthCenter[] = Array.from(new Map(cmamChildren.filter(c => c.child_has_cmam === 'نعم').map((item: any) => [item.hc_id, { hc_id: item.hc_id, hc_name: item.hc_name, hw_id: item.hw_id, hw_name: item.hw_name }])).values());
+            setHealthCenters(uniqueHCs);
+        } catch (error: any) {
+            toast({ title: "Error loading project data", description: error.message, variant: "destructive" });
+        } finally {
+            setLoading(p => ({ ...p, data: false }));
+        }
+    }, [toast]);
 
     const handleProjectSelect = useCallback(async (projectId: string) => {
         setSelectedProjectId(projectId);
@@ -108,32 +130,11 @@ export default function ConfirmationDataEntryPage() {
         setSelectedBeneficiary(null);
         setSelectedChildId("");
         form.reset();
-        
-        if (!projectId) {
-            setAllChildren([]);
-            return;
-        }
+        await fetchProjectData(projectId);
+    }, [toast, form, fetchProjectData]);
 
-        setLoading(p => ({...p, data: true}));
-        try {
-            const res = await fetch(`/api/child-cmam?projectId=${projectId}`);
-            if (!res.ok) throw new Error("Failed to load child CMAM data.");
-            const data = await res.json();
-            setAllChildren(Array.isArray(data) ? data : []);
-        } catch (error: any) {
-            toast({ title: "Error", description: error.message, variant: "destructive" });
-        } finally {
-            setLoading(p => ({...p, data: false}));
-        }
-    }, [toast, form]);
 
-    const healthCenters = useMemo((): HealthCenter[] => {
-        if (!allChildren.length) return [];
-        const qualifiedChildren = allChildren.filter(c => c.child_has_cmam === 'نعم');
-        const uniqueHCs = Array.from(new Map(qualifiedChildren.map(c => [c.hc_id, { hc_id: c.hc_id, hc_name: c.hc_name, hw_id: c.hw_id, hw_name: c.hw_name }])).values());
-        return uniqueHCs;
-    }, [allChildren]);
-    
+    // --- Filtering & Memoization ---
     const beneficiariesInHc = useMemo((): Beneficiary[] => {
         if (!selectedHealthCenterId) return [];
         const childrenInHc = allChildren.filter(c => c.hc_id === selectedHealthCenterId && c.child_has_cmam === 'نعم');
@@ -157,6 +158,7 @@ export default function ConfirmationDataEntryPage() {
         return filtered;
     }, [allChildren, selectedBeneficiary, childSearch]);
 
+    // --- Form Logic ---
     const moveToNext = useCallback(() => {
         form.reset({ attend_hc: undefined, muac_hc: 7.0, muac_hc_no: 12.5 });
 
@@ -174,7 +176,7 @@ export default function ConfirmationDataEntryPage() {
              setSelectedBeneficiary(nextBnf);
              toast({ title: "Next Beneficiary", description: `Switched to: ${nextBnf.BENEF_NAME}`});
         } else {
-             toast({ title: "End of List", description: "You have reviewed all children for this educator."});
+             toast({ title: "End of List", description: "You have reviewed all children for this health center."});
              setSelectedChildId("");
              setSelectedBeneficiary(null);
         }
@@ -253,7 +255,7 @@ export default function ConfirmationDataEntryPage() {
             if (!res.ok) throw new Error(await res.text());
             
             toast({ title: "Success", description: "Record updated successfully." });
-            await handleProjectSelect(selectedProjectId); // Refresh data
+            await fetchProjectData(selectedProjectId);
             moveToNext();
 
         } catch (err: any) {
@@ -293,7 +295,7 @@ export default function ConfirmationDataEntryPage() {
 
             {selectedHealthCenterId && (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <Card className="lg:col-span-1 space-y-4">
+                <Card className="lg:col-span-1">
                     <CardHeader><CardTitle>اختيار المستفيدة</CardTitle></CardHeader>
                     <CardContent>
                         <Input placeholder="بحث بالاسم او رقم المستفيدة..." value={beneficiarySearch} onChange={e => setBeneficiarySearch(e.target.value)} disabled={!selectedHealthCenterId} />
@@ -308,7 +310,7 @@ export default function ConfirmationDataEntryPage() {
                          </ScrollArea>
                     </CardContent>
                     
-                    {selectedBeneficiary && <Card>
+                    {selectedBeneficiary && <Card className="mt-4">
                         <CardHeader><CardTitle>اختيار الطفل</CardTitle></CardHeader>
                         <CardContent>
                              <Input placeholder="بحث بالاسم او رقم الطفل..." value={childSearch} onChange={e => setChildSearch(e.target.value)} />

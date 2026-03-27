@@ -501,7 +501,7 @@ export default function ChildScreeningDataEntryPage() {
                             </CardContent>
                         </form>
                     </Form>
-                </Card>}
+                </Card>
             </div>
         </div>
     );
