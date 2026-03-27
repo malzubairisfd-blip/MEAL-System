@@ -66,7 +66,18 @@ const formSchema = z.object({
   exp_end_treat_date_month: z.string().optional(),
   exp_end_treat_date_year: z.string().optional(),
   cmam_result_hc: z.string().optional(),
-});
+}).refine(data => {
+    if (data.attend_hc === 'نعم') {
+        return !!data.bnf_has_cmam_hc;
+    }
+    return true;
+}, { message: "This field is required.", path: ["bnf_has_cmam_hc"] })
+.refine(data => {
+    if (data.attend_hc === 'نعم' && data.bnf_has_cmam_hc === 'نعم') {
+        return !!data.bnf_cmam_cond;
+    }
+    return true;
+}, { message: "This field is required.", path: ["bnf_cmam_cond"] });
 
 
 export default function ConfirmationDataEntryPage() {
@@ -74,6 +85,7 @@ export default function ConfirmationDataEntryPage() {
     const [projects, setProjects] = useState<Project[]>([]);
     const [healthCenters, setHealthCenters] = useState<HealthCenter[]>([]);
     const [allChildren, setAllChildren] = useState<Child[]>([]);
+    const [allBeneficiaries, setAllBeneficiaries] = useState<Beneficiary[]>([]);
     
     const [selectedProjectId, setSelectedProjectId] = useState("");
     const [selectedHealthCenterId, setSelectedHealthCenterId] = useState("");
@@ -110,15 +122,36 @@ export default function ConfirmationDataEntryPage() {
         if (!projectId) return;
         setLoading(p => ({ ...p, data: true }));
         try {
-            const res = await fetch(`/api/child-cmam?projectId=${projectId}`);
-            if (!res.ok) throw new Error("Failed to load child CMAM data.");
-            const data = await res.json();
-            const cmamChildren = Array.isArray(data) ? data : [];
-            setAllChildren(cmamChildren);
-            const uniqueHCs: HealthCenter[] = Array.from(new Map(cmamChildren.filter(c => c.child_has_cmam === 'نعم').map((item: any) => [item.hc_id, { hc_id: item.hc_id, hc_name: item.hc_name, hw_id: item.hw_id, hw_name: item.hw_name }])).values());
-            setHealthCenters(uniqueHCs);
+            const [bnfRes, hcRes, childRes] = await Promise.all([
+                fetch(`/api/bnf-cmam?projectId=${projectId}`),
+                fetch(`/api/health-centers?projectId=${projectId}`),
+                fetch(`/api/child-cmam?projectId=${projectId}`)
+            ]);
+
+            if (!bnfRes.ok || !hcRes.ok || !childRes.ok) throw new Error("Failed to load project data.");
+            
+            const bnfData = await bnfRes.json();
+            setAllBeneficiaries(bnfData);
+            
+            setHealthCenters(await hcRes.json());
+            setAllChildren(await childRes.json());
+            
         } catch (error: any) {
             toast({ title: "Error loading project data", description: error.message, variant: "destructive" });
+        } finally {
+            setLoading(p => ({ ...p, data: false }));
+        }
+    }, [toast]);
+    
+    const fetchChildData = useCallback(async (projectId: string) => {
+        if (!projectId) return;
+        setLoading(p => ({ ...p, data: true }));
+        try {
+             const res = await fetch(`/api/child-cmam?projectId=${projectId}`);
+             if (!res.ok) throw new Error("Failed to load child CMAM data.");
+             setAllChildren(await res.json());
+        } catch (error: any) {
+             toast({ title: "Error refreshing child data", description: error.message, variant: "destructive" });
         } finally {
             setLoading(p => ({ ...p, data: false }));
         }
@@ -131,16 +164,16 @@ export default function ConfirmationDataEntryPage() {
         setSelectedChildId("");
         form.reset();
         await fetchProjectData(projectId);
-    }, [toast, form, fetchProjectData]);
+    }, [form, fetchProjectData]);
 
 
     // --- Filtering & Memoization ---
     const beneficiariesInHc = useMemo((): Beneficiary[] => {
         if (!selectedHealthCenterId) return [];
         const childrenInHc = allChildren.filter(c => c.hc_id === selectedHealthCenterId && c.child_has_cmam === 'نعم');
-        const uniqueBnfs = Array.from(new Map(childrenInHc.map(c => [c.benef_id, { id: c.id, BENEF_ID: c.benef_id, BENEF_NAME: c.bnf_name }])).values());
-        return uniqueBnfs;
-    }, [allChildren, selectedHealthCenterId]);
+        const uniqueBnfIds = new Set(childrenInHc.map(c => c.benef_id));
+        return allBeneficiaries.filter(b => uniqueBnfIds.has(b.BENEF_ID));
+    }, [allChildren, allBeneficiaries, selectedHealthCenterId]);
     
     const filteredBeneficiaries = useMemo(() => {
         if (!beneficiarySearch) return beneficiariesInHc;
@@ -157,30 +190,57 @@ export default function ConfirmationDataEntryPage() {
         }
         return filtered;
     }, [allChildren, selectedBeneficiary, childSearch]);
-
+    
     // --- Form Logic ---
+    const resetForm = useCallback(() => {
+        form.reset({
+            attend_hc: undefined,
+            conf_date_day: undefined,
+            conf_date_month: undefined,
+            conf_date_year: undefined,
+            not_attend_reason_hc: '',
+            bnf_has_cmam_hc: undefined,
+            muac_hc_no: 12.5,
+            comments: '',
+            hc_card_no: '',
+            meas_type: undefined,
+            muac_hc: 7.0,
+            zscore_h: '',
+            zscore_w: '',
+            zscore: '',
+            child_cmam_cond: undefined,
+            exp_start_treat_date_day: undefined,
+            exp_start_treat_date_month: undefined,
+            exp_start_treat_date_year: undefined,
+            exp_end_treat_date_day: undefined,
+            exp_end_treat_date_month: undefined,
+            exp_end_treat_date_year: undefined,
+            cmam_result_hc: undefined,
+        });
+    }, [form]);
+
     const moveToNext = useCallback(() => {
-        form.reset({ attend_hc: undefined, muac_hc: 7.0, muac_hc_no: 12.5 });
+        resetForm();
 
         const currentChildIndex = childrenOfBeneficiary.findIndex(c => c.child_id === selectedChildId);
         if (currentChildIndex > -1 && currentChildIndex < childrenOfBeneficiary.length - 1) {
-             const nextChild = childrenOfBeneficiary[currentChildIndex + 1];
-             setSelectedChildId(nextChild.child_id);
-             toast({ title: "Next Child", description: `Switched to child: ${nextChild.child_name}`});
-             return;
+            const nextChild = childrenOfBeneficiary[currentChildIndex + 1];
+            setSelectedChildId(nextChild.child_id);
+            toast({ title: "Next Child", description: `Switched to child: ${nextChild.child_name}`});
+            return;
         }
         
         const currentBnfIndex = filteredBeneficiaries.findIndex(b => b.id === selectedBeneficiary?.id);
         if (currentBnfIndex > -1 && currentBnfIndex < filteredBeneficiaries.length - 1) {
-             const nextBnf = filteredBeneficiaries[currentBnfIndex + 1];
-             setSelectedBeneficiary(nextBnf);
-             toast({ title: "Next Beneficiary", description: `Switched to: ${nextBnf.BENEF_NAME}`});
+            const nextBnf = filteredBeneficiaries[currentBnfIndex + 1];
+            setSelectedBeneficiary(nextBnf);
+            toast({ title: "Next Beneficiary", description: `Switched to: ${nextBnf.BENEF_NAME}`});
         } else {
              toast({ title: "End of List", description: "You have reviewed all children for this health center."});
              setSelectedChildId("");
              setSelectedBeneficiary(null);
         }
-    }, [childrenOfBeneficiary, selectedChildId, form, toast, filteredBeneficiaries, selectedBeneficiary]);
+    }, [childrenOfBeneficiary, selectedChildId, toast, filteredBeneficiaries, selectedBeneficiary, resetForm]);
     
     useEffect(() => {
         if (selectedBeneficiary && childrenOfBeneficiary.length > 0) {
@@ -190,11 +250,11 @@ export default function ConfirmationDataEntryPage() {
             } else {
               setSelectedChildId(childrenOfBeneficiary[0].child_id);
             }
-            form.reset({ attend_hc: undefined, muac_hc: 7.0, muac_hc_no: 12.5 });
+            resetForm();
         } else {
             setSelectedChildId("");
         }
-    }, [selectedBeneficiary, childrenOfBeneficiary, form]);
+    }, [selectedBeneficiary, childrenOfBeneficiary, resetForm]);
 
 
     const onSubmit = async (data: z.infer<typeof formSchema>) => {
@@ -231,7 +291,7 @@ export default function ConfirmationDataEntryPage() {
                 if (data.child_has_cmam_hc === 'لا') {
                     if (data.muac_hc_no === undefined) throw new Error("قياس المواك is required.");
                     payload.muac_hc = data.muac_hc_no;
-                    payload.not_attend_reason_hc = data.comments; 
+                    payload.not_attend_reason_hc = data.comments; // Note: Overwriting this field based on new logic
                 } else {
                     if (!data.meas_type || !data.child_cmam_cond) throw new Error("Please fill all required malnutrition details.");
                     payload.hc_card_no = data.hc_card_no;
@@ -255,7 +315,7 @@ export default function ConfirmationDataEntryPage() {
             if (!res.ok) throw new Error(await res.text());
             
             toast({ title: "Success", description: "Record updated successfully." });
-            await fetchProjectData(selectedProjectId);
+            await fetchChildData(selectedProjectId); 
             moveToNext();
 
         } catch (err: any) {
@@ -300,7 +360,7 @@ export default function ConfirmationDataEntryPage() {
                     <CardContent>
                         <Input placeholder="بحث بالاسم او رقم المستفيدة..." value={beneficiarySearch} onChange={e => setBeneficiarySearch(e.target.value)} disabled={!selectedHealthCenterId} />
                         <ScrollArea className="h-48 mt-4 border rounded-md">
-                            <Table><TableHeader><TableRow><TableHead>تحديد</TableHead><TableHead>ID</TableHead><TableHead>الاسم</TableHead></TableRow></TableHeader>
+                            <Table><TableHeader className="bg-muted sticky top-0"><TableRow><TableHead className="w-[50px]">تحديد</TableHead><TableHead>ID</TableHead><TableHead>الاسم</TableHead></TableRow></TableHeader>
                             <TableBody>{filteredBeneficiaries.map(b => (
                                 <TableRow key={b.BENEF_ID} onClick={()=>{setSelectedBeneficiary(b); setSelectedChildId('');}} className={cn("cursor-pointer", selectedBeneficiary?.BENEF_ID === b.BENEF_ID && 'bg-primary/10')}>
                                     <TableCell><Checkbox checked={selectedBeneficiary?.BENEF_ID === b.BENEF_ID} /></TableCell>
@@ -315,7 +375,7 @@ export default function ConfirmationDataEntryPage() {
                         <CardContent>
                              <Input placeholder="بحث بالاسم او رقم الطفل..." value={childSearch} onChange={e => setChildSearch(e.target.value)} />
                              <ScrollArea className="h-48 mt-4 border rounded-md">
-                                <Table><TableHeader><TableRow><TableHead>تحديد</TableHead><TableHead>ID</TableHead><TableHead>الاسم</TableHead></TableRow></TableHeader>
+                                <Table><TableHeader className="bg-muted sticky top-0"><TableRow><TableHead className="w-[50px]">تحديد</TableHead><TableHead>ID</TableHead><TableHead>الاسم</TableHead></TableRow></TableHeader>
                                 <TableBody>{childrenOfBeneficiary.map(c => (
                                     <TableRow key={c.id} onClick={()=>setSelectedChildId(c.child_id)} className={cn("cursor-pointer", selectedChildId === c.child_id && 'bg-secondary/10')}>
                                         <TableCell><Checkbox checked={selectedChildId === c.child_id} /></TableCell>
