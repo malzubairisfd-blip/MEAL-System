@@ -57,14 +57,6 @@ const formSchema = z.object({
 }, {
   message: "New child details are required.",
   path: ['child_first_name'],
-}).refine(data => {
-  if (data.child_has_cmam === 'نعم') {
-    return !!data.child_cmam_type && !!data.muac && !!data.go_health_center && !!data.disc_date_day && !!data.disc_date_month && !!data.disc_date_year;
-  }
-  return true;
-}, {
-  message: "All fields are required when malnutrition is 'Yes'",
-  path: ['child_has_cmam'],
 });
 
 export default function ChildScreeningDataEntryPage() {
@@ -101,15 +93,8 @@ export default function ChildScreeningDataEntryPage() {
         fetch('/api/projects').then(res => res.json()).then(setProjects).finally(() => setLoading(p => ({ ...p, projects: false })));
     }, []);
 
-    const handleProjectSelect = useCallback(async (projectId: string) => {
-        setSelectedProjectId(projectId);
-        setSelectedEducatorId("");
-        setSelectedBeneficiary(null);
-        setSelectedChildId("");
-        form.reset();
-
+    const fetchProjectData = useCallback(async (projectId: string) => {
         if (!projectId) return;
-
         setLoading(p => ({ ...p, data: true }));
         try {
             const [bnfRes, hcRes, childRes] = await Promise.all([
@@ -126,11 +111,20 @@ export default function ChildScreeningDataEntryPage() {
             setHealthCenters(await hcRes.json());
             setAllChildren(await childRes.json());
         } catch (error: any) {
-            toast({ title: "Error loading data", description: error.message, variant: "destructive" });
+            toast({ title: "Error loading project data", description: error.message, variant: "destructive" });
         } finally {
             setLoading(p => ({ ...p, data: false }));
         }
-    }, [toast, form]);
+    }, [toast]);
+
+    const handleProjectSelect = useCallback(async (projectId: string) => {
+        setSelectedProjectId(projectId);
+        setSelectedEducatorId("");
+        setSelectedBeneficiary(null);
+        setSelectedChildId("");
+        form.reset();
+        await fetchProjectData(projectId);
+    }, [toast, form, fetchProjectData]);
 
     const beneficiariesForEducator = useMemo(() => {
         if (!selectedEducatorId) return [];
@@ -151,10 +145,9 @@ export default function ChildScreeningDataEntryPage() {
         }
         return filtered;
     }, [allChildren, selectedBeneficiary, childSearch]);
-
+    
     const moveToNext = useCallback(() => {
         form.reset({ isExistingChild: 'نعم', child_has_cmam: undefined, muac: 7.0 });
-
         const currentChildIndex = childrenOfBeneficiary.findIndex(c => c.child_id === selectedChildId);
         if (currentChildIndex > -1 && currentChildIndex < childrenOfBeneficiary.length - 1) {
             const nextChild = childrenOfBeneficiary[currentChildIndex + 1];
@@ -162,34 +155,48 @@ export default function ChildScreeningDataEntryPage() {
             toast({ title: "Next Child", description: `Switched to child: ${nextChild.child_name}` });
             return;
         }
-        
         const currentBnfIndex = beneficiariesForEducator.findIndex(b => b.id === selectedBeneficiary?.id);
         if (currentBnfIndex > -1 && currentBnfIndex < beneficiariesForEducator.length - 1) {
-             const nextBnf = beneficiariesForEducator[currentBnfIndex + 1];
-             setSelectedBeneficiary(nextBnf);
-             toast({ title: "Next Beneficiary", description: `Switched to: ${nextBnf.BENEF_NAME}`});
+            const nextBnf = beneficiariesForEducator[currentBnfIndex + 1];
+            setSelectedBeneficiary(nextBnf);
+            toast({ title: "Next Beneficiary", description: `Switched to: ${nextBnf.BENEF_NAME}` });
         } else {
-             toast({ title: "End of List", description: "You have reviewed all children for this educator."});
-             setSelectedChildId("");
-             setSelectedBeneficiary(null);
-             setSelectedEducatorId(""); // Reset educator selection
+            toast({ title: "End of List", description: "You have reviewed all children for this educator." });
+            setSelectedChildId("");
+            setSelectedBeneficiary(null);
         }
     }, [childrenOfBeneficiary, selectedChildId, form, toast, beneficiariesForEducator, selectedBeneficiary]);
 
-    useEffect(() => {
-        if (selectedBeneficiary && childrenOfBeneficiary.length > 0) {
-            const firstUnreviewedChild = childrenOfBeneficiary.find(c => !c.child_has_cmam);
-            if(firstUnreviewedChild) {
-              setSelectedChildId(firstUnreviewedChild.child_id);
-            } else if (childrenOfBeneficiary.length > 0) {
-              setSelectedChildId(childrenOfBeneficiary[0].child_id);
-            }
-            form.reset({ isExistingChild: 'نعم', child_has_cmam: undefined, muac: 7.0 });
-        } else {
-            setSelectedChildId("");
+    const handleQuickSave = useCallback(async (payload: any) => {
+        if (!selectedChildId && payload.isExistingChild === 'نعم') return;
+        setLoading(p => ({...p, saving: true}));
+        try {
+            const finalPayload = { id: allChildren.find(c => c.child_id === selectedChildId)?.id, ...payload };
+            const res = await fetch('/api/child-cmam', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'update_child', payload: finalPayload }),
+            });
+            if (!res.ok) throw new Error(await res.text());
+            toast({ title: "Success", description: "Record updated." });
+            await fetchProjectData(selectedProjectId); 
+            moveToNext();
+        } catch (err: any) {
+            toast({ title: "Save Error", description: err.message, variant: "destructive" });
+        } finally {
+            setLoading(p => ({...p, saving: false}));
         }
-    }, [selectedBeneficiary, childrenOfBeneficiary, form]);
+    }, [selectedChildId, allChildren, toast, moveToNext, selectedProjectId, fetchProjectData]);
 
+    const handleCmamDecision = (value: 'نعم' | 'لا') => {
+        if (value === 'لا') {
+            form.setValue('child_has_cmam', 'لا');
+            handleQuickSave({ child_id: selectedChildId, child_has_cmam: 'لا' });
+        } else {
+            form.setValue('child_has_cmam', 'نعم');
+        }
+    };
+    
     const handleSave = async (data: z.infer<typeof formSchema>) => {
         if ((data.isExistingChild === 'نعم' && !selectedChildId) || !selectedBeneficiary) {
             toast({ title: "Selection Missing", variant: "destructive" });
@@ -262,7 +269,7 @@ export default function ChildScreeningDataEntryPage() {
 
             toast({ title: "نجاح", description: "تم حفظ بيانات الطفل بنجاح" });
 
-            await handleProjectSelect(selectedProjectId);
+            await fetchProjectData(selectedProjectId);
             moveToNext();
 
         } catch (error: any) {
@@ -272,6 +279,20 @@ export default function ChildScreeningDataEntryPage() {
         }
     };
     
+    useEffect(() => {
+        if (selectedBeneficiary && childrenOfBeneficiary.length > 0) {
+            const firstUnreviewedChild = childrenOfBeneficiary.find(c => !c.child_has_cmam);
+            if(firstUnreviewedChild) {
+              setSelectedChildId(firstUnreviewedChild.child_id);
+            } else if (childrenOfBeneficiary.length > 0) {
+              setSelectedChildId(childrenOfBeneficiary[0].child_id);
+            }
+            form.reset({ isExistingChild: 'نعم', child_has_cmam: undefined, muac: 7.0 });
+        } else {
+            setSelectedChildId("");
+        }
+    }, [selectedBeneficiary, childrenOfBeneficiary, form]);
+
     useEffect(() => {
         const timer = setTimeout(() => {
             if (watchIsExisting === 'لا' && watchFirstName && watchGender && selectedBeneficiary) {
@@ -449,14 +470,14 @@ export default function ChildScreeningDataEntryPage() {
                                                     <div className="flex items-center space-x-2 space-x-reverse"><RadioGroupItem value="سوء تغذية متوسط" id="mam" /><Label htmlFor="mam" className="font-normal m-0 cursor-pointer">سوء تغذية متوسط</Label></div>
                                                     <div className="flex items-center space-x-2 space-x-reverse"><RadioGroupItem value="سوء تغذية حاد" id="sam" /><Label htmlFor="sam" className="font-normal m-0 cursor-pointer">سوء تغذية حاد</Label></div>
                                                 </RadioGroup></FormControl></FormItem>)} />
-                                                <FormField control={form.control} name="muac" render={({ field }) => (<FormItem><FormLabel>قياس المواك: {field.value?.toFixed(1) || 7}</FormLabel><FormControl><Slider min={7} max={16} step={0.1} value={[field.value || 7]} onValueChange={(v) => field.onChange(v[0])} /></FormControl><FormMessage /></FormItem>)} />
+                                                <FormField control={form.control} name="muac" render={({ field }) => (<FormItem><FormLabel>قياس المواك: {field.value?.toFixed(1) || 7}</FormLabel><FormControl><Slider min={7} max={12.4} step={0.1} value={[field.value || 7]} onValueChange={(v) => field.onChange(v[0])} /></FormControl><FormMessage /></FormItem>)} />
                                                 <FormField control={form.control} name="go_health_center" render={({ field }) => (<FormItem><FormLabel>هل يذهب الى المرفق الصحي؟</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} value={field.value} className="flex gap-6 pt-2">
                                                     <div className="flex items-center space-x-2 space-x-reverse"><RadioGroupItem value="نعم" id="gh_yes" /><Label htmlFor="gh_yes" className="font-normal m-0 cursor-pointer">نعم</Label></div>
                                                     <div className="flex items-center space-x-2 space-x-reverse"><RadioGroupItem value="لا" id="gh_no" /><Label htmlFor="gh_no" className="font-normal m-0 cursor-pointer">لا</Label></div>
                                                 </RadioGroup></FormControl></FormItem>)} />
                                                 <div className="space-y-3"><Label>تاريخ اكتشاف الحالة</Label><div className="grid grid-cols-3 gap-2">
-                                                    <FormField control={form.control} name="disc_date_day" render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="اليوم" /></SelectTrigger></FormControl><SelectContent>{days.map(d => <SelectItem key={d} value={String(d).padStart(2, '0')}>{d}</SelectItem>)}</SelectContent></Select></FormItem>)} />
-                                                    <FormField control={form.control} name="disc_date_month" render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="الشهر" /></SelectTrigger></FormControl><SelectContent>{months.map((m, i) => <SelectItem key={m} value={String(i + 1).padStart(2, '0')}>{m}</SelectItem>)}</SelectContent></Select></FormItem>)} />
+                                                    <FormField control={form.control} name="disc_date_day" render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="اليوم" /></SelectTrigger></FormControl><SelectContent>{days.map(d => <SelectItem key={d} value={String(d)}>{d}</SelectItem>)}</SelectContent></Select></FormItem>)} />
+                                                    <FormField control={form.control} name="disc_date_month" render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="الشهر" /></SelectTrigger></FormControl><SelectContent>{months.map((m, i) => <SelectItem key={m} value={String(i + 1)}>{m}</SelectItem>)}</SelectContent></Select></FormItem>)} />
                                                     <FormField control={form.control} name="disc_date_year" render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="السنة" /></SelectTrigger></FormControl><SelectContent>{years.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}</SelectContent></Select></FormItem>)} />
                                                 </div></div>
                                                 <FormField
@@ -464,6 +485,9 @@ export default function ChildScreeningDataEntryPage() {
                                                     name="near_health_center"
                                                     render={({ field }) => (
                                                     <FormItem className="col-span-1 md:col-span-2"><FormLabel>اقرب مركز صحي للذهاب الية</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="اختر المرفق الصحي..." /></SelectTrigger></FormControl><SelectContent>{healthCenters.map(hc => <SelectItem key={hc.hc_id} value={hc.hc_name}>{hc.hc_name}</SelectItem>)}</SelectContent></Select></FormItem>
+                                                )} />
+                                                <FormField control={form.control} name="comments" render={({ field }) => (
+                                                    <FormItem className="col-span-1 md:col-span-2"><FormLabel>ملاحظات</FormLabel><FormControl><Textarea placeholder="أدخل ملاحظاتك هنا..." {...field} /></FormControl><FormMessage /></FormItem>
                                                 )} />
                                             </div>
                                         )}
@@ -477,7 +501,7 @@ export default function ChildScreeningDataEntryPage() {
                             </CardContent>
                         </form>
                     </Form>
-                </Card>
+                </Card>}
             </div>
         </div>
     );
