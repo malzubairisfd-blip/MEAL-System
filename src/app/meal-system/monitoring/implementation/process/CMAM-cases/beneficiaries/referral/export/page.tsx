@@ -9,6 +9,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ArrowLeft, Loader2, Save, FileDown, Plus, Minus } from "lucide-react";
 import { useToast } from '@/hooks/use-toast';
 import JSZip from 'jszip';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+
 
 interface Project {
   projectId: string;
