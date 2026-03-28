@@ -28,7 +28,7 @@ export async function POST(req: Request) {
                         updates.bnf_isprev_ref_c1 = 'نعم';
                         if (record.bnf_cmam_cond === 'حامل') {
                             const pregMonth = parseInt(record.bnf_preg_mon, 10);
-                            if (pregMonth >= 1 && pregMonth <= 8) {
+                            if (!isNaN(pregMonth) && pregMonth >= 1 && pregMonth <= 8) {
                                 updates.bnf_cmam_cond_c1 = 'حامل';
                                 updates.bnf_preg_mon_c1 = pregMonth + 1;
                             } else if (pregMonth === 9) {
@@ -37,7 +37,7 @@ export async function POST(req: Request) {
                             }
                         } else if (record.bnf_cmam_cond === 'مرضع') {
                             const childAge = parseInt(record.bnf_child_age, 10);
-                            if (childAge >= 1 && childAge <= 5) {
+                            if (!isNaN(childAge) && childAge >= 1 && childAge <= 5) {
                                 updates.bnf_cmam_cond_c1 = 'مرضع';
                                 updates.bnf_child_age_c1 = childAge + 1;
                             }
@@ -45,7 +45,7 @@ export async function POST(req: Request) {
                     }
                     if (updates.bnf_cmam_cond_c1 === 'مرضع' && updates.bnf_child_age_c1 === 6) {
                         updates.next_cycle_c1 = 'Last Month Qualification';
-                    } else if (record.hc_muac >= 23 || record.bnf_child_age === 6) {
+                    } else if (parseFloat(record.hc_muac) >= 23 || parseInt(record.bnf_child_age, 10) === 6) {
                         updates.next_cycle_c1 = 'Disqualified';
                     } else {
                         updates.next_cycle_c1 = 'Qualified';
@@ -56,7 +56,7 @@ export async function POST(req: Request) {
                         updates.bnf_isprev_ref_c2 = 'نعم';
                         if (record.bnf_cmam_cond_c1 === 'حامل') {
                             const pregMonth = parseInt(record.bnf_preg_mon_c1, 10);
-                             if (pregMonth >= 1 && pregMonth <= 8) {
+                             if (!isNaN(pregMonth) && pregMonth >= 1 && pregMonth <= 8) {
                                 updates.bnf_cmam_cond_c2 = 'حامل';
                                 updates.bnf_preg_mon_c2 = pregMonth + 1;
                             } else if (pregMonth === 9) {
@@ -65,7 +65,7 @@ export async function POST(req: Request) {
                             }
                         } else if (record.bnf_cmam_cond_c1 === 'مرضع') {
                              const childAge = parseInt(record.bnf_child_age_c1, 10);
-                            if (childAge >= 1 && childAge <= 5) {
+                            if (!isNaN(childAge) && childAge >= 1 && childAge <= 5) {
                                 updates.bnf_cmam_cond_c2 = 'مرضع';
                                 updates.bnf_child_age_c2 = childAge + 1;
                             }
@@ -87,7 +87,7 @@ export async function POST(req: Request) {
                         }
                     }
 
-                    if (record.hc_muac_c1 >= 23 || record.bnf_child_age_c1 === 6 || record.next_cycle_c1 === 'Last Month Qualification' || record.next_cycle_c1 === 'Disqualified' || ['شفاء', 'الوفاة', 'انتهاء فترة الدعم / تخريج من برنامج سوء التغذية'].includes(record.cmam_result_c1)) {
+                    if (parseFloat(record.hc_muac_c1) >= 23 || parseInt(record.bnf_child_age_c1, 10) === 6 || record.next_cycle_c1 === 'Last Month Qualification' || record.next_cycle_c1 === 'Disqualified' || ['شفاء', 'الوفاة', 'انتهاء فترة الدعم / تخريج من برنامج سوء التغذية'].includes(record.cmam_result_c1)) {
                         updates.next_cycle_c2 = 'Disqualified';
                     } else {
                         updates.next_cycle_c2 = 'Qualified';
@@ -97,7 +97,7 @@ export async function POST(req: Request) {
                         updates.bnf_isprev_ref_c3 = 'نعم';
                          if (record.bnf_cmam_cond_c2 === 'حامل') {
                             const pregMonth = parseInt(record.bnf_preg_mon_c2, 10);
-                             if (pregMonth >= 1 && pregMonth <= 8) {
+                             if (!isNaN(pregMonth) && pregMonth >= 1 && pregMonth <= 8) {
                                 updates.bnf_cmam_cond_c3 = 'حامل';
                                 updates.bnf_preg_mon_c3 = pregMonth + 1;
                             } else if (pregMonth === 9) {
@@ -106,7 +106,7 @@ export async function POST(req: Request) {
                             }
                         } else if (record.bnf_cmam_cond_c2 === 'مرضع') {
                              const childAge = parseInt(record.bnf_child_age_c2, 10);
-                            if (childAge >= 1 && childAge <= 5) {
+                            if (!isNaN(childAge) && childAge >= 1 && childAge <= 5) {
                                 updates.bnf_cmam_cond_c3 = 'مرضع';
                                 updates.bnf_child_age_c3 = childAge + 1;
                             }
@@ -128,7 +128,7 @@ export async function POST(req: Request) {
                         }
                     }
 
-                    if (record.hc_muac_c2 >= 23 || record.bnf_child_age_c2 === 6 || record.next_cycle_c2 === 'Last Month Qualification' || record.next_cycle_c2 === 'Disqualified' || ['شفاء', 'الوفاة', 'انتهاء فترة الدعم / تخريج من برنامج سوء التغذية'].includes(record.cmam_result_c2) || record.cure_rate_c2 === 'Negative' || record.cure_rate_c2 === 'No Improvement' ) {
+                    if (parseFloat(record.hc_muac_c2) >= 23 || parseInt(record.bnf_child_age_c2, 10) === 6 || record.next_cycle_c2 === 'Last Month Qualification' || record.next_cycle_c2 === 'Disqualified' || ['شفاء', 'الوفاة', 'انتهاء فترة الدعم / تخريج من برنامج سوء التغذية'].includes(record.cmam_result_c2) || record.cure_rate_c2 === 'Negative' || record.cure_rate_c2 === 'No Improvement' ) {
                         updates.next_cycle_c3 = 'Disqualified';
                     } else {
                         updates.next_cycle_c3 = 'Qualified';
