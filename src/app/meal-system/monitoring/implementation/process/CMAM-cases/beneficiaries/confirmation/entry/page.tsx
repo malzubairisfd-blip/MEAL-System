@@ -92,9 +92,24 @@ export default function ConfirmationDataEntryPage() {
         resolver: zodResolver(formSchema),
         defaultValues: {
             attend_hc: undefined,
+            conf_date_day: "",
+            conf_date_month: "",
+            conf_date_year: "",
             bnf_has_cmam_hc: undefined,
             hc_muac_no: 25,
             hc_muac_yes: 17,
+            not_attend_reason: "",
+            bnf_cmam_cond: undefined,
+            hc_card_no: "",
+            bnf_preg_mon: "1",
+            bnf_child_age: "1",
+            exp_start_treat_date_day: "",
+            exp_start_treat_date_month: "",
+            exp_start_treat_date_year: "",
+            exp_end_treat_date_day: "",
+            exp_end_treat_date_month: "",
+            exp_end_treat_date_year: "",
+            follow_up_status: ""
         }
     });
 
@@ -142,18 +157,32 @@ export default function ConfirmationDataEntryPage() {
     }, [beneficiaries, selectedHealthCenterId, beneficiarySearch]);
 
     // --- Form Logic ---
-    const moveToNextBeneficiary = useCallback(() => {
+    const resetFormValues = useCallback(() => {
         form.reset({
             attend_hc: undefined,
-            not_attend_reason: '',
+            conf_date_day: "",
+            conf_date_month: "",
+            conf_date_year: "",
+            not_attend_reason: "",
             bnf_has_cmam_hc: undefined,
             hc_muac_no: 25,
             hc_muac_yes: 17,
             bnf_cmam_cond: undefined,
-            hc_card_no: '',
-            bnf_preg_mon: '1',
-            bnf_child_age: '1'
+            hc_card_no: "",
+            bnf_preg_mon: "1",
+            bnf_child_age: "1",
+            exp_start_treat_date_day: "",
+            exp_start_treat_date_month: "",
+            exp_start_treat_date_year: "",
+            exp_end_treat_date_day: "",
+            exp_end_treat_date_month: "",
+            exp_end_treat_date_year: "",
+            follow_up_status: ""
         });
+    }, [form]);
+
+    const moveToNextBeneficiary = useCallback(() => {
+        resetFormValues();
         const currentIndex = filteredBeneficiaries.findIndex(b => b.id === selectedBeneficiaryId);
         if (currentIndex !== -1 && currentIndex < filteredBeneficiaries.length - 1) {
             setSelectedBeneficiaryId(filteredBeneficiaries[currentIndex + 1].id);
@@ -161,7 +190,7 @@ export default function ConfirmationDataEntryPage() {
              toast({ title: "End of List", description: "All beneficiaries in this list have been reviewed." });
              setSelectedBeneficiaryId(null);
         }
-    }, [filteredBeneficiaries, selectedBeneficiaryId, form, toast]);
+    }, [filteredBeneficiaries, selectedBeneficiaryId, resetFormValues, toast]);
 
     const handleFormSubmit = async (data: z.infer<typeof formSchema>) => {
         if (!selectedBeneficiaryId) return;
@@ -248,7 +277,14 @@ export default function ConfirmationDataEntryPage() {
                                 <TableHeader><TableRow><TableHead>Select</TableHead><TableHead>ID</TableHead><TableHead>Name</TableHead></TableRow></TableHeader>
                                 <TableBody>
                                     {filteredBeneficiaries.map(b => (
-                                        <TableRow key={b.id} onClick={()=>setSelectedBeneficiaryId(b.id)} className={cn("cursor-pointer", selectedBeneficiaryId === b.id && 'bg-primary/10')}>
+                                        <TableRow 
+                                            key={b.id} 
+                                            onClick={() => {
+                                                setSelectedBeneficiaryId(b.id);
+                                                resetFormValues(); // Added so manual clicks also reset the form
+                                            }} 
+                                            className={cn("cursor-pointer", selectedBeneficiaryId === b.id && 'bg-primary/10')}
+                                        >
                                             <TableCell><Checkbox checked={selectedBeneficiaryId === b.id} /></TableCell>
                                             <TableCell>{b.BENEF_ID}</TableCell>
                                             <TableCell>{b.BENEF_NAME}</TableCell>
@@ -262,15 +298,16 @@ export default function ConfirmationDataEntryPage() {
 
                 <Card className="lg:col-span-2">
                     <Form {...form}>
-                    <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-6">
+                    {/* Added key prop bound to selectedBeneficiaryId. This forces React to remount the entire form block from scratch, destroying any lingering state inside Shadcn select components. */}
+                    <form key={selectedBeneficiaryId || "form"} onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-6">
                         <CardHeader><CardTitle>Confirmation Details</CardTitle></CardHeader>
                         <CardContent className="space-y-4">
                             <div className="space-y-2">
                                 <Label>تاريخ تأكيد الحالة</Label>
                                 <div className="grid grid-cols-3 gap-2">
-                                    <FormField control={form.control} name="conf_date_day" render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Day"/></SelectTrigger></FormControl><SelectContent>{days.map(d => <SelectItem key={d} value={String(d)}>{d}</SelectItem>)}</SelectContent></Select></FormItem>)} />
-                                    <FormField control={form.control} name="conf_date_month" render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Month"/></SelectTrigger></FormControl><SelectContent>{months.map((m,i) => <SelectItem key={m} value={String(i+1)}>{m}</SelectItem>)}</SelectContent></Select></FormItem>)} />
-                                    <FormField control={form.control} name="conf_date_year" render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Year"/></SelectTrigger></FormControl><SelectContent>{years.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}</SelectContent></Select></FormItem>)} />
+                                    <FormField control={form.control} name="conf_date_day" render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value || undefined}><FormControl><SelectTrigger><SelectValue placeholder="Day"/></SelectTrigger></FormControl><SelectContent>{days.map(d => <SelectItem key={d} value={String(d)}>{d}</SelectItem>)}</SelectContent></Select></FormItem>)} />
+                                    <FormField control={form.control} name="conf_date_month" render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value || undefined}><FormControl><SelectTrigger><SelectValue placeholder="Month"/></SelectTrigger></FormControl><SelectContent>{months.map((m,i) => <SelectItem key={m} value={String(i+1)}>{m}</SelectItem>)}</SelectContent></Select></FormItem>)} />
+                                    <FormField control={form.control} name="conf_date_year" render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value || undefined}><FormControl><SelectTrigger><SelectValue placeholder="Year"/></SelectTrigger></FormControl><SelectContent>{years.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}</SelectContent></Select></FormItem>)} />
                                 </div>
                             </div>
 
@@ -341,24 +378,24 @@ export default function ConfirmationDataEntryPage() {
                                 <div className="space-y-2">
                                     <Label>تاريخ بدء العلاج</Label>
                                     <div className="grid grid-cols-3 gap-2">
-                                        <FormField control={form.control} name="exp_start_treat_date_day" render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Day"/></SelectTrigger></FormControl><SelectContent>{days.map(d => <SelectItem key={d} value={String(d)}>{d}</SelectItem>)}</SelectContent></Select></FormItem>)} />
-                                        <FormField control={form.control} name="exp_start_treat_date_month" render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Month"/></SelectTrigger></FormControl><SelectContent>{months.map((m,i) => <SelectItem key={m} value={String(i+1)}>{m}</SelectItem>)}</SelectContent></Select></FormItem>)} />
-                                        <FormField control={form.control} name="exp_start_treat_date_year" render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Year"/></SelectTrigger></FormControl><SelectContent>{years.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}</SelectContent></Select></FormItem>)} />
+                                        <FormField control={form.control} name="exp_start_treat_date_day" render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value || undefined}><FormControl><SelectTrigger><SelectValue placeholder="Day"/></SelectTrigger></FormControl><SelectContent>{days.map(d => <SelectItem key={d} value={String(d)}>{d}</SelectItem>)}</SelectContent></Select></FormItem>)} />
+                                        <FormField control={form.control} name="exp_start_treat_date_month" render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value || undefined}><FormControl><SelectTrigger><SelectValue placeholder="Month"/></SelectTrigger></FormControl><SelectContent>{months.map((m,i) => <SelectItem key={m} value={String(i+1)}>{m}</SelectItem>)}</SelectContent></Select></FormItem>)} />
+                                        <FormField control={form.control} name="exp_start_treat_date_year" render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value || undefined}><FormControl><SelectTrigger><SelectValue placeholder="Year"/></SelectTrigger></FormControl><SelectContent>{years.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}</SelectContent></Select></FormItem>)} />
                                     </div>
                                 </div>
                                  <div className="space-y-2">
                                     <Label>التاريخ المتوقع للانتهاء العلاج</Label>
                                     <div className="grid grid-cols-3 gap-2">
-                                        <FormField control={form.control} name="exp_end_treat_date_day" render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Day"/></SelectTrigger></FormControl><SelectContent>{days.map(d => <SelectItem key={d} value={String(d)}>{d}</SelectItem>)}</SelectContent></Select></FormItem>)} />
-                                        <FormField control={form.control} name="exp_end_treat_date_month" render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Month"/></SelectTrigger></FormControl><SelectContent>{months.map((m,i) => <SelectItem key={m} value={String(i+1)}>{m}</SelectItem>)}</SelectContent></Select></FormItem>)} />
-                                        <FormField control={form.control} name="exp_end_treat_date_year" render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Year"/></SelectTrigger></FormControl><SelectContent>{years.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}</SelectContent></Select></FormItem>)} />
+                                        <FormField control={form.control} name="exp_end_treat_date_day" render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value || undefined}><FormControl><SelectTrigger><SelectValue placeholder="Day"/></SelectTrigger></FormControl><SelectContent>{days.map(d => <SelectItem key={d} value={String(d)}>{d}</SelectItem>)}</SelectContent></Select></FormItem>)} />
+                                        <FormField control={form.control} name="exp_end_treat_date_month" render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value || undefined}><FormControl><SelectTrigger><SelectValue placeholder="Month"/></SelectTrigger></FormControl><SelectContent>{months.map((m,i) => <SelectItem key={m} value={String(i+1)}>{m}</SelectItem>)}</SelectContent></Select></FormItem>)} />
+                                        <FormField control={form.control} name="exp_end_treat_date_year" render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value || undefined}><FormControl><SelectTrigger><SelectValue placeholder="Year"/></SelectTrigger></FormControl><SelectContent>{years.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}</SelectContent></Select></FormItem>)} />
                                     </div>
                                 </div>
                                 <FormField
                                     control={form.control}
                                     name="follow_up_status"
                                     render={({ field }) => (
-                                    <FormItem><FormLabel>حالة المتابعه</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select status..."/></SelectTrigger></FormControl>
+                                    <FormItem><FormLabel>حالة المتابعه</FormLabel><Select onValueChange={field.onChange} value={field.value || undefined}><FormControl><SelectTrigger><SelectValue placeholder="Select status..."/></SelectTrigger></FormControl>
                                     <SelectContent>
                                         <SelectItem value="مستمر بالمعالجة">مستمر بالمعالجة</SelectItem>
                                         <SelectItem value="شفاء">شفاء</SelectItem>

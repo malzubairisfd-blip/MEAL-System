@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
@@ -17,22 +16,27 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Slider } from "@/components/ui/slider";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { ArrowLeft, Loader2, Search, ThumbsUp, Check, ChevronsUpDown } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
+import { ArrowLeft, Loader2, Database, FileText, Search, Activity, UserCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // --- Types ---
 interface Project { projectId: string; projectName: string; }
 interface HealthCenter { hc_id: string; hc_name: string; }
-interface Beneficiary { id: number; BENEF_ID: string; BENEF_NAME: string; hc_id: string; [key: string]: any; }
+interface Beneficiary { 
+    id: number; BENEF_ID: string; BENEF_NAME: string; hc_id: string; bnf_has_cmam_hc: string;
+    next_cycle_c1?: string; next_cycle_c2?: string; next_cycle_c3?: string;
+    hc_muac?: number; hc_muac_c1?: number; hc_muac_c2?: number; 
+    cure_rate_c1?: string; cure_rate_c2?: string;
+    bnf_child_age_c1?: number; bnf_child_age_c2?: number; bnf_child_age_c3?: number;
+    bnf_attend_c1?: string; bnf_attend_c2?: string;
+    [key: string]: any; 
+}
 
 const months = ["يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"];
 const years = Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - 5 + i);
 const days = Array.from({ length: 31 }, (_, i) => i + 1);
 
-// --- Zod Schema ---
 const formSchema = z.object({
   bnf_attend_c: z.enum(['نعم', 'لا']),
   not_attend_reason_c: z.string().optional(),
@@ -44,13 +48,7 @@ const formSchema = z.object({
   cmam_result_c_no: z.string().optional(),
   hc_muac_c: z.number().optional(), // For YES malnutrition (17 to 26)
   cmam_result_c: z.string().optional(),
-}).refine(data => {
-    if (data.bnf_attend_c === 'نعم') {
-        return !!data.bnf_isprev_ref_c;
-    }
-    return true;
-}, { message: "This field is required.", path: ["bnf_isprev_ref_c"] });
-
+});
 
 export default function EnhancedReferralDataEntryPage() {
     const { toast } = useToast();
@@ -60,11 +58,12 @@ export default function EnhancedReferralDataEntryPage() {
     const [beneficiaries, setBeneficiaries] = useState<Beneficiary[]>([]);
     
     const [selectedHealthCenterId, setSelectedHealthCenterId] = useState("");
-    const [selectedBeneficiaryId, setSelectedBeneficiaryId] = useState<number | null>(null);
+    const [selectedBeneficiary, setSelectedBeneficiary] = useState<Beneficiary | null>(null);
+    const [hcSearch, setHcSearch] = useState("");
     const [beneficiarySearch, setBeneficiarySearch] = useState("");
     
     const [loading, setLoading] = useState({ projects: true, config: true, data: false, saving: false });
-    
+
     const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
         defaultValues: { hc_muac_c_no: 23, hc_muac_c: 17 }
@@ -72,8 +71,6 @@ export default function EnhancedReferralDataEntryPage() {
 
     const watchAttend = form.watch("bnf_attend_c");
     const watchHasMalnutrition = form.watch("bnf_isprev_ref_c");
-    
-    const [healthCenterPopoverOpen, setHealthCenterPopoverOpen] = useState(false);
 
     // --- Data Fetching (Restored Promise.all block) ---
     useEffect(() => {
@@ -91,7 +88,7 @@ export default function EnhancedReferralDataEntryPage() {
     const handleProjectSelect = useCallback(async (projectId: string, currentConfig = config) => {
         setConfig(prev => ({...prev, projectId}));
         setSelectedHealthCenterId("");
-        setSelectedBeneficiaryId(null);
+        setSelectedBeneficiary(null);
         
         if (!projectId) {
             setHealthCenters([]);
@@ -125,15 +122,12 @@ export default function EnhancedReferralDataEntryPage() {
 
     // --- Filtering ---
     const filteredHCs = useMemo(() => {
-        if (!beneficiarySearch) return healthCenters;
-        return healthCenters.filter(hc => hc.hc_name.toLowerCase().includes(beneficiarySearch.toLowerCase()));
-    }, [healthCenters, beneficiarySearch]);
+        if (!hcSearch) return healthCenters;
+        return healthCenters.filter(hc => hc.hc_name.toLowerCase().includes(hcSearch.toLowerCase()));
+    }, [healthCenters, hcSearch]);
 
     const filteredBeneficiaries = useMemo(() => {
-        let filtered = beneficiaries;
-        if (selectedHealthCenterId) {
-            filtered = filtered.filter(b => b.hc_id === selectedHealthCenterId);
-        }
+        let filtered = beneficiaries.filter(b => b.hc_id === selectedHealthCenterId);
         if (beneficiarySearch) {
             const lowerSearch = beneficiarySearch.toLowerCase();
             filtered = filtered.filter(b => 
@@ -144,75 +138,140 @@ export default function EnhancedReferralDataEntryPage() {
         return filtered;
     }, [beneficiaries, selectedHealthCenterId, beneficiarySearch]);
 
-    // --- Form Logic ---
+    // --- Metrics Calculation Engine ---
+    const runCycleCalculations = (payload: any, bnf: Beneficiary, cycle: number) => {
+        const p = { ...payload };
+        const cmamResult = p[`cmam_result_c${cycle}`] || '';
+        const isPrevRef = p[`bnf_isprev_ref_c${cycle}`];
+        const attend = p[`bnf_attend_c${cycle}`];
+        
+        let currentMuac = parseFloat(p[`hc_muac_c${cycle}`] || 0);
+        let prevMuac = 0;
+        let cureRate = '';
+        let nextCycle = '';
+
+        if (cycle === 1) prevMuac = parseFloat(bnf.hc_muac?.toString() || "0");
+        if (cycle === 2) prevMuac = parseFloat(bnf.hc_muac_c1?.toString() || "0");
+        if (cycle === 3) prevMuac = parseFloat(bnf.hc_muac_c2?.toString() || "0");
+
+        // Common Cure Rate & Pos/Neg Calculation
+        if (isPrevRef === 'نعم') {
+            const diff = currentMuac - prevMuac;
+            if (diff < 0) {
+                cureRate = 'Negative';
+                p[`negative_c${cycle}`] = diff;
+            } else if (diff === 0) {
+                cureRate = 'No Improvement';
+            } else if (diff > 0) {
+                cureRate = 'Positive';
+                p[`positive_c${cycle}`] = diff;
+            }
+            p[`cure_rate_c${cycle}`] = cureRate;
+        }
+
+        // Cycle 1 Specific Next Cycle Logic
+        if (cycle === 1) {
+            if (currentMuac >= 23) nextCycle = 'Disqualified';
+            else if (bnf.bnf_child_age_c1 === 6) nextCycle = 'Last Month Qualification';
+            else if (['شفاء', 'الوفاة', 'انتهاء فترة الدعم / تخريج من برنامج سوء التغذية'].includes(cmamResult)) nextCycle = 'Last Month Qualification';
+            else if (cureRate === 'Negative' || cureRate === 'No Improvement') nextCycle = 'Last Month Qualification';
+            else if (cureRate === 'Positive') nextCycle = 'Qualified';
+        }
+        
+        // Cycle 2 Specific Next Cycle Logic
+        if (cycle === 2) {
+            if (bnf.hc_muac_c1 && bnf.hc_muac_c1 >= 23) nextCycle = 'Disqualified';
+            else if (currentMuac >= 23) nextCycle = 'Disqualified'; 
+            else if ((cureRate === 'Negative' || cureRate === 'No Improvement') && (bnf.cure_rate_c1 === 'Negative' || bnf.cure_rate_c1 === 'No Improvement')) nextCycle = 'Disqualified';
+            else if (bnf.next_cycle_c1 === 'Disqualified' || bnf.next_cycle_c1 === 'Last Month Qualification') nextCycle = 'Disqualified';
+            else if (bnf.bnf_child_age_c2 === 6) nextCycle = 'Last Month Qualification';
+            else if (bnf.bnf_attend_c1 === 'لا' && attend === 'لا') nextCycle = 'Last Month Qualification';
+            else if (['شفاء', 'الوفاة', 'انتهاء فترة الدعم / تخريج من برنامج سوء التغذية'].includes(cmamResult)) nextCycle = 'Last Month Qualification';
+            else if (cureRate === 'Positive') nextCycle = 'Qualified';
+        }
+
+        // Cycle 3 Specific Next Cycle Logic
+        if (cycle === 3) {
+            if (bnf.hc_muac_c1 && bnf.hc_muac_c1 >= 23) nextCycle = 'Disqualified';
+            else if (bnf.hc_muac_c2 && bnf.hc_muac_c2 >= 23) nextCycle = 'Disqualified';
+            else if (currentMuac >= 23) nextCycle = 'Disqualified';
+            else if ((cureRate === 'Negative' || cureRate === 'No Improvement') && (bnf.cure_rate_c2 === 'Negative' || bnf.cure_rate_c2 === 'No Improvement')) nextCycle = 'Disqualified';
+            else if (bnf.next_cycle_c2 === 'Disqualified' || bnf.next_cycle_c2 === 'Last Month Qualification') nextCycle = 'Disqualified';
+            else if (bnf.bnf_attend_c1 === 'لا' && bnf.bnf_attend_c2 === 'لا') nextCycle = 'Disqualified';
+            else if (bnf.bnf_child_age_c3 === 6) nextCycle = 'Last Month Qualification';
+            else if (['شفاء', 'الوفاة', 'انتهاء فترة الدعم / تخريج من برنامج سوء التغذية'].includes(cmamResult)) nextCycle = 'Last Month Qualification';
+            else if (cureRate === 'Positive') nextCycle = 'Qualified';
+        }
+
+        if (nextCycle) p[`next_cycle_c${cycle}`] = nextCycle;
+        return p;
+    };
+
     const moveToNextBeneficiary = useCallback(() => {
         form.reset({
             bnf_attend_c: undefined,
             not_attend_reason_c: '',
             bnf_isprev_ref_c: undefined,
-            hc_muac_c_no: 23,
-            hc_muac_c: 17
+            hc_muac_c_no: 23, hc_muac_c: 17
         });
-        const currentIndex = filteredBeneficiaries.findIndex(b => b.id === selectedBeneficiaryId);
+        const currentIndex = filteredBeneficiaries.findIndex(b => b.id === selectedBeneficiary?.id);
         if (currentIndex !== -1 && currentIndex < filteredBeneficiaries.length - 1) {
-            setSelectedBeneficiaryId(filteredBeneficiaries[currentIndex + 1].id);
+            setSelectedBeneficiary(filteredBeneficiaries[currentIndex + 1]);
         } else {
              toast({ title: "End of List", description: "All beneficiaries in this list have been reviewed." });
-             setSelectedBeneficiaryId(null);
+             setSelectedBeneficiary(null);
         }
-    }, [filteredBeneficiaries, selectedBeneficiaryId, form, toast]);
+    }, [filteredBeneficiaries, selectedBeneficiary, form, toast]);
 
+    // --- Form Submission ---
     const handleFormSubmit = async (data: z.infer<typeof formSchema>) => {
-        if (!selectedBeneficiaryId) return;
-
+        if (!selectedBeneficiary) return;
         setLoading(p => ({...p, saving: true}));
+        
+        const cycle = config.followUpCycle;
+        let payload: any = { id: selectedBeneficiary.id };
+        
+        payload[`bnf_attend_c${cycle}`] = data.bnf_attend_c;
 
-        const payload: any = {
-            id: selectedBeneficiaryId,
-            conf_date: `${data.conf_date_year}-${data.conf_date_month}-${data.conf_date_day}`,
-            attend_hc: data.attend_hc,
-        };
-
-        if (data.attend_hc === 'لا') {
-            payload.not_attend_reason_c = data.not_attend_reason_c;
+        if (data.bnf_attend_c === 'لا') {
+            payload[`not_attend_reason_c${cycle}`] = data.not_attend_reason_c;
         } else {
-            payload.bnf_has_cmam_hc = data.bnf_has_cmam_hc;
-            if (data.bnf_has_cmam_hc === 'لا') {
-                payload.hc_muac = data.hc_muac_c_no;
+            payload[`date_attend_c${cycle}`] = `${data.date_attend_c_year}-${data.date_attend_c_month}-${data.date_attend_c_day}`;
+            payload[`bnf_isprev_ref_c${cycle}`] = data.bnf_isprev_ref_c;
+            
+            if (data.bnf_isprev_ref_c === 'لا') {
+                payload[`hc_muac_c${cycle}`] = data.hc_muac_c_no;
+                payload[`cmam_result_c${cycle}`] = data.cmam_result_c_no;
             } else {
-                payload.hc_card_no = data.hc_card_no;
-                payload.bnf_cmam_cond = data.bnf_cmam_cond;
-                payload.bnf_preg_mon = data.bnf_preg_mon;
-                payload.bnf_child_age = data.bnf_child_age;
-                payload.hc_muac = data.hc_muac_c;
-                payload.exp_start_treat_date = `${data.exp_start_treat_date_year}-${data.exp_start_treat_date_month}-${data.exp_start_treat_date_day}`;
-                payload.exp_end_treat_date = `${data.exp_end_treat_date_year}-${data.exp_end_treat_date_month}-${data.exp_end_treat_date_day}`;
-                payload.not_attend_reason_c = data.cmam_result_c; // Re-using field
+                payload[`hc_muac_c${cycle}`] = data.hc_muac_c;
+                payload[`cmam_result_c${cycle}`] = data.cmam_result_c;
             }
         }
-        
+
+        // Apply dynamic calculations
+        payload = runCycleCalculations(payload, selectedBeneficiary, cycle);
+
         try {
-            await fetch('/api/bnf-cmam', {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify([payload])
+            await fetch('/api/bnf-cmam', { 
+                method: 'PUT', 
+                headers: { 'Content-Type': 'application/json' }, 
+                body: JSON.stringify([payload]) 
             });
             
-            toast({ title: "Success", description: "Record updated successfully."});
+            toast({ title: "Success", description: "Beneficiary record updated successfully."});
             moveToNextBeneficiary();
         } catch(err: any) {
-            toast({ title: "Save Error", description: err.message, variant: "destructive" });
+            toast({ title: "Error updating", description: err.message, variant: "destructive" });
         } finally {
             setLoading(p => ({...p, saving: false}));
         }
     };
 
-
     return (
-        <div className="space-y-6 max-w-7xl mx-auto p-4 md:p-6 pb-24" dir="rtl">
+        <div className="space-y-6 max-w-7xl mx-auto p-4" dir="rtl">
             <div className="flex flex-col md:flex-row justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-slate-100 gap-4">
                 <div className="flex items-center gap-3">
-                    <ThumbsUp className="h-8 w-8 text-primary" />
+                    <Activity className="h-8 w-8 text-primary" />
                     <h1 className="text-2xl font-extrabold text-slate-800 tracking-tight">إدخال بيانات إحالة المستفيدات</h1>
                 </div>
                  <div className="flex flex-wrap gap-2">
@@ -220,7 +279,7 @@ export default function EnhancedReferralDataEntryPage() {
                         <Link href="/meal-system/monitoring/implementation/process/CMAM-cases/beneficiaries/referral/cycles"><ArrowLeft className="mr-2 h-4 w-4"/>العودة</Link>
                     </Button>
                     <Button variant="secondary" className="bg-primary/10 text-primary hover:bg-primary/20" asChild>
-                        <Link href="/meal-system/monitoring/implementation/process/CMAM-cases/beneficiaries/database"><Database className="mr-2 h-4 w-4"/>Beneficiaries CMAM Database</Link>
+                        <Link href="/meal-system/monitoring/implementation/process/CMAM-cases/beneficiaries/screening/preparing/database"><Database className="mr-2 h-4 w-4"/>Beneficiaries CMAM Database</Link>
                     </Button>
                     <Button variant="default" className="shadow-md" asChild>
                         <Link href="/meal-system/monitoring/implementation/process/CMAM-cases/beneficiaries/referral/export"><FileText className="mr-2 h-4 w-4"/>Exporting Beneficiaries Referral Statements</Link>
@@ -229,65 +288,69 @@ export default function EnhancedReferralDataEntryPage() {
             </div>
 
             {/* Project & Cycle Configuration */}
-            <Card>
-                <CardHeader><CardTitle>1. حدد المشروع</CardTitle></CardHeader>
-                <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
-                    <Select onValueChange={(v) => handleProjectSelect(v)} value={config.projectId}><SelectTrigger><SelectValue placeholder="اختر المشروع..." /></SelectTrigger><SelectContent>{projects.map(p => <SelectItem key={p.projectId} value={p.projectId}>{p.projectName}</SelectItem>)}</SelectContent></Select>
-                    <Input value={`دورة المتابعة: ${config.followUpCycle}`} readOnly className="bg-muted"/>
-                    <Input value={`شهر المتابعة: ${config.followUpMonth}`} readOnly className="bg-muted"/>
+            <Card className="border-t-4 border-t-primary shadow-md">
+                <CardHeader className="bg-slate-50/50 pb-4">
+                    <CardTitle className="text-lg flex items-center gap-2"><Database className="w-5 h-5 text-slate-500"/> إعدادات المشروع و دورة المتابعة</CardTitle>
+                </CardHeader>
+                <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-6 items-end">
+                    <div className="space-y-2">
+                        <Label className="font-semibold text-white">اختر المشروع</Label>
+                        <Select onValueChange={(v) => handleProjectSelect(v)} value={config.projectId}>
+                            <SelectTrigger className="border-slate-300 focus:ring-primary"><SelectValue placeholder="بحث واختيار المشروع..." /></SelectTrigger>
+                            <SelectContent>
+                                {projects.map(p => <SelectItem key={p.projectId} value={p.projectId}>{p.projectName}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="space-y-2">
+                        <Label className="font-semibold text-white">دورة المتابعة</Label>
+                        <Input value={`دورة المتابعة: ${config.followUpCycle}`} readOnly className="bg-slate-50 border-slate-200 text-slate-600 cursor-not-allowed"/>
+                    </div>
+                    <div className="space-y-2">
+                        <Label className="font-semibold text-white">شهر المتابعة</Label>
+                        <Input value={`شهر المتابعة: ${config.followUpMonth}`} readOnly className="bg-slate-50 border-slate-200 text-slate-600 cursor-not-allowed"/>
+                    </div>
                 </CardContent>
             </Card>
 
             {config.projectId && (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <Card className="lg:col-span-1">
-                    <CardHeader><CardTitle>اختيار المستفيدة</CardTitle></CardHeader>
-                    <CardContent>
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                
+                {/* Beneficiary Selection List */}
+                <Card className="lg:col-span-5 border border-slate-200 shadow-md h-fit">
+                    <CardHeader className="bg-slate-50/50 pb-4 border-b border-slate-100">
+                        <CardTitle className="text-lg flex items-center gap-2"><UserCheck className="w-5 h-5 text-slate-500"/> اختيار المستفيدة</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-5 pt-6">
                         <div className="space-y-2">
-                             <Label>اختر المركز الصحي</Label>
-                             <Popover open={healthCenterPopoverOpen} onOpenChange={setHealthCenterPopoverOpen}>
-                                <PopoverTrigger asChild>
-                                    <Button variant="outline" role="combobox" aria-expanded={healthCenterPopoverOpen} className="w-full justify-between disabled:opacity-50" disabled={!config.projectId}>
-                                        {selectedHealthCenterId ? healthCenters.find((hc) => hc.hc_id === selectedHealthCenterId)?.hc_name : "اختر المركز..."}
-                                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                    </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-[300px] p-0" align="end">
-                                    <Command>
-                                        <CommandInput placeholder="ابحث عن المركز الصحي..." />
-                                        <CommandList>
-                                            <CommandEmpty>لم يتم العثور على مركز صحي.</CommandEmpty>
-                                            <CommandGroup>
-                                                <ScrollArea className="h-[200px]">
-                                                    {filteredHCs.map((hc) => (
-                                                        <CommandItem
-                                                            key={hc.hc_id}
-                                                            value={hc.hc_name}
-                                                            onSelect={() => {
-                                                                setSelectedHealthCenterId(hc.hc_id);
-                                                                setHealthCenterPopoverOpen(false);
-                                                            }}
-                                                        >
-                                                            <Check className={cn("mr-2 h-4 w-4", selectedHealthCenterId === hc.hc_id ? "opacity-100" : "opacity-0")} />
-                                                            {hc.hc_name} ({hc.hc_id})
-                                                        </CommandItem>
-                                                    ))}
-                                                </ScrollArea>
-                                            </CommandGroup>
-                                        </CommandList>
-                                    </Command>
-                                </PopoverContent>
-                            </Popover>
+                            <Label className="font-semibold text-white">اختر المركز الصحي</Label>
+                            <Select value={selectedHealthCenterId} onValueChange={(v) => { setSelectedHealthCenterId(v); setSelectedBeneficiary(null); }}>
+                                <SelectTrigger className="border-slate-300 focus:ring-primary">
+                                    <SelectValue placeholder="البحث واختيار المركز الصحي..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <div className="p-2 border-b">
+                                        <div className="relative">
+                                            <Search className="absolute right-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                                            <Input placeholder="بحث..." className="pr-8 h-9" value={hcSearch} onChange={(e) => setHcSearch(e.target.value)} />
+                                        </div>
+                                    </div>
+                                    <ScrollArea className="h-[200px]">
+                                        {filteredHCs.map(hc => <SelectItem key={hc.hc_id} value={hc.hc_id}>{hc.hc_name}</SelectItem>)}
+                                    </ScrollArea>
+                                </SelectContent>
+                            </Select>
                         </div>
+
                         {selectedHealthCenterId && (
                             <div className="space-y-3">
                                 <div className="relative">
-                                    <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                                    <Input placeholder="بحث بالاسم او رقم المستفيدة..." className="pl-9" value={beneficiarySearch} onChange={e => setBeneficiarySearch(e.target.value)} />
+                                    <Search className="absolute right-3 top-2.5 h-4 w-4 text-slate-400" />
+                                    <Input placeholder="بحث برقم ID أو اسم المستفيدة..." className="pr-9 border-slate-300 focus-visible:ring-primary" value={beneficiarySearch} onChange={e => setBeneficiarySearch(e.target.value)} />
                                 </div>
-                                <ScrollArea className="h-96 mt-4 border rounded-md">
+                                <ScrollArea className="h-[450px] border border-slate-200 rounded-lg bg-white shadow-inner">
                                     <Table>
-                                        <TableHeader className="bg-muted sticky top-0 z-10 shadow-sm">
+                                        <TableHeader className="bg-slate-50 sticky top-0 z-10 shadow-sm">
                                             <TableRow>
                                                 <TableHead className="w-[60px] text-center font-bold text-white">تحديد</TableHead>
                                                 <TableHead className="font-bold text-white">ID</TableHead>
@@ -295,12 +358,20 @@ export default function EnhancedReferralDataEntryPage() {
                                             </TableRow>
                                         </TableHeader>
                                         <TableBody>
-                                        {filteredBeneficiaries.map(b => (
-                                            <TableRow key={b.id} onClick={() => setSelectedBeneficiaryId(b.id)} className={cn("cursor-pointer", selectedBeneficiaryId === b.id && 'bg-primary/10')}>
-                                                <TableCell><Checkbox checked={selectedBeneficiaryId === b.id} /></TableCell>
-                                                <TableCell>{b.BENEF_ID}</TableCell><TableCell>{b.BENEF_NAME}</TableCell>
-                                            </TableRow>
-                                        ))}</TableBody>
+                                            {filteredBeneficiaries.length === 0 ? (
+                                                <TableRow><TableCell colSpan={3} className="text-center text-slate-500 py-8">لا توجد بيانات مطابقة</TableCell></TableRow>
+                                            ) : (
+                                                filteredBeneficiaries.map(b => (
+                                                    <TableRow key={b.id} onClick={()=>setSelectedBeneficiary(b)} className={cn("cursor-pointer transition-colors hover:bg-slate-50", selectedBeneficiary?.id === b.id && 'bg-primary/10 hover:bg-primary/15 border-l-4 border-primary')}>
+                                                        <TableCell className="text-center">
+                                                            <Checkbox checked={selectedBeneficiary?.id === b.id} className="data-[state=checked]:bg-primary data-[state=checked]:border-primary" />
+                                                        </TableCell>
+                                                        <TableCell className="font-medium text-slate-700">{b.BENEF_ID}</TableCell>
+                                                        <TableCell className="text-slate-600">{b.BENEF_NAME}</TableCell>
+                                                    </TableRow>
+                                                ))
+                                            )}
+                                        </TableBody>
                                     </Table>
                                 </ScrollArea>
                             </div>
@@ -308,95 +379,145 @@ export default function EnhancedReferralDataEntryPage() {
                     </CardContent>
                 </Card>
 
-                <Card className={cn("lg:col-span-2", !selectedBeneficiaryId && "opacity-50 pointer-events-none")}>
+                {/* Form Data Entry */}
+                <Card className={cn("lg:col-span-7 transition-opacity duration-300 border border-slate-200 shadow-lg", !selectedBeneficiary && "opacity-50 pointer-events-none")}>
                     <Form {...form}>
-                    <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-6">
-                        <CardHeader><CardTitle>Confirmation Details</CardTitle></CardHeader>
-                        <CardContent className="space-y-4">
-                            <div className="space-y-2">
-                                <Label>تاريخ تأكيد الحالة</Label>
-                                <div className="grid grid-cols-3 gap-2">
-                                    <FormField control={form.control} name="conf_date_day" render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Day"/></SelectTrigger></FormControl><SelectContent>{days.map(d => <SelectItem key={d} value={String(d)}>{d}</SelectItem>)}</SelectContent></Select></FormItem>)} />
-                                    <FormField control={form.control} name="conf_date_month" render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Month"/></SelectTrigger></FormControl><SelectContent>{months.map((m,i) => <SelectItem key={m} value={String(i+1)}>{m}</SelectItem>)}</SelectContent></Select></FormItem>)} />
-                                    <FormField control={form.control} name="conf_date_year" render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Year"/></SelectTrigger></FormControl><SelectContent>{years.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}</SelectContent></Select></FormItem>)} />
-                                </div>
-                            </div>
+                        <form onSubmit={form.handleSubmit(handleFormSubmit)}>
+                            <CardHeader className="bg-primary/5 pb-4 border-b border-primary/10">
+                                <CardTitle className="text-xl flex justify-between items-center text-white">
+                                    <span>بيانات المتابعة و الامتثال</span>
+                                    {selectedBeneficiary && <span className="text-sm font-normal px-3 py-1 rounded-full shadow-sm border border-primary/20">{selectedBeneficiary.BENEF_NAME}</span>}
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-8 pt-8 px-8">
+                                
+                                <FormField control={form.control} name="bnf_attend_c" render={({ field }) => (
+                                    <FormItem className="space-y-3">
+                                        <FormLabel className="text-base font-bold text-white">هل امتثلت المستفيدة الى المركز الصحي؟</FormLabel>
+                                        <FormControl>
+                                            <div className="flex gap-4">
+                                                <Button type="button" size="lg" variant={field.value === 'نعم' ? 'default' : 'outline'} onClick={() => field.onChange('نعم')} className={cn("flex-1 text-lg transition-all", field.value === 'نعم' && "shadow-md ring-2 ring-primary ring-offset-2")}>نعم</Button>
+                                                <Button type="button" size="lg" variant={field.value === 'لا' ? 'destructive' : 'outline'} onClick={() => field.onChange('لا')} className={cn("flex-1 text-lg transition-all", field.value === 'لا' && "shadow-md ring-2 ring-destructive ring-offset-2")}>لا</Button>
+                                            </div>
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )} />
 
-                            <FormField control={form.control} name="bnf_attend_c" render={({ field }) => (
-                                <FormItem><FormLabel>هل امتثلت المستفيدة الى المركز الصحي؟</FormLabel>
-                                <FormControl><div className="flex gap-4 pt-2">
-                                    <Button type="button" variant={field.value === 'نعم' ? 'default' : 'outline'} onClick={() => field.onChange('نعم')} className="flex-1">نعم</Button>
-                                    <Button type="button" variant={field.value === 'لا' ? 'destructive' : 'outline'} onClick={() => field.onChange('لا')} className="flex-1">لا</Button>
-                                </div></FormControl><FormMessage /></FormItem>
-                            )} />
+                                {watchAttend === 'لا' && (
+                                    <div className="p-6 bg-red-50 rounded-xl border border-red-100 animate-in fade-in slide-in-from-top-4">
+                                        <FormField control={form.control} name="not_attend_reason_c" render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel className="text-red-800 font-semibold">سبب عدم الحضور</FormLabel>
+                                                <FormControl><Input {...field} className="bg-white text-black border-red-200 focus-visible:ring-red-400"/></FormControl>
+                                                <FormMessage/>
+                                            </FormItem>
+                                        )} />
+                                        <div className="mt-6 flex justify-end">
+                                            <Button type="submit" size="lg" disabled={loading.saving} className="w-full md:w-auto px-8">
+                                                {loading.saving && <Loader2 className="mr-2 h-5 w-5 animate-spin"/>} حفظ وتحديث الحالة
+                                            </Button>
+                                        </div>
+                                    </div>
+                                )}
 
-                            {watchAttend === 'لا' && (
-                                <>
-                                <FormField control={form.control} name="not_attend_reason_c" render={({ field }) => (
-                                    <FormItem><FormLabel>سبب عدم الحضور</FormLabel><FormControl><Input {...field}/></FormControl><FormMessage/></FormItem>
-                                )} />
-                                <Button type="submit" disabled={loading.saving}>{loading.saving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Update & Next</Button>
-                                </>
-                            )}
+                                {watchAttend === 'نعم' && (
+                                    <div className="space-y-8 animate-in fade-in slide-in-from-top-4">
+                                        <div className="p-5 bg-slate-50 rounded-xl border border-slate-100 space-y-3">
+                                            <Label className="text-base font-bold text-slate-800">تاريخ امتثال الحالة</Label>
+                                            <div className="grid grid-cols-3 gap-3">
+                                                <FormField control={form.control} name="date_attend_c_day" render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger className="bg-white text-black"><SelectValue placeholder="يوم"/></SelectTrigger></FormControl><SelectContent>{days.map(d => <SelectItem key={d} value={String(d)}>{d}</SelectItem>)}</SelectContent></Select></FormItem>)} />
+                                                <FormField control={form.control} name="date_attend_c_month" render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger className="bg-white text-black"><SelectValue placeholder="شهر"/></SelectTrigger></FormControl><SelectContent>{months.map((m,i) => <SelectItem key={m} value={String(i+1)}>{m}</SelectItem>)}</SelectContent></Select></FormItem>)} />
+                                                <FormField control={form.control} name="date_attend_c_year" render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger className="bg-white text-black"><SelectValue placeholder="سنة"/></SelectTrigger></FormControl><SelectContent>{years.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}</SelectContent></Select></FormItem>)} />
+                                            </div>
+                                        </div>
 
-                            {watchAttend === 'نعم' && (
-                                <FormField control={form.control} name="bnf_isprev_ref_c" render={({ field }) => (
-                                    <FormItem><FormLabel>هل تعاني المستفيدة من سوء تغذية؟</FormLabel>
-                                    <FormControl><div className="flex gap-4 pt-2">
-                                        <Button type="button" variant={field.value === 'نعم' ? 'default' : 'outline'} onClick={() => field.onChange('نعم')} className="flex-1">نعم</Button>
-                                        <Button type="button" variant={field.value === 'لا' ? 'destructive' : 'outline'} onClick={() => field.onChange('لا')} className="flex-1">لا</Button>
-                                    </div></FormControl><FormMessage /></FormItem>
-                                )} />
-                            )}
-                            
-                             {watchAttend === 'نعم' && watchHasMalnutrition === 'لا' && (
-                                <>
-                                <FormField control={form.control} name="hc_muac_c_no" render={({ field }) => (
-                                <FormItem><FormLabel>قياس المواك: {field.value || 23}</FormLabel>
-                                <FormControl><Slider min={23} max={30} step={0.1} value={[field.value || 23]} onValueChange={(v) => field.onChange(v[0])} /></FormControl><FormMessage /></FormItem>
-                                )} />
-                                 <FormField control={form.control} name="cmam_result_c_no" render={({ field }) => (
-                                    <FormItem><FormLabel>نتيجة المتابعة</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="اختر النتيجة..."/></SelectTrigger></FormControl>
-                                    <SelectContent>
-                                        {["شفاء", "تخلف", "الوفاة", "عدم استجابة", "انتهاء فترة الدعم / تخريج من برنامج سوء التغذية"].map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
-                                    </SelectContent>
-                                    </Select><FormMessage /></FormItem>
-                                )} />
-                                <Button type="submit" disabled={loading.saving}>{loading.saving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Update & Next</Button>
-                                </>
-                             )}
+                                        <FormField control={form.control} name="bnf_isprev_ref_c" render={({ field }) => (
+                                            <FormItem className="space-y-3">
+                                                <FormLabel className="text-base font-bold text-white">هل تعاني المستفيدة من سوء تغذية؟</FormLabel>
+                                                <FormControl>
+                                                    <div className="flex gap-4">
+                                                        <Button type="button" size="lg" variant={field.value === 'نعم' ? 'default' : 'outline'} onClick={() => field.onChange('نعم')} className={cn("flex-1 text-lg transition-all", field.value === 'نعم' && "shadow-md")}>نعم</Button>
+                                                        <Button type="button" size="lg" variant={field.value === 'لا' ? 'destructive' : 'outline'} onClick={() => field.onChange('لا')} className={cn("flex-1 text-lg transition-all", field.value === 'لا' && "shadow-md")}>لا</Button>
+                                                    </div>
+                                                </FormControl>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )} />
+                                    </div>
+                                )}
+                                
+                                {/* Case: NO Malnutrition */}
+                                {watchAttend === 'نعم' && watchHasMalnutrition === 'لا' && (
+                                    <div className="p-6 bg-green-50 rounded-xl border border-green-100 space-y-6 animate-in fade-in zoom-in-95">
+                                        <FormField control={form.control} name="hc_muac_c_no" render={({ field }) => (
+                                            <FormItem>
+                                                <div className="flex justify-between items-center mb-4">
+                                                    <FormLabel className="text-green-900 font-bold text-lg">قياس المواك</FormLabel>
+                                                    <span className="text-2xl font-black text-green-700 bg-green-200 px-3 py-1 rounded-lg">{field.value || 23}</span>
+                                                </div>
+                                                <FormControl>
+                                                    <Slider dir="ltr" min={23} max={30} step={0.1} value={[field.value || 23]} onValueChange={(v) => field.onChange(v[0])} className="py-4" />
+                                                </FormControl>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )} />
+                                        <FormField control={form.control} name="cmam_result_c_no" render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel className="text-green-900 font-bold">نتيجة المتابعة</FormLabel>
+                                                <Select onValueChange={field.onChange} value={field.value}>
+                                                    <FormControl><SelectTrigger className="bg-white text-black border-green-200 focus:ring-green-500"><SelectValue placeholder="اختر النتيجة..."/></SelectTrigger></FormControl>
+                                                    <SelectContent>
+                                                        {["شفاء", "تخلف", "الوفاة", "عدم استجابة", "انتهاء فترة الدعم / تخريج من برنامج سوء التغذية"].map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                                                    </SelectContent>
+                                                </Select>
+                                            </FormItem>
+                                        )} />
+                                        <div className="pt-4 flex justify-end">
+                                            <Button type="submit" size="lg" className="w-full md:w-auto px-8 bg-green-600 hover:bg-green-700" disabled={loading.saving}>{loading.saving && <Loader2 className="mr-2 h-5 w-5 animate-spin"/>} حفظ التحديثات والانتقال</Button>
+                                        </div>
+                                    </div>
+                                )}
 
-                            {watchAttend === 'نعم' && watchHasMalnutrition === 'نعم' && (
-                            <>
-                                <FormField control={form.control} name="hc_muac_c" render={({ field }) => (
-                                <FormItem><FormLabel>قياس المواك: {field.value || 17}</FormLabel>
-                                <FormControl><Slider min={17} max={26} step={0.1} value={[field.value || 17]} onValueChange={(v) => field.onChange(v[0])} /></FormControl><FormMessage /></FormItem>
-                                )} />
-                                <FormField
-                                    control={form.control}
-                                    name="cmam_result_c"
-                                    render={({ field }) => (
-                                    <FormItem><FormLabel>حالة المتابعه</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="اختر الحالة..."/></SelectTrigger></FormControl>
-                                    <SelectContent>
-                                        <SelectItem value="مستمر بالمعالجة">مستمر بالمعالجة</SelectItem>
-                                        <SelectItem value="شفاء">شفاء</SelectItem>
-                                        <SelectItem value="تخلف">تخلف</SelectItem>
-                                        <SelectItem value="الوفاة">الوفاة</SelectItem>
-                                        <SelectItem value="عدم استجابة">عدم استجابة</SelectItem>
-                                        <SelectItem value="انتهاء فترة الدعم / تخريج من برنامج سوء التغذية">انتهاء فترة الدعم / تخريج من برنامج سوء التغذية</SelectItem>
-                                    </SelectContent>
-                                    </Select><FormMessage /></FormItem>
-                                )} />
-                                <Button type="submit" disabled={loading.saving}>{loading.saving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Update & Next</Button>
-                            </>
-                            )}
-                        </CardContent>
-                    </form>
+                                {/* Case: YES Malnutrition */}
+                                {watchAttend === 'نعم' && watchHasMalnutrition === 'نعم' && (
+                                    <div className="p-6 bg-amber-50 rounded-xl border border-amber-100 space-y-6 animate-in fade-in zoom-in-95">
+                                        <FormField control={form.control} name="hc_muac_c" render={({ field }) => (
+                                            <FormItem>
+                                                <div className="flex justify-between items-center mb-4">
+                                                    <FormLabel className="text-amber-900 font-bold text-lg">قياس المواك</FormLabel>
+                                                    <span className="text-2xl font-black text-amber-700 bg-amber-200 px-3 py-1 rounded-lg">{field.value || 17}</span>
+                                                </div>
+                                                <FormControl>
+                                                    <Slider dir="ltr" min={17} max={26} step={0.1} value={[field.value || 17]} onValueChange={(v) => field.onChange(v[0])} className="py-4" />
+                                                </FormControl>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )} />
+                                        <FormField control={form.control} name="cmam_result_c" render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel className="text-amber-900 font-bold">حالة المتابعه</FormLabel>
+                                                <Select onValueChange={field.onChange} value={field.value}>
+                                                    <FormControl><SelectTrigger className="bg-white text-black border-amber-200 focus:ring-amber-500"><SelectValue placeholder="اختر الحالة..."/></SelectTrigger></FormControl>
+                                                    <SelectContent>
+                                                        <div className="grid grid-cols-1 gap-1">
+                                                            {["مستمر بالمعالجة", "شفاء", "تخلف", "الوفاة", "عدم استجابة", "انتهاء فترة الدعم / تخريج من برنامج سوء التغذية"].map(r => <SelectItem key={r} value={r} className="cursor-pointer hover:bg-amber-100">{r}</SelectItem>)}
+                                                        </div>
+                                                    </SelectContent>
+                                                </Select>
+                                            </FormItem>
+                                        )} />
+                                        <div className="pt-4 flex justify-end">
+                                            <Button type="submit" size="lg" className="w-full md:w-auto px-8 bg-amber-600 hover:bg-amber-700" disabled={loading.saving}>{loading.saving && <Loader2 className="mr-2 h-5 w-5 animate-spin"/>} حفظ التحديثات والانتقال</Button>
+                                        </div>
+                                    </div>
+                                )}
+                            </CardContent>
+                        </form>
                     </Form>
-                </Card>}
+                </Card>
             </div>
             )}
         </div>
     );
 }
-
