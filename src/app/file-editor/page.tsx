@@ -470,6 +470,57 @@ export default function FileEditor() {
     }
   };
 
+  const handleDownloadZip = async () => {
+    if (selectedPaths.size === 0) {
+      toast({ title: "No items selected", variant: "destructive" });
+      return;
+    }
+
+    setIsLoadingFile(true);
+    toast({ title: "Preparing Download", description: "Zipping selected files and folders..." });
+
+    try {
+      const sortedPaths = Array.from(selectedPaths).sort((a, b) => a.length - b.length);
+      const topLevelItems: string[] = [];
+      for (const p of sortedPaths) {
+        if (!topLevelItems.some(existing => p.startsWith(`${existing}/`))) {
+          topLevelItems.push(p);
+        }
+      }
+
+      const response = await fetch("/api/file-manager", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "downloadZip", items: topLevelItems }),
+      });
+
+      if (!response.ok) {
+        let error = "Failed to create zip file.";
+        try {
+            const errJson = await response.json();
+            error = errJson.error || errJson.details || error;
+        } catch {}
+        throw new Error(error);
+      }
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'file-export.zip';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      toast({ title: "Download Started" });
+    } catch (e: any) {
+        toast({ title: "Download Failed", description: e.message, variant: "destructive" });
+    } finally {
+        setIsLoadingFile(false);
+    }
+  };
+
   const togglePathSelection = (p: string, isFolder: boolean) => {
     setSelectedPaths(prev => {
         const next = new Set(prev);
@@ -730,6 +781,9 @@ export default function FileEditor() {
                     <div className="flex gap-2">
                         <Button className="flex-1 h-8 text-xs bg-accent text-accent-foreground" onClick={() => setIsMoveDialogOpen(true)}>
                             <ArrowRightLeft className="h-3 w-3 mr-1" /> Move
+                        </Button>
+                         <Button className="flex-1 h-8 text-xs bg-green-600 text-white hover:bg-green-700" onClick={handleDownloadZip} disabled={isLoadingFile}>
+                            <Archive className="h-3 w-3 mr-1" /> {isLoadingFile ? 'Zipping...' : 'Download ZIP'}
                         </Button>
                         <Button className="flex-1 h-8 text-xs bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => {
                             if(confirm(`Delete ${selectedPaths.size} items?`)) {

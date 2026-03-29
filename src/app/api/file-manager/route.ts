@@ -268,6 +268,34 @@ export async function POST(req: Request) {
         await fs.mkdir(path.join(dir, name), { recursive: true });
         return NextResponse.json({ ok: true });
       }
+      case "downloadZip": {
+        if (!Array.isArray(items) || items.length === 0) {
+            throw new Error("No items selected for download.");
+        }
+        const zip = new AdmZip();
+        
+        for (const itemPath of items) {
+            const absolutePath = safePath(itemPath);
+            const stats = await fs.stat(absolutePath);
+
+            if (stats.isDirectory()) {
+                zip.addLocalFolder(absolutePath, itemPath);
+            } else {
+                const zipDir = path.dirname(itemPath);
+                zip.addLocalFile(absolutePath, zipDir === '.' ? '' : zipDir);
+            }
+        }
+    
+        const zipBuffer = zip.toBuffer();
+    
+        return new NextResponse(zipBuffer, {
+            status: 200,
+            headers: {
+                'Content-Type': 'application/zip',
+                'Content-Disposition': `attachment; filename="file-export.zip"`,
+            },
+        });
+      }
       case "search":
         return NextResponse.json(await searchFiles(BASE_DIR, content));
       default:
