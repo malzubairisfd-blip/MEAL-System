@@ -48,11 +48,11 @@ export async function POST(req: Request) {
                     } else if (parseFloat(record.hc_muac) >= 23 || parseInt(record.bnf_child_age, 10) === 6) {
                         updates.next_cycle_c1 = 'Disqualified';
                     } else {
-                        updates.next_cycle_c1 = 'Qualified';
+                        updates.next_cycle_c1 = null;
                     }
 
                 } else if (cycle === 2) {
-                     if (record.bnf_isprev_ref_c1 === 'نعم' && record.next_cycle_c1 === 'Qualified') {
+                     if (record.bnf_has_cmam_hc === 'نعم' &&  record.bnf_isprev_ref_c1 === 'نعم' && record.next_cycle_c1 === 'Qualified') {
                         updates.bnf_isprev_ref_c2 = 'نعم';
                         if (record.bnf_cmam_cond_c1 === 'حامل') {
                             const pregMonth = parseInt(record.bnf_preg_mon_c1, 10);
@@ -90,10 +90,10 @@ export async function POST(req: Request) {
                     if (parseFloat(record.hc_muac_c1) >= 23 || parseInt(record.bnf_child_age_c1, 10) === 6 || record.next_cycle_c1 === 'Last Month Qualification' || record.next_cycle_c1 === 'Disqualified' || ['شفاء', 'الوفاة', 'انتهاء فترة الدعم / تخريج من برنامج سوء التغذية'].includes(record.cmam_result_c1)) {
                         updates.next_cycle_c2 = 'Disqualified';
                     } else {
-                        updates.next_cycle_c2 = 'Qualified';
+                        updates.next_cycle_c2 = null;
                     }
                 } else if (cycle === 3) {
-                     if (record.bnf_isprev_ref_c2 === 'نعم' && record.next_cycle_c2 === 'Qualified') {
+                     if (record.bnf_has_cmam_hc === 'نعم' && record.bnf_isprev_ref_c2 === 'نعم' && record.next_cycle_c2 === 'Qualified') {
                         updates.bnf_isprev_ref_c3 = 'نعم';
                          if (record.bnf_cmam_cond_c2 === 'حامل') {
                             const pregMonth = parseInt(record.bnf_preg_mon_c2, 10);
@@ -131,7 +131,7 @@ export async function POST(req: Request) {
                     if (parseFloat(record.hc_muac_c2) >= 23 || parseInt(record.bnf_child_age_c2, 10) === 6 || record.next_cycle_c2 === 'Last Month Qualification' || record.next_cycle_c2 === 'Disqualified' || ['شفاء', 'الوفاة', 'انتهاء فترة الدعم / تخريج من برنامج سوء التغذية'].includes(record.cmam_result_c2) || record.cure_rate_c2 === 'Negative' || record.cure_rate_c2 === 'No Improvement' ) {
                         updates.next_cycle_c3 = 'Disqualified';
                     } else {
-                        updates.next_cycle_c3 = 'Qualified';
+                        updates.next_cycle_c3 = null;
                     }
                 }
                 

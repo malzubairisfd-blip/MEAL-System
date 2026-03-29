@@ -297,9 +297,9 @@ self.onmessage = async (event: MessageEvent) => {
 
   const qualified = beneficiaries
     .filter((r: any) => {
-      if (cycle === 1) return r.bnf_has_cmam === "نعم" && (r.next_cycle_c1 === 'Qualified' || r.next_cycle_c1 === null);
-      if (cycle === 2) return r.next_cycle_c2 === 'Qualified';
-      if (cycle === 3) return r.next_cycle_c3 === 'Qualified';
+      if (cycle === 1) return r.bnf_has_cmam_hc === "نعم" && (r.next_cycle_c1 === 'Qualified' || r.next_cycle_c1 === null || r.next_cycle_c1 === 'Last Month Qualification');
+      if (cycle === 2) return r.next_cycle_c2 === 'Qualified' || r.next_cycle_c2 === 'Last Month Qualification';
+      if (cycle === 3) return r.next_cycle_c3 === 'Qualified' || r.next_cycle_c3 === 'Last Month Qualification';
       return false;
     })
     .sort((a: any, b: any) => {

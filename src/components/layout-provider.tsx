@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { usePathname } from "next/navigation";
@@ -49,21 +50,23 @@ import {
   ScanSearch,
   Send,
   UserCheck,
-  ClipboardCheck,
-  PieChart,
-  FileText,
-  ShieldAlert,
-  MessageSquareWarning,
-  Menu,
-  PanelLeft,
-  PanelRight,
-  Baby,
-  Database,
   ThumbsUp,
   Hand,
   Wallet,
   CreditCard,
   BarChart2,
+  Menu,
+  PanelLeft,
+  PanelRight,
+  Baby,
+  Database,
+
+  // ✅ FIXED MISSING ICONS
+  PieChart,
+  FileText,
+  ClipboardCheck,
+  ShieldAlert,
+  MessageSquareWarning,
 } from "lucide-react";
 import { useTranslation } from "@/hooks/use-translation";
 import { useLanguage } from "@/context/language-context";
@@ -243,11 +246,6 @@ const navItems = [
                                           { href: "/meal-system/monitoring/implementation/process/CMAM-cases/beneficiaries/referral", label: "Referral", icon: <Send />, subItems: [
                                             { href: "/meal-system/monitoring/implementation/process/CMAM-cases/beneficiaries/referral/export", label: "Export", icon: <FileDown /> },
                                             { href: "/meal-system/monitoring/implementation/process/CMAM-cases/beneficiaries/referral/data-entry", label: "Data Entry", icon: <FileEdit /> },
-                                            { href: "/meal-system/monitoring/implementation/process/CMAM-cases/beneficiaries/referral/cycles", label: "Cycles", icon: <Activity />, subItems: [
-                                                { href: "/meal-system/monitoring/implementation/process/CMAM-cases/beneficiaries/referral/cycles/1", label: "Cycle 1", icon: <Activity /> },
-                                                { href: "/meal-system/monitoring/implementation/process/CMAM-cases/beneficiaries/referral/cycles/2", label: "Cycle 2", icon: <Activity /> },
-                                                { href: "/meal-system/monitoring/implementation/process/CMAM-cases/beneficiaries/referral/cycles/3", label: "Cycle 3", icon: <Activity /> },
-                                            ]}
                                           ]},
                                       ]},
                                       { href: "/meal-system/monitoring/implementation/process/CMAM-cases/children", label: "Children", icon: <Baby />, subItems: [
@@ -417,5 +415,3 @@ export function LayoutProvider({ children, year }: { children: React.ReactNode, 
     </div>
   );
 }
-
-    

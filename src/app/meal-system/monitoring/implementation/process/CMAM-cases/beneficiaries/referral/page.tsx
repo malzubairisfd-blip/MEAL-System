@@ -1,9 +1,10 @@
+
 "use client";
 
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ArrowRight, FileText, Send } from "lucide-react";
+import { ArrowLeft, ArrowRight, FileText, FileEdit } from "lucide-react";
 
 export default function ReferralHubPage() {
   const features = [
@@ -14,10 +15,10 @@ export default function ReferralHubPage() {
       icon: <FileText className="h-8 w-8 text-blue-500" />,
     },
     {
-      title: "Referral Malnourished Cases Cycles",
-      description: "Manage and track referral cycles.",
-      href: "/meal-system/monitoring/implementation/process/CMAM-cases/beneficiaries/referral/cycles",
-      icon: <Send className="h-8 w-8 text-green-500" />,
+      title: "Beneficiaries Referral Malnourished Data Entry",
+      description: "Enter and manage data for referred beneficiaries.",
+      href: "/meal-system/monitoring/implementation/process/CMAM-cases/beneficiaries/referral/data-entry",
+      icon: <FileEdit className="h-8 w-8 text-green-500" />,
     },
   ];
 
