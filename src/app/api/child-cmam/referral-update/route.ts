@@ -7,6 +7,7 @@ import dayjs from "dayjs";
 
 const getDataPath = () => path.join(process.cwd(), "src/data");
 const getDbPath = () => path.join(getDataPath(), "child-CMAM.db");
+const getJsonPath = () => path.join(getDataPath(), 'child-referral-cycle.json');
 
 // Helper to convert string to number, defaulting to 0 if invalid
 const safeToNumber = (value: any) => {
@@ -25,6 +26,13 @@ export async function POST(req: Request) {
 
     let db: Database.Database | null = null;
     try {
+        const configRaw = await fs.readFile(getJsonPath(), 'utf-8');
+        const config = JSON.parse(configRaw);
+
+        if (!config || !config.followUpMonth) {
+            return NextResponse.json({ error: "Referral cycle configuration is missing or invalid." }, { status: 500 });
+        }
+        
         db = new Database(getDbPath());
         const records = db.prepare("SELECT * FROM child_cmam WHERE project_id = ?").all(projectId);
 
@@ -37,7 +45,10 @@ export async function POST(req: Request) {
                         updates.child_isprev_ref_c1 = 'نعم';
                         
                         const confDate = dayjs(record.conf_date);
-                        const followUpDate = dayjs(new Date(confDate.year(), Number(config.followUpMonth) - 1));
+                        
+                        // Correctly use the loaded config here
+                        const monthIndex = new Date(Date.parse(config.followUpMonth +" 1, 2012")).getMonth();
+                        const followUpDate = dayjs(new Date(confDate.year(), monthIndex));
                         
                         if(confDate.isValid() && followUpDate.isValid()) {
                             const daysDiff = followUpDate.diff(confDate, 'day');
