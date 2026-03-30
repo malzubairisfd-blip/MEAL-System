@@ -63,9 +63,9 @@ import {
 
   // ✅ FIXED MISSING ICONS
   PieChart,
-  FileText,
   ClipboardCheck,
   ShieldAlert,
+  FileText,
   MessageSquareWarning,
 } from "lucide-react";
 import { useTranslation } from "@/hooks/use-translation";
@@ -258,6 +258,10 @@ const navItems = [
                                           { href: "/meal-system/monitoring/implementation/process/CMAM-cases/children/confirmation", label: "Confirmation", icon: <ClipboardCheck />, subItems: [
                                             { href: "/meal-system/monitoring/implementation/process/CMAM-cases/children/confirmation/entry", label: "Entry", icon: <FileEdit /> },
                                             { href: "/meal-system/monitoring/implementation/process/CMAM-cases/children/confirmation/export", label: "Export", icon: <FileDown /> },
+                                          ]},
+                                          { href: "/meal-system/monitoring/implementation/process/CMAM-cases/children/referral", label: "Referral", icon: <Send />, subItems: [
+                                              { href: "/meal-system/monitoring/implementation/process/CMAM-cases/children/referral/export", label: "Export Statements", icon: <FileText /> },
+                                              { href: "/meal-system/monitoring/implementation/process/CMAM-cases/children/referral/entry", label: "Data Entry", icon: <FileEdit /> },
                                           ]},
                                       ]},
                                       { href: "/meal-system/monitoring/implementation/process/CMAM-cases/health-worker-data", label: "Health Worker Data", icon: <Stethoscope />}

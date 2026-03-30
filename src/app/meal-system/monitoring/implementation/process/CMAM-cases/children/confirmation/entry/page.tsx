@@ -1,472 +1,1252 @@
-// src/app/meal-system/monitoring/implementation/process/CMAM-cases/children/confirmation/entry/page.tsx
 "use client";
 
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import Link from 'next/link';
+import React, { useEffect, useState, useMemo, useCallback } from "react";
+import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { Slider } from "@/components/ui/slider";
 import { Checkbox } from "@/components/ui/checkbox";
-import { cn } from "@/lib/utils";
-import { Textarea } from '@/components/ui/textarea';
+import { Textarea } from "@/components/ui/textarea";
 import { ArrowLeft, Loader2, Database, FileText } from "lucide-react";
+import { cn } from "@/lib/utils";
 
-// --- Types ---
-interface Project { projectId: string; projectName: string; }
-interface HealthCenter { hc_id: string; hc_name: string; hw_id: string; hw_name: string;}
-interface Beneficiary { id: string; BENEF_ID: string; BENEF_NAME: string; hc_id: string; [key: string]: any; }
-interface Child { id: number; child_id: string; child_name: string; benef_id: string; [key: string]: any; }
+interface Project {
+  projectId: string;
+  projectName: string;
+}
+interface HealthCenter {
+  hc_id: string;
+  hc_name: string;
+  hw_id: string;
+  hw_name: string;
+}
+interface Beneficiary {
+  id: string;
+  BENEF_ID: string;
+  BENEF_NAME: string;
+  hc_id: string;
+  [key: string]: any;
+}
+interface Child {
+  id: number;
+  child_id: string;
+  child_name: string;
+  benef_id: string;
+  [key: string]: any;
+}
 
-const months = ["يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"];
+const months = [
+  "يناير",
+  "فبراير",
+  "مارس",
+  "أبريل",
+  "مايو",
+  "يونيو",
+  "يوليو",
+  "أغسطس",
+  "سبتمبر",
+  "أكتوبر",
+  "نوفمبر",
+  "دسمبر",
+];
 const years = Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - 5 + i);
 const days = Array.from({ length: 31 }, (_, i) => i + 1);
 
-// --- Zod Schema ---
-const formSchema = z.object({
-  attend_hc: z.enum(['نعم', 'لا']),
-  conf_date_day: z.string().optional(),
-  conf_date_month: z.string().optional(),
-  conf_date_year: z.string().optional(),
-  
-  // 'No' branch
-  not_attend_reason_hc: z.string().optional(),
-
-  // 'Yes' branch
-  child_has_cmam_hc: z.enum(['نعم', 'لا']).optional(),
-
-  // 'Yes' -> 'No' sub-branch
-  muac_hc_no: z.number().optional(),
-  cmam_result_hc_no: z.string().optional(), 
-
-  // 'Yes' -> 'Yes' sub-branch
-  hc_card_no: z.string().optional(),
-  meas_type: z.enum(['المواك', 'الزد اسكور']).optional(),
-  muac_hc: z.number().optional(),
-  zscore_h: z.string().optional(),
-  zscore_w: z.string().optional(),
-  zscore: z.string().optional(),
-  child_cmam_cond: z.enum(['سوء تغذية متوسط', 'سوء تغذية حاد']).optional(),
-  exp_start_treat_date_day: z.string().optional(),
-  exp_start_treat_date_month: z.string().optional(),
-  exp_start_treat_date_year: z.string().optional(),
-  exp_end_treat_date_day: z.string().optional(),
-  exp_end_treat_date_month: z.string().optional(),
-  exp_end_treat_date_year: z.string().optional(),
-  cmam_result_hc: z.string().optional(),
-}).refine(data => {
-    if (data.attend_hc === 'نعم') {
-        return !!data.child_has_cmam_hc;
+const formSchema = z
+  .object({
+    attend_hc: z.enum(["نعم", "لا"], {
+      errorMap: () => ({ message: "يرجى تحديد ما إذا حضر الطفل." }),
+    }),
+    conf_date_day: z.string().optional(),
+    conf_date_month: z.string().optional(),
+    conf_date_year: z.string().optional(),
+    not_attend_reason_hc: z.string().optional(),
+    child_has_cmam_hc: z.enum(["نعم", "لا"]).optional(),
+    muac_hc_no: z.number().optional(),
+    cmam_result_hc_no: z.string().optional(),
+    hc_card_no: z.string().optional(),
+    meas_type: z.enum(["الـمـوّاك", "الـزد اسكور"]).optional(),
+    muac_hc: z.number().optional(),
+    zscore_h: z.string().optional(),
+    zscore_w: z.string().optional(),
+    zscore: z.string().optional(),
+    child_cmam_cond: z.enum(["سوء تغذية متوسط", "سوء تغذية حاد"]).optional(),
+    exp_start_treat_date_day: z.string().optional(),
+    exp_start_treat_date_month: z.string().optional(),
+    exp_start_treat_date_year: z.string().optional(),
+    exp_end_treat_date_day: z.string().optional(),
+    exp_end_treat_date_month: z.string().optional(),
+    exp_end_treat_date_year: z.string().optional(),
+    cmam_result_hc: z.string().optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.attend_hc === "نعم") {
+      if (!data.conf_date_day) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["conf_date_day"],
+          message: "يرجى تحديد يوم التأكيد.",
+        });
+      }
+      if (!data.conf_date_month) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["conf_date_month"],
+          message: "يرجى تحديد شهر التأكيد.",
+        });
+      }
+      if (!data.conf_date_year) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["conf_date_year"],
+          message: "يرجى تحديد سنة التأكيد.",
+        });
+      }
+      if (!data.child_has_cmam_hc) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["child_has_cmam_hc"],
+          message: "يرجى تحديد ما إذا كان الطفل يعاني من سوء تغذية.",
+        });
+      } else if (data.child_has_cmam_hc === "لا") {
+        if (data.muac_hc_no === undefined) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["muac_hc_no"],
+            message: "يرجى ضبط قيمة MUAC.",
+          });
+        }
+        if (!data.cmam_result_hc_no?.trim()) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["cmam_result_hc_no"],
+            message: "يرجى توضيح ملاحظات الحالة.",
+          });
+        }
+      } else if (data.child_has_cmam_hc === "نعم") {
+        if (!data.hc_card_no?.trim()) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["hc_card_no"],
+            message: "يرجى إدخال رقم الكرت الصحي.",
+          });
+        }
+        if (!data.meas_type) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["meas_type"],
+            message: "يرجى اختيار نوع القياس.",
+          });
+        }
+        if (data.meas_type === "الـمـوّاك" && data.muac_hc === undefined) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["muac_hc"],
+            message: "يرجى ضبط قيمة MUAC.",
+          });
+        }
+        if (data.meas_type === "الـزد اسكور") {
+          if (!data.zscore_h?.trim()) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ["zscore_h"],
+              message: "يرجى إدخال قيمة الطول.",
+            });
+          }
+          if (!data.zscore_w?.trim()) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ["zscore_w"],
+              message: "يرجى إدخال قيمة الوزن.",
+            });
+          }
+          if (!data.zscore?.trim()) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ["zscore"],
+              message: "يرجى تحديد قيمة النمو.",
+            });
+          }
+        }
+        if (!data.child_cmam_cond) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["child_cmam_cond"],
+            message: "يرجى تحديد حالة الطفل.",
+          });
+        }
+        if (!data.exp_start_treat_date_day) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["exp_start_treat_date_day"],
+            message: "يرجى تحديد يوم بدء العلاج.",
+          });
+        }
+        if (!data.exp_start_treat_date_month) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["exp_start_treat_date_month"],
+            message: "يرجى تحديد شهر بدء العلاج.",
+          });
+        }
+        if (!data.exp_start_treat_date_year) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["exp_start_treat_date_year"],
+            message: "يرجى تحديد سنة بدء العلاج.",
+          });
+        }
+        if (!data.exp_end_treat_date_day) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["exp_end_treat_date_day"],
+            message: "يرجى تحديد يوم انتهاء العلاج.",
+          });
+        }
+        if (!data.exp_end_treat_date_month) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["exp_end_treat_date_month"],
+            message: "يرجى تحديد شهر انتهاء العلاج.",
+          });
+        }
+        if (!data.exp_end_treat_date_year) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["exp_end_treat_date_year"],
+            message: "يرجى تحديد سنة انتهاء العلاج.",
+          });
+        }
+        if (!data.cmam_result_hc?.trim()) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["cmam_result_hc"],
+            message: "يرجى تحديد نتيجة المتابعة.",
+          });
+        }
+      }
+    } else if (data.attend_hc === "لا") {
+      if (!data.not_attend_reason_hc?.trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["not_attend_reason_hc"],
+          message: "يرجى توضيح سبب عدم الحضور.",
+        });
+      }
     }
-    return true;
-}, { message: "This field is required.", path: ["child_has_cmam_hc"] })
-.refine(data => {
-    if (data.attend_hc === 'نعم' && data.child_has_cmam_hc === 'نعم') {
-        return !!data.child_cmam_cond;
-    }
-    return true;
-}, { message: "This field is required.", path: ["child_cmam_cond"] });
+  });
 
 const defaultValues = {
-    attend_hc: undefined,
-    conf_date_day: undefined,
-    conf_date_month: undefined,
-    conf_date_year: undefined,
-    not_attend_reason_hc: '',
-    child_has_cmam_hc: undefined,
-    muac_hc_no: 12.5,
-    cmam_result_hc_no: '',
-    hc_card_no: '',
-    meas_type: undefined,
-    muac_hc: 7.0,
-    zscore_h: '',
-    zscore_w: '',
-    zscore: '',
-    child_cmam_cond: undefined,
-    exp_start_treat_date_day: undefined,
-    exp_start_treat_date_month: undefined,
-    exp_start_treat_date_year: undefined,
-    exp_end_treat_date_day: undefined,
-    exp_end_treat_date_month: undefined,
-    exp_end_treat_date_year: undefined,
-    cmam_result_hc: undefined,
+  attend_hc: undefined,
+  conf_date_day: undefined,
+  conf_date_month: undefined,
+  conf_date_year: undefined,
+  not_attend_reason_hc: "",
+  child_has_cmam_hc: undefined,
+  muac_hc_no: 12.5,
+  cmam_result_hc_no: "",
+  hc_card_no: "",
+  meas_type: undefined,
+  muac_hc: 7.0,
+  zscore_h: "",
+  zscore_w: "",
+  zscore: "",
+  child_cmam_cond: undefined,
+  exp_start_treat_date_day: undefined,
+  exp_start_treat_date_month: undefined,
+  exp_start_treat_date_year: undefined,
+  exp_end_treat_date_day: undefined,
+  exp_end_treat_date_month: undefined,
+  exp_end_treat_date_year: undefined,
+  cmam_result_hc: undefined,
 };
 
 export default function ConfirmationDataEntryPage() {
-    const { toast } = useToast();
-    const [projects, setProjects] = useState<Project[]>([]);
-    const [healthCenters, setHealthCenters] = useState<HealthCenter[]>([]);
-    const [allChildren, setAllChildren] = useState<Child[]>([]);
-    
-    const [selectedProjectId, setSelectedProjectId] = useState("");
-    const [selectedHealthCenterId, setSelectedHealthCenterId] = useState("");
-    const [selectedBeneficiary, setSelectedBeneficiary] = useState<Beneficiary | null>(null);
-    const [selectedChildId, setSelectedChildId] = useState<string>('');
-    
-    const [beneficiarySearch, setBeneficiarySearch] = useState("");
-    const [childSearch, setChildSearch] = useState("");
-    
-    const [loading, setLoading] = useState({ projects: true, data: false, saving: false });
+  const { toast } = useToast();
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [healthCenters, setHealthCenters] = useState<HealthCenter[]>([]);
+  const [allChildren, setAllChildren] = useState<Child[]>([]);
+  const [selectedProjectId, setSelectedProjectId] = useState("");
+  const [selectedHealthCenterId, setSelectedHealthCenterId] = useState("");
+  const [selectedBeneficiary, setSelectedBeneficiary] = useState<Beneficiary | null>(null);
+  const [selectedChildId, setSelectedChildId] = useState("");
+  const [beneficiarySearch, setBeneficiarySearch] = useState("");
+  const [childSearch, setChildSearch] = useState("");
+  const [loading, setLoading] = useState({ projects: true, data: false, saving: false });
 
-    const form = useForm<z.infer<typeof formSchema>>({
-        resolver: zodResolver(formSchema),
-        defaultValues
-    });
+  const form = useForm<z.infer<typeof formSchema>>({
+    resolver: zodResolver(formSchema),
+    mode: "onChange",
+    reValidateMode: "onChange",
+    defaultValues,
+  });
 
-    const watchAttendHC = form.watch("attend_hc");
-    const watchHasCmamHC = form.watch("child_has_cmam_hc");
-    const watchMeasType = form.watch("meas_type");
+  const watchAttendHC = form.watch("attend_hc");
+  const watchHasCmamHC = form.watch("child_has_cmam_hc");
+  const watchMeasType = form.watch("meas_type");
+  const isFormValid = form.formState.isValid;
 
-    // --- Data Fetching ---
-    useEffect(() => {
-        setLoading(p => ({...p, projects: true}));
-        fetch('/api/projects').then(res => res.json()).then(setProjects).finally(() => setLoading(p => ({...p, projects: false})));
-    }, []);
+  useEffect(() => {
+    setLoading((p) => ({ ...p, projects: true }));
+    fetch("/api/projects")
+      .then((res) => res.json())
+      .then(setProjects)
+      .finally(() => setLoading((p) => ({ ...p, projects: false })));
+  }, []);
 
-    const fetchProjectData = useCallback(async (projectId: string) => {
-        if (!projectId) return;
-        setLoading(p => ({ ...p, data: true }));
-        try {
-            const res = await fetch(`/api/child-cmam?projectId=${projectId}`);
-            if (!res.ok) throw new Error("Failed to load child CMAM data.");
-            const data = await res.json();
-       
-            const cmamChildren = Array.isArray(data) ? data : [];
-            setAllChildren(cmamChildren);
+  const fetchProjectData = useCallback(
+    async (projectId: string) => {
+      if (!projectId) return;
+      setLoading((p) => ({ ...p, data: true }));
+      try {
+        const res = await fetch(`/api/child-cmam?projectId=${projectId}`);
+        if (!res.ok) throw new Error("Failed to load child CMAM data.");
+        const data = await res.json();
+        const cmamChildren = Array.isArray(data) ? data : [];
+        setAllChildren(cmamChildren);
+        const uniqueHCs: HealthCenter[] = Array.from(
+          new Map(
+            cmamChildren
+              .filter((c: any) => c.child_has_cmam === "نعم" && c.hc_id)
+              .map((item: any) => [
+                item.hc_id,
+                { hc_id: item.hc_id, hc_name: item.hc_name, hw_id: item.hw_id, hw_name: item.hw_name },
+              ])
+          ).values()
+        );
+        setHealthCenters(uniqueHCs);
+      } catch (error: any) {
+        toast({ title: "Error loading project data", description: error.message, variant: "destructive" });
+      } finally {
+        setLoading((p) => ({ ...p, data: false }));
+      }
+    },
+    [toast]
+  );
 
-            const uniqueHCs: HealthCenter[] = Array.from(new Map(cmamChildren
-                .filter((c: any) => c.child_has_cmam === 'نعم' && c.hc_id)
-                .map((item: any) => [item.hc_id, { hc_id: item.hc_id, hc_name: item.hc_name, hw_id: item.hw_id, hw_name: item.hw_name }]))
-                .values());
-            setHealthCenters(uniqueHCs);
-            
-        } catch (error: any) {
-            toast({ title: "Error loading project data", description: error.message, variant: "destructive" });
-        } finally {
-            setLoading(p => ({ ...p, data: false }));
-        }
-    }, [toast]);
+  const resetForm = useCallback(() => {
+    form.reset(defaultValues);
+  }, [form]);
 
-    const resetForm = useCallback(() => {
-        form.reset(defaultValues);
-    }, [form]);
-
-    const handleBeneficiarySelect = useCallback((b: Beneficiary | null) => {
-        setSelectedBeneficiary(b);
-        if (b) {
-            const children = allChildren.filter(c => c.benef_id === b.BENEF_ID && c.child_has_cmam === 'نعم');
-            if (children.length > 0) {
-                const firstUnreviewedChild = children.find(c => !c.attend_hc);
-                setSelectedChildId(firstUnreviewedChild ? firstUnreviewedChild.child_id : children[0].child_id);
-            } else {
-                setSelectedChildId("");
-            }
-        } else {
-            setSelectedChildId("");
-        }
+  const handleBeneficiarySelect = useCallback(
+    (b: Beneficiary | null) => {
+      setSelectedBeneficiary(b);
+      if (!b) {
+        setSelectedChildId("");
         resetForm();
-    }, [allChildren, resetForm]);
+        return;
+      }
+      const children = allChildren.filter((c) => c.benef_id === b.BENEF_ID && c.child_has_cmam === "نعم");
+      if (children.length > 0) {
+        const firstUnreviewedChild = children.find((c) => !c.attend_hc);
+        setSelectedChildId(firstUnreviewedChild ? firstUnreviewedChild.child_id : children[0].child_id);
+      } else {
+        setSelectedChildId("");
+      }
+      resetForm();
+    },
+    [allChildren, resetForm]
+  );
 
-    const handleProjectSelect = useCallback(async (projectId: string) => {
-        setSelectedProjectId(projectId);
-        setSelectedHealthCenterId("");
-        handleBeneficiarySelect(null);
-        await fetchProjectData(projectId);
-    }, [fetchProjectData, handleBeneficiarySelect]);
+  const handleProjectSelect = useCallback(
+    async (projectId: string) => {
+      setSelectedProjectId(projectId);
+      setSelectedHealthCenterId("");
+      handleBeneficiarySelect(null);
+      await fetchProjectData(projectId);
+    },
+    [fetchProjectData, handleBeneficiarySelect]
+  );
 
-    const handleHealthCenterChange = (hcId: string) => {
-        setSelectedHealthCenterId(hcId);
-        handleBeneficiarySelect(null);
-    };
+  const handleHealthCenterChange = (hcId: string) => {
+    setSelectedHealthCenterId(hcId);
+    handleBeneficiarySelect(null);
+  };
 
-    // --- Filtering & Memoization ---
-    const beneficiariesInHc = useMemo((): Beneficiary[] => {
-        if (!selectedHealthCenterId) return [];
-        const childrenInHc = allChildren.filter(c => c.hc_id === selectedHealthCenterId && c.child_has_cmam === 'نعم');
-        
-        const uniqueBeneficiaries = new Map<string, Beneficiary>();
-        childrenInHc.forEach(child => {
-            if (child.benef_id && !uniqueBeneficiaries.has(child.benef_id)) {
-                uniqueBeneficiaries.set(child.benef_id, {
-                    id: child.benef_id,
-                    BENEF_ID: child.benef_id,
-                    BENEF_NAME: child.bnf_name,
-                    hc_id: child.hc_id,
-                 });
-            }
-        });
-        return Array.from(uniqueBeneficiaries.values());
-    }, [allChildren, selectedHealthCenterId]);
-
-    const filteredBeneficiaries = useMemo(() => {
-        if (!beneficiarySearch) return beneficiariesInHc;
-        const ls = beneficiarySearch.toLowerCase();
-        return beneficiariesInHc.filter(b => String(b.BENEF_ID).toLowerCase().includes(ls) || b.BENEF_NAME.toLowerCase().includes(ls));
-    }, [beneficiariesInHc, beneficiarySearch]);
-
-    const childrenOfBeneficiary = useMemo(() => {
-        if (!selectedBeneficiary) return [];
-        let filtered = allChildren.filter(c => c.benef_id === selectedBeneficiary.BENEF_ID && c.child_has_cmam === 'نعم');
-        if (childSearch) {
-            const ls = childSearch.toLowerCase();
-            filtered = filtered.filter(c => String(c.child_id).toLowerCase().includes(ls) || c.child_name.toLowerCase().includes(ls));
-        }
-        return filtered;
-    }, [allChildren, selectedBeneficiary, childSearch]);
-
-    // --- Submit Logic ---
-    const onSubmit = async (data: z.infer<typeof formSchema>) => {
-        if (!selectedChildId) {
-            toast({ title: "Selection Missing", variant: "destructive" });
-            return;
-        }
-
-        setLoading(p => ({...p, saving: true}));
-
-        const fullDate = (data.conf_date_day && data.conf_date_month && data.conf_date_year)
-            ? `${data.conf_date_year}-${data.conf_date_month}-${data.conf_date_day}`
-            : null;
-
-        const childToUpdate = allChildren.find(c => c.child_id === selectedChildId);
-        if (!childToUpdate) {
-            toast({title: "Error", description: "Could not find the child record to update.", variant: "destructive"});
-            setLoading(p => ({...p, saving: false}));
-            return;
-        }
-
-        let payload: any = { 
-            id: childToUpdate.id,
-            conf_date: fullDate,
-        };
-
-        try {
-            if (!fullDate && data.attend_hc === 'نعم') {
-                throw new Error("تاريخ تأكيد الحالة is required.");
-            }
-
-            payload.attend_hc = data.attend_hc;
-
-            if (data.attend_hc === 'لا') {
-                if (!data.not_attend_reason_hc) throw new Error("سبب عدم الحضور is required.");
-                payload.not_attend_reason_hc = data.not_attend_reason_hc;
-            } else if (data.attend_hc === 'نعم') {
-                if (!data.child_has_cmam_hc) throw new Error("هل يعاني الطفل من سوء تغذية is required.");
-                payload.child_has_cmam_hc = data.child_has_cmam_hc;
-
-                if (data.child_has_cmam_hc === 'لا') {
-                    if (data.muac_hc_no === undefined) throw new Error("قياس المواك is required.");
-                    payload.muac_hc = data.muac_hc_no;
-                    payload.comments = data.cmam_result_hc_no;
-                } else {
-                    if (!data.meas_type || !data.child_cmam_cond) throw new Error("Please fill all required malnutrition details.");
-                    payload.hc_card_no = data.hc_card_no;
-                    payload.meas_type = data.meas_type;
-                    payload.muac_hc = data.meas_type === 'المواك' ? data.muac_hc : null;
-                    payload.zscore_h = data.meas_type === 'الزد اسكور' ? data.zscore_h : null;
-                    payload.zscore_w = data.meas_type === 'الزد اسكور' ? data.zscore_w : null;
-                    payload.zscore = data.meas_type === 'الزد اسكور' ? data.zscore : null;
-                    payload.child_cmam_cond = data.child_cmam_cond;
-                    payload.exp_start_treat_date = data.exp_start_treat_date_year ? `${data.exp_start_treat_date_year}-${data.exp_start_treat_date_month}-${data.exp_start_treat_date_day}` : null;
-                    payload.exp_end_treat_date = data.exp_end_treat_date_year ? `${data.exp_end_treat_date_year}-${data.exp_end_treat_date_month}-${data.exp_end_treat_date_day}` : null;
-                    payload.cmam_result_hc = data.cmam_result_hc;
-                }
-            }
-            
-            const res = await fetch('/api/child-cmam', {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify([payload])
-            });
-            if (!res.ok) throw new Error(await res.text());
-
-            toast({ title: "Success", description: "تم تحديث السجل بنجاح." });
-            
-            const updatedChildren = allChildren.map(child =>
-                child.id === payload.id ? { ...child, ...payload } : child
-            );
-            setAllChildren(updatedChildren);
-
-            // Determine explicit navigation paths
-            const currentChildIndex = childrenOfBeneficiary.findIndex(c => c.child_id === selectedChildId);
-            const nextChild = (currentChildIndex > -1 && currentChildIndex < childrenOfBeneficiary.length - 1) ? childrenOfBeneficiary[currentChildIndex + 1] : null;
-
-            if (nextChild) {
-                toast({ title: "انتقال", description: `يتم الان الانتقال إلى الطفل: ${nextChild.child_name}` });
-                setSelectedChildId(nextChild.child_id);
-                resetForm();
-            } else {
-                const currentBnfIndex = filteredBeneficiaries.findIndex(b => b.id === selectedBeneficiary?.id);
-                if (currentBnfIndex > -1 && currentBnfIndex < filteredBeneficiaries.length - 1) {
-                    const nextBnf = filteredBeneficiaries[currentBnfIndex + 1];
-                    toast({ title: "انتقال", description: `يتم الان الانتقال إلى المستفيدة: ${nextBnf.BENEF_NAME}` });
-                    handleBeneficiarySelect(nextBnf);
-                } else {
-                    toast({ title: "نهاية القائمة", description: "لقد قمت بمراجعة جميع الأطفال في هذا المركز الصحي." });
-                    handleBeneficiarySelect(null);
-                }
-            }
-            
-        } catch (err: any) {
-            toast({ title: "Save Error", description: err.message, variant: "destructive" });
-        } finally {
-            setLoading(p => ({...p, saving: false}));
-        }
-    };
-
-
-    return (
-        <div className="space-y-6 max-w-7xl mx-auto p-4 md:p-6 pb-24" dir="rtl">
-            <div className="flex justify-between items-center mb-6">
-                <h1 className="text-3xl font-bold text-foreground">إدخال نتائج تأكيد سوء التغذية (للأطفال)</h1>
-                <div className="flex gap-2">
-                    <Button variant="outline" asChild><Link href="/meal-system/monitoring/implementation/process/CMAM-cases/children/confirmation"><ArrowLeft className="mr-2 h-4 w-4"/> عودة</Link></Button>
-                    <Button variant="outline" asChild><Link href="/meal-system/monitoring/implementation/process/CMAM-cases/children/database"><Database className="mr-2 h-4 w-4"/>Database</Link></Button>
-                    <Button variant="outline" asChild><Link href="/meal-system/monitoring/implementation/process/CMAM-cases/children/confirmation/export"><FileText className="mr-2 h-4 w-4"/>Export</Link></Button>
-                </div>
-            </div>
-            
-            <Card>
-                <CardHeader>
-                    <CardTitle>1. حدد المشروع و المركز الصحي</CardTitle>
-                </CardHeader>
-                <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <Select onValueChange={handleProjectSelect} value={selectedProjectId}>
-                        <SelectTrigger><SelectValue placeholder="اختر المشروع..." /></SelectTrigger>
-                        <SelectContent>{projects.map(p => <SelectItem key={p.projectId} value={p.projectId}>{p.projectName}</SelectItem>)}</SelectContent>
-                    </Select>
-                     <Select onValueChange={handleHealthCenterChange} value={selectedHealthCenterId} disabled={!selectedProjectId}>
-                        <SelectTrigger><SelectValue placeholder="اختر المركز..." /></SelectTrigger>
-                        <SelectContent>{healthCenters.map(hc => <SelectItem key={hc.hc_id} value={hc.hc_id}>{hc.hc_name} ({hc.hc_id})</SelectItem>)}</SelectContent>
-                    </Select>
-                </CardContent>
-            </Card>
-
-            {selectedHealthCenterId && (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <Card className="lg:col-span-1">
-                    <CardHeader><CardTitle>اختيار المستفيدة</CardTitle></CardHeader>
-                    <CardContent>
-                        <Input placeholder="بحث بالاسم او رقم المستفيدة..." value={beneficiarySearch} onChange={e => setBeneficiarySearch(e.target.value)} disabled={!selectedHealthCenterId} />
-                        <ScrollArea className="h-48 mt-4 border rounded-md">
-                            <Table><TableHeader className="bg-muted sticky top-0"><TableRow><TableHead className="w-[50px]">تحديد</TableHead><TableHead>ID</TableHead><TableHead>الاسم</TableHead></TableRow></TableHeader>
-                            <TableBody>{filteredBeneficiaries.map(b => (
-                                <TableRow key={b.id} onClick={() => handleBeneficiarySelect(b)} className={cn("cursor-pointer", selectedBeneficiary?.id === b.id && 'bg-primary/10')}>
-                                    <TableCell><Checkbox checked={selectedBeneficiary?.id === b.id} /></TableCell>
-                                    <TableCell>{b.BENEF_ID}</TableCell><TableCell>{b.BENEF_NAME}</TableCell>
-                                </TableRow>
-                            ))}</TableBody></Table>
-                         </ScrollArea>
-                    </CardContent>
-             
-                    {selectedBeneficiary && <Card className="mt-4">
-                        <CardHeader><CardTitle>اختيار الطفل</CardTitle></CardHeader>
-                        <CardContent>
-                             <Input placeholder="بحث بالاسم او رقم الطفل..." value={childSearch} onChange={e => setChildSearch(e.target.value)} />
-                             <ScrollArea className="h-48 mt-4 border rounded-md">
-                                <Table><TableHeader className="bg-muted sticky top-0"><TableRow><TableHead className="w-[50px]">تحديد</TableHead><TableHead>ID</TableHead><TableHead>الاسم</TableHead></TableRow></TableHeader>
-                                <TableBody>{childrenOfBeneficiary.map(c => (
-                                    <TableRow key={c.id} onClick={() => { setSelectedChildId(c.child_id); resetForm(); }} className={cn("cursor-pointer", selectedChildId === c.child_id && 'bg-secondary/10')}>
-                                        <TableCell><Checkbox checked={selectedChildId === c.child_id} /></TableCell>
-                                        <TableCell>{c.child_id}</TableCell><TableCell>{c.child_name}</TableCell>
-                                    </TableRow>
-                                ))}</TableBody></Table>
-                             </ScrollArea>
-                        </CardContent>
-                    </Card>}
-                </Card>
-
-                {/* Using key={selectedChildId} forces React to destroy and rebuild the component, eliminating completely any stale data in custom UI elements */}
-                {selectedChildId && <Card key={selectedChildId} className="lg:col-span-2">
-                    <Form {...form}>
-                    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                        <CardHeader><CardTitle>بيانات تأكيد الحالة للطفل المحدد</CardTitle></CardHeader>
-                        <CardContent className="space-y-6">
-                            <div className="space-y-2"><Label>تاريخ تأكيد الحالة</Label><div className="grid grid-cols-3 gap-2">
-                                <FormField control={form.control} name="conf_date_day" render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Day"/></SelectTrigger></FormControl><SelectContent>{days.map(d => <SelectItem key={d} value={String(d)}>{d}</SelectItem>)}</SelectContent></Select></FormItem>)} />
-                                <FormField control={form.control} name="conf_date_month" render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Month"/></SelectTrigger></FormControl><SelectContent>{months.map((m,i) => <SelectItem key={m} value={String(i+1)}>{m}</SelectItem>)}</SelectContent></Select></FormItem>)} />
-                                <FormField control={form.control} name="conf_date_year" render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Year"/></SelectTrigger></FormControl><SelectContent>{years.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}</SelectContent></Select></FormItem>)} />
-                            </div></div>
-                            <FormField control={form.control} name="attend_hc" render={({ field }) => (<FormItem><FormLabel>هل الطفل حضر الى المركز الصحي؟</FormLabel><FormControl><div className="flex gap-4 pt-2">
-                                <Button type="button" variant={field.value === 'نعم' ? 'default' : 'outline'} onClick={() => field.onChange('نعم')} className="flex-1">نعم</Button>
-                                <Button type="button" variant={field.value === 'لا' ? 'destructive' : 'outline'} onClick={() => field.onChange('لا')} className="flex-1">لا</Button>
-                            </div></FormControl><FormMessage /></FormItem>)} />
-
-                            {watchAttendHC === 'لا' && (<><FormField control={form.control} name="not_attend_reason_hc" render={({ field }) => (<FormItem><FormLabel>سبب عدم الحضور</FormLabel><FormControl><Input {...field}/></FormControl><FormMessage/></FormItem>)} /><Button type="submit" disabled={loading.saving}>{loading.saving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Update & Next</Button></>)}
-           
-                            {watchAttendHC === 'نعم' && (<FormField control={form.control} name="child_has_cmam_hc" render={({ field }) => (<FormItem><FormLabel>هل يعاني الطفل من سوء تغذية؟</FormLabel><FormControl><div className="flex gap-4 pt-2">
-                                <Button type="button" variant={field.value === 'نعم' ? 'default' : 'outline'} onClick={() => field.onChange('نعم')} className="flex-1">نعم</Button>
-                                <Button type="button" variant={field.value === 'لا' ? 'destructive' : 'outline'} onClick={() => field.onChange('لا')} className="flex-1">لا</Button>
-                            </div></FormControl><FormMessage /></FormItem>)} />)}
-                            
-                             {watchAttendHC === 'نعم' && watchHasCmamHC === 'لا' && (<>
-                                <FormField control={form.control} name="muac_hc_no" render={({ field }) => (
-                                <FormItem><FormLabel>قياس المواك: {field.value?.toFixed(1) || 12.5}</FormLabel>
-                                <FormControl><Slider min={12.5} max={20} step={0.1} value={[field.value || 12.5]} onValueChange={(v) => field.onChange(v[0])} /></FormControl><FormMessage /></FormItem>
-                                )} />
-                                 <FormField control={form.control} name="cmam_result_hc_no" render={({ field }) => (
-                                    <FormItem><FormLabel>ملاحظات</FormLabel><FormControl><Textarea placeholder="أدخل ملاحظاتك هنا..." {...field} /></FormControl><FormMessage/></FormItem>
-                                )} />
-                                <Button type="submit" disabled={loading.saving}>{loading.saving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Update & Next</Button>
-                                </>
-                             )}
-
-                            {watchAttendHC === 'نعم' && watchHasCmamHC === 'نعم' && (<div className="space-y-6 border-t pt-6 mt-6">
-                                <FormField control={form.control} name="hc_card_no" render={({ field }) => (<FormItem><FormLabel>رقم الكرت الحصري</FormLabel><FormControl><Input type="number" {...field}/></FormControl><FormMessage/></FormItem>)} />
-                                <FormField control={form.control} name="meas_type" render={({ field }) => (<FormItem><FormLabel>نوع القياس المستخدم</FormLabel><FormControl><div className="flex gap-4 pt-2">
-                                    <Button type="button" variant={field.value === 'المواك' ? 'default' : 'outline'} onClick={() => field.onChange('المواك')} className="flex-1">المواك</Button>
-                                    <Button type="button" variant={field.value === 'الزد اسكور' ? 'default' : 'outline'} onClick={() => field.onChange('الزد اسكور')} className="flex-1">الزد اسكور</Button>
-                                </div></FormControl><FormMessage /></FormItem>)} />
-                                {watchMeasType === 'المواك' && (<FormField control={form.control} name="muac_hc" render={({ field }) => (<FormItem><FormLabel>قياس المواك: {field.value?.toFixed(1) || 7.0}</FormLabel><FormControl><Slider min={7} max={12.4} step={0.1} value={[field.value || 7]} onValueChange={(v) => field.onChange(v[0])} /></FormControl><FormMessage /></FormItem>)} />)}
-                                {watchMeasType === 'الزد اسكور' && (<div className="grid grid-cols-2 gap-4"><FormField control={form.control} name="zscore_h" render={({ field }) => (<FormItem><FormLabel>قياس الطول</FormLabel><FormControl><Input type="number" {...field} /></FormControl></FormItem>)} /><FormField control={form.control} name="zscore_w" render={({ field }) => (<FormItem><FormLabel>قياس الوزن</FormLabel><FormControl><Input type="number" {...field} /></FormControl></FormItem>)} />
-                                    <FormField control={form.control} name="zscore" render={({ field }) => (<FormItem className="col-span-2"><FormLabel>قياس الزد اسكور</FormLabel><FormControl><div className="flex gap-2 p-2 border rounded-md justify-around">{[-3, -2, -1, 0, 1, 2, 3].map(v => <Button key={v} type="button" variant={field.value === String(v) ? 'default' : 'outline'} onClick={() => field.onChange(String(v))} className="h-10 w-10">{v}</Button>)}</div></FormControl></FormItem>)} />
-                                </div>)}
-                                <FormField control={form.control} name="child_cmam_cond" render={({ field }) => (<FormItem><FormLabel>حالة الطفل حاليا</FormLabel><FormControl><div className="flex gap-4 pt-2">
-                                    <Button type="button" variant={field.value === 'سوء تغذية متوسط' ? 'default' : 'outline'} onClick={() => field.onChange('سوء تغذية متوسط')} className="flex-1">سوء تغذية متوسط</Button>
-                                    <Button type="button" variant={field.value === 'سوء تغذية حاد' ? 'default' : 'outline'} onClick={() => field.onChange('سوء تغذية حاد')} className="flex-1">سوء تغذية حاد</Button>
-                                </div></FormControl><FormMessage /></FormItem>)} />
-                                <div className="space-y-2"><Label>تاريخ بدء العلاج</Label><div className="grid grid-cols-3 gap-2">
-                                    <FormField control={form.control} name="exp_start_treat_date_day" render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Day"/></SelectTrigger></FormControl><SelectContent>{days.map(d => <SelectItem key={d} value={String(d)}>{d}</SelectItem>)}</SelectContent></Select></FormItem>)} />
-                                    <FormField control={form.control} name="exp_start_treat_date_month" render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Month"/></SelectTrigger></FormControl><SelectContent>{months.map((m,i) => <SelectItem key={m} value={String(i+1)}>{m}</SelectItem>)}</SelectContent></Select></FormItem>)} />
-                                    <FormField control={form.control} name="exp_start_treat_date_year" render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Year"/></SelectTrigger></FormControl><SelectContent>{years.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}</SelectContent></Select></FormItem>)} />
-                                </div></div>
-                                <div className="space-y-2"><Label>التاريخ المتوقع لانتهاء العلاج</Label><div className="grid grid-cols-3 gap-2">
-                                    <FormField control={form.control} name="exp_end_treat_date_day" render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Day"/></SelectTrigger></FormControl><SelectContent>{days.map(d => <SelectItem key={d} value={String(d)}>{d}</SelectItem>)}</SelectContent></Select></FormItem>)} />
-                                    <FormField control={form.control} name="exp_end_treat_date_month" render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Month"/></SelectTrigger></FormControl><SelectContent>{months.map((m,i) => <SelectItem key={m} value={String(i+1)}>{m}</SelectItem>)}</SelectContent></Select></FormItem>)} />
-                                    <FormField control={form.control} name="exp_end_treat_date_year" render={({ field }) => (<FormItem><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Year"/></SelectTrigger></FormControl><SelectContent>{years.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}</SelectContent></Select></FormItem>)} />
-                                </div></div>
-                                <FormField
-                                    control={form.control}
-                                    name="cmam_result_hc"
-                                    render={({ field }) => (
-                                    <FormItem><FormLabel>حالة المتابعة</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select status..."/></SelectTrigger></FormControl>
-                                    <SelectContent>
-                                        <SelectItem value="مستمر بالمعالجة">مستمر بالمعالجة</SelectItem>
-                                        <SelectItem value="شفاء">شفاء</SelectItem>
-                                        <SelectItem value="تخلف">تخلف</SelectItem>
-                                        <SelectItem value="الوفاة">الوفاة</SelectItem>
-                                        <SelectItem value="عدم استجابة">عدم استجابة</SelectItem>
-                                        <SelectItem value="انتهاء فترة الدعم / تخريج من برنامج سوء التغذية">انتهاء فترة الدعم / تخريج من برنامج سوء التغذية</SelectItem>
-                                    </SelectContent>
-                                    </Select><FormMessage /></FormItem>
-                                )} />
-                                <Button type="submit" disabled={loading.saving}>{loading.saving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Update & Next</Button>
-                            </div>)}
-                        </CardContent>
-                    </form>
-                    </Form>
-                </Card>}
-            </div>
-            )}
-        </div>
+  const beneficiariesInHc = useMemo(() => {
+    if (!selectedHealthCenterId) return [];
+    const childrenInHc = allChildren.filter(
+      (c) => c.hc_id === selectedHealthCenterId && c.child_has_cmam === "نعم"
     );
+    const uniqueBeneficiaries = new Map<string, Beneficiary>();
+    childrenInHc.forEach((child) => {
+      if (child.benef_id && !uniqueBeneficiaries.has(child.benef_id)) {
+        uniqueBeneficiaries.set(child.benef_id, {
+          id: child.benef_id,
+          BENEF_ID: child.benef_id,
+          BENEF_NAME: child.bnf_name,
+          hc_id: child.hc_id,
+        });
+      }
+    });
+    return Array.from(uniqueBeneficiaries.values());
+  }, [allChildren, selectedHealthCenterId]);
+
+  const filteredBeneficiaries = useMemo(() => {
+    if (!beneficiarySearch) return beneficiariesInHc;
+    const ls = beneficiarySearch.toLowerCase();
+    return beneficiariesInHc.filter(
+      (b) => String(b.BENEF_ID).toLowerCase().includes(ls) || b.BENEF_NAME.toLowerCase().includes(ls)
+    );
+  }, [beneficiariesInHc, beneficiarySearch]);
+
+  const childrenOfBeneficiary = useMemo(() => {
+    if (!selectedBeneficiary) return [];
+    let filtered = allChildren.filter(
+      (c) => c.benef_id === selectedBeneficiary.BENEF_ID && c.child_has_cmam === "نعم"
+    );
+    if (childSearch) {
+      const ls = childSearch.toLowerCase();
+      filtered = filtered.filter(
+        (c) =>
+          String(c.child_id).toLowerCase().includes(ls) || c.child_name.toLowerCase().includes(ls)
+      );
+    }
+    return filtered;
+  }, [allChildren, selectedBeneficiary, childSearch]);
+
+  const onSubmit = async (data: z.infer<typeof formSchema>) => {
+    if (!selectedChildId) {
+      toast({ title: "Selection Missing", variant: "destructive" });
+      return;
+    }
+
+    setLoading((p) => ({ ...p, saving: true }))
+    const fullDate =
+      data.conf_date_day && data.conf_date_month && data.conf_date_year
+        ? `${data.conf_date_year}-${data.conf_date_month}-${data.conf_date_day}`
+        : null;
+
+    const childToUpdate = allChildren.find((c) => c.child_id === selectedChildId);
+    if (!childToUpdate) {
+      toast({ title: "Error", description: "Could not find the child record to update.", variant: "destructive" });
+      setLoading((p) => ({ ...p, saving: false }));
+      return;
+    }
+
+    let payload: any = {
+      id: childToUpdate.id,
+      conf_date: fullDate,
+    };
+
+    try {
+      if (!fullDate && data.attend_hc === "نعم") {
+        throw new Error("تاريخ تأكيد الحالة is required.");
+      }
+
+      payload.attend_hc = data.attend_hc;
+
+      if (data.attend_hc === "لا") {
+        if (!data.not_attend_reason_hc) throw new Error("سبب عدم الحضور is required.");
+        payload.not_attend_reason_hc = data.not_attend_reason_hc;
+      } else if (data.attend_hc === "نعم") {
+        if (!data.child_has_cmam_hc) throw new Error("هل يعاني الطفل من سوء تغذية is required.");
+        payload.child_has_cmam_hc = data.child_has_cmam_hc;
+
+        if (data.child_has_cmam_hc === "لا") {
+          if (data.muac_hc_no === undefined) throw new Error("قياس المواءك is required.");
+          payload.muac_hc = data.muac_hc_no;
+          payload.comments = data.cmam_result_hc_no;
+        } else {
+          if (!data.meas_type || !data.child_cmam_cond) throw new Error("Please fill all required malnutrition details.");
+          payload.hc_card_no = data.hc_card_no;
+          payload.meas_type = data.meas_type;
+          payload.muac_hc = data.meas_type === "الـمـوّاك" ? data.muac_hc : null;
+          payload.zscore_h = data.meas_type === "الـزد اسكور" ? data.zscore_h : null;
+          payload.zscore_w = data.meas_type === "الـزد اسكور" ? data.zscore_w : null;
+          payload.zscore = data.meas_type === "الـزد اسكور" ? data.zscore : null;
+          payload.child_cmam_cond = data.child_cmam_cond;
+          payload.exp_start_treat_date = data.exp_start_treat_date_year
+            ? `${data.exp_start_treat_date_year}-${data.exp_start_treat_date_month}-${data.exp_start_treat_date_day}`
+            : null;
+          payload.exp_end_treat_date = data.exp_end_treat_date_year
+            ? `${data.exp_end_treat_date_year}-${data.exp_end_treat_date_month}-${data.exp_end_treat_date_day}`
+            : null;
+          payload.cmam_result_hc = data.cmam_result_hc;
+        }
+      }
+
+      const res = await fetch("/api/child-cmam", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify([payload]),
+      });
+      if (!res.ok) throw new Error(await res.text());
+
+      toast({ title: "Success", description: "تم تحديد السجل بنجاح." });
+
+      const updatedChildren = allChildren.map((child) =>
+        child.id === payload.id ? { ...child, ...payload } : child
+      );
+      setAllChildren(updatedChildren);
+
+      const currentChildIndex = childrenOfBeneficiary.findIndex((c) => c.child_id === selectedChildId);
+      const nextChild =
+        currentChildIndex > -1 && currentChildIndex < childrenOfBeneficiary.length - 1
+          ? childrenOfBeneficiary[currentChildIndex + 1]
+          : null;
+
+      if (nextChild) {
+        toast({ title: "انتقال", description: `تم الانتقال إلى الطفل: ${nextChild.child_name}` });
+        setSelectedChildId(nextChild.child_id);
+        resetForm();
+      } else {
+        const currentBnfIndex = filteredBeneficiaries.findIndex((b) => b.id === selectedBeneficiary?.id);
+        if (currentBnfIndex > -1 && currentBnfIndex < filteredBeneficiaries.length - 1) {
+          const nextBnf = filteredBeneficiaries[currentBnfIndex + 1];
+          toast({
+            title: "انتقال",
+            description: `تم الانتقال إلى المستفيدة: ${nextBnf.BENEF_NAME}`,
+          });
+          handleBeneficiarySelect(nextBnf);
+        } else {
+          toast({
+            title: "نهاية القائمة",
+            description: "لقد تمت مراجعة جميع الأطفال في هذا المركز الصحي.",
+          });
+          handleBeneficiarySelect(null);
+        }
+      }
+    } catch (err: any) {
+      toast({ title: "Save Error", description: err.message, variant: "destructive" });
+    } finally {
+      setLoading((p) => ({ ...p, saving: false }));
+    }
+  };
+
+  return (
+    <div className="space-y-6 max-w-7xl mx-auto p-4 md:p-6 pb-24" dir="rtl">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-3xl font-bold text-foreground">إدخال نتائج سوء التغذية (للأطفال)</h1>
+        <div className="flex gap-2">
+          <Button variant="outline" asChild>
+            <Link href="/meal-system/monitoring/implementation/process/CMAM-cases/children/confirmation">
+              <ArrowLeft className="mr-2 h-4 w-4" /> عودة
+            </Link>
+          </Button>
+          <Button variant="outline" asChild>
+            <Link href="/meal-system/monitoring/implementation/process/CMAM-cases/children/database">
+              <Database className="mr-2 h-4 w-4" /> Database
+            </Link>
+          </Button>
+          <Button variant="outline" asChild>
+            <Link href="/meal-system/monitoring/implementation/process/CMAM-cases/children/confirmation/export">
+              <FileText className="mr-2 h-4 w-4" /> Export
+            </Link>
+          </Button>
+        </div>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>1. تحديد المشروع والمركز الصحي</CardTitle>
+        </CardHeader>
+        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Select onValueChange={handleProjectSelect} value={selectedProjectId}>
+            <SelectTrigger>
+              <SelectValue placeholder="اختر المشروع..." />
+            </SelectTrigger>
+            <SelectContent>
+              {projects.map((p) => (
+                <SelectItem key={p.projectId} value={p.projectId}>
+                  {p.projectName}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
+            onValueChange={handleHealthCenterChange}
+            value={selectedHealthCenterId}
+            disabled={!selectedProjectId}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="اختر المركز..." />
+            </SelectTrigger>
+            <SelectContent>
+              {healthCenters.map((hc) => (
+                <SelectItem key={hc.hc_id} value={hc.hc_id}>
+                  {hc.hc_name} ({hc.hc_id})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </CardContent>
+      </Card>
+
+      {selectedHealthCenterId && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <Card className="lg:col-span-1">
+            <CardHeader>
+              <CardTitle>اختيار المستفيدة</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Input
+                placeholder="بحث بالاسم أو رقم المستفيدة..."
+                value={beneficiarySearch}
+                onChange={(e) => setBeneficiarySearch(e.target.value)}
+                disabled={!selectedHealthCenterId}
+              />
+              <ScrollArea className="h-48 mt-4 border rounded-md">
+                <Table>
+                  <TableHeader className="bg-muted sticky top-0">
+                    <TableRow>
+                      <TableHead className="w-[50px]">تحديد</TableHead>
+                      <TableHead>ID</TableHead>
+                      <TableHead>الاسم</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredBeneficiaries.map((b) => (
+                      <TableRow
+                        key={b.id}
+                        onClick={() => handleBeneficiarySelect(b)}
+                        className={cn("cursor-pointer", selectedBeneficiary?.id === b.id && "bg-primary/10")}
+                      >
+                        <TableCell>
+                          <Checkbox checked={selectedBeneficiary?.id === b.id} />
+                        </TableCell>
+                        <TableCell>{b.BENEF_ID}</TableCell>
+                        <TableCell>{b.BENEF_NAME}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </ScrollArea>
+
+              {selectedBeneficiary && (
+                <Card className="mt-4">
+                  <CardHeader>
+                    <CardTitle>اختيار الطفل</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <Input
+                      placeholder="بحث بالاسم أو رقم الطفل..."
+                      value={childSearch}
+                      onChange={(e) => setChildSearch(e.target.value)}
+                    />
+                    <ScrollArea className="h-48 mt-4 border rounded-md">
+                      <Table>
+                        <TableHeader className="bg-muted sticky top-0">
+                          <TableRow>
+                            <TableHead className="w-[50px]">تحديد</TableHead>
+                            <TableHead>ID</TableHead>
+                            <TableHead>الاسم</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {childrenOfBeneficiary.map((c) => (
+                            <TableRow
+                              key={c.id}
+                              onClick={() => {
+                                setSelectedChildId(c.child_id);
+                                resetForm();
+                              }}
+                              className={cn("cursor-pointer", selectedChildId === c.child_id && "bg-secondary/10")}
+                            >
+                              <TableCell>
+                                <Checkbox checked={selectedChildId === c.child_id} />
+                              </TableCell>
+                              <TableCell>{c.child_id}</TableCell>
+                              <TableCell>{c.child_name}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </ScrollArea>
+                  </CardContent>
+                </Card>
+              )}
+            </CardContent>
+          </Card>
+
+          {selectedChildId && (
+            <Card key={selectedChildId} className="lg:col-span-2">
+              <Form {...form}>
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                  <CardHeader>
+                    <CardTitle>بيانات تأكيد الحالة للأطفال</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    <div className="space-y-2">
+                      <Label>تاريخ تأكيد الحالة</Label>
+                      <div className="grid grid-cols-3 gap-2">
+                        <FormField
+                          control={form.control}
+                          name="conf_date_day"
+                          render={({ field }) => (
+                            <FormItem>
+                              <Select onValueChange={field.onChange} value={field.value}>
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Day" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {days.map((d) => (
+                                    <SelectItem key={d} value={String(d)}>
+                                      {d}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="conf_date_month"
+                          render={({ field }) => (
+                            <FormItem>
+                              <Select onValueChange={field.onChange} value={field.value}>
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Month" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {months.map((m, i) => (
+                                    <SelectItem key={m} value={String(i + 1)}>
+                                      {m}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="conf_date_year"
+                            render={({ field }) => (
+                            <FormItem>
+                              <Select onValueChange={field.onChange} value={field.value}>
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Year" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {years.map((y) => (
+                                    <SelectItem key={y} value={String(y)}>
+                                      {y}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    </div>
+                    <FormField
+                      control={form.control}
+                      name="attend_hc"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>هل الطفل حضر إلى المركز الصحي؟</FormLabel>
+                          <FormControl>
+                            <div className="flex gap-4 pt-2">
+                              <Button
+                                type="button"
+                                variant={field.value === "نعم" ? "default" : "outline"}
+                                onClick={() => field.onChange("نعم")}
+                                className="flex-1"
+                              >
+                                نعم
+                              </Button>
+                              <Button
+                                type="button"
+                                variant={field.value === "لا" ? "destructive" : "outline"}
+                                onClick={() => field.onChange("لا")}
+                                className="flex-1"
+                              >
+                                لا
+                              </Button>
+                            </div>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    {watchAttendHC === "لا" && (
+                      <>
+                        <FormField
+                          control={form.control}
+                          name="not_attend_reason_hc"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>سبب عدم الحضور</FormLabel>
+                              <FormControl>
+                                <Input {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <Button type="submit" disabled={!isFormValid || loading.saving}>
+                          {loading.saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                          Update & Next
+                        </Button>
+                      </>
+                    )}
+                    {watchAttendHC === "نعم" && (
+                      <>
+                        <FormField
+                          control={form.control}
+                          name="child_has_cmam_hc"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>هل الطفل يعاني من سوء تغذية؟</FormLabel>
+                              <FormControl>
+                                <div className="flex gap-4 pt-2">
+                                  <Button
+                                    type="button"
+                                    variant={field.value === "نعم" ? "default" : "outline"}
+                                    onClick={() => field.onChange("نعم")}
+                                    className="flex-1"
+                                  >
+                                    نعم
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant={field.value === "لا" ? "destructive" : "outline"}
+                                    onClick={() => field.onChange("لا")}
+                                    className="flex-1"
+                                  >
+                                    لا
+                                  </Button>
+                                </div>
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        {watchHasCmamHC === "لا" && (
+                          <>
+                            <FormField
+                              control={form.control}
+                              name="muac_hc_no"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>قياس المواءك: {field.value?.toFixed(1) || 12.5}</FormLabel>
+                                  <FormControl>
+                                    <Slider
+                                      min={12.5}
+                                      max={20}
+                                      step={0.1}
+                                      value={[field.value || 12.5]}
+                                      onValueChange={(v) => field.onChange(v[0])}
+                                    />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                            <FormField
+                              control={form.control}
+                              name="cmam_result_hc_no"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>ملاحظات</FormLabel>
+                                  <FormControl>
+                                    <Textarea placeholder="أدخل ملاحظاتك هنا..." {...field} />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                            <Button type="submit" disabled={!isFormValid || loading.saving}>
+                              {loading.saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                              Update & Next
+                            </Button>
+                          </>
+                        )}
+                        {watchHasCmamHC === "نعم" && (
+                          <div className="space-y-6 border-t pt-6 mt-6">
+                            <FormField
+                              control={form.control}
+                              name="hc_card_no"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>رقم الكرت الصحي</FormLabel>
+                                  <FormControl>
+                                    <Input type="number" {...field} />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                            <FormField
+                              control={form.control}
+                              name="meas_type"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>نوع القياس المستخدَم</FormLabel>
+                                  <FormControl>
+                                    <div className="flex gap-4 pt-2">
+                                      <Button
+                                        type="button"
+                                        variant={field.value === "الـمـوّاك" ? "default" : "outline"}
+                                        onClick={() => field.onChange("الـمـوّاك")}
+                                        className="flex-1"
+                                      >
+                                        الموّاك
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        variant={field.value === "الـزد اسكور" ? "default" : "outline"}
+                                        onClick={() => field.onChange("الـزد اسكور")}
+                                        className="flex-1"
+                                      >
+                                        الزد اسكور
+                                      </Button>
+                                    </div>
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                            {watchMeasType === "الـمـوّاك" && (
+                              <FormField
+                                control={form.control}
+                                name="muac_hc"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>قياس المواءك: {field.value?.toFixed(1) || 7.0}</FormLabel>
+                                    <FormControl>
+                                      <Slider
+                                        min={7}
+                                        max={12.4}
+                                        step={0.1}
+                                        value={[field.value || 7]}
+                                        onValueChange={(v) => field.onChange(v[0])}
+                                      />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                            )}
+                            {watchMeasType === "الـزد اسكور" && (
+                              <div className="grid grid-cols-2 gap-4">
+                                <FormField
+                                  control={form.control}
+                                  name="zscore_h"
+                                  render={({ field }) => (
+                                    <FormItem>
+                                      <FormLabel>قيس الطول</FormLabel>
+                                      <FormControl>
+                                        <Input type="number" {...field} />
+                                      </FormControl>
+                                      <FormMessage />
+                                    </FormItem>
+                                  )}
+                                />
+                                <FormField
+                                  control={form.control}
+                                  name="zscore_w"
+                                  render={({ field }) => (
+                                    <FormItem>
+                                      <FormLabel>قيس الوزن</FormLabel>
+                                      <FormControl>
+                                        <Input type="number" {...field} />
+                                      </FormControl>
+                                      <FormMessage />
+                                    </FormItem>
+                                  )}
+                                />
+                                <FormField
+                                  control={form.control}
+                                  name="zscore"
+                                  render={({ field }) => (
+                                    <FormItem className="col-span-2">
+                                      <FormLabel>قيمة الزد اسكور</FormLabel>
+                                      <FormControl>
+                                        <div className="flex gap-2 p-2 border rounded-md justify-around">
+                                          {[-3, -2, -1, 0, 1, 2, 3].map((v) => (
+                                            <Button
+                                              key={v}
+                                              type="button"
+                                              variant={field.value === String(v) ? "default" : "outline"}
+                                              onClick={() => field.onChange(String(v))}
+                                              className="h-10 w-10"
+                                            >
+                                              {v}
+                                            </Button>
+                                          ))}
+                                        </div>
+                                      </FormControl>
+                                      <FormMessage />
+                                    </FormItem>
+                                  )}
+                                />
+                              </div>
+                            )}
+                            <FormField
+                              control={form.control}
+                              name="child_cmam_cond"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>حالة الطفل حاليا</FormLabel>
+                                  <FormControl>
+                                    <div className="flex gap-4 pt-2">
+                                      <Button
+                                        type="button"
+                                        variant={field.value === "سوء تغذية متوسطة" ? "default" : "outline"}
+                                        onClick={() => field.onChange("سوء تغذية متوسطة")}
+                                        className="flex-1"
+                                      >
+                                        سوء تغذية متوسطة
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        variant={field.value === "سوء تغذية حاد" ? "default" : "outline"}
+                                        onClick={() => field.onChange("سوء تغذية حاد")}
+                                        className="flex-1"
+                                      >
+                                        سوء تغذية حاد
+                                      </Button>
+                                    </div>
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                            <div className="space-y-2">
+                              <Label>تاريخ بدء العلاج</Label>
+                              <div className="grid grid-cols-3 gap-2">
+                                <FormField
+                                  control={form.control}
+                                  name="exp_start_treat_date_day"
+                                  render={({ field }) => (
+                                    <FormItem>
+                                      <Select onValueChange={field.onChange} value={field.value}>
+                                        <FormControl>
+                                          <SelectTrigger>
+                                            <SelectValue placeholder="Day" />
+                                          </SelectTrigger>
+                                        </FormControl>
+                                        <SelectContent>
+                                          {days.map((d) => (
+                                            <SelectItem key={d} value={String(d)}>
+                                              {d}
+                                            </SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                      <FormMessage />
+                                    </FormItem>
+                                  )}
+                                />
+                                <FormField
+                                  control={form.control}
+                                  name="exp_start_treat_date_month"
+                                  render={({ field }) => (
+                                    <FormItem>
+                                      <Select onValueChange={field.onChange} value={field.value}>
+                                        <FormControl>
+                                          <SelectTrigger>
+                                            <SelectValue placeholder="Month" />
+                                          </SelectTrigger>
+                                        </SelectControl>
+                                        <SelectContent>
+                                          {months.map((m, i) => (
+                                            <SelectItem key={m} value={String(i + 1)}>
+                                              {m}
+                                            </SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                      <FormMessage />
+                                    </FormItem>
+                                  )}
+                                />
+                                <FormField
+                                  control={form.control}
+                                  name="exp_start_treat_date_year"
+                                  render={({ field }) => (
+                                    <FormItem>
+                                      <Select onValueChange={field.onChange} value={field.value}>
+                                        <FormControl>
+                                          <SelectTrigger>
+                                            <SelectValue placeholder="Year" />
+                                          </SelectTrigger>
+                                        </FormControl>
+                                        <SelectContent>
+                                          {years.map((y) => (
+                                            <SelectItem key={y} value={String(y)}>
+                                              {y}
+                                            </SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                      <FormMessage />
+                                    </FormItem>
+                                  )}
+                                />
+                              </div>
+                            </div>
+                            <div className="space-y-2">
+                              <Label>تاريخ انتهاء العلاج</Label>
+                              <div className="grid grid-cols-3 gap-2">
+                                <FormField
+                                  control={form.control}
+                                  name="exp_end_treat_date_day"
+                                  render={({ field }) => (
+                                    <FormItem>
+                                      <Select onValueChange={field.onChange} value={field.value}>
+                                        <FormControl>
+                                          <SelectTrigger>
+                                            <SelectValue placeholder="Day" />
+                                          </SelectTrigger>
+                                        </FormControl>
+                                        <SelectContent>
+                                          {days.map((d) => (
+                                            <SelectItem key={d} value={String(d)}>
+                                              {d}
+                                            </SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                      <FormMessage />
+                                    </FormItem>
+                                  )}
+                                />
+                                <FormField
+                                  control={form.control}
+                                  name="exp_end_treat_date_month"
+                                  render={({ field }) => (
+                                    <FormItem>
+                                      <Select onValueChange={field.onChange} value={field.value}>
+                                        <FormControl>
+                                          <SelectTrigger>
+                                            <SelectValue placeholder="Month" />
+                                          </SelectTrigger>
+                                        </FormControl>
+                                        <SelectContent>
+                                          {months.map((m, i) => (
+                                            <SelectItem key={m} value={String(i + 1)}>
+                                              {m}
+                                            </SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                      <FormMessage />
+                                    </FormItem>
+                                  )}
+                                />
+                                <FormField
+                                  control={form.control}
+                                  name="exp_end_treat_date_year"
+                                  render={({ field }) => (
+                                    <FormItem>
+                                      <Select onValueChange={field.onChange} value={field.value}>
+                                        <FormControl>
+                                          <SelectTrigger>
+                                            <SelectValue placeholder="Year" />
+                                          </SelectTrigger>
+                                        </FormControl>
+                                        <SelectContent>
+                                          {years.map((y) => (
+                                            <SelectItem key={y} value={String(y)}>
+                                              {y}
+                                            </SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                      <FormMessage />
+                                    </FormItem>
+                                  )}
+                                />
+                              </div>
+                            </div>
+                            <FormField
+                              control={form.control}
+                              name="cmam_result_hc"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>حالة المتابعة</FormLabel>
+                                  <FormControl>
+                                    <Select onValueChange={field.onChange} value={field.value}>
+                                      <FormControl>
+                                        <SelectTrigger>
+                                          <SelectValue placeholder="Select status..." />
+                                        </SelectTrigger>
+                                      </FormControl>
+                                      <SelectContent>
+                                        {[
+                                          "مستمر بالمعالجة",
+                                          "شفاء",
+                                          "تخلف",
+                                          "الوفاة",
+                                          "عدم استجابة",
+                                          "إنتهاء فترة الدعم / تخرج من برنامج سوء التغذية",
+                                        ].map((status) => (
+                                          <SelectItem key={status} value={status}>
+                                            {status}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                            <Button type="submit" disabled={!isFormValid || loading.saving}>
+                              {loading.saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                              Update & Next
+                            </Button>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </CardContent>
+                </form>
+              </Form>
+            </Card>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
