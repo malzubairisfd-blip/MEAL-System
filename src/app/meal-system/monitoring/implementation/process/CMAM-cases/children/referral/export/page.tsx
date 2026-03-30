@@ -11,6 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import JSZip from 'jszip';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import { saveAs } from 'file-saver';
 
 interface Project {
   projectId: string;
@@ -76,7 +77,7 @@ export default function ExportChildReferralStatementsPage() {
                 ]);
                 const [fontRegularBuffer, fontBoldBuffer, logoBlob] = await Promise.all([
                     fontRegularRes.arrayBuffer(),
-                    fontBoldBuffer.arrayBuffer(),
+                    fontBoldRes.arrayBuffer(),
                     logoRes.blob()
                 ]);
 
@@ -105,11 +106,7 @@ export default function ExportChildReferralStatementsPage() {
                     const { type, data, error } = event.data;
                     if(type === 'done-all') {
                         const blob = new Blob([data], { type: 'application/zip' });
-                        const link = document.createElement('a');
-                        link.href = URL.createObjectURL(blob);
-                        link.download = `Child_Referral_Statements_Cycle_${config.followUpCycle}.zip`;
-                        link.click();
-                        URL.revokeObjectURL(link.href);
+                        saveAs(blob, `Child_Referral_Statements_Cycle_${config.followUpCycle}.zip`);
                         toast({ title: "Export Complete", description: "Your ZIP file has been downloaded." });
                     } else if (type === 'error') {
                         throw new Error(error);
