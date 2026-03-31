@@ -17,14 +17,9 @@ interface Project {
   projectName: string;
 }
 
-const MONTHS: Record<string, number> = {
-  يناير: 1, فبراير: 2, مارس: 3, أبريل: 4, مايو: 5, يونيو: 6,
-  يوليو: 7, أغسطس: 8, سبتمبر: 9, أكتوبر: 10, نوفمبر: 11, ديسمبر: 12,
-};
-
 type BeneficiaryRecord = Record<string, any>;
 
-const ROWS_PER_PAGE = 8;
+const ROWS_PER_PAGE = 7;
 
 // Dynamic import for html2pdf to avoid SSR issues in Next.js
 let html2pdf: any;
@@ -59,7 +54,7 @@ export default function ExportChildReferralStatementsPage() {
   }, [toast]);
 
   const handleUpdateAndExport = async () => {
-    if (!selectedProject || !config.followUpCycle || !config.followUpMonth) {
+    if (!selectedProject || !selectedCycle || !selectedMonth) {
       toast({
         title: "Incomplete Selection",
         description: "Please select a project, cycle, and month before exporting.",
@@ -69,18 +64,32 @@ export default function ExportChildReferralStatementsPage() {
     }
 
     setLoading((prev) => ({ ...prev, action: true }));
-    toast({ title: "Processing", description: "Preparing referral statements..." });
+    toast({ title: "Processing", description: "Updating database and preparing referral statements..." });
 
     try {
-      const response = await fetch(`/api/child-cmam?projectId=${selectedProject}`);
-      if (!response.ok) throw new Error("Failed to fetch CMAM data.");
-      const rawBeneficiaries = await response.json();
+      // 1. Trigger the backend DB update process
+      const updateResponse = await fetch('/api/child-cmam/referral-update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectId: selectedProject,
+          cycle: selectedCycle,
+          followUpMonth: selectedMonth
+        })
+      });
 
-      // Lowercase keys
-      const normalizedBeneficiaries = normalizeKeys(rawBeneficiaries);
-      
-      // Transform and fix age logic
-      const transformed = applyCycleTransformations(normalizedBeneficiaries, selectedCycle, selectedMonth);
+      if (!updateResponse.ok) {
+        const errorData = await updateResponse.json();
+        throw new Error(errorData.error || "Failed to update CMAM records in database.");
+      }
+
+      // 2. Fetch the newly updated data
+      const fetchResponse = await fetch(`/api/child-cmam?projectId=${selectedProject}`);
+      if (!fetchResponse.ok) throw new Error("Failed to fetch updated CMAM data.");
+      const rawBeneficiaries = await fetchResponse.json();
+
+      // Lowercase specific keys to standardize access
+      const transformed = normalizeKeys(rawBeneficiaries);
 
       // Fetch logo as base64 for reliable HTML rendering
       const logoRes = await fetch("/sfd-logo.png");
@@ -92,26 +101,15 @@ export default function ExportChildReferralStatementsPage() {
         reader.readAsDataURL(logoBlob);
       });
 
+      // Fixed string literals to proper template literals
       const workerConfigs = [
         {
           measType: "المواك",
           columns: [
-  "benef_id",
-  "child_id",
-  "bnf_name",
-  "child_name",
-  "child_gender",
-  `child_age_c${selectedCycle}`,
-  `child_attend_c${selectedCycle}`,
-  `date_attend_c${selectedCycle}`,
-  "hc_card_no",
-  `child_has_cmam_c${selectedCycle}`,
-  "meas_type",
-  `muac_c${selectedCycle}`,
-  `child_cmam_cond_c${selectedCycle}`,
-  `cmam_result_c${selectedCycle}`,
-  `not_attend_reason_c${selectedCycle}`
-],
+            "benef_id", "child_id", "bnf_name", "child_name", "child_gender", 
+            `child_age_c${selectedCycle}`, `child_attend_c${selectedCycle}`, `date_attend_c${selectedCycle}`, "hc_card_no", `child_has_cmam_c${selectedCycle}`, 
+            "meas_type", `muac_c${selectedCycle}`, `child_cmam_cond_c${selectedCycle}`, `cmam_result_c${selectedCycle}`, `not_attend_reason_c${selectedCycle}`
+          ],
           headers: [
             "كود المستفيدة", "كود الطفل", "اسم الأم", "اسم الطفل", "الجنس", 
             "العمر", "هل امتثل الطفل", "تاريخ الامتثال", "رقم الكرت الحصري", 
@@ -120,34 +118,23 @@ export default function ExportChildReferralStatementsPage() {
           ],
           filter: (r: any) => {
             const nextCycleValue = r[`next_cycle_c${selectedCycle}`];
+            const measType = r[`meas_type_c${selectedCycle}`] || r.meas_type;
+            const hasCmam = r[`child_has_cmam_c${selectedCycle}`] === "نعم" || r.child_has_cmam_hc === "نعم";
             return (
-              r.child_has_cmam === "نعم" &&
+              hasCmam &&
               ["Qualified", "Last Month Qualification"].includes(nextCycleValue) &&
-              r.meas_type === "المواك"
+              measType === "المواك"
             );
           },
         },
         {
           measType: "الزد اسكور",
           columns: [
-  "benef_id",
-  "child_id",
-  "bnf_name",
-  "child_name",
-  "child_gender",
-  `child_age_c${selectedCycle}`,
-  `child_attend_c${selectedCycle}`,
-  `date_attend_c${selectedCycle}`,
-  "hc_card_no",
-  `child_has_cmam_c${selectedCycle}`,
-  "meas_type",
-  `zscore_h_c${selectedCycle}`,
-  `zscore_w_c${selectedCycle}`,
-  `zscore_c${selectedCycle}`,
-  `child_cmam_cond_c${selectedCycle}`,
-  `cmam_result_c${selectedCycle}`,
-  `not_attend_reason_c${selectedCycle}`
-],
+            "benef_id", "child_id", "bnf_name", "child_name", "child_gender", 
+            `child_age_c${selectedCycle}`, `child_attend_c${selectedCycle}`, `date_attend_c${selectedCycle}`, "hc_card_no", `child_has_cmam_c${selectedCycle}`, 
+            "meas_type", `zscore_h_c${selectedCycle}`, `zscore_w_c${selectedCycle}`, `zscore_c${selectedCycle}`, `child_cmam_cond_c${selectedCycle}`, 
+            `cmam_result_c${selectedCycle}`, `not_attend_reason_c${selectedCycle}`
+          ],
           headers: [
             "كود المستفيدة", "كود الطفل", "اسم الأم", "اسم الطفل", "الجنس", 
             "العمر", "هل امتثل الطفل", "تاريخ الامتثال", "رقم الكرت الحصري", 
@@ -156,10 +143,12 @@ export default function ExportChildReferralStatementsPage() {
           ],
           filter: (r: any) => {
             const nextCycleValue = r[`next_cycle_c${selectedCycle}`];
+            const measType = r[`meas_type_c${selectedCycle}`] || r.meas_type;
+            const hasCmam = r[`child_has_cmam_c${selectedCycle}`] === "نعم" || r.child_has_cmam_hc === "نعم";
             return (
-              r.child_has_cmam === "نعم" &&
+              hasCmam &&
               ["Qualified", "Last Month Qualification"].includes(nextCycleValue) &&
-              r.meas_type === "الزد اسكور"
+              measType === "الزد اسكور"
             );
           },
         },
@@ -167,7 +156,7 @@ export default function ExportChildReferralStatementsPage() {
 
       const zip = new JSZip();
 
-      // Group all valid records by Health Center (HC) to combine "المواك" and "الزد اسكور" into one PDF
+      // Group all valid records by Health Center (HC)
       const hcGroups: Record<string, any[]> = {};
       for (const row of transformed) {
         const isMouak = workerConfigs[0].filter(row);
@@ -244,7 +233,7 @@ export default function ExportChildReferralStatementsPage() {
 
         // Generate PDF using html2pdf
         const pdfBlob = await html2pdf().set({
-          margin: 0, // Set to 0 to respect the 8mm padding in .pdf-page CSS
+          margin: 0,
           filename: 'report.pdf',
           image: { type: 'jpeg', quality: 0.98 },
           html2canvas: { scale: 2, useCORS: true },
@@ -265,7 +254,7 @@ export default function ExportChildReferralStatementsPage() {
       });
 
       saveAs(zipData, `Child_Referral_Statements_Cycle_${selectedCycle}.zip`);
-      toast({ title: "Export Complete", description: "Statements are ready." });
+      toast({ title: "Export Complete", description: "Database updated and statements exported successfully." });
 
     } catch (error: any) {
       toast({ title: "Process Failed", description: error.message, variant: "destructive" });
@@ -326,7 +315,7 @@ export default function ExportChildReferralStatementsPage() {
       <div className="flex justify-end">
         <Button size="lg" onClick={handleUpdateAndExport} disabled={loading.action || !selectedProject}>
           {loading.action ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-          Update & Export Statements
+          Update Database & Export Statements
         </Button>
       </div>
     </div>
@@ -353,191 +342,6 @@ function chunkArray(arr: any[], size: number) {
     chunks.push(arr.slice(i, i + size));
   }
   return chunks;
-}
-
-function computeAgeDiff(confDate: Date, followUpMonthNumber: number) {
-  if (!confDate || isNaN(confDate.getTime())) return 0;
-
-  // Step 1: same year, follow-up month, day = 1
-  const followUpDate = new Date(
-    confDate.getFullYear(),
-    followUpMonthNumber - 1,
-    1
-  );
-
-  // Step 2: difference in days
-  const diffMs = followUpDate.getTime() - confDate.getTime();
-  const diffDays = diffMs / (1000 * 60 * 60 * 24);
-
-  // Prevent negative values
-  const rawMonths = Math.max(diffDays / 30, 0);
-
-  // Step 3: apply 0.70 rule
-  const integerPart = Math.floor(rawMonths);
-  const decimalPart = rawMonths - integerPart;
-
-  const roundedMonths =
-    decimalPart >= 0.7 ? integerPart + 1 : integerPart;
-
-  return roundedMonths;
-}
-
-function applyCycleTransformations(
-  beneficiaries: BeneficiaryRecord[],
-  cycle: number,
-  followUpMonth: string
-): BeneficiaryRecord[] {
-  const followUpMonthNumber = MONTHS[followUpMonth] || 1;
-
-  return beneficiaries.map((record) => {
-    const updated = { ...record };
-    const attendKey = `child_attend_c${cycle}`;
-    const measKey = `meas_type_c${cycle}` as const;
-    const hasCmamKey = `child_has_cmam_c${cycle}`;
-    const formattedAttend = updated[attendKey] === "نعم" && updated[hasCmamKey] === "نعم";
-
-    if (cycle === 1) {
-      updated["child_isprev_ref_c1"] = formattedAttend ? "نعم" : updated["child_isprev_ref_c1"];
-
-      if (formattedAttend && updated["child_has_cmam_hc"] === "نعم") {
-        const confDateStr = updated.conf_date || updated.CONF_DATE;
-        const confDate = confDateStr ? new Date(confDateStr) : new Date();
-        
-        // Revised ageIncrement logic (.70 threshold mapping)
-        const ageIncrement = computeAgeDiff(confDate, followUpMonthNumber);
-
-        const existing =
-          Number(
-            updated.new_child_age_mon ||
-            0
-          ) || 0;
-
-        updated["child_age_c1"] = ageIncrement + existing;
-
-        const muac = Number(updated["muac_hc"] || 0);
-        const measType = updated["meas_type"] || "";
-        const childAge = Number(updated["child_age_c1"] || 0);
-
-        if (measType === "المواك" && muac >= 12.5) updated["next_cycle_c1"] = "Disqualified";
-        else if (measType === "الزد اسكور") {
-          const zscore = Number(updated["zscore_hc"] ?? 0);
-          if ([-1, 0, 1, 2, 3].includes(zscore)) updated["next_cycle_c1"] = "Disqualified";
-        }
-        if (childAge >= 60) updated["next_cycle_c1"] = "Disqualified";
-        if (childAge === 59) updated["next_cycle_c1"] = "Last Month Qualification";
-        if (!updated["next_cycle_c1"]) updated["next_cycle_c1"] = "Qualified";
-      }
-
-      return updated;
-    }
-
-    if (cycle === 2) {
-      const prevQualified = updated["next_cycle_c1"] === "Qualified";
-
-      if (formattedAttend && prevQualified) {
-        updated["child_isprev_ref_c2"] = "نعم";
-        updated["child_age_c2"] = Number(updated["child_age_c1"] || 0) + 1;
-
-        const cure = computeCureRate(updated, 1, 2);
-        if (cure.cure) updated["cure_rate_c2"] = cure.cure;
-        if (cure.negative !== null) updated["negative_c2"] = cure.negative;
-        if (cure.positive !== null) updated["positive_c2"] = cure.positive;
-      }
-
-      const nextCycleValue = determineNextCycle(updated, 2, { prevNextCycle: updated["next_cycle_c1"], cureField: "c2" });
-      updated["next_cycle_c2"] = nextCycleValue;
-
-      if (!updated["next_cycle_c2"] && updated["child_isprev_ref_c2"] === "نعم" && prevQualified) updated["next_cycle_c2"] = "Qualified";
-      return updated;
-    }
-
-    if (cycle === 3) {
-      const prevQualified = updated["next_cycle_c2"] === "Qualified";
-
-      if (formattedAttend && prevQualified) {
-        updated["child_isprev_ref_c3"] = "نعم";
-        updated["child_age_c3"] = Number(updated["child_age_c2"] || 0) + 1;
-
-        const cure = computeCureRate(updated, 2, 3);
-        if (cure.cure) updated["cure_rate_c3"] = cure.cure;
-        if (cure.negative !== null) updated["negative_c3"] = cure.negative;
-        if (cure.positive !== null) updated["positive_c3"] = cure.positive;
-      }
-
-      const nextCycleValue = determineNextCycle(updated, 3, { prevNextCycle: updated["next_cycle_c2"], cureField: "c3" });
-      updated["next_cycle_c3"] = nextCycleValue;
-
-      if (!updated["next_cycle_c3"] && updated["child_isprev_ref_c3"] === "نعم" && prevQualified) updated["next_cycle_c3"] = "Qualified";
-      return updated;
-    }
-
-    return updated;
-  });
-}
-
-function computeCureRate(record: BeneficiaryRecord, prevCycle: number, currentCycle: number) {
-  const measType = record[`meas_type_c${currentCycle}`] || record.meas_type;
-
-  const prevMuac = Number(record[`muac_c${prevCycle}`] || 0);
-  const currentMuac = Number(record[`muac_c${currentCycle}`] || 0);
-  const prevZ = Number(record[`zscore_c${prevCycle}`] || 0);
-  const currentZ = Number(record[`zscore_c${currentCycle}`] || 0);
-
-  if (measType === "المواك") {
-    if (currentMuac < prevMuac) return { cure: "Negative", negative: Number((prevMuac - currentMuac).toFixed(1)), positive: null };
-    if (currentMuac === prevMuac) return { cure: "No Improvement", negative: null, positive: null };
-    return { cure: "Positive", negative: null, positive: Number((currentMuac - prevMuac).toFixed(1)) };
-  }
-
-  if (measType === "الزد اسكور") {
-    if (prevZ === -3 && currentZ === -2) return { cure: "Negative", negative: -1, positive: null };
-    if ((prevZ === -2 && currentZ === -2) || (prevZ === -3 && currentZ === -3)) return { cure: "No Improvement", negative: null, positive: null };
-
-    const positiveScore = determineZscorePositive(prevZ, currentZ);
-    if (positiveScore !== null) return { cure: "Positive", negative: null, positive: positiveScore };
-  }
-
-  return { cure: "", negative: null, positive: null };
-}
-
-function determineZscorePositive(prev: number, current: number): number | null {
-  const map: Record<string, number> = {
-    "-1:-2": 1, "-1:-3": 2, "-2:-3": 1, "0:-3": 3, "2:-3": 5,
-    "3:-3": 6, "0:-2": 2, "2:-2": 4, "3:-2": 5,
-  };
-  return map[`${prev}:${current}`] ?? null;
-}
-
-function determineNextCycle(
-  record: BeneficiaryRecord,
-  cycle: number,
-  options: { prevNextCycle?: string; cureField: string }
-) {
-  const prevNext = options.prevNextCycle;
-  const meas = record[`meas_type_c${cycle}`] || record.meas_type;
-  const age = Number(record[`child_age_c${cycle}`] || 0);
-  const muac = Number(record[`muac_c${cycle - 1}`] || 0);
-  const zscore = Number(record[`zscore_c${cycle - 1}`] || 0);
-  const cmamResult = record[`cmam_result_c${cycle - 1}`];
-  const cureField = record[`cure_rate_c${cycle}`];
-
-  if (muac >= 12.5) return "Disqualified";
-  if (meas === "الزد اسكور" && [-1, 0, 1, 2, 3].includes(zscore)) return "Disqualified";
-  if (age >= 60) return "Disqualified";
-  if (["شفاء", "الوفاة", "انتهاء فترة الدعم / تخريج من برنامج سوء التغذية"].includes(cmamResult)) return "Disqualified";
-
-  if (prevNext === "Last Month Qualification") return "Disqualified";
-  if (prevNext === "Disqualified") return "Disqualified";
-
-  if (
-    cureField &&
-    (cureField === "Negative" || cureField === "No Improvement") &&
-    (record[`cure_rate_c${cycle - 1}`] === "Negative" || record[`cure_rate_c${cycle - 1}`] === "No Improvement")
-  )
-    return "Disqualified";
-
-  if (age === 59) return "Last Month Qualification";
-  return null;
 }
 
 // Sorting and Grouping Helpers
@@ -583,7 +387,7 @@ function buildCoverPageHTML(hcRows: any[], firstRecord: any, logoBase64: string,
       </div>
       
       <div style="text-align: center; border: 1px solid black; padding: 10px; margin: 0 100px 30px; font-size: 20px; font-weight: bold; background: #f9f9f9;">
-        كشف امتثال الأطفال  الصحي
+        كشف امتثال الأطفال إلى المرفق الصحي
       </div>
 
       <div style="text-align: center; font-size: 20px; font-weight: bold; margin-bottom: 40px;">
@@ -658,7 +462,7 @@ function buildDataPagesHTML(hwGroups: any, logoBase64: string, cycle: number, mo
               </div>
               <div style="text-align: center; flex: 1;">
                  <div style="font-size: 18px; font-weight: bold;">برنامج التحويلات النقدية المشروطة في التغذية</div>
-                 <div style="font-size: 15px;">كشف امتثال الأطفال  الصحي</div>
+                 <div style="font-size: 15px;">كشف امتثال الأطفال إلى المرفق الصحي</div>
                  <div style="font-size: 14px; font-weight: bold; margin-top: 5px;">(${config.measType})</div>
               </div>
               <div style="text-align: left; width: 150px; display: flex; justify-content: flex-end;">
@@ -704,7 +508,6 @@ function buildDataPagesHTML(hwGroups: any, logoBase64: string, cycle: number, mo
         `;
 
         if (isLastPage) {
-          const discovered = bnfs.filter((b: any) => b.child_cmam_cond && b.child_cmam_cond !== "").length;
           html += `
             <table class="header-table" style="width: 50%; margin: 15px auto 0;">
               <tr>
@@ -731,14 +534,8 @@ function buildDataPagesHTML(hwGroups: any, logoBase64: string, cycle: number, mo
             </div>
           </div>
         `;
-
-        const isLastGroup = hwIndex === hwKeys.length - 1 && edIndex === edKeys.length - 1;
-        if (!isLastPage || !isLastGroup) {
-          html += `<div class="html2pdf__page-break"></div>`;
-        }
       });
     });
   });
-
   return html;
 }
