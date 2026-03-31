@@ -101,7 +101,7 @@ const formSchema = z
     muac_hc_no: z.number().optional(),
     cmam_result_hc_no: z.string().optional(),
     hc_card_no: z.string().optional(),
-    meas_type: z.enum(["الـمـوّاك", "الـزد اسكور"]).optional(),
+    meas_type: z.enum(["المواك", "الزد اسكور"]).optional(),
     muac_hc: z.number().optional(),
     zscore_h: z.string().optional(),
     zscore_w: z.string().optional(),
@@ -174,14 +174,14 @@ const formSchema = z
             message: "يرجى اختيار نوع القياس.",
           });
         }
-        if (data.meas_type === "الـمـوّاك" && data.muac_hc === undefined) {
+        if (data.meas_type === "المواك" && data.muac_hc === undefined) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
             path: ["muac_hc"],
             message: "يرجى ضبط قيمة MUAC.",
           });
         }
-        if (data.meas_type === "الـزد اسكور") {
+        if (data.meas_type === "الزد اسكور") {
           if (!data.zscore_h?.trim()) {
             ctx.addIssue({
               code: z.ZodIssueCode.custom,
@@ -487,10 +487,10 @@ export default function ConfirmationDataEntryPage() {
           if (!data.meas_type || !data.child_cmam_cond) throw new Error("Please fill all required malnutrition details.");
           payload.hc_card_no = data.hc_card_no;
           payload.meas_type = data.meas_type;
-          payload.muac_hc = data.meas_type === "الـمـوّاك" ? data.muac_hc : null;
-          payload.zscore_h = data.meas_type === "الـزد اسكور" ? data.zscore_h : null;
-          payload.zscore_w = data.meas_type === "الـزد اسكور" ? data.zscore_w : null;
-          payload.zscore = data.meas_type === "الـزد اسكور" ? data.zscore : null;
+          payload.muac_hc = data.meas_type === "المواك" ? data.muac_hc : null;
+          payload.zscore_h = data.meas_type === "الزد اسكور" ? data.zscore_h : null;
+          payload.zscore_w = data.meas_type === "الزد اسكور" ? data.zscore_w : null;
+          payload.zscore = data.meas_type === "الزد اسكور" ? data.zscore : null;
           payload.child_cmam_cond = data.child_cmam_cond;
           payload.exp_start_treat_date = data.exp_start_treat_date_year
             ? `${data.exp_start_treat_date_year}-${data.exp_start_treat_date_month}-${data.exp_start_treat_date_day}`
@@ -925,16 +925,16 @@ export default function ConfirmationDataEntryPage() {
                                     <div className="flex gap-4 pt-2">
                                       <Button
                                         type="button"
-                                        variant={field.value === "الـمـوّاك" ? "default" : "outline"}
-                                        onClick={() => field.onChange("الـمـوّاك")}
+                                        variant={field.value === "المواك" ? "default" : "outline"}
+                                        onClick={() => field.onChange("المواك")}
                                         className="flex-1"
                                       >
-                                        الموّاك
+                                        المواك
                                       </Button>
                                       <Button
                                         type="button"
-                                        variant={field.value === "الـزد اسكور" ? "default" : "outline"}
-                                        onClick={() => field.onChange("الـزد اسكور")}
+                                        variant={field.value === "الزد اسكور" ? "default" : "outline"}
+                                        onClick={() => field.onChange("الزد اسكور")}
                                         className="flex-1"
                                       >
                                         الزد اسكور
@@ -945,7 +945,7 @@ export default function ConfirmationDataEntryPage() {
                                 </FormItem>
                               )}
                             />
-                            {watchMeasType === "الـمـوّاك" && (
+                            {watchMeasType === "المواك" && (
                               <FormField
                                 control={form.control}
                                 name="muac_hc"
@@ -966,7 +966,7 @@ export default function ConfirmationDataEntryPage() {
                                 )}
                               />
                             )}
-                            {watchMeasType === "الـزد اسكور" && (
+                            {watchMeasType === "الزد اسكور" && (
                               <div className="grid grid-cols-2 gap-4">
                                 <FormField
                                   control={form.control}
@@ -1031,11 +1031,11 @@ export default function ConfirmationDataEntryPage() {
                                     <div className="flex gap-4 pt-2">
                                       <Button
                                         type="button"
-                                        variant={field.value === "سوء تغذية متوسطة" ? "default" : "outline"}
-                                        onClick={() => field.onChange("سوء تغذية متوسطة")}
+                                        variant={field.value === "سوء تغذية متوسط" ? "default" : "outline"}
+                                        onClick={() => field.onChange("سوء تغذية متوسط")}
                                         className="flex-1"
                                       >
-                                        سوء تغذية متوسطة
+                                       سوء تغذية متوسط
                                       </Button>
                                       <Button
                                         type="button"
@@ -1087,7 +1087,7 @@ export default function ConfirmationDataEntryPage() {
                                           <SelectTrigger>
                                             <SelectValue placeholder="Month" />
                                           </SelectTrigger>
-                                        </SelectControl>
+                                        </FormControl>
                                         <SelectContent>
                                           {months.map((m, i) => (
                                             <SelectItem key={m} value={String(i + 1)}>
