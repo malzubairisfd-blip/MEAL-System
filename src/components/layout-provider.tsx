@@ -41,6 +41,7 @@ import {
   MessageSquare,
   ClipboardPenLine,
   Network,
+  FileText,
   Layers,
   Link2,
   User,
@@ -59,12 +60,10 @@ import {
   PanelRight,
   Baby,
   Database,
-  FileText,
-  // ✅ FIXED MISSING ICONS
   PieChart,
   ClipboardCheck,
   MessageSquareWarning,
-  ShieldAlert, 
+  ShieldAlert,
 } from "lucide-react";
 import { useTranslation } from "@/hooks/use-translation";
 import { useLanguage } from "@/context/language-context";
@@ -112,20 +111,24 @@ function ClientOnlyLanguageSwitcher() {
   );
 }
 
-const NavLink = ({ href, icon, label, isActive, isCollapsed }: { href: string; icon: React.ReactNode; label: string; isActive: boolean, isCollapsed: boolean }) => (
-    <Link
-      href={href}
-      className={cn(
-        "flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary hover:bg-muted",
-        isActive && "bg-primary/10 text-primary font-semibold",
-        isCollapsed && "justify-center"
-      )}
-      title={isCollapsed ? label : undefined}
-    >
-      {icon}
-      <span className={cn("whitespace-nowrap", isCollapsed && "hidden")}>{label}</span>
-    </Link>
-);
+const NavLink = ({ href, icon, label, isActive, isCollapsed }: { href: string; icon: React.ReactNode; label: string; isActive: boolean, isCollapsed: boolean }) => {
+    const { direction } = useLanguage();
+    return (
+        <Link
+        href={href}
+        className={cn(
+            "flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary hover:bg-muted",
+            isActive && "bg-primary/10 text-primary font-semibold",
+            isCollapsed && "justify-center",
+            direction === 'rtl' && 'flex-row-reverse'
+        )}
+        title={isCollapsed ? label : undefined}
+        >
+        {icon}
+        <span className={cn("whitespace-nowrap", isCollapsed && "hidden")}>{label}</span>
+        </Link>
+    );
+};
 
 const navItems = [
     { href: "/", labelKey: "sidebar.dashboard", icon: <Home /> },
@@ -304,6 +307,7 @@ const navItems = [
 
 const RecursiveNavGroup = ({ item, pathname, isCollapsed }: { item: any, pathname: string, isCollapsed: boolean }) => {
     const { t } = useTranslation();
+    const { direction } = useLanguage();
     const isGroupOrChildActive = item.subItems?.some((l: any) => pathname.startsWith(l.href)) || pathname === item.href;
     const [isOpen, setIsOpen] = useState(isGroupOrChildActive);
 
@@ -321,7 +325,7 @@ const RecursiveNavGroup = ({ item, pathname, isCollapsed }: { item: any, pathnam
         <Collapsible open={isOpen} onOpenChange={setIsOpen}>
             <div className={cn("flex w-full items-center rounded-lg transition-colors hover:bg-muted", pathname === item.href && "bg-primary/10", isGroupOrChildActive && "text-primary")}>
                 <Link href={item.href} className="flex-1">
-                    <div className={cn("flex items-center gap-3 px-3 py-2 text-muted-foreground", isCollapsed && "justify-center", isGroupOrChildActive && "text-primary")}>
+                    <div className={cn("flex items-center gap-3 px-3 py-2 text-muted-foreground", isCollapsed && "justify-center", isGroupOrChildActive && "text-primary", direction === 'rtl' && 'flex-row-reverse')}>
                         {item.icon}
                         <span className={cn("whitespace-nowrap", isCollapsed && "hidden")}>{t(item.labelKey)}</span>
                     </div>
@@ -335,7 +339,7 @@ const RecursiveNavGroup = ({ item, pathname, isCollapsed }: { item: any, pathnam
                     </CollapsibleTrigger>
                 )}
             </div>
-            <CollapsibleContent className={cn("space-y-1 py-1", !isCollapsed && "pl-4")}>
+            <CollapsibleContent className={cn("space-y-1 py-1", !isCollapsed && (direction === 'rtl' ? 'pr-4' : 'pl-4'))}>
                 {item.subItems.map((subItem: any) => (
                     <RecursiveNavGroup key={subItem.href} item={subItem} pathname={pathname} isCollapsed={isCollapsed} />
                 ))}
@@ -350,6 +354,7 @@ export function LayoutProvider({ children, year }: { children: React.ReactNode, 
   const [pathname, setPathname] = useState(currentPathname);
   const [isCollapsed, setIsCollapsed] = useState(true);
   const { t, isLoading: isTranslationLoading } = useTranslation();
+  const { direction } = useLanguage();
 
   useEffect(() => {
     setPathname(currentPathname);
@@ -362,7 +367,6 @@ export function LayoutProvider({ children, year }: { children: React.ReactNode, 
         }
         if (path.startsWith(item.href) && item.subItems) {
             const subTitle = getPageTitle(item.subItems, path);
-            // If the subtitle is not the parent's name, we found a more specific match
             if (subTitle !== t(item.labelKey)) return subTitle;
         }
     }
@@ -373,16 +377,17 @@ export function LayoutProvider({ children, year }: { children: React.ReactNode, 
   const pageTitle = getPageTitle(navItems, pathname);
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen" dir={direction}>
       <aside
         className={cn(
-          "bg-card text-card-foreground border-r transition-all duration-300 ease-in-out flex flex-col fixed h-full z-50",
-          isCollapsed ? "w-20" : "w-64"
+          "bg-card text-card-foreground border-border transition-all duration-300 ease-in-out flex flex-col fixed h-full z-50",
+          isCollapsed ? "w-20" : "w-64",
+          direction === 'rtl' ? 'border-l right-0' : 'border-r left-0'
         )}
         onMouseEnter={() => setIsCollapsed(false)}
         onMouseLeave={() => setIsCollapsed(true)}
       >
-        <div className="flex items-center justify-between p-4 border-b h-14">
+        <div className={cn("flex items-center justify-between p-4 border-b h-14", direction === 'rtl' ? 'border-l' : 'border-r')}>
            <div className={cn("flex items-center gap-2", isCollapsed && "hidden")}>
              <Briefcase className="size-6 text-primary" />
              <span className="text-lg font-semibold">MEAL System</span>
@@ -397,14 +402,18 @@ export function LayoutProvider({ children, year }: { children: React.ReactNode, 
             ))
           )}
         </nav>
-        <div className="mt-auto p-4 border-t">
+        <div className={cn("mt-auto p-4 border-t", direction === 'rtl' ? 'border-l' : 'border-r')}>
             <div className={cn("text-xs text-muted-foreground", isCollapsed && "text-center")}>
                  © {year}
               </div>
         </div>
       </aside>
 
-      <div className={cn("flex flex-col flex-1 transition-all duration-300 ease-in-out", isCollapsed ? "pl-20" : "pl-64")}>
+      <div className={cn("flex flex-col flex-1 transition-all duration-300 ease-in-out", 
+        isCollapsed 
+            ? (direction === 'rtl' ? 'pr-20' : 'pl-20')
+            : (direction === 'rtl' ? 'pr-64' : 'pl-64')
+      )}>
         <header className="flex h-14 items-center gap-4 border-b bg-card px-6 sticky top-0 z-40">
           <div className="flex-1">
             {isTranslationLoading ? <Skeleton className="h-6 w-32" /> : <h1 className="text-lg font-semibold capitalize">{pageTitle}</h1>}

@@ -7,9 +7,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ArrowRight, LayoutDashboard, Plus, Eye, CalendarCheck } from 'lucide-react';
 import { useTranslation } from '@/hooks/use-translation';
+import { useLanguage } from '@/context/language-context';
+import { cn } from '@/lib/utils';
 
 const FeatureCard = ({ title, href, icon }: { title: string, href: string, icon: React.ReactNode }) => {
     const { t } = useTranslation();
+    const { direction } = useLanguage();
     return (
         <Link href={href} className="block transition-all hover:shadow-lg hover:-translate-y-1 rounded-lg">
             <Card className="h-full">
@@ -19,7 +22,10 @@ const FeatureCard = ({ title, href, icon }: { title: string, href: string, icon:
                 </CardHeader>
                 <CardContent>
                     <Button variant="link" className="p-0">
-                        {t('hubs.buttons.go')} {title} <ArrowRight className="ml-2 h-4 w-4" />
+                        <div className={cn("flex items-center gap-1", direction === 'rtl' && 'flex-row-reverse')}>
+                            <span>{t('hubs.buttons.go')} {title}</span>
+                            <ArrowRight className={cn("h-4 w-4 transition-transform group-hover:translate-x-1", direction === 'rtl' && 'rotate-180 group-hover:-translate-x-1')} />
+                        </div>
                     </Button>
                 </CardContent>
             </Card>

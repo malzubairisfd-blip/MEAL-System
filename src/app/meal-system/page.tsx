@@ -8,21 +8,29 @@ import {
   ArrowRight,
   Briefcase,
   Monitor,
-  ClipboardCheck,
   Database,
   PieChart,
   FileText,
-  ShieldAlert,
-  MessageSquareWarning,
   ListChecks,
   Target,
   Settings,
+  Palette,
+  Sheet,
+  Users,
+  FileEdit,
+  BrainCircuit,
+  ShieldAlert,
+  MessageSquareWarning,
+  ClipboardCheck
 } from "lucide-react";
 import Link from "next/link";
 import { useTranslation } from "@/hooks/use-translation";
+import { useLanguage } from '@/context/language-context';
+import { cn } from "@/lib/utils";
 
 export default function MealSystemPage() {
   const { t } = useTranslation();
+  const { direction } = useLanguage();
 
   const mealFeatures = [
     { href: "/meal-system/project", icon: <Briefcase className="h-8 w-8 text-indigo-500" />, labelKey: "sidebar.projectManagement" },
@@ -43,8 +51,8 @@ export default function MealSystemPage() {
        <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">{t('hubs.mealSystem.title')}</h1>
         <Button variant="outline" asChild>
-            <Link href="/">
-                <ArrowLeft className="mr-2 h-4 w-4" />
+            <Link href="/" className="flex items-center">
+                <ArrowLeft className={cn("mr-2 h-4 w-4", direction === 'rtl' && 'ml-2 mr-0 rotate-180')} />
                 {t('hubs.mealSystem.back')}
             </Link>
         </Button>
@@ -59,7 +67,10 @@ export default function MealSystemPage() {
             <h3 className="font-semibold text-sm mb-2">{t(feature.labelKey)}</h3>
             <Button variant="secondary" size="sm" className="w-full mt-auto group" asChild>
                 <Link href={feature.href}>
-                    {t('hubs.buttons.go')} <ArrowRight className="ml-1 h-4 w-4 transition-transform group-hover:translate-x-1" />
+                    <div className={cn("flex items-center gap-1", direction === 'rtl' && 'flex-row-reverse')}>
+                        <span>{t('hubs.buttons.go')}</span>
+                        <ArrowRight className={cn("h-4 w-4 transition-transform group-hover:translate-x-1", direction === 'rtl' && 'rotate-180 group-hover:-translate-x-1')} />
+                    </div>
                 </Link>
             </Button>
           </Card>
