@@ -1,9 +1,10 @@
-
+// src/app/meal-system/page.tsx
 "use client";
 
-import { Card } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
+  ArrowLeft,
   ArrowRight,
   Briefcase,
   Monitor,
