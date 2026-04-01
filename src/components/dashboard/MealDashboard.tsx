@@ -6,6 +6,7 @@ import { ImpactCard } from "@/components/cards/ImpactCard";
 import { OutcomeTrendChart } from "@/components/charts/OutcomeTrendChart";
 import { EvidenceTable } from "@/components/tables/EvidenceTable";
 import { Loader2 } from 'lucide-react';
+import { useTranslation } from '@/hooks/use-translation';
 
 interface Project {
   budget: number;
@@ -14,6 +15,7 @@ interface Project {
 }
 
 export function MealDashboard() {
+  const { t } = useTranslation();
   const [chartData, setChartData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -70,9 +72,9 @@ export function MealDashboard() {
   return (
     <div className="space-y-8">
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <ImpactCard title="Indicators Met" value="82%" impact="high" />
-        <ImpactCard title="At Risk" value="11%" impact="medium" />
-        <ImpactCard title="Off Track" value="7%" impact="low" />
+        <ImpactCard title={t('dashboard.kpi.indicatorsMet')} value="82%" impact="high" />
+        <ImpactCard title={t('dashboard.kpi.atRisk')} value="11%" impact="medium" />
+        <ImpactCard title={t('dashboard.kpi.offTrack')} value="7%" impact="low" />
       </div>
 
       {loading ? (

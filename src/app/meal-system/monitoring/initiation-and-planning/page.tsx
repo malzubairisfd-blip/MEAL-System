@@ -5,25 +5,28 @@ import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, ArrowRight, Target, Database, BarChart3, FileText, Users, CircleDollarSign } from "lucide-react";
+import { useTranslation } from "@/hooks/use-translation";
 
 export default function InitiationAndPlanningPage() {
+  const { t } = useTranslation();
+
   const planningSteps = [
-    { href: "/meal-system/monitoring/initiation-and-planning/purpose-and-scope", icon: <Target className="h-8 w-8 text-indigo-500" />, title: "Identify the purpose and scope of the M&E system" },
-    { href: "/meal-system/monitoring/initiation-and-planning/data-collection", icon: <Database className="h-8 w-8 text-blue-500" />, title: "Plan for data collection and management" },
-    { href: "/meal-system/monitoring/initiation-and-planning/data-analysis", icon: <BarChart3 className="h-8 w-8 text-green-500" />, title: "Plan for data analysis" },
-    { href: "/meal-system/monitoring/initiation-and-planning/reporting", icon: <FileText className="h-8 w-8 text-sky-500" />, title: "Plan for information reporting and utilization" },
-    { href: "/meal-system/monitoring/initiation-and-planning/hr", icon: <Users className="h-8 w-8 text-purple-500" />, title: "Plan for M&E human resources and capacity building" },
-    { href: "/meal-system/monitoring/initiation-and-planning/budget", icon: <CircleDollarSign className="h-8 w-8 text-slate-500" />, title: "Prepare the M&E budget" },
+    { href: "/meal-system/monitoring/initiation-and-planning/purpose-and-scope", icon: <Target className="h-8 w-8 text-indigo-500" />, labelKey: "hubs.initiation.purpose" },
+    { href: "/meal-system/monitoring/initiation-and-planning/data-collection", icon: <Database className="h-8 w-8 text-blue-500" />, labelKey: "hubs.initiation.dataCollection" },
+    { href: "/meal-system/monitoring/initiation-and-planning/data-analysis", icon: <BarChart3 className="h-8 w-8 text-green-500" />, labelKey: "hubs.initiation.dataAnalysis" },
+    { href: "/meal-system/monitoring/initiation-and-planning/reporting", icon: <FileText className="h-8 w-8 text-sky-500" />, labelKey: "hubs.initiation.reporting" },
+    { href: "/meal-system/monitoring/initiation-and-planning/hr", icon: <Users className="h-8 w-8 text-purple-500" />, labelKey: "hubs.initiation.hr" },
+    { href: "/meal-system/monitoring/initiation-and-planning/budget", icon: <CircleDollarSign className="h-8 w-8 text-slate-500" />, labelKey: "hubs.initiation.budget" },
   ];
 
   return (
     <div className="space-y-8">
        <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">Initiation and Planning</h1>
+        <h1 className="text-3xl font-bold">{t('hubs.initiation.title')}</h1>
         <Button variant="outline" asChild>
             <Link href="/meal-system/monitoring">
                 <ArrowLeft className="mr-2 h-4 w-4" />
-                Back to M&E Lifecycle
+                {t('hubs.initiation.back')}
             </Link>
         </Button>
       </div>
@@ -35,12 +38,12 @@ export default function InitiationAndPlanningPage() {
                 <div className="rounded-lg bg-muted p-4">
                     {step.icon}
                 </div>
-                <CardTitle className="text-base font-semibold">{step.title}</CardTitle>
+                <CardTitle className="text-base font-semibold">{t(step.labelKey)}</CardTitle>
             </CardHeader>
             <CardContent className="mt-auto flex justify-end">
                 <Button variant="secondary" size="sm" className="group" asChild>
                     <Link href={step.href}>
-                        Go <ArrowRight className="ml-1 h-4 w-4 transition-transform group-hover:translate-x-1" />
+                        {t('hubs.buttons.go')} <ArrowRight className="ml-1 h-4 w-4 transition-transform group-hover:translate-x-1" />
                     </Link>
                 </Button>
             </CardContent>

@@ -15,34 +15,36 @@ import {
   MessageSquareWarning,
   ListChecks,
   Target,
-  ArrowLeft,
   Settings,
 } from "lucide-react";
 import Link from "next/link";
+import { useTranslation } from "@/hooks/use-translation";
 
 export default function MealSystemPage() {
+  const { t } = useTranslation();
+
   const mealFeatures = [
-    { href: "/meal-system/project", icon: <Briefcase className="h-8 w-8 text-indigo-500" />, title: "Project Page" },
-    { href: "/meal-system/monitoring", icon: <Monitor className="h-8 w-8 text-blue-500" />, title: "Monitoring Page" },
-    { href: "/meal-system/evaluation", icon: <ClipboardCheck className="h-8 w-8 text-green-500" />, title: "Evaluation Page" },
-    { href: "/meal-system/monitoring/initiation-and-planning/data-collection", icon: <Database className="h-8 w-8 text-sky-500" />, title: "Data Collection Page" },
-    { href: "/meal-system/analysis", icon: <PieChart className="h-8 w-8 text-purple-500" />, title: "Analysis Page" },
-    { href: "/meal-system/reporting", icon: <FileText className="h-8 w-8 text-slate-500" />, title: "Reporting Page" },
-    { href: "/meal-system/risk", icon: <ShieldAlert className="h-8 w-8 text-red-500" />, title: "Risk Page" },
-    { href: "/meal-system/compliant", icon: <MessageSquareWarning className="h-8 w-8 text-yellow-500" />, title: "Compliant Page" },
-    { href: "/meal-system/project/logframe", icon: <ListChecks className="h-8 w-8 text-cyan-500" />, title: "Logical Framework page" },
-    { href: "/meal-system/indicator", icon: <Target className="h-8 w-8 text-orange-500" />, title: "Indicator Page" },
-    { href: "/meal-system/settings", icon: <Settings className="h-8 w-8 text-gray-500" />, title: "Settings" },
+    { href: "/meal-system/project", icon: <Briefcase className="h-8 w-8 text-indigo-500" />, labelKey: "sidebar.projectManagement" },
+    { href: "/meal-system/monitoring", icon: <Monitor className="h-8 w-8 text-blue-500" />, labelKey: "sidebar.monitoring" },
+    { href: "/meal-system/evaluation", icon: <ClipboardCheck className="h-8 w-8 text-green-500" />, labelKey: "sidebar.evaluation" },
+    { href: "/meal-system/monitoring/initiation-and-planning/data-collection", icon: <Database className="h-8 w-8 text-sky-500" />, labelKey: "sidebar.dataCollection" },
+    { href: "/meal-system/analysis", icon: <PieChart className="h-8 w-8 text-purple-500" />, labelKey: "sidebar.analysis" },
+    { href: "/meal-system/reporting", icon: <FileText className="h-8 w-8 text-slate-500" />, labelKey: "sidebar.reporting" },
+    { href: "/meal-system/risk", icon: <ShieldAlert className="h-8 w-8 text-red-500" />, labelKey: "sidebar.risk" },
+    { href: "/meal-system/compliant", icon: <MessageSquareWarning className="h-8 w-8 text-yellow-500" />, labelKey: "sidebar.compliant" },
+    { href: "/meal-system/project/logframe", icon: <ListChecks className="h-8 w-8 text-cyan-500" />, labelKey: "sidebar.logframe" },
+    { href: "/meal-system/indicator", icon: <Target className="h-8 w-8 text-orange-500" />, labelKey: "sidebar.indicator" },
+    { href: "/meal-system/settings", icon: <Settings className="h-8 w-8 text-gray-500" />, labelKey: "sidebar.settings" },
   ];
 
   return (
     <div className="space-y-8">
        <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">MEAL System Features</h1>
+        <h1 className="text-3xl font-bold">{t('hubs.mealSystem.title')}</h1>
         <Button variant="outline" asChild>
             <Link href="/">
                 <ArrowLeft className="mr-2 h-4 w-4" />
-                Back to Dashboard
+                {t('hubs.mealSystem.back')}
             </Link>
         </Button>
       </div>
@@ -53,10 +55,10 @@ export default function MealSystemPage() {
             <div className="rounded-lg bg-muted p-4 mb-4">
               {feature.icon}
             </div>
-            <h3 className="font-semibold text-sm mb-2">{feature.title}</h3>
+            <h3 className="font-semibold text-sm mb-2">{t(feature.labelKey)}</h3>
             <Button variant="secondary" size="sm" className="w-full mt-auto group" asChild>
                 <Link href={feature.href}>
-                    Go <ArrowRight className="ml-1 h-4 w-4 transition-transform group-hover:translate-x-1" />
+                    {t('hubs.buttons.go')} <ArrowRight className="ml-1 h-4 w-4 transition-transform group-hover:translate-x-1" />
                 </Link>
             </Button>
           </Card>
@@ -65,5 +67,3 @@ export default function MealSystemPage() {
     </div>
   );
 }
-
-    

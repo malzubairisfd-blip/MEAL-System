@@ -85,11 +85,11 @@ export function IndicatorTable({ logframe, indicatorPlan }: { logframe: Logframe
                             </TableRow>
                         </TableHeader>
                         <TableBody>
+                            <TableRow className="bg-secondary/10">
+                                <TableCell colSpan={23} className="font-bold text-secondary-foreground">{outcomeDescription}</TableCell>
+                            </TableRow>
                             {Object.entries(groupedIndicators).map(([outcome, outputs]) => (
                                 <React.Fragment key={outcome}>
-                                    <TableRow className="bg-secondary/10">
-                                        <TableCell colSpan={23} className="font-bold text-secondary-foreground">{outcome}</TableCell>
-                                    </TableRow>
                                     {Object.entries(outputs).map(([output, indicators]) => (
                                          <React.Fragment key={output}>
                                              <TableRow className="bg-muted/50">

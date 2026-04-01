@@ -1,11 +1,13 @@
 // components/charts/OutcomeTrendChart.tsx
 "use client";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { useTranslation } from '@/hooks/use-translation';
 
 export function OutcomeTrendChart({ data }: { data: any[] }) {
+  const { t } = useTranslation();
   return (
     <div className="bg-surface border border-border rounded-lg p-5">
-      <h3 className="font-semibold text-lg mb-4">Outcome Trend</h3>
+      <h3 className="font-semibold text-lg mb-4">{t('dashboard.outcomeTrend.title')}</h3>
       <ResponsiveContainer width="100%" height={300}>
         <AreaChart data={data} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />

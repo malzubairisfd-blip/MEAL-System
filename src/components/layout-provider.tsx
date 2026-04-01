@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import { usePathname } from "next/navigation";
@@ -60,13 +59,11 @@ import {
   PanelRight,
   Baby,
   Database,
-
+  FileText,
   // ✅ FIXED MISSING ICONS
   PieChart,
-  ClipboardCheck,
-  ShieldAlert,
-  FileText,
   MessageSquareWarning,
+  ShieldAlert, 
 } from "lucide-react";
 import { useTranslation } from "@/hooks/use-translation";
 import { useLanguage } from "@/context/language-context";
@@ -130,181 +127,182 @@ const NavLink = ({ href, icon, label, isActive, isCollapsed }: { href: string; i
 );
 
 const navItems = [
-    { href: "/", label: "Dashboard", icon: <Home /> },
+    { href: "/", labelKey: "sidebar.dashboard", icon: <Home /> },
     {
-        href: "/meal-system", label: "MEAL System", icon: <Briefcase />,
+        href: "/meal-system", labelKey: "sidebar.mealSystem", icon: <Briefcase />,
         subItems: [
             {
-                href: "/meal-system/project", label: "Project", icon: <Briefcase />, subItems: [
-                    { href: "/meal-system/project/dashboard", label: "Dashboard", icon: <LayoutDashboard /> },
-                    { href: "/meal-system/project/details", label: "Details", icon: <Eye /> },
-                    { href: "/meal-system/project/add", label: "Add Project", icon: <Plus /> },
-                    { href: "/meal-system/project/plan", label: "Plan", icon: <CalendarCheck />, subItems: [
-                        { href: "/meal-system/project/plan/add-task", label: "Add Task", icon: <Plus /> },
-                        { href: "/meal-system/project/plan/edit-task", label: "Edit Task", icon: <Edit /> },
+                href: "/meal-system/project", labelKey: "sidebar.projectManagement", icon: <Briefcase />, subItems: [
+                    { href: "/meal-system/project/dashboard", labelKey: "sidebar.dashboard", icon: <LayoutDashboard /> },
+                    { href: "/meal-system/project/details", labelKey: "sidebar.details", icon: <Eye /> },
+                    { href: "/meal-system/project/add", labelKey: "sidebar.addProject", icon: <Plus /> },
+                    { href: "/meal-system/project/plan", labelKey: "sidebar.plan", icon: <CalendarCheck />, subItems: [
+                        { href: "/meal-system/project/plan/add-task", labelKey: "sidebar.addTask", icon: <Plus /> },
+                        { href: "/meal-system/project/plan/edit-task", labelKey: "sidebar.editTask", icon: <Edit /> },
                     ]},
-                    { href: "/meal-system/project/logframe", label: "Logframe", icon: <ListChecks />, subItems: [
-                        { href: "/meal-system/project/logframe/add", label: "Add", icon: <Plus /> },
-                        { href: "/meal-system/project/logframe/edit", label: "Edit", icon: <Edit /> },
+                    { href: "/meal-system/project/logframe", labelKey: "sidebar.logframe", icon: <ListChecks />, subItems: [
+                        { href: "/meal-system/project/logframe/add", labelKey: "sidebar.add", icon: <Plus /> },
+                        { href: "/meal-system/project/logframe/edit", labelKey: "sidebar.edit", icon: <Edit /> },
                     ]},
                 ]
             },
             {
-                href: "/meal-system/monitoring", label: "Monitoring", icon: <Monitor />,
+                href: "/meal-system/monitoring", labelKey: "sidebar.monitoring", icon: <Monitor />,
                 subItems: [
-                    { href: "/meal-system/monitoring/initiation-and-planning", label: "Initiation & Planning", icon: <ClipboardList />, subItems: [
-                        { href: "/meal-system/monitoring/initiation-and-planning/purpose-and-scope", label: "Purpose & Scope", icon: <Target />, subItems: [
-                           { href: "/meal-system/monitoring/initiation-and-planning/purpose-and-scope/add", label: "Add", icon: <Plus /> },
+                    { href: "/meal-system/monitoring/initiation-and-planning", labelKey: "sidebar.initiation", icon: <ClipboardList />, subItems: [
+                        { href: "/meal-system/monitoring/initiation-and-planning/purpose-and-scope", labelKey: "sidebar.purpose", icon: <Target />, subItems: [
+                           { href: "/meal-system/monitoring/initiation-and-planning/purpose-and-scope/add", labelKey: "sidebar.add", icon: <Plus /> },
                         ]},
-                        { href: "/meal-system/monitoring/initiation-and-planning/data-collection", label: "Data Collection", icon: <Database />, subItems: [
-                           { href: "/meal-system/monitoring/initiation-and-planning/data-collection/itt", label: "ITT", icon: <Sheet />, subItems: [
-                             { href: "/meal-system/monitoring/initiation-and-planning/data-collection/itt/edit", label: "Edit", icon: <Edit /> },
+                        { href: "/meal-system/monitoring/initiation-and-planning/data-collection", labelKey: "sidebar.dataCollection", icon: <Database />, subItems: [
+                           { href: "/meal-system/monitoring/initiation-and-planning/data-collection/itt", labelKey: "sidebar.itt", icon: <Sheet />, subItems: [
+                             { href: "/meal-system/monitoring/initiation-and-planning/data-collection/itt/edit", labelKey: "sidebar.edit", icon: <Edit /> },
                            ] },
                         ]},
-                        { href: "/meal-system/monitoring/initiation-and-planning/data-analysis", label: "Data Analysis", icon: <PieChart /> },
-                        { href: "/meal-system/monitoring/initiation-and-planning/reporting", label: "Reporting", icon: <FileText /> },
-                        { href: "/meal-system/monitoring/initiation-and-planning/hr", label: "HR", icon: <Users /> },
-                        { href: "/meal-system/monitoring/initiation-and-planning/budget", label: "Budget", icon: <DollarSign /> },
-                        { href: "/meal-system/monitoring/initiation-and-planning/me-plan-table", label: "ME Plan Table", icon: <Table />, subItems: [
-                             { href: "/meal-system/monitoring/initiation-and-planning/me-plan-table/add", label: "Add", icon: <Plus /> },
+                        { href: "/meal-system/monitoring/initiation-and-planning/data-analysis", labelKey: "sidebar.dataAnalysis", icon: <PieChart /> },
+                        { href: "/meal-system/monitoring/initiation-and-planning/reporting", labelKey: "sidebar.reporting", icon: <FileText /> },
+                        { href: "/meal-system/monitoring/initiation-and-planning/hr", labelKey: "sidebar.hr", icon: <Users /> },
+                        { href: "/meal-system/monitoring/initiation-and-planning/budget", labelKey: "sidebar.budget", icon: <DollarSign /> },
+                        { href: "/meal-system/monitoring/initiation-and-planning/me-plan-table", labelKey: "sidebar.mePlanTable", icon: <Table />, subItems: [
+                             { href: "/meal-system/monitoring/initiation-and-planning/me-plan-table/add", labelKey: "sidebar.add", icon: <Plus /> },
                         ]},
-                        { href: "/meal-system/monitoring/initiation-and-planning/prepare-indicators", label: "Prepare Indicators", icon: <Target />, subItems: [
-                             { href: "/meal-system/monitoring/initiation-and-planning/prepare-indicators/add", label: "Add", icon: <Plus /> },
+                        { href: "/meal-system/monitoring/initiation-and-planning/prepare-indicators", labelKey: "sidebar.prepareIndicators", icon: <Target />, subItems: [
+                             { href: "/meal-system/monitoring/initiation-and-planning/prepare-indicators/add", labelKey: "sidebar.add", icon: <Plus /> },
                         ]},
-                        { href: "/meal-system/monitoring/initiation-and-planning/sampling-calculator", label: "Sampling Calculator", icon: <Calculator /> },
+                        { href: "/meal-system/monitoring/initiation-and-planning/sampling-calculator", labelKey: "sidebar.samplingCalculator", icon: <Calculator /> },
                     ]},
                     {
-                        href: "/meal-system/monitoring/implementation", label: "Implementation", icon: <PlayCircle />,
+                        href: "/meal-system/monitoring/implementation", labelKey: "sidebar.implementation", icon: <PlayCircle />,
                         subItems: [
                             {
-                                href: "/meal-system/monitoring/implementation/beneficiary-monitoring", label: "Beneficiary Monitoring", icon: <Users />, subItems: [
-                                    { href: "/meal-system/monitoring/implementation/beneficiary-monitoring/Beneficiaries", label: "Beneficiaries", icon: <Users />, subItems: [
-                                        { href: "/meal-system/monitoring/implementation/beneficiary-monitoring/Beneficiaries/upload", label: "Upload", icon: <Upload /> },
-                                        { href: "/meal-system/monitoring/implementation/beneficiary-monitoring/Beneficiaries/correction", label: "Correction", icon: <Wrench /> },
-                                        { href: "/meal-system/monitoring/implementation/beneficiary-monitoring/Beneficiaries/review", label: "Review", icon: <Microscope /> },
-                                        { href: "/meal-system/monitoring/implementation/beneficiary-monitoring/Beneficiaries/audit", label: "Audit", icon: <ClipboardList /> },
-                                        { href: "/meal-system/monitoring/implementation/beneficiary-monitoring/Beneficiaries/report", label: "Report", icon: <BarChartHorizontal /> },
-                                        { href: "/meal-system/monitoring/implementation/beneficiary-monitoring/Beneficiaries/export", label: "Export", icon: <FileDown /> },
-                                        { href: "/meal-system/monitoring/implementation/beneficiary-monitoring/Beneficiaries/database", label: "Database", icon: <Database /> },
+                                href: "/meal-system/monitoring/implementation/beneficiary-monitoring", labelKey: "sidebar.beneficiaryMonitoring", icon: <Users />, subItems: [
+                                    { href: "/meal-system/monitoring/implementation/beneficiary-monitoring/Beneficiaries", labelKey: "sidebar.beneficiaries", icon: <Users />, subItems: [
+                                        { href: "/meal-system/monitoring/implementation/beneficiary-monitoring/Beneficiaries/upload", labelKey: "sidebar.upload", icon: <Upload /> },
+                                        { href: "/meal-system/monitoring/implementation/beneficiary-monitoring/Beneficiaries/correction", labelKey: "sidebar.correction", icon: <Wrench /> },
+                                        { href: "/meal-system/monitoring/implementation/beneficiary-monitoring/Beneficiaries/review", labelKey: "sidebar.review", icon: <Microscope /> },
+                                        { href: "/meal-system/monitoring/implementation/beneficiary-monitoring/Beneficiaries/audit", labelKey: "sidebar.audit", icon: <ClipboardList /> },
+                                        { href: "/meal-system/monitoring/implementation/beneficiary-monitoring/Beneficiaries/report", labelKey: "sidebar.report", icon: <BarChartHorizontal /> },
+                                        { href: "/meal-system/monitoring/implementation/beneficiary-monitoring/Beneficiaries/export", labelKey: "sidebar.export", icon: <FileDown /> },
+                                        { href: "/meal-system/monitoring/implementation/beneficiary-monitoring/Beneficiaries/database", labelKey: "sidebar.database", icon: <Database /> },
                                     ]},
-                                    { href: "/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators", label: "Community Educators", icon: <UserCheck />, subItems: [
-                                        { href: "/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/selection", label: "Selection", icon: <UserSearch /> },
-                                        { href: "/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/interview", label: "Interview", icon: <MessageSquare />, subItems: [
-                                            { href: "/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/interview/export-exact-pdf", label: "Export Exact PDF", icon: <FileDown />},
-                                            { href: "/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/interview/export-statements", label: "Export Statements", icon: <FileText />},
-                                            { href: "/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/interview/interview-results", label: "Interview Results", icon: <BarChart2 />},
+                                    { href: "/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators", labelKey: "sidebar.communityEducators", icon: <UserCheck />, subItems: [
+                                        { href: "/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/selection", labelKey: "sidebar.selection", icon: <UserSearch /> },
+                                        { href: "/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/interview", labelKey: "sidebar.interview", icon: <MessageSquare />, subItems: [
+                                            { href: "/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/interview/export-exact-pdf", labelKey: "sidebar.exportExactPdf", icon: <FileDown />},
+                                            { href: "/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/interview/export-statements", labelKey: "sidebar.exportStatements", icon: <FileText />},
+                                            { href: "/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/interview/interview-results", labelKey: "sidebar.interviewResults", icon: <BarChart2 />},
                                         ]},
-                                        { href: "/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/training", label: "Training", icon: <ClipboardPenLine /> },
-                                        { href: "/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/connecting", label: "Connecting", icon: <Link2 /> },
-                                        { href: "/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/contracts", label: "Contracts", icon: <FileText />, subItems: [
-                                            { href: "/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/contracts/export", label: "Export Contracts", icon: <FileDown />},
-                                            { href: "/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/contracts/view", label: "View Contracts", icon: <Eye />}
+                                        { href: "/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/training", labelKey: "sidebar.training", icon: <ClipboardPenLine /> },
+                                        { href: "/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/connecting", labelKey: "sidebar.connecting", icon: <Link2 /> },
+                                        { href: "/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/contracts", labelKey: "sidebar.contracts", icon: <FileText />, subItems: [
+                                            { href: "/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/contracts/export", labelKey: "sidebar.exportContracts", icon: <FileDown />},
+                                            { href: "/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/contracts/view", labelKey: "sidebar.viewContracts", icon: <Eye />}
                                         ] },
-                                        { href: "/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/database", label: "Database", icon: <Database /> },
-                                        { href: "/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/double-benefits", label: "Double Benefits", icon: <Layers /> },
+                                        { href: "/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/database", labelKey: "sidebar.database", icon: <Database /> },
+                                        { href: "/meal-system/monitoring/implementation/beneficiary-monitoring/community-educators/double-benefits", labelKey: "sidebar.doubleBenefits", icon: <Layers /> },
                                     ]},
-                                    { href: "/meal-system/monitoring/implementation/beneficiary-monitoring/education-and-payment-center", label: "Education & Payment Center", icon: <Home />, subItems: [
-                                        { href: "/meal-system/monitoring/implementation/beneficiary-monitoring/education-and-payment-center/add-center", label: "Add Center", icon: <Plus /> },
-                                        { href: "/meal-system/monitoring/implementation/beneficiary-monitoring/education-and-payment-center/add-locations", label: "Add Locations", icon: <Plus /> },
-                                        { href: "/meal-system/monitoring/implementation/beneficiary-monitoring/education-and-payment-center/edit-center", label: "Edit Center", icon: <Edit /> },
-                                        { href: "/meal-system/monitoring/implementation/beneficiary-monitoring/education-and-payment-center/modification", label: "Modification", icon: <Wrench /> },
-                                        { href: "/meal-system/monitoring/implementation/beneficiary-monitoring/education-and-payment-center/upload-centers", label: "Upload Centers", icon: <Upload /> },
+                                    { href: "/meal-system/monitoring/implementation/beneficiary-monitoring/education-and-payment-center", labelKey: "sidebar.educationCenter", icon: <Home />, subItems: [
+                                        { href: "/meal-system/monitoring/implementation/beneficiary-monitoring/education-and-payment-center/add-center", labelKey: "sidebar.addCenter", icon: <Plus /> },
+                                        { href: "/meal-system/monitoring/implementation/beneficiary-monitoring/education-and-payment-center/add-locations", labelKey: "sidebar.addLocations", icon: <Plus /> },
+                                        { href: "/meal-system/monitoring/implementation/beneficiary-monitoring/education-and-payment-center/edit-center", labelKey: "sidebar.editCenter", icon: <Edit /> },
+                                        { href: "/meal-system/monitoring/implementation/beneficiary-monitoring/education-and-payment-center/modification", labelKey: "sidebar.modification", icon: <Wrench /> },
+                                        { href: "/meal-system/monitoring/implementation/beneficiary-monitoring/education-and-payment-center/upload-centers", labelKey: "sidebar.uploadCenters", icon: <Upload /> },
                                     ]}
                                 ]
                             },
                              {
-                                href: "/meal-system/monitoring/implementation/process", label: "Process", icon: <Activity />, subItems: [
-                                   { href: "/meal-system/monitoring/implementation/process/monthly-health-sessions", label: "Monthly Health Sessions", icon: <HeartPulse />, subItems: [
-                                      { href: "/meal-system/monitoring/implementation/process/monthly-health-sessions/upload", label: "Upload", icon: <Upload /> },
-                                      { href: "/meal-system/monitoring/implementation/process/monthly-health-sessions/dashboard", label: "Dashboard", icon: <LayoutDashboard /> },
-                                      { href: "/meal-system/monitoring/implementation/process/monthly-health-sessions/database", label: "Database", icon: <Database /> },
+                                href: "/meal-system/monitoring/implementation/process", labelKey: "sidebar.process", icon: <Activity />, subItems: [
+                                   { href: "/meal-system/monitoring/implementation/process/monthly-health-sessions", labelKey: "sidebar.healthSessions", icon: <HeartPulse />, subItems: [
+                                      { href: "/meal-system/monitoring/implementation/process/monthly-health-sessions/upload", labelKey: "sidebar.upload", icon: <Upload /> },
+                                      { href: "/meal-system/monitoring/implementation/process/monthly-health-sessions/dashboard", labelKey: "sidebar.dashboard", icon: <LayoutDashboard /> },
+                                      { href: "/meal-system/monitoring/implementation/process/monthly-health-sessions/database", labelKey: "sidebar.database", icon: <Database /> },
                                    ]},
-                                   { href: "/meal-system/monitoring/implementation/process/cash-assistance-disbursement", label: "Cash Assistance Disbursement", icon: <DollarSign />, subItems: [
-                                       { href: "/meal-system/monitoring/implementation/process/cash-assistance-disbursement/beneficiaries", label: "Beneficiaries", icon: <Users />, subItems: [
-                                            { href: "/meal-system/monitoring/implementation/process/cash-assistance-disbursement/beneficiaries/upload", label: "Upload", icon: <Upload />},
-                                            { href: "/meal-system/monitoring/implementation/process/cash-assistance-disbursement/beneficiaries/dashboard", label: "Dashboard", icon: <LayoutDashboard />},
-                                            { href: "/meal-system/monitoring/implementation/process/cash-assistance-disbursement/beneficiaries/database", label: "Database", icon: <Database />},
+                                   { href: "/meal-system/monitoring/implementation/process/cash-assistance-disbursement", labelKey: "sidebar.disbursement", icon: <DollarSign />, subItems: [
+                                       { href: "/meal-system/monitoring/implementation/process/cash-assistance-disbursement/beneficiaries", labelKey: "sidebar.beneficiaries", icon: <Users />, subItems: [
+                                            { href: "/meal-system/monitoring/implementation/process/cash-assistance-disbursement/beneficiaries/upload", labelKey: "sidebar.upload", icon: <Upload />},
+                                            { href: "/meal-system/monitoring/implementation/process/cash-assistance-disbursement/beneficiaries/dashboard", labelKey: "sidebar.dashboard", icon: <LayoutDashboard />},
+                                            { href: "/meal-system/monitoring/implementation/process/cash-assistance-disbursement/beneficiaries/database", labelKey: "sidebar.database", icon: <Database />},
                                        ]},
-                                       { href: "/meal-system/monitoring/implementation/process/cash-assistance-disbursement/educators", label: "Educators", icon: <UserCheck />, subItems: [
-                                            { href: "/meal-system/monitoring/implementation/process/cash-assistance-disbursement/educators/upload", label: "Upload", icon: <Upload />},
-                                            { href: "/meal-system/monitoring/implementation/process/cash-assistance-disbursement/educators/dashboard", label: "Dashboard", icon: <LayoutDashboard />},
-                                            { href: "/meal-system/monitoring/implementation/process/cash-assistance-disbursement/educators/database", label: "Database", icon: <Database />},
+                                       { href: "/meal-system/monitoring/implementation/process/cash-assistance-disbursement/educators", labelKey: "sidebar.educators", icon: <UserCheck />, subItems: [
+                                            { href: "/meal-system/monitoring/implementation/process/cash-assistance-disbursement/educators/upload", labelKey: "sidebar.upload", icon: <Upload />},
+                                            { href: "/meal-system/monitoring/implementation/process/cash-assistance-disbursement/educators/dashboard", labelKey: "sidebar.dashboard", icon: <LayoutDashboard />},
+                                            { href: "/meal-system/monitoring/implementation/process/cash-assistance-disbursement/educators/database", labelKey: "sidebar.database", icon: <Database />},
                                        ]},
                                    ]},
-                                   { href: "/meal-system/monitoring/implementation/process/CMAM-cases", label: "CMAM Cases", icon: <Stethoscope />, subItems: [
-                                      { href: "/meal-system/monitoring/implementation/process/CMAM-cases/beneficiaries", label: "Beneficiaries", icon: <Users />, subItems: [
-                                          { href: "/meal-system/monitoring/implementation/process/CMAM-cases/beneficiaries/screening", label: "Screening", icon: <ScanSearch />, subItems: [
-                                            { href: "/meal-system/monitoring/implementation/process/CMAM-cases/beneficiaries/screening/preparing", label: "Preparing", icon: <ListChecks /> },
-                                            { href: "/meal-system/monitoring/implementation/process/CMAM-cases/beneficiaries/screening/database", label: "Database", icon: <Database /> },
-                                            { href: "/meal-system/monitoring/implementation/process/CMAM-cases/beneficiaries/screening/export", label: "Export", icon: <FileDown /> },
-                                            { href: "/meal-system/monitoring/implementation/process/CMAM-cases/beneficiaries/screening/entry", label: "Entry", icon: <FileEdit /> },
+                                   { href: "/meal-system/monitoring/implementation/process/CMAM-cases", labelKey: "sidebar.cmamCases", icon: <Stethoscope />, subItems: [
+                                      { href: "/meal-system/monitoring/implementation/process/CMAM-cases/beneficiaries", labelKey: "sidebar.beneficiaries", icon: <Users />, subItems: [
+                                          { href: "/meal-system/monitoring/implementation/process/CMAM-cases/beneficiaries/screening", labelKey: "sidebar.screening", icon: <ScanSearch />, subItems: [
+                                            { href: "/meal-system/monitoring/implementation/process/CMAM-cases/beneficiaries/screening/preparing", labelKey: "sidebar.preparing", icon: <ListChecks /> },
+                                            { href: "/meal-system/monitoring/implementation/process/CMAM-cases/beneficiaries/screening/database", labelKey: "sidebar.database", icon: <Database /> },
+                                            { href: "/meal-system/monitoring/implementation/process/CMAM-cases/beneficiaries/screening/export", labelKey: "sidebar.export", icon: <FileDown /> },
+                                            { href: "/meal-system/monitoring/implementation/process/CMAM-cases/beneficiaries/screening/entry", labelKey: "sidebar.entry", icon: <FileEdit /> },
                                           ]},
-                                          { href: "/meal-system/monitoring/implementation/process/CMAM-cases/beneficiaries/confirmation", label: "Confirmation", icon: <ClipboardCheck />, subItems: [
-                                            { href: "/meal-system/monitoring/implementation/process/CMAM-cases/beneficiaries/confirmation/entry", label: "Entry", icon: <FileEdit /> },
-                                            { href: "/meal-system/monitoring/implementation/process/CMAM-cases/beneficiaries/confirmation/export", label: "Export", icon: <FileDown /> },
+                                          { href: "/meal-system/monitoring/implementation/process/CMAM-cases/beneficiaries/confirmation", labelKey: "sidebar.confirmation", icon: <ClipboardCheck />, subItems: [
+                                            { href: "/meal-system/monitoring/implementation/process/CMAM-cases/beneficiaries/confirmation/entry", labelKey: "sidebar.entry", icon: <FileEdit /> },
+                                            { href: "/meal-system/monitoring/implementation/process/CMAM-cases/beneficiaries/confirmation/export", labelKey: "sidebar.export", icon: <FileDown /> },
                                           ]},
-                                          { href: "/meal-system/monitoring/implementation/process/CMAM-cases/beneficiaries/referral", label: "Referral", icon: <Send />, subItems: [
-                                            { href: "/meal-system/monitoring/implementation/process/CMAM-cases/beneficiaries/referral/export", label: "Export", icon: <FileDown /> },
-                                            { href: "/meal-system/monitoring/implementation/process/CMAM-cases/beneficiaries/referral/data-entry", label: "Data Entry", icon: <FileEdit /> },
+                                          { href: "/meal-system/monitoring/implementation/process/CMAM-cases/beneficiaries/referral", labelKey: "sidebar.referral", icon: <Send />, subItems: [
+                                            { href: "/meal-system/monitoring/implementation/process/CMAM-cases/beneficiaries/referral/export", labelKey: "sidebar.export", icon: <FileDown /> },
+                                            { href: "/meal-system/monitoring/implementation/process/CMAM-cases/beneficiaries/referral/data-entry", labelKey: "sidebar.dataEntry", icon: <FileEdit /> },
                                           ]},
                                       ]},
-                                      { href: "/meal-system/monitoring/implementation/process/CMAM-cases/children", label: "Children", icon: <Baby />, subItems: [
-                                          { href: "/meal-system/monitoring/implementation/process/CMAM-cases/children/screening", label: "Screening", icon: <ScanSearch />, subItems: [
-                                            { href: "/meal-system/monitoring/implementation/process/CMAM-cases/children/screening/preparing", label: "Preparing", icon: <ListChecks /> },
-                                            { href: "/meal-system/monitoring/implementation/process/CMAM-cases/children/screening/database", label: "Database", icon: <Database /> },
-                                            { href: "/meal-system/monitoring/implementation/process/CMAM-cases/children/screening/export", label: "Export", icon: <FileDown /> },
-                                            { href: "/meal-system/monitoring/implementation/process/CMAM-cases/children/screening/entry", label: "Entry", icon: <FileEdit /> },
+                                      { href: "/meal-system/monitoring/implementation/process/CMAM-cases/children", labelKey: "sidebar.children", icon: <Baby />, subItems: [
+                                          { href: "/meal-system/monitoring/implementation/process/CMAM-cases/children/screening", labelKey: "sidebar.screening", icon: <ScanSearch />, subItems: [
+                                            { href: "/meal-system/monitoring/implementation/process/CMAM-cases/children/screening/preparing", labelKey: "sidebar.preparing", icon: <ListChecks /> },
+                                            { href: "/meal-system/monitoring/implementation/process/CMAM-cases/children/screening/database", labelKey: "sidebar.database", icon: <Database /> },
+                                            { href: "/meal-system/monitoring/implementation/process/CMAM-cases/children/screening/export", labelKey: "sidebar.export", icon: <FileDown /> },
+                                            { href: "/meal-system/monitoring/implementation/process/CMAM-cases/children/screening/entry", labelKey: "sidebar.entry", icon: <FileEdit /> },
                                           ]},
-                                          { href: "/meal-system/monitoring/implementation/process/CMAM-cases/children/confirmation", label: "Confirmation", icon: <ClipboardCheck />, subItems: [
-                                            { href: "/meal-system/monitoring/implementation/process/CMAM-cases/children/confirmation/entry", label: "Entry", icon: <FileEdit /> },
-                                            { href: "/meal-system/monitoring/implementation/process/CMAM-cases/children/confirmation/export", label: "Export", icon: <FileDown /> },
+                                          { href: "/meal-system/monitoring/implementation/process/CMAM-cases/children/confirmation", labelKey: "sidebar.confirmation", icon: <ClipboardCheck />, subItems: [
+                                            { href: "/meal-system/monitoring/implementation/process/CMAM-cases/children/confirmation/entry", labelKey: "sidebar.entry", icon: <FileEdit /> },
+                                            { href: "/meal-system/monitoring/implementation/process/CMAM-cases/children/confirmation/export", labelKey: "sidebar.export", icon: <FileDown /> },
                                           ]},
-                                          { href: "/meal-system/monitoring/implementation/process/CMAM-cases/children/referral", label: "Referral", icon: <Send />, subItems: [
-                                              { href: "/meal-system/monitoring/implementation/process/CMAM-cases/children/referral/export", label: "Export Statements", icon: <FileText /> },
-                                              { href: "/meal-system/monitoring/implementation/process/CMAM-cases/children/referral/entry", label: "Data Entry", icon: <FileEdit /> },
+                                          { href: "/meal-system/monitoring/implementation/process/CMAM-cases/children/referral", labelKey: "sidebar.referral", icon: <Send />, subItems: [
+                                              { href: "/meal-system/monitoring/implementation/process/CMAM-cases/children/referral/export", labelKey: "sidebar.exportStatements", icon: <FileText /> },
+                                              { href: "/meal-system/monitoring/implementation/process/CMAM-cases/children/referral/entry", labelKey: "sidebar.dataEntry", icon: <FileEdit /> },
                                           ]},
                                       ]},
-                                      { href: "/meal-system/monitoring/implementation/process/CMAM-cases/health-worker-data", label: "Health Worker Data", icon: <Stethoscope />}
+                                      { href: "/meal-system/monitoring/implementation/process/CMAM-cases/health-worker-data", labelKey: "sidebar.healthWorkerData"}
                                    ] }
                                 ]
                             },
-                             { href: "/meal-system/monitoring/implementation/results", label: "Results", icon: <BarChart /> },
-                             { href: "/meal-system/monitoring/implementation/compliance", label: "Compliance", icon: <ShieldCheck /> },
-                             { href: "/meal-system/monitoring/implementation/context", label: "Context", icon: <Globe /> },
-                             { href: "/meal-system/monitoring/implementation/financial", label: "Financial", icon: <DollarSign /> },
-                             { href: "/meal-system/monitoring/implementation/organizational", label: "Organizational", icon: <Building /> },
-                             { href: "/meal-system/monitoring/implementation/enrollment", label: "Enrollment", icon: <UserCheck />, subItems: [
-                                  { href: "/meal-system/monitoring/implementation/enrollment/create-id-cards", label: "Create ID Cards", icon: <FileText /> },
-                                  { href: "/meal-system/monitoring/implementation/enrollment/create-sheets", label: "Create Sheets", icon: <Sheet /> },
-                                  { href: "/meal-system/monitoring/implementation/enrollment/review", label: "Review", icon: <Microscope />, subItems: [
-                                      { href: "/meal-system/monitoring/implementation/enrollment/review/upload", label: "Upload", icon: <Upload />},
-                                      { href: "/meal-system/monitoring/implementation/enrollment/review/recommendation", label: "Recommendation", icon: <ThumbsUp />},
-                                      { href: "/meal-system/monitoring/implementation/enrollment/review/dashboard", label: "Dashboard", icon: <LayoutDashboard />},
-                                      { href: "/meal-system/monitoring/implementation/enrollment/review/database", label: "Database", icon: <Database />},
-                                      { href: "/meal-system/monitoring/implementation/enrollment/review/download", label: "Download", icon: <FileDown />},
+                             { href: "/meal-system/monitoring/implementation/results", labelKey: "sidebar.results", icon: <BarChart /> },
+                             { href: "/meal-system/monitoring/implementation/compliance", labelKey: "sidebar.compliance", icon: <ShieldCheck /> },
+                             { href: "/meal-system/monitoring/implementation/context", labelKey: "sidebar.context", icon: <Globe /> },
+                             { href: "/meal-system/monitoring/implementation/financial", labelKey: "sidebar.financial", icon: <DollarSign /> },
+                             { href: "/meal-system/monitoring/implementation/organizational", labelKey: "sidebar.organizational", icon: <Building /> },
+                             { href: "/meal-system/monitoring/implementation/enrollment", labelKey: "sidebar.enrollment", icon: <UserCheck />, subItems: [
+                                  { href: "/meal-system/monitoring/implementation/enrollment/create-id-cards", labelKey: "sidebar.createIdCards", icon: <FileText /> },
+                                  { href: "/meal-system/monitoring/implementation/enrollment/create-sheets", labelKey: "sidebar.createSheets", icon: <Sheet /> },
+                                  { href: "/meal-system/monitoring/implementation/enrollment/review", labelKey: "sidebar.review", icon: <Microscope />, subItems: [
+                                      { href: "/meal-system/monitoring/implementation/enrollment/review/upload", labelKey: "sidebar.upload", icon: <Upload />},
+                                      { href: "/meal-system/monitoring/implementation/enrollment/review/recommendation", labelKey: "sidebar.recommendation", icon: <ThumbsUp />},
+                                      { href: "/meal-system/monitoring/implementation/enrollment/review/dashboard", labelKey: "sidebar.dashboard", icon: <LayoutDashboard />},
+                                      { href: "/meal-system/monitoring/implementation/enrollment/review/database", labelKey: "sidebar.database", icon: <Database />},
+                                      { href: "/meal-system/monitoring/implementation/enrollment/review/download", labelKey: "sidebar.download", icon: <FileDown />},
                                   ]},
                              ]},
                         ]
                     },
-                    { href: "/meal-system/monitoring/closure", label: "Closure", icon: <Flag /> },
+                    { href: "/meal-system/monitoring/closure", labelKey: "sidebar.closure", icon: <Flag /> },
                 ]
             },
-            { href: "/meal-system/evaluation", label: "Evaluation", icon: <ClipboardCheck /> },
-            { href: "/meal-system/analysis", label: "Analysis", icon: <PieChart /> },
-            { href: "/meal-system/reporting", label: "Reporting", icon: <FileText /> },
-            { href: "/meal-system/risk", label: "Risk", icon: <ShieldAlert /> },
-            { href: "/meal-system/compliant", label: "Compliant", icon: <MessageSquareWarning /> },
-            { href: "/meal-system/indicator", label: "Indicator", icon: <Target /> },
-            { href: "/meal-system/settings", label: "Settings", icon: <Settings /> },
+            { href: "/meal-system/evaluation", labelKey: "sidebar.evaluation", icon: <ClipboardCheck /> },
+            { href: "/meal-system/analysis", labelKey: "sidebar.analysis", icon: <PieChart /> },
+            { href: "/meal-system/reporting", labelKey: "sidebar.reporting", icon: <FileText /> },
+            { href: "/meal-system/risk", labelKey: "sidebar.risk", icon: <ShieldAlert /> },
+            { href: "/meal-system/compliant", labelKey: "sidebar.compliant", icon: <MessageSquareWarning /> },
+            { href: "/meal-system/indicator", labelKey: "sidebar.indicator", icon: <Target /> },
+            { href: "/meal-system/settings", labelKey: "sidebar.settings", icon: <Settings /> },
         ]
     },
-    { href: "/file-editor", label: "File Editor", icon: <FileEdit /> },
-    { href: "/export-folders", label: "Export Folders", icon: <FileDown /> },
-    { href: "/style-guide", label: "Style Guide", icon: <Palette /> },
-    { href: "/system-architecture", label: "System Architecture", icon: <BrainCircuit /> },
+    { href: "/file-editor", labelKey: "sidebar.fileEditor", icon: <FileEdit /> },
+    { href: "/export-folders", labelKey: "sidebar.exportFolders", icon: <FileDown /> },
+    { href: "/style-guide", labelKey: "sidebar.styleGuide", icon: <Palette /> },
+    { href: "/system-architecture", labelKey: "sidebar.systemArchitecture", icon: <BrainCircuit /> },
 ];
 
 const RecursiveNavGroup = ({ item, pathname, isCollapsed }: { item: any, pathname: string, isCollapsed: boolean }) => {
+    const { t } = useTranslation();
     const isGroupOrChildActive = item.subItems?.some((l: any) => pathname.startsWith(l.href)) || pathname === item.href;
     const [isOpen, setIsOpen] = useState(isGroupOrChildActive);
 
@@ -315,7 +313,7 @@ const RecursiveNavGroup = ({ item, pathname, isCollapsed }: { item: any, pathnam
     }, [isGroupOrChildActive, pathname]);
 
     if (!item.subItems) {
-        return <NavLink href={item.href} icon={item.icon} label={item.label} isActive={pathname === item.href} isCollapsed={isCollapsed} />;
+        return <NavLink href={item.href} icon={item.icon} label={t(item.labelKey)} isActive={pathname === item.href} isCollapsed={isCollapsed} />;
     }
 
     return (
@@ -324,7 +322,7 @@ const RecursiveNavGroup = ({ item, pathname, isCollapsed }: { item: any, pathnam
                 <Link href={item.href} className="flex-1">
                     <div className={cn("flex items-center gap-3 px-3 py-2 text-muted-foreground", isCollapsed && "justify-center", isGroupOrChildActive && "text-primary")}>
                         {item.icon}
-                        <span className={cn("whitespace-nowrap", isCollapsed && "hidden")}>{item.label}</span>
+                        <span className={cn("whitespace-nowrap", isCollapsed && "hidden")}>{t(item.labelKey)}</span>
                     </div>
                 </Link>
                 {!isCollapsed && (
@@ -359,16 +357,16 @@ export function LayoutProvider({ children, year }: { children: React.ReactNode, 
   const getPageTitle = (items: any[], path: string): string => {
     for (const item of items) {
         if (item.href === path) {
-            return item.label;
+            return t(item.labelKey);
         }
         if (path.startsWith(item.href) && item.subItems) {
             const subTitle = getPageTitle(item.subItems, path);
             // If the subtitle is not the parent's name, we found a more specific match
-            if (subTitle !== item.label) return subTitle;
+            if (subTitle !== t(item.labelKey)) return subTitle;
         }
     }
     const pathSegments = path.split('/').filter(Boolean);
-    return pathSegments.length > 0 ? pathSegments.map(s => s.replace(/-/g, ' ')).join(' > ') : 'Dashboard';
+    return pathSegments.length > 0 ? pathSegments.map(s => s.replace(/-/g, ' ')).join(' > ') : t('sidebar.dashboard');
   };
 
   const pageTitle = getPageTitle(navItems, pathname);

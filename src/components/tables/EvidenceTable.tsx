@@ -2,6 +2,7 @@
 "use client";
 
 import { StatusBadge } from "@/components/feedback/StatusBadge";
+import { useTranslation } from "@/hooks/use-translation";
 
 interface EvidenceRow {
   indicator: string;
@@ -11,15 +12,16 @@ interface EvidenceRow {
 }
 
 export function EvidenceTable({ rows }: { rows: EvidenceRow[] }) {
+  const { t } = useTranslation();
   return (
     <div className="bg-surface border border-border rounded-lg overflow-hidden">
       <table className="w-full text-sm">
         <thead className="bg-primary text-primary-foreground">
           <tr>
-            <th className="px-4 py-3 text-left font-bold text-primary-foreground">Indicator</th>
-            <th className="px-4 py-3 font-bold text-primary-foreground">Target</th>
-            <th className="px-4 py-3 font-bold text-primary-foreground">Actual</th>
-            <th className="px-4 py-3 font-bold text-primary-foreground">Status</th>
+            <th className="px-4 py-3 text-left font-bold text-primary-foreground">{t('dashboard.evidenceTable.indicator')}</th>
+            <th className="px-4 py-3 font-bold text-primary-foreground">{t('dashboard.evidenceTable.target')}</th>
+            <th className="px-4 py-3 font-bold text-primary-foreground">{t('dashboard.evidenceTable.actual')}</th>
+            <th className="px-4 py-3 font-bold text-primary-foreground">{t('dashboard.evidenceTable.status')}</th>
           </tr>
         </thead>
         <tbody>
