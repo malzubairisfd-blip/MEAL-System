@@ -62,6 +62,7 @@ import {
   FileText,
   // ✅ FIXED MISSING ICONS
   PieChart,
+  ClipboardCheck,
   MessageSquareWarning,
   ShieldAlert, 
 } from "lucide-react";

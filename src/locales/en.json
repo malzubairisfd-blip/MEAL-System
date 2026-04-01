@@ -18,7 +18,72 @@
     "prepareIndicators": "Prepare Indicators",
     "indicatorTracking": "Indicator Tracking",
     "fileEditor": "File Editor",
-    "systemArchitecture": "System Architecture"
+    "systemArchitecture": "System Architecture",
+    "monitoring": "Monitoring",
+    "initiation": "Initiation & Planning",
+    "purpose": "Purpose and Scope",
+    "add": "Add",
+    "edit": "Edit",
+    "dataCollection": "Data Collection",
+    "itt": "ITT",
+    "dataAnalysis": "Data Analysis",
+    "reporting": "Reporting",
+    "hr": "HR",
+    "budget": "Budget",
+    "mePlanTable": "M&E Plan Table",
+    "samplingCalculator": "Sampling Calculator",
+    "implementation": "Implementation",
+    "beneficiaryMonitoring": "Beneficiary Monitoring",
+    "beneficiaries": "Beneficiaries",
+    "database": "Database",
+    "communityEducators": "Community Educators",
+    "selection": "Selection",
+    "interview": "Interview",
+    "exportExactPdf": "Export Exact PDF",
+    "exportStatements": "Export Statements",
+    "interviewResults": "Interview Results",
+    "training": "Training",
+    "connecting": "Connecting",
+    "contracts": "Contracts",
+    "exportContracts": "Export Contracts",
+    "viewContracts": "View Contracts",
+    "doubleBenefits": "Double Benefits",
+    "educationCenter": "Education Center",
+    "addCenter": "Add Center",
+    "addLocations": "Add Locations",
+    "editCenter": "Edit Center",
+    "modification": "Modification",
+    "uploadCenters": "Upload Centers",
+    "process": "Process",
+    "healthSessions": "Health Sessions",
+    "disbursement": "Disbursement",
+    "educators": "Educators",
+    "cmamCases": "CMAM Cases",
+    "children": "Children",
+    "screening": "Screening",
+    "preparing": "Preparing",
+    "confirmation": "Confirmation",
+    "entry": "Entry",
+    "referral": "Referral",
+    "dataEntry": "Data Entry",
+    "healthWorkerData": "Health Worker Data",
+    "results": "Results",
+    "compliance": "Compliance",
+    "context": "Context",
+    "financial": "Financial",
+    "organizational": "Organizational",
+    "enrollment": "Enrollment",
+    "createIdCards": "Create ID Cards",
+    "createSheets": "Create Sheets",
+    "recommendation": "Recommendation",
+    "download": "Download",
+    "closure": "Closure",
+    "evaluation": "Evaluation",
+    "analysis": "Analysis",
+    "risk": "Risk",
+    "compliant": "Compliant",
+    "indicator": "Indicator",
+    "exportFolders": "Export Folders"
   },
   "header": {
     "dashboard": "Dashboard",
@@ -59,7 +124,7 @@
         "button": "Go to Export"
       }
     },
-     "kpi": {
+    "kpi": {
       "indicatorsMet": "Indicators Met",
       "atRisk": "At Risk",
       "offTrack": "Off Track"
@@ -80,11 +145,11 @@
       "back": "Back to Dashboard"
     },
     "project": {
-        "title": "Project Management",
-        "dashboard": "Project Dashboard",
-        "details": "Project Details",
-        "add": "Add Project",
-        "plan": "Project Plan"
+      "title": "Project Management",
+      "dashboard": "Project Dashboard",
+      "details": "Project Details",
+      "add": "Add Project",
+      "plan": "Project Plan"
     },
     "monitoring": {
       "title": "M&E System Lifecycle",
@@ -97,206 +162,682 @@
       "closureDesc": "Finalizing deliverables and lessons learned."
     },
     "initiation": {
-        "title": "Initiation and Planning",
-        "back": "Back to M&E Lifecycle",
-        "purpose": "Identify the purpose and scope of the M&E system",
-        "dataCollection": "Plan for data collection and management",
-        "dataAnalysis": "Plan for data analysis",
-        "reporting": "Plan for information reporting and utilization",
-        "hr": "Plan for M&E human resources and capacity building",
-        "budget": "Prepare the M&E budget"
+      "title": "Initiation and Planning",
+      "back": "Back to M&E Lifecycle",
+      "purpose": "Identify the purpose and scope of the M&E system",
+      "dataCollection": "Plan for data collection and management",
+      "dataAnalysis": "Plan for data analysis",
+      "reporting": "Plan for information reporting and utilization",
+      "hr": "Plan for M&E human resources and capacity building",
+      "budget": "Prepare the M&E budget"
     },
     "implementation": {
-        "title": "Implementation Monitoring",
-        "back": "Back to M&E Lifecycle",
-        "results": "Results monitoring",
-        "process": "Process (activity) monitoring",
-        "compliance": "Compliance monitoring",
-        "context": "Context (situation) monitoring",
-        "beneficiary": "Beneficiary monitoring",
-        "financial": "Financial monitoring",
-        "organizational": "Organizational monitoring"
+      "title": "Implementation Monitoring",
+      "back": "Back to M&E Lifecycle",
+      "results": "Results monitoring",
+      "process": "Process (activity) monitoring",
+      "compliance": "Compliance monitoring",
+      "context": "Context (situation) monitoring",
+      "beneficiary": "Beneficiary monitoring",
+      "financial": "Financial monitoring",
+      "organizational": "Organizational monitoring"
     },
     "process": {
-        "title": "Process (Activity) Monitoring",
-        "back": "Back to Implementation",
-        "enrollment": "Enrollment Management",
-        "enrollmentDesc": "Manage and track beneficiary enrollment processes.",
-        "healthSessions": "Monthly Health Sessions",
-        "healthSessionsDesc": "Monitor attendance and content of monthly health education sessions.",
-        "disbursement": "Cash Assistance Disbursement",
-        "disbursementDesc": "Track and verify the disbursement of monthly cash payments.",
-        "cmam": "Screening, Confirmation, and Referral of CMAM Cases",
-        "cmamDesc": "Analyze and filter Community Management of Acute Malnutrition cases."
+      "title": "Process (Activity) Monitoring",
+      "back": "Back to Implementation",
+      "enrollment": "Enrollment Management",
+      "enrollmentDesc": "Manage and track beneficiary enrollment processes.",
+      "healthSessions": "Monthly Health Sessions",
+      "healthSessionsDesc": "Monitor attendance and content of monthly health education sessions.",
+      "disbursement": "Cash Assistance Disbursement",
+      "disbursementDesc": "Track and verify the disbursement of monthly cash payments.",
+      "cmam": "Screening, Confirmation, and Referral of CMAM Cases",
+      "cmamDesc": "Analyze and filter Community Management of Acute Malnutrition cases."
     },
     "beneficiaryMonitoring": {
-        "title": "Beneficiary Monitoring",
-        "back": "Back to Implementation",
-        "beneficiaries": "Beneficiaries",
-        "communityEducators": "Community Educators",
-        "fieldCoordinator": "Field Coordinator",
-        "educationCenter": "Education and Payment Center"
+      "title": "Beneficiary Monitoring",
+      "back": "Back to Implementation",
+      "beneficiaries": "Beneficiaries",
+      "communityEducators": "Community Educators",
+      "fieldCoordinator": "Field Coordinator",
+      "educationCenter": "Education and Payment Center"
     },
     "beneficiaries": {
-        "title": "Beneficiaries Data Management",
-        "back": "Back to Beneficiary Monitoring",
-        "upload": "Upload Page",
-        "correction": "Correction Page",
-        "review": "Review Page",
-        "database": "View Beneficiaries Database",
-        "audit": "Audit Page",
-        "report": "Report Page",
-        "export": "Export Page"
+      "title": "Beneficiaries Data Management",
+      "back": "Back to Beneficiary Monitoring",
+      "upload": "Upload Page",
+      "correction": "Correction Page",
+      "review": "Review Page",
+      "database": "View Beneficiaries Database",
+      "audit": "Audit Page",
+      "report": "Report Page",
+      "export": "Export Page"
     },
     "communityEducators": {
-        "title": "Community Educators Management",
-        "back": "Back to Beneficiary Monitoring",
-        "selection": "Community Educators Selection",
-        "interview": "Community Educators Interview",
-        "training": "Community Educators Training",
-        "connecting": "Connecting BNF ED EC PC",
-        "contracts": "Community Educators Contracts",
-        "database": "ED Database",
-        "doubleBenefits": "Double Benefits Analysis"
+      "title": "Community Educators Management",
+      "back": "Back to Beneficiary Monitoring",
+      "selection": "Community Educators Selection",
+      "interview": "Community Educators Interview",
+      "training": "Community Educators Training",
+      "connecting": "Connecting BNF ED EC PC",
+      "contracts": "Community Educators Contracts",
+      "database": "ED Database",
+      "doubleBenefits": "Double Benefits Analysis"
     },
     "contracts": {
-        "title": "Community Educators Contracts",
-        "back": "Back to Community Educators",
-        "view": "View Signed Contracts",
-        "viewDesc": "View details of all active community educator contracts.",
-        "setDates": "Set Contract Dates",
-        "setDatesDesc": "Set start and end dates for contracts in bulk for a project.",
-        "terminate": "Termination of Community Educators Contracts",
-        "terminateDesc": "Process the termination of educator contracts.",
-        "renew": "Renewal Community Educators Contracts",
-        "renewDesc": "Manage the renewal of educator contracts."
+      "title": "Community Educators Contracts",
+      "back": "Back to Community Educators",
+      "view": "View Signed Contracts",
+      "viewDesc": "View details of all active community educator contracts.",
+      "setDates": "Set Contract Dates",
+      "setDatesDesc": "Set start and end dates for contracts in bulk for a project.",
+      "terminate": "Termination of Community Educators Contracts",
+      "terminateDesc": "Process the termination of educator contracts.",
+      "renew": "Renewal Community Educators Contracts",
+      "renewDesc": "Manage the renewal of educator contracts."
     },
     "interview": {
-        "title": "Community Educators Interview",
-        "back": "Back to Community Educators",
-        "exportStatements": "Exporting Interview Statements",
-        "exportStatementsDesc": "Generate and download documents for interview sessions.",
-        "analyzeResults": "Analyzing Interview Results",
-        "analyzeResultsDesc": "Analyze scores and results from the interviews.",
-        "exportExact": "Export Interview Sheets (Exact)",
-        "exportExactDesc": "Generate an exact replica of the interview scoresheet as a PDF."
+      "title": "Community Educators Interview",
+      "back": "Back to Community Educators",
+      "exportStatements": "Exporting Interview Statements",
+      "exportStatementsDesc": "Generate and download documents for interview sessions.",
+      "analyzeResults": "Analyzing Interview Results",
+      "analyzeResultsDesc": "Analyze scores and results from the interviews.",
+      "exportExact": "Export Interview Sheets (Exact)",
+      "exportExactDesc": "Generate an exact replica of the interview scoresheet as a PDF."
     },
-     "cmamCases": {
-        "title": "CMAM Cases Management",
-        "back": "Back to Process Monitoring",
-        "beneficiaries": "Beneficiaries CMAM",
-        "beneficiariesDesc": "Manage CMAM data for beneficiaries.",
-        "children": "Children CMAM",
-        "childrenDesc": "Manage CMAM data specifically for children.",
-        "healthWorker": "Health Worker Data",
-        "healthWorkerDesc": "Data related to health workers involved in CMAM."
+    "cmamCases": {
+      "title": "CMAM Cases Management",
+      "back": "Back to Process Monitoring",
+      "beneficiaries": "Beneficiaries CMAM",
+      "beneficiariesDesc": "Manage CMAM data for beneficiaries.",
+      "children": "Children CMAM",
+      "childrenDesc": "Manage CMAM data specifically for children.",
+      "healthWorker": "Health Worker Data",
+      "healthWorkerDesc": "Data related to health workers involved in CMAM."
     },
     "beneficiariesCmam": {
-        "title": "Beneficiaries CMAM",
-        "back": "Back to CMAM Cases",
-        "screening": "Screening Malnutrition Cases",
-        "screeningDesc": "Screen beneficiaries for signs of malnutrition.",
-        "confirmation": "Confirmation Malnutrition Cases",
-        "confirmationDesc": "Confirm and document cases of malnutrition.",
-        "referral": "Referral Malnourished Cases",
-        "referralDesc": "Refer confirmed cases for appropriate treatment."
+      "title": "Beneficiaries CMAM",
+      "back": "Back to CMAM Cases",
+      "screening": "Screening Malnutrition Cases",
+      "screeningDesc": "Screen beneficiaries for signs of malnutrition.",
+      "confirmation": "Confirmation Malnutrition Cases",
+      "confirmationDesc": "Confirm and document cases of malnutrition.",
+      "referral": "Referral Malnourished Cases",
+      "referralDesc": "Refer confirmed cases for appropriate treatment."
     },
     "beneficiariesCmamScreening": {
-        "title": "Screening Malnutrition Cases",
-        "back": "Back to Beneficiaries CMAM",
-        "preparing": "Preparing Beneficiaries CMAM List",
-        "preparingDesc": "Prepare and manage the list of beneficiaries for CMAM screening.",
-        "database": "Beneficiaries CMAM Database",
-        "databaseDesc": "View and manage the CMAM screening database.",
-        "export": "Exporting Beneficiaries CMAM Statements",
-        "exportDesc": "Export statements and reports related to CMAM screening.",
-        "entry": "Beneficiaries CMAM Screening Results Data Entry",
-        "entryDesc": "Enter the results from the screening process."
+      "title": "Screening Malnutrition Cases",
+      "back": "Back to Beneficiaries CMAM",
+      "preparing": "Preparing Beneficiaries CMAM List",
+      "preparingDesc": "Prepare and manage the list of beneficiaries for CMAM screening.",
+      "database": "Beneficiaries CMAM Database",
+      "databaseDesc": "View and manage the CMAM screening database.",
+      "export": "Exporting Beneficiaries CMAM Statements",
+      "exportDesc": "Export statements and reports related to CMAM screening.",
+      "entry": "Beneficiaries CMAM Screening Results Data Entry",
+      "entryDesc": "Enter the results from the screening process."
     },
     "beneficiariesCmamConfirmation": {
-        "title": "Confirmation of Malnutrition Cases",
-        "back": "Back to Beneficiaries CMAM",
-        "export": "Export Confirmation Malnutrition Statements",
-        "exportDesc": "Generate and download PDF statements for confirmed cases.",
-        "entry": "Confirmation Malnutrition Results Data Entry",
-        "entryDesc": "Enter and manage the results for confirmed malnutrition cases."
+      "title": "Confirmation of Malnutrition Cases",
+      "back": "Back to Beneficiaries CMAM",
+      "export": "Export Confirmation Malnutrition Statements",
+      "exportDesc": "Generate and download PDF statements for confirmed cases.",
+      "entry": "Confirmation Malnutrition Results Data Entry",
+      "entryDesc": "Enter and manage the results for confirmed malnutrition cases."
     },
     "beneficiariesCmamReferral": {
-        "title": "Referral of Malnourished Cases",
-        "back": "Back to Beneficiaries CMAM",
-        "export": "Exporting Referral Malnourished Statements",
-        "exportDesc": "Generate and download statements for referred cases.",
-        "entry": "Beneficiaries Referral Malnourished Data Entry",
-        "entryDesc": "Enter and manage data for referred beneficiaries."
+      "title": "Referral of Malnourished Cases",
+      "back": "Back to Beneficiaries CMAM",
+      "export": "Exporting Referral Malnourished Statements",
+      "exportDesc": "Generate and download statements for referred cases.",
+      "entry": "Beneficiaries Referral Malnourished Data Entry",
+      "entryDesc": "Enter and manage data for referred beneficiaries."
     },
     "childrenCmam": {
-        "title": "Children CMAM",
-        "back": "Back to CMAM Cases",
-        "screening": "Screening Malnutrition Cases",
-        "screeningDesc": "Screen children for signs of malnutrition.",
-        "confirmation": "Confirmation Malnutrition Cases",
-        "confirmationDesc": "Confirm and document cases of malnutrition.",
-        "referral": "Referral Malnourished Cases",
-        "referralDesc": "Refer confirmed cases for appropriate treatment."
+      "title": "Children CMAM",
+      "back": "Back to CMAM Cases",
+      "screening": "Screening Malnutrition Cases",
+      "screeningDesc": "Screen children for signs of malnutrition.",
+      "confirmation": "Confirmation Malnutrition Cases",
+      "confirmationDesc": "Confirm and document cases of malnutrition.",
+      "referral": "Referral Malnourished Cases",
+      "referralDesc": "Refer confirmed cases for appropriate treatment."
     },
     "childrenCmamScreening": {
-        "title": "Child Screening for CMAM",
-        "back": "Back to Children CMAM",
-        "preparing": "Preparing Child CMAM List",
-        "preparingDesc": "Upload and process the initial list of children for CMAM screening.",
-        "database": "Child CMAM Database",
-        "databaseDesc": "View and manage all records in the child CMAM database.",
-        "export": "Exporting Child CMAM Statements",
-        "exportDesc": "Generate and download PDF statements for screening.",
-        "entry": "Child CMAM Screening Results Data Entry",
-        "entryDesc": "Enter the results and findings from the screening process."
+      "title": "Child Screening for CMAM",
+      "back": "Back to Children CMAM",
+      "preparing": "Preparing Child CMAM List",
+      "preparingDesc": "Upload and process the initial list of children for CMAM screening.",
+      "database": "Child CMAM Database",
+      "databaseDesc": "View and manage all records in the child CMAM database.",
+      "export": "Exporting Child CMAM Statements",
+      "exportDesc": "Generate and download PDF statements for screening.",
+      "entry": "Child CMAM Screening Results Data Entry",
+      "entryDesc": "Enter the results and findings from the screening process."
     },
-     "childrenCmamConfirmation": {
-        "title": "Confirmation of Malnutrition Cases",
-        "back": "Back to Children CMAM",
-        "export": "Export Confirmation Malnutrition Statements",
-        "exportDesc": "Generate and download PDF statements for confirmed cases.",
-        "entry": "Confirmation Malnutrition Results Data Entry",
-        "entryDesc": "Enter and manage the results for confirmed malnutrition cases."
+    "childrenCmamConfirmation": {
+      "title": "Confirmation of Malnutrition Cases",
+      "back": "Back to Children CMAM",
+      "export": "Export Confirmation Malnutrition Statements",
+      "exportDesc": "Generate and download PDF statements for confirmed cases.",
+      "entry": "Confirmation Malnutrition Results Data Entry",
+      "entryDesc": "Enter and manage the results for confirmed malnutrition cases."
     },
     "childrenCmamReferral": {
-        "title": "Referral of Malnourished Children",
-        "back": "Back to Children CMAM",
-        "export": "Exporting Referral Malnourished Statements",
-        "exportDesc": "Generate and download statements for referred cases.",
-        "entry": "Child Referral Malnourished Data Entry",
-        "entryDesc": "Enter and manage data for referred children."
+      "title": "Referral of Malnourished Children",
+      "back": "Back to Children CMAM",
+      "export": "Exporting Referral Malnourished Statements",
+      "exportDesc": "Generate and download statements for referred cases.",
+      "entry": "Child Referral Malnourished Data Entry",
+      "entryDesc": "Enter and manage data for referred children."
     },
-     "cashDisbursement": {
-        "title": "Cash Assistance Disbursement",
-        "back": "Back to Process Monitoring",
-        "beneficiaries": "Beneficiaries Disbursement",
-        "beneficiariesDesc": "Manage disbursement information related to beneficiaries.",
-        "educators": "Community Educators Disbursement",
-        "educatorsDesc": "Manage disbursement information for community educators."
+    "cashDisbursement": {
+      "title": "Cash Assistance Disbursement",
+      "back": "Back to Process Monitoring",
+      "beneficiaries": "Beneficiaries Disbursement",
+      "beneficiariesDesc": "Manage disbursement information related to beneficiaries.",
+      "educators": "Community Educators Disbursement",
+      "educatorsDesc": "Manage disbursement information for community educators."
     },
     "dataCollection": {
-        "title": "Plan for Data Collection and Management",
-        "back": "Back to Initiation & Planning",
-        "description": "Outline the steps for gathering and managing project data.",
-        "mePlanTable": "Develop an M&E plan table",
-        "prepareIndicators": "Prepare Monitoring indicators",
-        "secondaryData": "Availability of secondary data",
-        "dataTypes": "Determine the quantitative and qualitative data",
-        "sampling": "Determine sampling requirements",
-        "surveys": "Prepare for any surveys",
-        "staffCriteria": "Establish Monitoring staff selection Crietria",
-        "itt": "indicator tracking table (ITT)"
+      "title": "Plan for Data Collection and Management",
+      "back": "Back to Initiation & Planning",
+      "description": "Outline the steps for gathering and managing project data.",
+      "mePlanTable": "Develop an M&E plan table",
+      "prepareIndicators": "Prepare Monitoring indicators",
+      "secondaryData": "Availability of secondary data",
+      "dataTypes": "Determine the quantitative and qualitative data",
+      "sampling": "Determine sampling requirements",
+      "surveys": "Prepare for any surveys",
+      "staffCriteria": "Establish Monitoring staff selection Crietria",
+      "itt": "indicator tracking table (ITT)"
     },
     "buttons": {
-        "proceed": "Proceed",
-        "viewDetails": "View Details",
-        "go": "Go"
+      "proceed": "Proceed",
+      "viewDetails": "View Details",
+      "go": "Go"
     }
   },
   "underConstruction": {
     "title": "Under Construction",
     "description": "This section is under construction. It will contain tools and reports for finalizing deliverables and documenting lessons learned.",
+    "checkBack": "Check back soon for updates!"
+  },
+  "upload": {
+    "steps": {
+      "1": {
+        "title": "1. Upload File",
+        "description": "Select a file from your device to begin analysis."
+      },
+      "2": {
+        "title": "2. Map Columns",
+        "description": "Map your spreadsheet columns to the required fields for analysis."
+      },
+      "3": {
+        "title": "3. Run Clustering",
+        "description": "Start the AI-powered analysis to find potential duplicates."
+      },
+      "4": {
+        "title": "4. Results",
+        "description": "A summary of the clustering process."
+      }
+    },
+    "buttons": {
+      "settings": "Settings",
+      "reset": "Reset",
+      "idle": "Start Clustering",
+      "processing": "Processing...",
+      "caching": "Caching Results...",
+      "building-edges": "Building Edges...",
+      "merging-edges": "Merging Edges...",
+      "re-clustering": "Refining Clusters...",
+      "annotating": "Finalizing...",
+      "done": "Clustering Complete!",
+      "error": "Error! Try Again?",
+      "goToReview": "Go To Review Page"
+    },
+    "file": {
+      "clickToUpload": "Click to upload",
+      "orDragAndDrop": "or drag and drop",
+      "fileTypes": "XLSX, XLS, CSV, etc.",
+      "rowsDetected": "rows detected",
+      "reading": "Reading file..."
+    },
+    "mappingFields": {
+      "womanName": "Woman Name",
+      "husbandName": "Husband Name",
+      "nationalId": "National ID",
+      "phone": "Phone",
+      "village": "Village",
+      "subdistrict": "Subdistrict",
+      "children": "Children",
+      "beneficiaryId": "Beneficiary ID"
+    },
+    "status": {
+      "label": "Status",
+      "idle": "Idle",
+      "worker-ready": "Ready",
+      "receiving": "Receiving data",
+      "mapping-rows": "Mapping rows",
+      "blocking": "Creating blocks",
+      "building-edges": "Building edges",
+      "merging-edges": "Merging edges",
+      "re-clustering-pass": "Refining pass {pass}",
+      "annotating": "Finalizing",
+      "calculating_scores": "Calculating scores",
+      "caching": "Caching results",
+      "done": "Completed",
+      "error": "Error"
+    },
+    "results": {
+      "totalRecords": "Total Records",
+      "clusteredRecords": "Clustered Records",
+      "unclusteredRecords": "Unclustered Records",
+      "clusterCount": "Cluster Count",
+      "avgClusterSize": "Avg. Cluster Size",
+      "outOf": "out of"
+    },
+    "toasts": {
+      "clusteringComplete": {
+        "title": "Clustering Complete",
+        "description": "Found {count} potential duplicate clusters."
+      },
+      "cacheError": {
+        "title": "Failed to cache results"
+      },
+      "workerError": {
+        "title": "Worker Error"
+      },
+      "workerStartError": {
+        "title": "Unable to start worker"
+      },
+      "noData": "Please upload data first",
+      "mappingIncomplete": "Mapping incomplete"
+    }
+  },
+  "review": {
+    "title": "Review Clusters",
+    "description": "Inspect and analyze potential duplicate clusters from the last processing run. Found {filteredClusters} of {allClusters} clusters.",
+    "buttons": {
+      "backToUpload": "Back to Upload",
+      "recalculate": "Recalculate Scores",
+      "goToAudit": "Go to Audit Page"
+    },
+    "searchPlaceholder": "Search by name, husband, or phone...",
+    "loading": "Loading clusters...",
+    "noClusters": "No clusters found",
+    "noClustersForQuery": " for your query.",
+    "pagination": "Page {currentPage} of {totalPages}",
+    "previous": "Previous",
+    "next": "Next",
+    "clusterCard": {
+      "records": "records",
+      "confidence": "Confidence",
+      "inspect": "Inspect",
+      "aiSummary": "AI Summary"
+    },
+    "pairwiseModal": {
+      "title": "Cluster Details",
+      "description": "Review the pairwise similarity scores between records in this cluster.",
+      "loadButton": "Load Pairwise Similarities",
+      "scoresLoaded": "Scores Loaded",
+      "calculating": "Calculating...",
+      "recordA": "Record A",
+      "recordB": "Record B",
+      "scoreBreakdown": "Score Breakdown",
+      "component": "Component",
+      "score": "Score",
+      "close": "Close",
+      "firstNameScore": "First Name Score",
+      "familyNameScore": "Family Name Score",
+      "advancedNameScore": "Advanced Name Score",
+      "tokenReorderScore": "Token Reorder Score",
+      "husbandScore": "Husband Score",
+      "childrenScore": "Children Score",
+      "idScore": "ID Score",
+      "phoneScore": "Phone Score",
+      "locationScore": "Location Score",
+      "finalScore": "Final Score"
+    },
+    "toasts": {
+      "calculatingScores": {
+        "title": "Calculating Scores",
+        "description": "Fetching and calculating average scores for {clustersToScore} clusters..."
+      },
+      "calculationComplete": {
+        "title": "Calculation Complete",
+        "description": "Average scores and confidence have been updated for all clusters."
+      },
+      "noData": {
+        "title": "No Data",
+        "description": "No clusters from the last run were found. Please upload data first."
+      },
+      "loadError": "Failed to load clusters from the server cache.",
+      "noClustersFound": {
+        "title": "No Clusters Found",
+        "description": "The last run produced no clusters. Try adjusting the settings."
+      },
+      "clustersLoaded": {
+        "title": "Clusters Loaded",
+        "description": "Loaded {clusters} clusters for review."
+      },
+      "loadErrorFromServer": {
+        "title": "Error",
+        "description": "Failed to load cluster data from server cache."
+      },
+      "noScores": {
+        "title": "Scores not pre-calculated",
+        "description": "Re-run clustering for better performance."
+      }
+    }
+  },
+  "audit": {
+    "title": "Data Integrity Audit",
+    "description": "Run a set of rules over your clustered records to identify potential issues like duplicates and invalid relationships.",
+    "readyMessage": "Ready to audit {rows} records.",
+    "buttons": {
+      "backToReview": "Back to Review",
+      "runAudit": "Run Audit",
+      "rerunAudit": "Re-run Audit",
+      "goToExport": "Go to Export Page"
+    },
+    "loading": "Loading latest data...",
+    "auditing": "Auditing...",
+    "summary": {
+      "title": "Audit Summary",
+      "description": "A summary of the types of issues found across all records."
+    },
+    "findings": {
+      "title": "Audit Findings",
+      "description": "{findings} total issues found across {groupedFindings} unique records."
+    },
+    "findingTypes": {
+      "WOMAN_MULTIPLE_HUSBANDS": "Woman with Multiple Husbands",
+      "MULTIPLE_NATIONAL_IDS": "Multiple National IDs",
+      "DUPLICATE_ID": "Duplicate ID",
+      "DUPLICATE_COUPLE": "Duplicate Couple",
+      "HIGH_SIMILARITY": "High Similarity"
+    },
+    "severity": {
+      "high": "High",
+      "medium": "Medium",
+      "low": "Low"
+    },
+    "recordDetails": "Record Details:",
+    "identifiedIssues": "Identified Issues:",
+    "readyToAudit": {
+      "title": "Ready to Audit",
+      "description": "Click 'Run Audit' to check {rows} clustered records for issues."
+    },
+    "toasts": {
+      "noData": "Cache ID not found. Please re-upload data.",
+      "auditComplete": "Audit Complete",
+      "issuesFound": "{newFindings} potential issues found.",
+      "auditError": "Audit Error",
+      "noClusteredData": "No records in clusters to audit.",
+      "loadedFromCache": {
+        "title": "Loaded from Cache",
+        "description": "Loaded {auditFindings} existing audit findings."
+      }
+    }
+  },
+  "export": {
+    "title": "Advanced Export Workflow",
+    "description": "Generate and download your comprehensive beneficiary analysis report in a single step.",
+    "initialLoading": "Loading data from cache...",
+    "generateAndDownload": {
+      "title": "Generate & Download Report",
+      "recordsLoaded": "{recordCount} records loaded",
+      "clustersFound": "{clusterCount} clusters found",
+      "description": "This will generate a single Excel file with multiple sheets: Enriched Data, Review Summary, Cluster Details, and Audit Findings.",
+      "button": "Generate & Download Report",
+      "buttonGenerating": "Generating..."
+    },
+    "status": {
+      "title": "Generation Status",
+      "starting": "Starting export process...",
+      "enriching": "Enriching data...",
+      "sorting": "Sorting records...",
+      "sheets": "Building data sheets...",
+      "summary": "Building summary sheets...",
+      "audit": "Building audit sheets...",
+      "dashboard": "Building dashboard sheet...",
+      "done": "Completed",
+      "idle": "Real-time generation status will appear here once the process starts."
+    },
+    "downloadPanel": {
+      "title": "Download Panel",
+      "empty": "Generated reports will appear here.",
+      "fileName": "File Name",
+      "version": "Version",
+      "created": "Created At",
+      "actions": "Actions",
+      "download": "Download",
+      "delete": "Delete"
+    },
+    "toasts": {
+      "noData": "No data found. Please start from the upload page to generate data for export.",
+      "fetchError": "Failed to fetch cached data. Please try the upload process again.",
+      "noRecords": "Cached data is empty. Please re-upload your file.",
+      "generationFailed": "Generation failed",
+      "reportReadyTitle": "Report Ready",
+      "reportReadyDescription": "{newVersion} has been added to the download panel.",
+      "downloadStartedTitle": "Download Started",
+      "downloadStartedDescription": "Your download of {fileName} has begun."
+    }
+  },
+  "report": {
+    "title": "Report Dashboard",
+    "description": "Visualize your data and navigate to other sections. Use the button below to capture this view for your final Excel export.",
+    "buttons": {
+      "captureAndExport": "Capture & Go to Export",
+      "capturing": "Capturing..."
+    },
+    "mapping": {
+      "title": "Mapping",
+      "description": "Map your data columns to the required fields for the report.",
+      "fields": {
+        "government": "Government",
+        "district": "District",
+        "subdistrict": "Subdistrict",
+        "teamLeaders": "Team Leaders",
+        "surveyor": "Surveyor",
+        "registrationDays": "Registration Days",
+        "villageTargeted": "Village Targeted",
+        "householdRegistered": "Household Registered",
+        "householdGender": "Household Gender",
+        "dislocatedHousehold": "Dislocated Household",
+        "householdWithGuest": "Household With Guest",
+        "beneficiariesRegistered": "Beneficiaries Registered",
+        "pregnantWoman": "Pregnant Woman",
+        "lactatingMother": "Lactating Mother (< 5 years child)",
+        "womanWithHandicappedChild": "Woman with Handicapped Child (5-17 years)",
+        "handicappedWoman": "Handicapped Woman",
+        "dislocatedWoman": "Dislocated Woman",
+        "maleChildren": "Male Children",
+        "femaleChildren": "Female Children"
+      }
+    },
+    "keyFigures": {
+      "title": "Key Figures",
+      "description": "Topline statistics from your data.",
+      "teamLeaders": "Total Team Leaders",
+      "surveyors": "Total Surveyors",
+      "registrationDays": "Total Registration Days",
+      "villages": "Total Villages Targeted"
+    },
+    "charts": {
+      "title": "Charts & Graphs",
+      "description": "Detailed breakdowns of your beneficiary data.",
+      "byDay": "Beneficiaries by Registration Day",
+      "byVillage": "Beneficiaries by Village",
+      "day": "Day",
+      "village": "Village",
+      "beneficiaries": "Beneficiaries",
+      "womenAndChildren": "Women & Children",
+      "womenAndChildrenDescription": "Distribution of mothers and pregnant women.",
+      "maleChildren": "Male Children",
+      "femaleChildren": "Female Children",
+      "ofTotal": "of total"
+    },
+    "bubbles": {
+      "hhRegistered": "HH Registered",
+      "maleHH": "Male-headed HH",
+      "femaleHH": "Female-headed HH",
+      "dislocatedHH": "Dislocated HH",
+      "hhWithGuest": "HH with Guest",
+      "beneficiaries": "Beneficiaries",
+      "pregnantWoman": "Pregnant Woman",
+      "lactatingMother": "Lactating/Mother < 5",
+      "handicappedWoman": "Handicapped Woman",
+      "womanWithHandicappedChild": "Woman w/ Handicapped Child",
+      "dislocatedWoman": "Dislocated Woman"
+    },
+    "womenStats": {
+      "pregnant": "Pregnant",
+      "mother": "Mother < 5",
+      "handicappedChild": "Handicapped Child"
+    },
+    "map": {
+      "title": "Geographic View",
+      "description": "A map of the subdistricts present in your data."
+    },
+    "loading": "Loading report data...",
+    "toasts": {
+      "loadError": {
+        "title": "Could not load data. Please start by uploading a file.",
+        "description": "No valid data was found in the cache."
+      },
+      "noRecords": {
+        "title": "No Records",
+        "description": "The cached data contains no records."
+      },
+      "cannotExport": {
+        "title": "Cannot Export",
+        "description": "Data is not ready. Please complete mapping first."
+      },
+      "preparingExport": {
+        "title": "Preparing Export",
+        "description": "Capturing dashboard components as images..."
+      },
+      "captureFailed": {
+        "title": "Capture Failed",
+        "description": "Could not capture the {key} component."
+      },
+      "dashboardCached": {
+        "title": "Dashboard Cached",
+        "description": "Visuals saved. Proceeding to the export page."
+      },
+      "exportError": {
+        "title": "Export Error",
+        "description": "An error occurred while preparing the export: {message}"
+      }
+    }
+  },
+  "settings": {
+    "title": "Clustering — Admin Settings (v5)",
+    "description": "Fine-tune the v5 clustering engine, weights, and rules.",
+    "buttons": {
+      "goToUpload": "Go to Upload",
+      "export": "Export",
+      "import": "Import",
+      "reset": "Reset",
+      "save": "Save",
+      "saving": "Saving..."
+    },
+    "cache": {
+      "title": "Raw Cache Viewer",
+      "description": "Inspect the raw data currently stored in your browser's IndexedDB cache. This is useful for debugging.",
+      "button": "View Cached Data",
+      "loading": "Loading cached data..."
+    },
+    "thresholds": {
+      "title": "Thresholds & Performance",
+      "minPair": "Minimum Pair Score",
+      "minInternal": "Minimum Internal Score",
+      "blockChunkSize": "Block Chunk Size",
+      "minPairDescription": "Minimum score (0 to 1) to consider two records a potential match and form an edge. Higher values create fewer, more confident clusters. Lower values create more, potentially noisier, clusters.",
+      "minInternalDescription": "Minimum score (0 to 1) used to decide if records inside a large temporary cluster should stay together in the final, smaller clusters. Higher values result in smaller, more tightly related final clusters.",
+      "blockChunkSizeDescription": "A performance setting for very large datasets. It splits up large groups of potential matches into smaller chunks to manage memory. Default is usually fine."
+    },
+    "weights": {
+      "title": "Final Score Configuration",
+      "firstNameScore": "First Name Score",
+      "firstNameScoreDescription": "Weight of the first name similarity.",
+      "familyNameScore": "Family Name Score",
+      "familyNameScoreDescription": "Weight of the family name (all parts except first) similarity.",
+      "advancedNameScore": "Advanced Name Score",
+      "advancedNameScoreDescription": "Weight for advanced name matching techniques, like character root matching.",
+      "tokenReorderScore": "Token Reorder Score",
+      "tokenReorderScoreDescription": "Weight for detecting names that have the same words but in a different order.",
+      "husbandScore": "Husband Score",
+      "husbandScoreDescription": "Weight of the husband's name similarity.",
+      "idScore": "ID Score",
+      "idScoreDescription": "Weight of a match in the National ID.",
+      "phoneScore": "Phone Score",
+      "phoneScoreDescription": "Weight of a match in the phone number.",
+      "childrenScore": "Children Score",
+      "childrenScoreDescription": "Weight of matching children's names.",
+      "locationScore": "Location Score",
+      "locationScoreDescription": "Weight of matching village or subdistrict names."
+    },
+    "rules": {
+      "title": "Rules",
+      "enableNameRootEngine": "Enable Name Root Engine",
+      "enableNameRootEngineDescription": "An advanced technique that attempts to match names based on their potential roots, catching more complex variations.",
+      "enableTribalLineage": "Enable Tribal Lineage",
+      "enableTribalLineageDescription": "Looks for and weights matches in the tribal or family parts of the full name.",
+      "enableMaternalLineage": "Enable Maternal Lineage",
+      "enableMaternalLineageDescription": "Weights similarities found in maternal parts of the name if they can be identified.",
+      "enablePolygamyRules": "Enable Polygamy Rules",
+      "enablePolygamyRulesDescription": "Applies special logic for polygamous relationships, like checking if two women share the same husband and paternal lineage."
+    },
+    "testScoring": {
+      "title": "Test Scoring",
+      "recordA": "Record A",
+      "recordB": "Record B",
+      "runTest": "Run Test",
+      "clear": "Clear",
+      "score": "Score",
+      "compareToMinPair": "Compare to Min Pair",
+      "viewBreakdown": "View Breakdown"
+    },
+    "fieldNames": {
+      "womanName": "Woman Name",
+      "husbandName": "Husband Name",
+      "nationalId": "National ID",
+      "phone": "Phone"
+    },
+    "toasts": {
+      "defaultsLoaded": {
+        "title": "No settings found",
+        "description": "Loading default settings. Save to create a settings file."
+      },
+      "loadError": {
+        "title": "Error Loading Settings",
+        "description": "Could not fetch settings from the server. Using defaults."
+      },
+      "saveSuccess": {
+        "title": "Settings Saved",
+        "description": "Your changes have been saved successfully."
+      },
+      "saveFailed": "Save Failed",
+      "resetConfirm": "Are you sure you want to reset all settings to their default values?",
+      "resetSuccess": {
+        "title": "Settings Reset",
+        "description": "Settings have been reset. Click save to persist."
+      },
+      "importSuccess": {
+        "title": "Settings Imported",
+        "description": "Imported settings have been previewed. Click save to persist."
+      },
+      "importFailed": "Import Failed"
+    }
+  },
+  "underConstruction": {
+    "title": "Under Construction",
+    "description": "This section is under construction. It will contain tools and reports for finalizing deliverables and lessons learned.",
     "checkBack": "Check back soon for updates!"
   }
 }
