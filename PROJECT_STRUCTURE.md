@@ -6,28 +6,34 @@ This document outlines the high-level architecture of the application, showing h
 
 ```
 .
+├── .agents/
+│   └── skills/
+│       └── developing-genkit-js/
+│           ├── references/
+│           │   ├── best-practices.md
+│           │   ├── common-errors.md
+│           │   ├── docs-and-cli.md
+│           │   ├── examples.md
+│           │   └── setup.md
+│           └── SKILL.md
 ├── .env
 ├── .vscode/
 │   ├── launch.json
 │   └── settings.json
-├── BUILD_INSTRUCTIONS.md
 ├── PROJECT_STRUCTURE.md
 ├── README.md
-├── apphosting.yaml
+├── Test.md
 ├── components.json
 ├── idx.ts
+├── metadata.json
 ├── next.config.js
 ├── package.json
+├── skills-lock.json
 ├── src/
 │   ├── ai/
 │   │   ├── flows/
 │   │   │   └── describe-cluster-flow.ts
 │   │   └── genkit.ts
-│   ├── api/
-│   │   └── bnf-assessed/
-│   │       ├── download/
-│   │       │   └── route.ts
-│   │       └── route.ts
 │   ├── app/
 │   │   ├── api/
 │   │   │   ├── ai/
@@ -37,7 +43,21 @@ This document outlines the high-level architecture of the application, showing h
 │   │   │   │   ├── download/
 │   │   │   │   │   └── route.ts
 │   │   │   │   └── route.ts
+│   │   │   ├── bnf-cash-disbursement/
+│   │   │   │   └── route.ts
+│   │   │   ├── bnf-cmam/
+│   │   │   │   ├── referral-update/
+│   │   │   │   │   └── route.ts
+│   │   │   │   └── route.ts
+│   │   │   ├── bnf-referral-cycle/
+│   │   │   │   └── route.ts
+│   │   │   ├── child-cmam/
+│   │   │   │   ├── referral-update/
+│   │   │   │   │   └── route.ts
+│   │   │   │   └── route.ts
 │   │   │   ├── data-connection/
+│   │   │   │   └── route.ts
+│   │   │   ├── ed-cash-disbursement/
 │   │   │   │   └── route.ts
 │   │   │   ├── ed-selection/
 │   │   │   │   ├── download/
@@ -49,7 +69,15 @@ This document outlines the high-level architecture of the application, showing h
 │   │   │   │   ├── update-beneficiary-info/
 │   │   │   │   │   └── route.ts
 │   │   │   │   └── route.ts
+│   │   │   ├── enrollment-review/
+│   │   │   │   └── route.ts
+│   │   │   ├── export-folder/
+│   │   │   │   └── route.ts
 │   │   │   ├── file-manager/
+│   │   │   │   └── route.ts
+│   │   │   ├── health-centers/
+│   │   │   │   ├── download/
+│   │   │   │   │   └── route.ts
 │   │   │   │   └── route.ts
 │   │   │   ├── indicator-tracking/
 │   │   │   │   └── route.ts
@@ -68,6 +96,10 @@ This document outlines the high-level architecture of the application, showing h
 │   │   │   │   └── route.ts
 │   │   │   ├── monitoring-plan/
 │   │   │   │   └── route.ts
+│   │   │   ├── monthly-health-sessions/
+│   │   │   │   ├── download/
+│   │   │   │   │   └── route.ts
+│   │   │   │   └── route.ts
 │   │   │   ├── pdf-templates/
 │   │   │   │   └── route.ts
 │   │   │   ├── project-plan/
@@ -82,6 +114,13 @@ This document outlines the high-level architecture of the application, showing h
 │   │   │   │   └── route.ts
 │   │   │   ├── settings/
 │   │   │   │   └── route.ts
+│   │   │   ├── system-intelligence/
+│   │   │   │   ├── analyze/
+│   │   │   │   │   └── route.ts
+│   │   │   │   ├── export-pdf/
+│   │   │   │   │   └── route.ts
+│   │   │   │   └── export-word/
+│   │   │   │       └── route.ts
 │   │   │   ├── training/
 │   │   │   │   ├── attendance/
 │   │   │   │   │   └── route.ts
@@ -89,9 +128,13 @@ This document outlines the high-level architecture of the application, showing h
 │   │   │   │   │   └── route.ts
 │   │   │   │   └── requirements/
 │   │   │   │       └── route.ts
-│   │   │   └── trainings/
-│   │   │       └── link/
-│   │   │           └── route.ts
+│   │   │   ├── trainings/
+│   │   │   │   └── link/
+│   │   │   │       └── route.ts
+│   │   │   └── validate-name/
+│   │   │       └── route.ts
+│   │   ├── export-folders/
+│   │   │   └── page.tsx
 │   │   ├── file-editor/
 │   │   │   └── page.tsx
 │   │   ├── globals.css
@@ -130,7 +173,11 @@ This document outlines the high-level architecture of the application, showing h
 │   │   │   │   │   │   │   ├── connecting/
 │   │   │   │   │   │   │   │   └── page.tsx
 │   │   │   │   │   │   │   ├── contracts/
-│   │   │   │   │   │   │   │   └── page.tsx
+│   │   │   │   │   │   │   │   ├── export/
+│   │   │   │   │   │   │   │   │   └── page.tsx
+│   │   │   │   │   │   │   │   ├── page.tsx
+│   │   │   │   │   │   │   │   └── view/
+│   │   │   │   │   │   │   │       └── page.tsx
 │   │   │   │   │   │   │   ├── database/
 │   │   │   │   │   │   │   │   └── page.tsx
 │   │   │   │   │   │   │   ├── double-benefits/
@@ -148,18 +195,19 @@ This document outlines the high-level architecture of the application, showing h
 │   │   │   │   │   │   │   │   └── page.tsx
 │   │   │   │   │   │   │   └── training/
 │   │   │   │   │   │   │       └── page.tsx
-│   │   │   │   │   │   └── education-and-payment-center/
-│   │   │   │   │   │       ├── add-center/
-│   │   │   │   │   │       │   └── page.tsx
-│   │   │   │   │   │       ├── add-locations/
-│   │   │   │   │   │       │   └── page.tsx
-│   │   │   │   │   │       ├── edit-center/
-│   │   │   │   │   │       │   └── page.tsx
-│   │   │   │   │   │       ├── modification/
-│   │   │   │   │   │       │   └── page.tsx
-│   │   │   │   │   │       ├── page.tsx
-│   │   │   │   │   │       └── upload-centers/
-│   │   │   │   │   │           └── page.tsx
+│   │   │   │   │   │   ├── education-and-payment-center/
+│   │   │   │   │   │   │   ├── add-center/
+│   │   │   │   │   │   │   │   └── page.tsx
+│   │   │   │   │   │   │   ├── add-locations/
+│   │   │   │   │   │   │   │   └── page.tsx
+│   │   │   │   │   │   │   ├── edit-center/
+│   │   │   │   │   │   │   │   └── page.tsx
+│   │   │   │   │   │   │   ├── modification/
+│   │   │   │   │   │   │   │   └── page.tsx
+│   │   │   │   │   │   │   ├── page.tsx
+│   │   │   │   │   │   │   └── upload-centers/
+│   │   │   │   │   │   │       └── page.tsx
+│   │   │   │   │   │   └── page.tsx
 │   │   │   │   │   ├── compliance/
 │   │   │   │   │   │   └── page.tsx
 │   │   │   │   │   ├── context/
@@ -240,7 +288,11 @@ This document outlines the high-level architecture of the application, showing h
 │   │   │       ├── edit-task/
 │   │   │       │   └── page.tsx
 │   │   │       └── page.tsx
-│   │   └── style-guide/
+│   │   ├── settings/
+│   │   │   └── page.tsx
+│   │   ├── style-guide/
+│   │   │   └── page.tsx
+│   │   └── system-architecture/
 │   │       └── page.tsx
 │   ├── components/
 │   │   ├── DecisionPieChart.tsx
@@ -251,9 +303,9 @@ This document outlines the high-level architecture of the application, showing h
 │   │   │   └── ImpactCard.tsx
 │   │   ├── charts/
 │   │   │   └── OutcomeTrendChart.tsx
-│   │   ├── dashboard-components.tsx
 │   │   ├── dashboard/
 │   │   │   └── MealDashboard.tsx
+│   │   ├── dashboard-components.tsx
 │   │   ├── feedback/
 │   │   │   └── StatusBadge.tsx
 │   │   ├── gantt/
@@ -261,27 +313,129 @@ This document outlines the high-level architecture of the application, showing h
 │   │   │   ├── GanttHeader.tsx
 │   │   │   └── GanttRow.tsx
 │   │   ├── itt/
-│   │   │   ... (omitted for brevity)
+│   │   │   ├── ITTFilters.tsx
+│   │   │   ├── ITTHeaderBar.tsx
+│   │   │   ├── ITTProgressBar.tsx
+│   │   │   ├── ITTStatusBadge.tsx
+│   │   │   ├── ITTTableCell.tsx
+│   │   │   ├── ImpactCards.tsx
+│   │   │   ├── IndicatorRow.tsx
+│   │   │   ├── IndicatorTable.tsx
+│   │   │   └── ProjectInfo.tsx
 │   │   ├── layout/
 │   │   │   ├── MealLayout.tsx
 │   │   │   └── Sidebar.tsx
 │   │   ├── layout-provider.tsx
 │   │   ├── leaflet-layers.tsx
 │   │   ├── report/
-│   │   │   ... (omitted for brevity)
+│   │   │   ├── BubbleStats.tsx
+│   │   │   ├── ColumnMapping.tsx
+│   │   │   ├── GenderVisual.tsx
+│   │   │   ├── KeyFigures.tsx
+│   │   │   └── TableBarCharts.tsx
 │   │   ├── tables/
 │   │   │   └── EvidenceTable.tsx
 │   │   ├── ui/
-│   │   │   ... (omitted for brevity)
+│   │   │   ├── accordion.tsx
+│   │   │   ├── alert-dialog.tsx
+│   │   │   ├── alert.tsx
+│   │   │   ├── avatar.tsx
+│   │   │   ├── badge.tsx
+│   │   │   ├── button.tsx
+│   │   │   ├── calendar.tsx
+│   │   │   ├── card.tsx
+│   │   │   ├── carousel.tsx
+│   │   │   ├── chart.tsx
+│   │   │   ├── checkbox.tsx
+│   │   │   ├── collapsible.tsx
+│   │   │   ├── command.tsx
+│   │   │   ├── dialog.tsx
+│   │   │   ├── dropdown-menu.tsx
+│   │   │   ├── form.tsx
+│   │   │   ├── input.tsx
+│   │   │   ├── label.tsx
+│   │   │   ├── menubar.tsx
+│   │   │   ├── popover.tsx
+│   │   │   ├── progress.tsx
+│   │   │   ├── radio-group.tsx
+│   │   │   ├── scroll-area.tsx
+│   │   │   ├── select.tsx
+│   │   │   ├── separator.tsx
+│   │   │   ├── sheet.tsx
+│   │   │   ├── skeleton.tsx
+│   │   │   ├── slider.tsx
+│   │   │   ├── switch.tsx
+│   │   │   ├── table.tsx
+│   │   │   ├── tabs.tsx
+│   │   │   ├── textarea.tsx
+│   │   │   ├── toast.tsx
+│   │   │   ├── toaster.tsx
+│   │   │   └── tooltip.tsx
 │   │   └── under-construction-page.tsx
 │   ├── context/
 │   │   └── language-context.tsx
 │   ├── data/
-│   │   ... (omitted for brevity)
+│   │   ├── auto-rules.json
+│   │   ├── bnf-referral-cycle.json
+│   │   ├── child-referral-cycle.json
+│   │   ├── educators.db.json
+│   │   ├── indicator-tracking.json
+│   │   ├── interviews.json
+│   │   ├── loc.json
+│   │   ├── logframes.json
+│   │   ├── monitoring-indicators.json
+│   │   ├── monitoring-plans.json
+│   │   ├── pdf-templates.json
+│   │   ├── project-plans.json
+│   │   └── projects.json
 │   ├── hooks/
-│   │   ... (omitted for brevity)
+│   │   ├── use-itt-data.ts
+│   │   ├── use-mobile.tsx
+│   │   ├── use-toast.ts
+│   │   └── use-translation.ts
 │   ├── lib/
-│   │   ... (omitted for brevity)
+│   │   ├── apiAnalyzer.ts
+│   │   ├── arabic-fixer.ts
+│   │   ├── arabicClusterSummary.ts
+│   │   ├── auditEngine.ts
+│   │   ├── cache.ts
+│   │   ├── confirmationchildcmam-export.ts
+│   │   ├── contract-template.ts
+│   │   ├── dependencyGraph.ts
+│   │   ├── dsu.ts
+│   │   ├── excel-export.ts
+│   │   ├── exportBnfToExcel.ts
+│   │   ├── exportChildCmamToExcel.ts
+│   │   ├── exportCmamToExcel.ts
+│   │   ├── exportDisbursementToExcel.ts
+│   │   ├── exportEducatorsToExcel.ts
+│   │   ├── exportEnrollmentToExcel.ts
+│   │   ├── exportEpcToExcel.ts
+│   │   ├── exportGanttToExcel.ts
+│   │   ├── exportGanttToPDF.ts
+│   │   ├── exportHealthCentersToExcel.ts
+│   │   ├── exportHealthSessionsToExcel.ts
+│   │   ├── exportSamplingPlanToExcel.ts
+│   │   ├── exportToWord.ts
+│   │   ├── fullValidation.ts
+│   │   ├── ganttTimeline.ts
+│   │   ├── ganttUtils.ts
+│   │   ├── generateContractPDF.ts
+│   │   ├── geojson-utils.ts
+│   │   ├── itt-calculations.ts
+│   │   ├── ittCalculations.ts
+│   │   ├── logframe.ts
+│   │   ├── placeholder-images.json
+│   │   ├── placeholder-images.ts
+│   │   ├── registerSW.ts
+│   │   ├── riskBuilder.ts
+│   │   ├── schemaReader.ts
+│   │   ├── similarity.ts
+│   │   ├── statusStyles.ts
+│   │   ├── systemScanner.ts
+│   │   ├── types.ts
+│   │   ├── utils.ts
+│   │   └── wakeLock.ts
 │   ├── locales/
 │   │   ├── ar.json
 │   │   └── en.json
@@ -292,9 +446,28 @@ This document outlines the high-level architecture of the application, showing h
 │   │   ├── motion.ts
 │   │   └── typography.ts
 │   ├── types/
-│   │   ... (omitted for brevity)
+│   │   ├── gantt.ts
+│   │   ├── indicator-tracking.ts
+│   │   ├── indicator.ts
+│   │   ├── monitoring-indicators.ts
+│   │   └── monitoring-plan.ts
 │   └── workers/
-│       ... (omitted for brevity)
+│       ├── bnfcmam-export.worker.ts
+│       ├── bnfreferralcmam-export.worker.ts
+│       ├── childcmam-export.worker.ts
+│       ├── childreferralcmam-export.worker.ts
+│       ├── cluster.worker.ts
+│       ├── double-benefit.worker.ts
+│       ├── ed-selection.worker.ts
+│       ├── enrollment-review.worker.ts
+│       ├── enrollment.worker.ts
+│       ├── export.worker.ts
+│       ├── id-card.worker.ts
+│       ├── interview-analysis.worker.ts
+│       ├── learning.worker.ts
+│       ├── monthly-sessions.worker.ts
+│       ├── preprocess.ts
+│       └── scoring.worker.ts
 ├── tailwind.config.ts
 ├── tsconfig.electron.json
 ├── tsconfig.json
