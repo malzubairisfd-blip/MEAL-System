@@ -63,6 +63,9 @@ import {
   PieChart,
   MessageSquareWarning,
   ShieldAlert,
+  ClipboardCheck,
+  ArrowLeft,
+  ArrowRight,
 } from "lucide-react";
 import { useTranslation } from "@/hooks/use-translation";
 import { useLanguage } from "@/context/language-context";
@@ -351,12 +354,16 @@ const RecursiveNavGroup = ({ item, pathname, isCollapsed }: { item: any, pathnam
 export function LayoutProvider({ children, year }: { children: React.ReactNode, year: number }) {
   const currentPathname = usePathname();
   const [pathname, setPathname] = useState(currentPathname);
-  const [isCollapsed, setIsCollapsed] = useState(true);
   const { t, isLoading: isTranslationLoading } = useTranslation();
   const { direction } = useLanguage();
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false); // Default to closed on mobile
 
   useEffect(() => {
     setPathname(currentPathname);
+    // Close sidebar on navigation on smaller screens
+    if (window.innerWidth < 768) {
+        setIsSidebarOpen(false);
+    }
   }, [currentPathname]);
 
   const getPageTitle = (items: any[], path: string): string => {
@@ -370,7 +377,8 @@ export function LayoutProvider({ children, year }: { children: React.ReactNode, 
         }
     }
     const pathSegments = path.split('/').filter(Boolean);
-    return pathSegments.length > 0 ? pathSegments.map(s => s.replace(/-/g, ' ')).join(' > ') : t('sidebar.dashboard');
+    const title = pathSegments.length > 0 ? pathSegments.map(s => s.replace(/-/g, ' ')).join(' > ') : t('sidebar.dashboard');
+    return title.length > 50 ? `${title.substring(0, 50)}...` : title;
   };
 
   const pageTitle = getPageTitle(navItems, pathname);
@@ -379,15 +387,14 @@ export function LayoutProvider({ children, year }: { children: React.ReactNode, 
     <div className="flex min-h-screen" dir={direction}>
       <aside
         className={cn(
-          "bg-card text-card-foreground border-border transition-all duration-300 ease-in-out flex flex-col fixed h-full z-50",
-          isCollapsed ? "w-20" : "w-64",
+          "bg-card text-card-foreground border-border transition-all duration-300 ease-in-out flex-col fixed h-full z-50",
+          "md:flex", // Always flex on medium and up
+          isSidebarOpen ? "w-64 flex" : "w-20 hidden", // Control visibility on small screens
           direction === 'rtl' ? 'border-l right-0' : 'border-r left-0'
         )}
-        onMouseEnter={() => setIsCollapsed(false)}
-        onMouseLeave={() => setIsCollapsed(true)}
       >
         <div className={cn("flex items-center justify-between p-4 border-b h-14", direction === 'rtl' ? 'border-l' : 'border-r')}>
-           <div className={cn("flex items-center gap-2", isCollapsed && "hidden")}>
+           <div className={cn("flex items-center gap-2", !isSidebarOpen && "hidden")}>
              <Briefcase className="size-6 text-primary" />
              <span className="text-lg font-semibold">MEAL System</span>
            </div>
@@ -397,23 +404,25 @@ export function LayoutProvider({ children, year }: { children: React.ReactNode, 
             Array.from({length: 10}).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)
           ) : (
             navItems.map(item => (
-                <RecursiveNavGroup key={item.href} item={item} pathname={pathname} isCollapsed={isCollapsed} />
+                <RecursiveNavGroup key={item.href} item={item} pathname={pathname} isCollapsed={!isSidebarOpen} />
             ))
           )}
         </nav>
         <div className={cn("mt-auto p-4 border-t", direction === 'rtl' ? 'border-l' : 'border-r')}>
-            <div className={cn("text-xs text-muted-foreground", isCollapsed && "text-center")}>
+            <div className={cn("text-xs text-muted-foreground", !isSidebarOpen && "text-center")}>
                  © {year}
               </div>
         </div>
       </aside>
 
       <div className={cn("flex flex-col flex-1 transition-all duration-300 ease-in-out", 
-        isCollapsed 
-            ? (direction === 'rtl' ? 'mr-20' : 'ml-20')
-            : (direction === 'rtl' ? 'mr-64' : 'ml-64')
+        !isSidebarOpen ? 'ml-0 md:ml-20' : 'ml-0 md:ml-64',
+        direction === 'rtl' && (!isSidebarOpen ? 'mr-0 md:mr-20' : 'mr-0 md:mr-64')
       )}>
         <header className="flex h-14 items-center gap-4 border-b bg-card px-6 sticky top-0 z-40">
+           <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setIsSidebarOpen(!isSidebarOpen)}>
+             <Menu className="h-5 w-5"/>
+           </Button>
           <div className="flex-1">
             {isTranslationLoading ? <Skeleton className="h-6 w-32" /> : <h1 className="text-lg font-semibold capitalize">{pageTitle}</h1>}
           </div>

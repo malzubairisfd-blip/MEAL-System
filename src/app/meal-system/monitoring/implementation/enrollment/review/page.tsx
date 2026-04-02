@@ -4,7 +4,7 @@
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ArrowRight, Upload, LayoutDashboard, Download, ThumbsUp, Database } from "lucide-react";
+import { ArrowLeft, ArrowRight, Upload, LayoutDashboard, Download, ThumbsUp, Database, ClipboardCheck } from "lucide-react";
 
 export default function EnrollmentReviewHubPage() {
   const features = [
