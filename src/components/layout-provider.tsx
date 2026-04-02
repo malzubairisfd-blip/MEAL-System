@@ -356,14 +356,10 @@ export function LayoutProvider({ children, year }: { children: React.ReactNode, 
   const [pathname, setPathname] = useState(currentPathname);
   const { t, isLoading: isTranslationLoading } = useTranslation();
   const { direction } = useLanguage();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false); // Default to closed on mobile
+  const [isCollapsed, setIsCollapsed] = useState(true);
 
   useEffect(() => {
     setPathname(currentPathname);
-    // Close sidebar on navigation on smaller screens
-    if (window.innerWidth < 768) {
-        setIsSidebarOpen(false);
-    }
   }, [currentPathname]);
 
   const getPageTitle = (items: any[], path: string): string => {
@@ -387,14 +383,15 @@ export function LayoutProvider({ children, year }: { children: React.ReactNode, 
     <div className="flex min-h-screen" dir={direction}>
       <aside
         className={cn(
-          "bg-card text-card-foreground border-border transition-all duration-300 ease-in-out flex-col fixed h-full z-50",
-          "md:flex", // Always flex on medium and up
-          isSidebarOpen ? "w-64 flex" : "w-20 hidden", // Control visibility on small screens
+          "bg-card text-card-foreground border-border transition-all duration-300 ease-in-out flex-col fixed h-full z-50 hidden md:flex",
+          isCollapsed ? "w-20" : "w-64",
           direction === 'rtl' ? 'border-l right-0' : 'border-r left-0'
         )}
+        onMouseEnter={() => setIsCollapsed(false)}
+        onMouseLeave={() => setIsCollapsed(true)}
       >
         <div className={cn("flex items-center justify-between p-4 border-b h-14", direction === 'rtl' ? 'border-l' : 'border-r')}>
-           <div className={cn("flex items-center gap-2", !isSidebarOpen && "hidden")}>
+           <div className={cn("flex items-center gap-2", isCollapsed && "hidden")}>
              <Briefcase className="size-6 text-primary" />
              <span className="text-lg font-semibold">MEAL System</span>
            </div>
@@ -404,25 +401,24 @@ export function LayoutProvider({ children, year }: { children: React.ReactNode, 
             Array.from({length: 10}).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)
           ) : (
             navItems.map(item => (
-                <RecursiveNavGroup key={item.href} item={item} pathname={pathname} isCollapsed={!isSidebarOpen} />
+                <RecursiveNavGroup key={item.href} item={item} pathname={pathname} isCollapsed={isCollapsed} />
             ))
           )}
         </nav>
         <div className={cn("mt-auto p-4 border-t", direction === 'rtl' ? 'border-l' : 'border-r')}>
-            <div className={cn("text-xs text-muted-foreground", !isSidebarOpen && "text-center")}>
+            <div className={cn("text-xs text-muted-foreground", isCollapsed && "text-center")}>
                  © {year}
               </div>
         </div>
       </aside>
 
       <div className={cn("flex flex-col flex-1 transition-all duration-300 ease-in-out", 
-        !isSidebarOpen ? 'ml-0 md:ml-20' : 'ml-0 md:ml-64',
-        direction === 'rtl' && (!isSidebarOpen ? 'mr-0 md:mr-20' : 'mr-0 md:mr-64')
+        isCollapsed 
+            ? (direction === 'rtl' ? 'md:mr-20' : 'md:ml-20')
+            : (direction === 'rtl' ? 'md:mr-64' : 'md:ml-64')
       )}>
         <header className="flex h-14 items-center gap-4 border-b bg-card px-6 sticky top-0 z-40">
-           <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setIsSidebarOpen(!isSidebarOpen)}>
-             <Menu className="h-5 w-5"/>
-           </Button>
+           {/* Hamburger Menu for mobile would go here */}
           <div className="flex-1">
             {isTranslationLoading ? <Skeleton className="h-6 w-32" /> : <h1 className="text-lg font-semibold capitalize">{pageTitle}</h1>}
           </div>
