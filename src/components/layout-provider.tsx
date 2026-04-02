@@ -61,7 +61,6 @@ import {
   Baby,
   Database,
   PieChart,
-  ClipboardCheck,
   MessageSquareWarning,
   ShieldAlert,
 } from "lucide-react";
@@ -411,8 +410,8 @@ export function LayoutProvider({ children, year }: { children: React.ReactNode, 
 
       <div className={cn("flex flex-col flex-1 transition-all duration-300 ease-in-out", 
         isCollapsed 
-            ? (direction === 'rtl' ? 'pr-20' : 'pl-20')
-            : (direction === 'rtl' ? 'pr-64' : 'pl-64')
+            ? (direction === 'rtl' ? 'mr-20' : 'ml-20')
+            : (direction === 'rtl' ? 'mr-64' : 'ml-64')
       )}>
         <header className="flex h-14 items-center gap-4 border-b bg-card px-6 sticky top-0 z-40">
           <div className="flex-1">
