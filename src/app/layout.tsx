@@ -1,6 +1,6 @@
 
 import type { Metadata } from "next";
-import { LayoutProvider } from "@/components/layout-provider";
+import AppLayout from "@/components/layout-provider";
 import { Toaster } from "@/components/ui/toaster";
 import { LanguageProvider } from "@/context/language-context";
 import "./globals.css";
@@ -19,7 +19,9 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body>
         <LanguageProvider>
-          <LayoutProvider year={new Date().getFullYear()}>{children}</LayoutProvider>
+          <AppLayout year={new Date().getFullYear()}>
+            {children}
+          </AppLayout>
         </LanguageProvider>
         <Toaster />
       </body>
