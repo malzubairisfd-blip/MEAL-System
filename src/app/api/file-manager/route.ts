@@ -103,6 +103,66 @@ async function searchFiles(dir: string, q: string, out: any[] = []) {
   return out;
 }
 
+
+/* ---------- EXPORT HELPERS ---------- */
+async function collectFilesRecursive(dir: string, out: any[] = []) {
+  const entries = await fs.readdir(dir, { withFileTypes: true });
+
+  for (const e of entries) {
+    const full = path.join(dir, e.name);
+
+    // Skip system folders
+    if (
+      e.name.startsWith('.') ||
+      e.name === 'node_modules' ||
+      e.name === '.next'
+    ) {
+      continue;
+    }
+
+    if (e.isDirectory()) {
+      await collectFilesRecursive(full, out);
+    } else {
+      // ✅ Skip binary files
+      const ext = path.extname(e.name).toLowerCase();
+      const skipExt = [
+        ".png",".jpg",".jpeg",".gif",".webp",
+        ".ico",".svg",
+        ".mp4",".mp3",
+        ".woff",".woff2",".ttf",
+        ".zip",".exe"
+      ];
+
+      if (skipExt.includes(ext)) continue;
+
+      let content = "";
+
+      try {
+        content = await fs.readFile(full, "utf8");
+      } catch {
+        content = "[[BINARY OR UNREADABLE FILE]]";
+      }
+
+      out.push({
+        path: path.relative(BASE_DIR, full),
+        content,
+      });
+    }
+  }
+
+  return out;
+}
+
+function cleanFolders(folders: string[]) {
+  return folders
+    .sort()
+    .filter((p, i, arr) => {
+      return !arr.some(
+        (other) => other !== p && p.startsWith(other + "/")
+      );
+    });
+}
+
 export async function POST(req: Request) {
   try {
     const contentType = req.headers.get("content-type") || "";
@@ -268,6 +328,44 @@ export async function POST(req: Request) {
         await fs.mkdir(path.join(dir, name), { recursive: true });
         return NextResponse.json({ ok: true });
       }
+      case "exportFolders": {
+  if (!Array.isArray(items) || items.length === 0) {
+    throw new Error("No folders selected");
+  }
+
+  const cleaned = cleanFolders(items);
+  const seen = new Set<string>();
+
+  let output = "PROJECT EXPORT\n=====================\n";
+
+  for (const folder of cleaned) {
+    const abs = safePath(folder);
+    const files = await collectFilesRecursive(abs);
+
+    output +=
+      "\n\n############################################\n" +
+      `FOLDER: ${folder}\n` +
+      "############################################\n\n";
+
+    for (const f of files) {
+      if (seen.has(f.path)) continue;
+      seen.add(f.path);
+
+      output +=
+        "\n════════════════════════════════════════════\n" +
+        `FILE: ${f.path}\n` +
+        "════════════════════════════════════════════\n\n" +
+        (f.content || "[EMPTY FILE]") +
+        "\n";
+    }
+  }
+
+  return NextResponse.json({
+    content: output,
+    totalFiles: seen.size,
+  });
+}
+
       case "downloadZip": {
         if (!Array.isArray(items) || items.length === 0) {
             throw new Error("No items selected for download.");

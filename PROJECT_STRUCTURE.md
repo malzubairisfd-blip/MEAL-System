@@ -226,6 +226,85 @@ This document outlines the high-level architecture of the application, showing h
 │   │   │   │   │   │   └── page.tsx
 │   │   │   │   │   ├── page.tsx
 │   │   │   │   │   ├── process/
+│   │   │   │   │   │   ├── CMAM-cases/
+│   │   │   │   │   │   │   ├── beneficiaries/
+│   │   │   │   │   │   │   │   ├── confirmation/
+│   │   │   │   │   │   │   │   │   ├── entry/
+│   │   │   │   │   │   │   │   │   │   └── page.tsx
+│   │   │   │   │   │   │   │   │   ├── export/
+│   │   │   │   │   │   │   │   │   │   └── page.tsx
+│   │   │   │   │   │   │   │   │   └── page.tsx
+│   │   │   │   │   │   │   │   ├── page.tsx
+│   │   │   │   │   │   │   │   ├── referral/
+│   │   │   │   │   │   │   │   │   ├── data-entry/
+│   │   │   │   │   │   │   │   │   │   └── page.tsx
+│   │   │   │   │   │   │   │   │   ├── export/
+│   │   │   │   │   │   │   │   │   │   └── page.tsx
+│   │   │   │   │   │   │   │   │   └── page.tsx
+│   │   │   │   │   │   │   │   └── screening/
+│   │   │   │   │   │   │   │       ├── database/
+│   │   │   │   │   │   │   │       │   └── page.tsx
+│   │   │   │   │   │   │   │       ├── entry/
+│   │   │   │   │   │   │   │       │   └── page.tsx
+│   │   │   │   │   │   │   │       ├── export/
+│   │   │   │   │   │   │   │       │   └── page.tsx
+│   │   │   │   │   │   │   │       ├── page.tsx
+│   │   │   │   │   │   │   │       └── preparing/
+│   │   │   │   │   │   │   │           └── page.tsx
+│   │   │   │   │   │   │   └── page.tsx
+│   │   │   │   │   │   │   ├── children/
+│   │   │   │   │   │   │   │   ├── confirmation/
+│   │   │   │   │   │   │   │   │   ├── entry/
+│   │   │   │   │   │   │   │   │   │   └── page.tsx
+│   │   │   │   │   │   │   │   │   ├── export/
+│   │   │   │   │   │   │   │   │   │   └── page.tsx
+│   │   │   │   │   │   │   │   │   └── page.tsx
+│   │   │   │   │   │   │   │   ├── page.tsx
+│   │   │   │   │   │   │   │   ├── referral/
+│   │   │   │   │   │   │   │   │   ├── entry/
+│   │   │   │   │   │   │   │   │   │   └── page.tsx
+│   │   │   │   │   │   │   │   │   ├── export/
+│   │   │   │   │   │   │   │   │   │   └── page.tsx
+│   │   │   │   │   │   │   │   │   └── page.tsx
+│   │   │   │   │   │   │   │   └── screening/
+│   │   │   │   │   │   │   │       ├── database/
+│   │   │   │   │   │   │   │       │   └── page.tsx
+│   │   │   │   │   │   │   │       ├── entry/
+│   │   │   │   │   │   │   │       │   └── page.tsx
+│   │   │   │   │   │   │   │       ├── export/
+│   │   │   │   │   │   │   │       │   └── page.tsx
+│   │   │   │   │   │   │   │       ├── page.tsx
+│   │   │   │   │   │   │   │       └── preparing/
+│   │   │   │   │   │   │   │           └── page.tsx
+│   │   │   │   │   │   │   ├── health-worker-data/
+│   │   │   │   │   │   │   │   └── page.tsx
+│   │   │   │   │   │   │   └── page.tsx
+│   │   │   │   │   │   ├── cash-assistance-disbursement/
+│   │   │   │   │   │   │   ├── beneficiaries/
+│   │   │   │   │   │   │   │   ├── dashboard/
+│   │   │   │   │   │   │   │   │   └── page.tsx
+│   │   │   │   │   │   │   │   ├── database/
+│   │   │   │   │   │   │   │   │   └── page.tsx
+│   │   │   │   │   │   │   │   ├── page.tsx
+│   │   │   │   │   │   │   │   └── upload/
+│   │   │   │   │   │   │   │       └── page.tsx
+│   │   │   │   │   │   │   ├── educators/
+│   │   │   │   │   │   │   │   ├── dashboard/
+│   │   │   │   │   │   │   │   │   └── page.tsx
+│   │   │   │   │   │   │   │   ├── database/
+│   │   │   │   │   │   │   │   │   └── page.tsx
+│   │   │   │   │   │   │   │   ├── page.tsx
+│   │   │   │   │   │   │   │   └── upload/
+│   │   │   │   │   │   │   │       └── page.tsx
+│   │   │   │   │   │   │   └── page.tsx
+│   │   │   │   │   │   ├── monthly-health-sessions/
+│   │   │   │   │   │   │   ├── dashboard/
+│   │   │   │   │   │   │   │   └── page.tsx
+│   │   │   │   │   │   │   ├── database/
+│   │   │   │   │   │   │   │   └── page.tsx
+│   │   │   │   │   │   │   ├── page.tsx
+│   │   │   │   │   │   │   └── upload/
+│   │   │   │   │   │   │       └── page.tsx
 │   │   │   │   │   │   └── page.tsx
 │   │   │   │   │   └── results/
 │   │   │   │   │       └── page.tsx

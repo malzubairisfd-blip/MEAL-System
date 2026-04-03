@@ -27,7 +27,7 @@ export default function ExportFoldersPage() {
   const loadTree = useCallback(async () => {
     try {
       setTree(await api({ action: "tree" }));
-    } catch(e) {
+    } catch (e) {
       console.error("Failed to load file tree", e);
     }
   }, [api]);
@@ -38,31 +38,25 @@ export default function ExportFoldersPage() {
 
   const handleSelectFolder = (path: string, checked: boolean) => {
     const newSelected = { ...selected };
-    
-    // Function to recursively apply selection state to a node and its children
+
     const applySelection = (node: Node, shouldBeSelected: boolean) => {
-        if(node.type === 'folder') {
-            newSelected[node.path] = shouldBeSelected;
-            if(node.children) {
-                node.children.forEach(child => applySelection(child, shouldBeSelected));
-            }
-        }
+      if (node.type === "folder") {
+        newSelected[node.path] = shouldBeSelected;
+        if (node.children) node.children.forEach((child) => applySelection(child, shouldBeSelected));
+      }
     };
 
-    // Find the node that was clicked in the tree
     const findAndApply = (nodes: Node[], targetPath: string): boolean => {
-        for(const node of nodes) {
-            if (node.path === targetPath) {
-                applySelection(node, checked);
-                return true;
-            }
-            if (node.children) {
-                if (findAndApply(node.children, targetPath)) return true;
-            }
+      for (const node of nodes) {
+        if (node.path === targetPath) {
+          applySelection(node, checked);
+          return true;
         }
-        return false;
+        if (node.children && findAndApply(node.children, targetPath)) return true;
+      }
+      return false;
     };
-    
+
     findAndApply(tree, path);
     setSelected(newSelected);
   };
@@ -73,10 +67,10 @@ export default function ExportFoldersPage() {
       alert("Select at least one folder");
       return;
     }
-    
-    const topLevelFolders = folders.filter(folder => {
-        const parentPath = folder.substring(0, folder.lastIndexOf('/'));
-        return !parentPath || !folders.includes(parentPath);
+
+    const topLevelFolders = folders.filter((folder) => {
+      const parentPath = folder.substring(0, folder.lastIndexOf("/"));
+      return !parentPath || !folders.includes(parentPath);
     });
 
     setWorking(true);
@@ -98,8 +92,8 @@ export default function ExportFoldersPage() {
         "\n\n############################################\n" +
         `FOLDER: ${folder}\n` +
         "############################################\n\n" +
-        res.content;
-
+        (res.content || "[No files in this folder]");
+      
       setProgress((p) => Math.min(100, p + 100 / topLevelFolders.length));
     }
 
@@ -129,27 +123,21 @@ export default function ExportFoldersPage() {
               <input
                 type="checkbox"
                 checked={!!selected[n.path]}
-                onChange={(e) =>
-                  handleSelectFolder(n.path, e.target.checked)
-                }
+                onChange={(e) => handleSelectFolder(n.path, e.target.checked)}
               />
               📁 {n.name}
             </label>
             {n.children && renderTree(n.children)}
           </>
         ) : (
-          <div className="ml-6 text-sm text-gray-400">
-            📄 {n.name}
-          </div>
+          <div className="ml-6 text-sm text-gray-400">📄 {n.name}</div>
         )}
       </div>
     ));
 
   return (
     <div className="min-h-screen bg-slate-950 text-white p-6">
-      <h1 className="text-2xl font-bold mb-4">
-        Export Folder Code (TXT)
-      </h1>
+      <h1 className="text-2xl font-bold mb-4">Export Folder Code (TXT)</h1>
 
       <div className="border border-slate-800 p-4 rounded bg-slate-900 max-h-[60vh] overflow-auto">
         {renderTree(tree)}
